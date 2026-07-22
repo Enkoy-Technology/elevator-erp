@@ -8,6 +8,9 @@
     "node": ">=20"
   },
   "scripts": {
+    "dev": "pnpm run infra:up && pnpm run db:migrate && concurrently -k -n api,web -c cyan,magenta \"pnpm run start:dev\" \"pnpm run web:dev\"",
+    "infra:up": "docker compose up -d --wait",
+    "infra:down": "docker compose down",
     "build": "nest build",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
@@ -56,6 +59,7 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/pg": "^8.20.0",
     "@types/supertest": "^7.2.1",
+    "concurrently": "^10.0.3",
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.7.0",
     "eslint-config-prettier": "^10.1.8",

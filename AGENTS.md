@@ -5,6 +5,8 @@ NestJS 11 + TypeScript, Drizzle ORM, PostgreSQL 16 with RLS, Redis 7, BullMQ.
 
 ## Commands
 
+Dev (all-in-one): `pnpm run dev` — Docker Postgres+Redis, migrate, API (`:3002`) + admin UI (`:3003`)
+Infra only: `pnpm run infra:up` / `pnpm run infra:down`
 Build: `pnpm run build`
 Test: `pnpm test`
 E2E test: `pnpm run test:e2e` (needs `docker compose up -d` + `pnpm run db:migrate`)
@@ -14,8 +16,8 @@ Single test: `pnpm test src/modules/elevator-calc/elevator-calc.service.spec.ts`
 DB migrate: `pnpm run db:migrate` (uses `DATABASE_ADMIN_URL`)
 DB generate: `pnpm run db:generate`
 DB seed: `pnpm run db:seed`
-Dev server: `pnpm run start:dev`
-Admin UI: `pnpm run web:dev` (http://localhost:3003)
+API only: `pnpm run start:dev`
+Admin UI only: `pnpm run web:dev` (http://localhost:3003)
 
 Local dev: Postgres is on host port **5434**, the API on **3002**, and the
 admin UI on **3003** (5432/5433 and 3000/3001 are used by other projects on

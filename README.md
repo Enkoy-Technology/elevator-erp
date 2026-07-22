@@ -12,17 +12,24 @@ Delivery plan: `docs/planning/ROADMAP.md`.
 ```bash
 pnpm install
 cp .env.example .env          # defaults work with the compose file below
-docker compose up -d          # Postgres 16 (host port 5434) + Redis 7
-pnpm run db:migrate           # applies schema + RLS policies (owner connection)
-pnpm run db:seed              # demo tenant + CEO user
-pnpm run start:dev            # API on http://localhost:3002/v1
-pnpm run web:dev              # Admin UI on http://localhost:3003
+pnpm run db:seed              # once: demo tenant + CEO user (needs DB up — see below)
+pnpm run dev                  # Postgres + Redis + migrate + API + admin UI
 ```
+
+`pnpm run dev` starts everything needed for day-to-day work:
+
+1. `docker compose up -d --wait` — Postgres **5434** + Redis **6379**
+2. `pnpm run db:migrate` — apply pending migrations
+3. API (`start:dev`) on **http://localhost:3002** and admin UI (`web:dev`) on **http://localhost:3003**
+
+First-time only (after install / empty DB): run `pnpm run db:seed` once (with infra up). You can run `pnpm run infra:up && pnpm run db:migrate && pnpm run db:seed` then `pnpm run dev`.
 
 Demo login (UI or API): workspace `demo`, `ceo@demo.example.com` / `Demo!Passw0rd`.
 
 - Admin UI: **http://localhost:3003**
 - Swagger: **http://localhost:3002/docs**
+
+Individual processes (if you prefer): `pnpm run start:dev`, `pnpm run web:dev`, `pnpm run infra:up` / `infra:down`.
 
 ## Verification
 
