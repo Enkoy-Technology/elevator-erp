@@ -27,9 +27,11 @@ Set `CORS_ORIGINS=http://localhost:3003` so the browser UI can call the API.
 
 ## Product scope
 
-Shining Star MVP is intentionally lean — see
-`docs/planning/SCOPE-shining-star-mvp.md`. Do not add crews, field phases,
-maintenance, inventory, or finance unless the user asks.
+Shining Star plan: `docs/planning/SHINING-STAR-PRODUCT-PLAN.md`  
+Short scope: `docs/planning/SCOPE-shining-star-mvp.md`  
+
+Next slices: Employees → Assets → Notifications → Maintenance → Settings/i18n.
+Do not rebuild parked installation/crews unless the user asks.
 
 ## Code Style
 
