@@ -2,6 +2,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import type { Request, Response } from 'express';
 
 import { AppModule } from './app.module';
 import type { Env } from './config';
@@ -26,6 +27,17 @@ const bootstrap = async (): Promise<void> => {
     }),
   );
   app.enableShutdownHooks();
+
+  // Visiting http://localhost:PORT/ should not 404 — send humans to Swagger.
+  const expressApp = app.getHttpAdapter().getInstance() as {
+    get: (
+      path: string,
+      handler: (req: Request, res: Response) => void,
+    ) => void;
+  };
+  expressApp.get('/', (_req, res) => {
+    res.redirect(302, '/docs');
+  });
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Elevator ERP API')
