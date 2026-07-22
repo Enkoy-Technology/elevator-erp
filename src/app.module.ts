@@ -11,6 +11,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { ElevatorCalcModule } from './modules/elevator-calc/elevator-calc.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { QuotationsModule } from './modules/quotations/quotations.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { ProjectsModule } from './modules/projects/projects.module';
     ElevatorCalcModule,
     CustomersModule,
     ProjectsModule,
+    QuotationsModule,
   ],
   controllers: [AppController],
   providers: [

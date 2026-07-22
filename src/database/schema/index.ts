@@ -5,3 +5,4 @@ export * from './permissions';
 export * from './customers';
 export * from './customer-fingerprints';
 export * from './projects';
+export * from './quotations';

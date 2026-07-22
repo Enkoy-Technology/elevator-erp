@@ -57,6 +57,20 @@
       "when": 1784727601000,
       "tag": "0007_customer_fingerprints_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784730745652,
+      "tag": "0008_quotations",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784730746652,
+      "tag": "0009_quotations_rls",
+      "breakpoints": true
     }
   ]
 }

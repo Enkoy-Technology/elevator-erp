@@ -43,3 +43,12 @@ export const projectStatusEnum = pgEnum('project_status', [
   'COMPLETED',
   'CANCELLED',
 ]);
+
+export const quoteStatusEnum = pgEnum('quote_status', [
+  'DRAFT',
+  'APPROVED',
+  'REJECTED',
+  'PROFORMA',
+  'CONTRACT',
+  'CANCELLED',
+]);
