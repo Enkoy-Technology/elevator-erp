@@ -9,6 +9,7 @@ import {
 import type { Request, Response } from 'express';
 
 import { DomainError } from '../exceptions';
+import { DuplicateCustomerError } from '../exceptions/duplicate-customer.error';
 
 interface ProblemDetails {
   type: string;
@@ -17,6 +18,8 @@ interface ProblemDetails {
   detail: string;
   instance: string;
   errors?: unknown;
+  recommendation?: string;
+  matches?: unknown;
 }
 
 const PROBLEM_TYPE_BASE = 'https://api.elevator-erp.com/problems';
@@ -47,13 +50,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
   private toProblemDetails(exception: unknown, instance: string): ProblemDetails {
     if (exception instanceof DomainError) {
-      return {
+      const problem: ProblemDetails = {
         type: `${PROBLEM_TYPE_BASE}/${exception.problemType}`,
         title: exception.title,
         status: exception.status,
         detail: exception.message,
         instance,
       };
+      if (exception instanceof DuplicateCustomerError) {
+        problem.recommendation = exception.recommendation;
+        problem.matches = exception.matches;
+      }
+      return problem;
     }
 
     if (exception instanceof HttpException) {

@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
+  IsBoolean,
   IsEmail,
   IsEnum,
   IsOptional,
@@ -97,4 +98,16 @@ export class CreateCustomerDto {
   @IsString()
   @MaxLength(2000)
   notes?: string;
+
+  /**
+   * Required when check-duplicate returns REVIEW_BEFORE_CREATE.
+   * Ignored for HIGH_CONFIDENCE_DUPLICATE (always blocked).
+   */
+  @ApiPropertyOptional({
+    description:
+      'Acknowledge REVIEW_BEFORE_CREATE duplicates and proceed with create',
+  })
+  @IsOptional()
+  @IsBoolean()
+  acknowledgePossibleDuplicate?: boolean;
 }

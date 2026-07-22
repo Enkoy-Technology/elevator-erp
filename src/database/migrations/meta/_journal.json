@@ -43,6 +43,20 @@
       "when": 1784727320000,
       "tag": "0005_projects_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784727600000,
+      "tag": "0006_customer_fingerprints",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784727601000,
+      "tag": "0007_customer_fingerprints_rls",
+      "breakpoints": true
     }
   ]
 }

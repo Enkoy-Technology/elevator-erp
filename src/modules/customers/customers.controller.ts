@@ -20,6 +20,7 @@ import {
 import { CurrentUser, Roles } from '../../common/decorators';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { CustomersService } from './customers.service';
+import { CheckDuplicateCustomerDto } from './dto/check-duplicate-customer.dto';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 
@@ -41,6 +42,16 @@ export class CustomersController {
     return this.customersService.list(user, { search, page, pageSize });
   }
 
+  @Post('check-duplicate')
+  @Roles('SALES_MANAGER')
+  @ApiOperation({ summary: 'Fuzzy duplicate check before create' })
+  checkDuplicate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CheckDuplicateCustomerDto,
+  ) {
+    return this.customersService.checkDuplicate(user, dto);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get customer by id' })
   get(
@@ -52,7 +63,7 @@ export class CustomersController {
 
   @Post()
   @Roles('SALES_MANAGER')
-  @ApiOperation({ summary: 'Create customer' })
+  @ApiOperation({ summary: 'Create customer (duplicate-gated)' })
   create(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateCustomerDto,

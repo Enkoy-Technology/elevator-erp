@@ -1,5 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 
+import { DuplicateCustomerError } from '../../common/exceptions';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type { CustomerRecord } from './customers.repository';
 import { CustomersService } from './customers.service';
@@ -48,10 +49,21 @@ describe('CustomersService', () => {
     softDelete: jest.fn(),
   };
 
-  const service = new CustomersService(repo as never);
+  const duplicates = {
+    check: jest.fn(),
+    upsertFingerprint: jest.fn(),
+  };
+
+  const service = new CustomersService(repo as never, duplicates as never);
 
   beforeEach(() => {
     jest.clearAllMocks();
+    duplicates.check.mockResolvedValue({
+      recommendation: 'OK',
+      maxScore: 0,
+      matches: [],
+    });
+    duplicates.upsertFingerprint.mockResolvedValue(undefined);
   });
 
   it('lists customers for the tenant', async () => {
@@ -83,7 +95,7 @@ describe('CustomersService', () => {
     );
   });
 
-  it('creates a customer', async () => {
+  it('creates a customer and upserts fingerprint', async () => {
     const dto = { name: 'Addis Heights PLC' };
     repo.create.mockResolvedValue(sample);
     await expect(service.create(user, dto)).resolves.toEqual(sample);
@@ -92,5 +104,51 @@ describe('CustomersService', () => {
       user.userId,
       dto,
     );
+    expect(duplicates.upsertFingerprint).toHaveBeenCalled();
+  });
+
+  it('blocks HIGH_CONFIDENCE_DUPLICATE creates', async () => {
+    duplicates.check.mockResolvedValue({
+      recommendation: 'HIGH_CONFIDENCE_DUPLICATE',
+      maxScore: 0.95,
+      matches: [
+        {
+          customerId: sample.id,
+          name: sample.name,
+          score: 0.95,
+          recommendation: 'HIGH_CONFIDENCE_DUPLICATE',
+        },
+      ],
+    });
+    await expect(
+      service.create(user, { name: 'Addis Heights PLC' }),
+    ).rejects.toBeInstanceOf(DuplicateCustomerError);
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('requires acknowledge for REVIEW_BEFORE_CREATE', async () => {
+    duplicates.check.mockResolvedValue({
+      recommendation: 'REVIEW_BEFORE_CREATE',
+      maxScore: 0.8,
+      matches: [
+        {
+          customerId: sample.id,
+          name: sample.name,
+          score: 0.8,
+          recommendation: 'REVIEW_BEFORE_CREATE',
+        },
+      ],
+    });
+    await expect(
+      service.create(user, { name: 'Addis Heights PLC' }),
+    ).rejects.toBeInstanceOf(DuplicateCustomerError);
+
+    repo.create.mockResolvedValue(sample);
+    await expect(
+      service.create(user, {
+        name: 'Addis Heights PLC',
+        acknowledgePossibleDuplicate: true,
+      }),
+    ).resolves.toEqual(sample);
   });
 });
