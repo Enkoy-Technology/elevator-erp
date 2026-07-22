@@ -347,7 +347,7 @@ export default function ProjectsPage() {
       >
         <form
           id="create-project-form"
-          onSubmit={onCreate}
+          onSubmit={(e) => void onCreate(e)}
           className="space-y-4"
         >
           {formError ? (

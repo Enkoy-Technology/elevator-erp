@@ -342,7 +342,7 @@ export default function CustomersPage() {
       >
         <form
           id="create-customer-form"
-          onSubmit={onCreate}
+          onSubmit={(e) => void onCreate(e)}
           className="space-y-4"
         >
           {formError ? (

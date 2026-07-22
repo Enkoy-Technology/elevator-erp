@@ -391,3 +391,113 @@ export const NEXT_PROJECT_STATUSES: Record<
   COMPLETED: [],
   CANCELLED: [],
 };
+
+export type QuoteStatus =
+  | 'DRAFT'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'PROFORMA'
+  | 'CONTRACT'
+  | 'CANCELLED';
+
+export interface Quotation {
+  id: string;
+  tenantId: string;
+  projectId: string;
+  customerId: string;
+  quoteNumber: string;
+  status: QuoteStatus;
+  marginPercent: string;
+  taxPercent: string;
+  subtotalEtb: string;
+  totalPriceEtb: string;
+  validUntil: string | null;
+  createdAt: string;
+}
+
+export interface CreateQuotationPayload extends CalcInputPayload {
+  validUntil?: string;
+  notes?: string;
+}
+
+export const listQuotations = (options?: {
+  projectId?: string;
+  status?: QuoteStatus;
+  page?: number;
+  pageSize?: number;
+}): Promise<Paginated<Quotation>> => {
+  const params = new URLSearchParams();
+  if (options?.projectId) {
+    params.set('projectId', options.projectId);
+  }
+  if (options?.status) {
+    params.set('status', options.status);
+  }
+  if (options?.page) {
+    params.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set('pageSize', String(options.pageSize));
+  }
+  const query = params.toString();
+  return apiFetch<Paginated<Quotation>>(
+    `/quotations${query ? `?${query}` : ''}`,
+  );
+};
+
+export const createQuotationFromCalc = (
+  projectId: string,
+  payload: CreateQuotationPayload,
+): Promise<Quotation> =>
+  apiFetch<Quotation>(`/projects/${projectId}/quotations`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const approveQuotation = (id: string): Promise<Quotation> =>
+  apiFetch<Quotation>(`/quotations/${id}/approve`, { method: 'POST' });
+
+export const rejectQuotation = (
+  id: string,
+  reason: string,
+): Promise<Quotation> =>
+  apiFetch<Quotation>(`/quotations/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+
+export const cancelQuotation = (id: string): Promise<Quotation> =>
+  apiFetch<Quotation>(`/quotations/${id}/cancel`, { method: 'POST' });
+
+export const convertQuotationToProforma = (id: string): Promise<Quotation> =>
+  apiFetch<Quotation>(`/quotations/${id}/convert-proforma`, { method: 'POST' });
+
+export const convertQuotationToContract = (id: string): Promise<Quotation> =>
+  apiFetch<Quotation>(`/quotations/${id}/convert-contract`, { method: 'POST' });
+
+/**
+ * Fetch the branded PDF (binary, not JSON) and trigger a browser download.
+ * apiFetch can't be used here because it assumes a JSON body.
+ */
+export const downloadQuotationPdf = async (
+  id: string,
+  quoteNumber: string,
+): Promise<void> => {
+  const token = getAccessToken();
+  const response = await fetch(`${API_URL}/quotations/${id}/generate-pdf`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    throw new ApiError(await parseProblem(response));
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${quoteNumber}.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+};
