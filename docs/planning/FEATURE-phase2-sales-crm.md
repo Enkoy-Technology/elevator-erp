@@ -10,11 +10,11 @@ consume Phase 1 pricing. Currency throughout: **ETB**.
 - Multi-tenancy: composite PK `(tenant_id, id)`, RLS + `TenantDbService`.
 
 ## Requirements (sliced commits)
-1. Customers schema + RLS + CRUD API (+ soft delete)
-2. Projects schema + status transition API (`WorkflowTransitionError`)
-3. Admin UI: customers list/create + projects pipeline
-4. Follow-ups (later commits): duplicate detection, quotation/proforma/contract,
-   branded PDF
+1. ~~Customers schema + RLS + CRUD API (+ soft delete)~~
+2. ~~Projects schema + status transition API (`WorkflowTransitionError`)~~
+3. ~~Admin UI: customers list/create + projects pipeline~~
+4. Duplicate detection — see `FEATURE-phase2-duplicate-detection.md`
+5. Follow-ups: quotation/proforma/contract, branded PDF
 
 ## Exit gate (full Phase 2)
 Create customer → project → quote from calc → convert toward contract;
