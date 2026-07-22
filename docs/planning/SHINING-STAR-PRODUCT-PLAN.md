@@ -12,6 +12,7 @@ Source: client proposal *ERP SYSTEM SHINING STAR ELECTROMECHANICAL WORKS*
 | Quotations | Quote / proforma / contract + branded PDF |
 | Employees | Staff directory + role assignment |
 | Assets | Elevators / stairs / other under a customer |
+| Notifications | In-app inbox + colleague notices |
 
 ## Planned next (keep simple)
 
@@ -26,7 +27,7 @@ Source: client proposal *ERP SYSTEM SHINING STAR ELECTROMECHANICAL WORKS*
 - Link to customer + optional project/building name
 - No heavy checklists yet — just a register
 
-### 3. Notifications center
+### 3. Notifications center ✅
 - Simple in-app inbox: “quote approved”, “service due”, “assigned to you”
 - SMS/email later — start with **internal alerts only**
 

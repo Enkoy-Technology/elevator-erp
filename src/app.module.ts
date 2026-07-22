@@ -12,6 +12,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { ElevatorCalcModule } from './modules/elevator-calc/elevator-calc.module';
 import { EmployeesModule } from './modules/employees/employees.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { QuotationsModule } from './modules/quotations/quotations.module';
 
@@ -32,6 +33,7 @@ import { QuotationsModule } from './modules/quotations/quotations.module';
     QuotationsModule,
     EmployeesModule,
     AssetsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

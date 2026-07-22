@@ -64,3 +64,10 @@ export const assetStatusEnum = pgEnum('asset_status', [
   'INACTIVE',
   'DECOMMISSIONED',
 ]);
+
+export const notificationTypeEnum = pgEnum('notification_type', [
+  'GENERAL',
+  'QUOTE',
+  'ASSIGNMENT',
+  'MAINTENANCE',
+]);

@@ -12,11 +12,11 @@ Full client wishlist lives in `SHINING-STAR-PRODUCT-PLAN.md` — deliver it in
 - Quotations → proforma → contract + PDF
 - Employees (roles)
 - Assets (elevator / stairs / other)
+- Notifications (in-app inbox)
 
 ## Next (in order)
-1. **Notifications** — simple in-app center
-2. **Maintenance** — contracts + service follow-up (+ light breakdowns)
-3. **Settings** — branding + language (EN / Amharic)
+1. **Maintenance** — contracts + service follow-up (+ light breakdowns)
+2. **Settings** — branding + language (EN / Amharic)
 
 ## Do not build yet
 - Crews / GPS / multi-phase installation theatre

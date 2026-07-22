@@ -27,7 +27,6 @@ export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
 
   @Get()
-  @Roles('ADMIN')
   @ApiOperation({ summary: 'List employees (paginated)' })
   @ApiOkResponse({ description: 'Paginated employees' })
   list(

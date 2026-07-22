@@ -663,3 +663,71 @@ export const updateAsset = (
     method: 'PATCH',
     body: JSON.stringify(payload),
   });
+
+export const NOTIFICATION_TYPES = [
+  'GENERAL',
+  'QUOTE',
+  'ASSIGNMENT',
+  'MAINTENANCE',
+] as const;
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
+export interface AppNotification {
+  id: string;
+  tenantId: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  body: string | null;
+  linkPath: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export const listNotifications = (options?: {
+  unreadOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+}): Promise<Paginated<AppNotification>> => {
+  const params = new URLSearchParams();
+  if (options?.unreadOnly) {
+    params.set('unreadOnly', 'true');
+  }
+  if (options?.page) {
+    params.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set('pageSize', String(options.pageSize));
+  }
+  const query = params.toString();
+  return apiFetch<Paginated<AppNotification>>(
+    `/notifications${query ? `?${query}` : ''}`,
+  );
+};
+
+export const getUnreadNotificationCount = (): Promise<{ count: number }> =>
+  apiFetch<{ count: number }>('/notifications/unread-count');
+
+export const createNotification = (payload: {
+  userId: string;
+  type?: NotificationType;
+  title: string;
+  body?: string;
+  linkPath?: string;
+}): Promise<AppNotification> =>
+  apiFetch<AppNotification>('/notifications', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const markNotificationRead = (
+  id: string,
+): Promise<AppNotification> =>
+  apiFetch<AppNotification>(`/notifications/${id}/read`, {
+    method: 'PATCH',
+  });
+
+export const markAllNotificationsRead = (): Promise<{ updated: number }> =>
+  apiFetch<{ updated: number }>('/notifications/read-all', {
+    method: 'POST',
+  });
