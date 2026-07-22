@@ -21,6 +21,8 @@ pnpm run start:dev            # API on http://localhost:3002/v1
 Demo login: `POST /v1/auth/login` with
 `{ "tenantSlug": "demo", "email": "ceo@demo.example.com", "password": "Demo!Passw0rd" }`.
 
+Interactive API docs (Swagger UI): **http://localhost:3002/docs**
+
 ## Verification
 
 ```bash

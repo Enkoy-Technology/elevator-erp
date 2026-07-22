@@ -17,6 +17,13 @@ export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
+    const request = context
+      .switchToHttp()
+      .getRequest<{ url?: string; user?: AuthenticatedUser }>();
+    if (request.url?.startsWith('/docs')) {
+      return true;
+    }
+
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -32,9 +39,6 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    const request = context
-      .switchToHttp()
-      .getRequest<{ user?: AuthenticatedUser }>();
     const role = request.user?.role;
     if (!role) {
       throw new ForbiddenException('No role in authentication context');

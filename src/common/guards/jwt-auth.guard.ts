@@ -11,6 +11,11 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   }
 
   override canActivate(context: ExecutionContext) {
+    const request = context.switchToHttp().getRequest<{ url?: string }>();
+    if (request.url?.startsWith('/docs')) {
+      return true;
+    }
+
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
