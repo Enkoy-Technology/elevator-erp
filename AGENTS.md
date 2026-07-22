@@ -15,11 +15,13 @@ DB migrate: `pnpm run db:migrate` (uses `DATABASE_ADMIN_URL`)
 DB generate: `pnpm run db:generate`
 DB seed: `pnpm run db:seed`
 Dev server: `pnpm run start:dev`
+Admin UI: `pnpm run web:dev` (http://localhost:3003)
 
-Local dev: Postgres is on host port **5434** and the API on **3002** (5432/5433
-and 3000/3001 are used by other projects on this machine). The app connects as
-the non-owner `app_user` role (subject to RLS); only migrate/seed use the
-`postgres` owner via `DATABASE_ADMIN_URL`.
+Local dev: Postgres is on host port **5434**, the API on **3002**, and the
+admin UI on **3003** (5432/5433 and 3000/3001 are used by other projects on
+this machine). The app connects as the non-owner `app_user` role (subject to
+RLS); only migrate/seed use the `postgres` owner via `DATABASE_ADMIN_URL`.
+Set `CORS_ORIGINS=http://localhost:3003` so the browser UI can call the API.
 
 ## Code Style
 

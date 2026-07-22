@@ -1,0 +1,13 @@
+# Marks web/ as its own pnpm workspace root so it keeps an isolated
+# lockfile and node_modules, separate from the API at the repo root.
+packages:
+  - '.'
+
+allowBuilds:
+  sharp: true
+
+# Registry fetches of the large Next.js tarballs are slow on this network;
+# generous timeouts and low concurrency keep installs from stalling out.
+fetchTimeout: 900000
+fetchRetries: 5
+networkConcurrency: 3

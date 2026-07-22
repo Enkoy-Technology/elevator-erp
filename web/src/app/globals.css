@@ -1,0 +1,21 @@
+@import 'tailwindcss';
+
+@theme {
+  /* Default tenant palette (seed branding); per-tenant theming lands later. */
+  --color-navy-950: #101a30;
+  --color-navy-900: #16233f;
+  --color-navy-800: #1b2a4a;
+  --color-navy-700: #24365d;
+  --color-navy-600: #2e4372;
+  --color-navy-100: #dbe2ef;
+  --color-gold-500: #e8b54d;
+  --color-gold-400: #f0c46a;
+  --color-gold-600: #d9a233;
+
+  --font-sans: var(--font-ibm-plex), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-barlow), var(--font-ibm-plex), sans-serif;
+}
+
+body {
+  @apply bg-slate-100 font-sans text-slate-900 antialiased;
+}

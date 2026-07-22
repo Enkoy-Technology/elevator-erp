@@ -16,18 +16,20 @@ docker compose up -d          # Postgres 16 (host port 5434) + Redis 7
 pnpm run db:migrate           # applies schema + RLS policies (owner connection)
 pnpm run db:seed              # demo tenant + CEO user
 pnpm run start:dev            # API on http://localhost:3002/v1
+pnpm run web:dev              # Admin UI on http://localhost:3003
 ```
 
-Demo login: `POST /v1/auth/login` with
-`{ "tenantSlug": "demo", "email": "ceo@demo.example.com", "password": "Demo!Passw0rd" }`.
+Demo login (UI or API): workspace `demo`, `ceo@demo.example.com` / `Demo!Passw0rd`.
 
-Interactive API docs (Swagger UI): **http://localhost:3002/docs**
+- Admin UI: **http://localhost:3003**
+- Swagger: **http://localhost:3002/docs**
 
 ## Verification
 
 ```bash
 pnpm run typecheck && pnpm run lint && pnpm test && pnpm run build
 pnpm run test:e2e   # tenant-isolation exit gate (requires migrated Postgres)
+pnpm run web:typecheck && pnpm run web:build
 ```
 
 ## Multi-tenancy model
