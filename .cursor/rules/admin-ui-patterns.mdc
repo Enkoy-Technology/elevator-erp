@@ -1,0 +1,25 @@
+---
+description: Admin UI patterns — right-side create drawers and paginated tables
+globs: web/**/*.{tsx,ts}
+alwaysApply: false
+---
+
+# Admin UI patterns (web/)
+
+## Create / edit forms
+
+- Do **not** put create/edit forms inline above list pages.
+- Open forms in a **right-side overlay drawer** when the user clicks a primary action (e.g. "Create customer").
+- Drawer: backdrop click / Escape / close button dismisses; focus stays in the drawer while open.
+- Keep the list page clean: header + search/filters + table + pagination only.
+
+## Tables
+
+- Every data table must be **server-paginated** (page + pageSize query params).
+- Default page size: 20. Cap pageSize at 100 on the API.
+- Show total count and Previous/Next (or page numbers) under the table.
+- Prefer list API shape: `{ items, page, pageSize, total, totalPages }`.
+
+## Shared components
+
+Reuse `SideDrawer` and `Pagination` from `web/src/components/` instead of one-off markup.

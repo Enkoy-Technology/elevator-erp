@@ -77,11 +77,18 @@ Never commit `.env` or any file containing secrets.
 ## Domain Conventions
 
 - Elevator specs follow EN 81-20/50, ISO 8100, ASME A17.1 standards.
-- Pricing uses arbitrary-precision decimal arithmetic (never float for money).
+- Pricing uses arbitrary-precision decimal arithmetic (never float for money). Currency is **ETB**.
 - Project status workflow is a DAG: LEAD -> SITE_SURVEY -> SPEC_CALCULATION -> QUOTATION -> PROFORMA -> CONTRACT -> EXECUTION -> COMPLETED.
 - Maintenance recurrence: DAILY, WEEKLY, BIWEEKLY, MONTHLY, QUARTERLY, BIANNUAL, ANNUAL, CUSTOM.
 - Breakdown severity: EMERGENCY (30min SLA), CRITICAL (60min), HIGH (4hr), MEDIUM (24hr), LOW (48hr).
 - Inventory transactions are an immutable ledger. Never delete, only create reversing entries.
+
+## Admin UI (`web/`)
+
+- List pages stay clean: header + search/filters + **paginated table**. No inline create forms above the list.
+- Create/edit opens in a **right-side overlay drawer** (primary button → drawer). Use shared `SideDrawer` / `Pagination`.
+- List APIs return `{ items, page, pageSize, total, totalPages }`. Query: `page` (1-based), `pageSize` (default 20, max 100).
+- See `.cursor/rules/admin-ui-patterns.mdc` for the full rule.
 
 ## Error Handling
 
