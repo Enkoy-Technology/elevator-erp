@@ -501,3 +501,78 @@ export const downloadQuotationPdf = async (
   anchor.remove();
   URL.revokeObjectURL(url);
 };
+
+export const EMPLOYEE_ROLES = [
+  'CEO',
+  'SALES_MANAGER',
+  'TECHNICAL_LEAD',
+  'FIELD_ENGINEER',
+  'FINANCE',
+  'WAREHOUSE_MANAGER',
+  'DISPATCHER',
+  'ADMIN',
+] as const;
+
+export type EmployeeRole = (typeof EMPLOYEE_ROLES)[number];
+
+export interface Employee {
+  id: string;
+  email: string;
+  fullName: string;
+  phone: string | null;
+  role: EmployeeRole;
+  isActive: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+}
+
+export interface CreateEmployeePayload {
+  email: string;
+  fullName: string;
+  phone?: string;
+  role: EmployeeRole;
+  password: string;
+}
+
+export const listEmployees = (options?: {
+  q?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<Paginated<Employee>> => {
+  const params = new URLSearchParams();
+  if (options?.q) {
+    params.set('q', options.q);
+  }
+  if (options?.page) {
+    params.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set('pageSize', String(options.pageSize));
+  }
+  const query = params.toString();
+  return apiFetch<Paginated<Employee>>(
+    `/employees${query ? `?${query}` : ''}`,
+  );
+};
+
+export const createEmployee = (
+  payload: CreateEmployeePayload,
+): Promise<Employee> =>
+  apiFetch<Employee>('/employees', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const updateEmployee = (
+  id: string,
+  payload: {
+    fullName?: string;
+    phone?: string;
+    role?: EmployeeRole;
+    isActive?: boolean;
+  },
+): Promise<Employee> =>
+  apiFetch<Employee>(`/employees/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });

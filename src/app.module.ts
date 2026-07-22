@@ -10,6 +10,7 @@ import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { ElevatorCalcModule } from './modules/elevator-calc/elevator-calc.module';
+import { EmployeesModule } from './modules/employees/employees.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { QuotationsModule } from './modules/quotations/quotations.module';
 
@@ -28,6 +29,7 @@ import { QuotationsModule } from './modules/quotations/quotations.module';
     CustomersModule,
     ProjectsModule,
     QuotationsModule,
+    EmployeesModule,
   ],
   controllers: [AppController],
   providers: [
