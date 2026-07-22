@@ -39,23 +39,36 @@ mutate an issued quote; queryable money is also lifted into numeric columns.
 - **Server recomputes pricing** from the posted `CalcInput` — client-sent
   money is never trusted.
 
-## Requirements (sliced commits)
-1. **[this slice]** `quotations` schema + enum + migration + RLS; create quote
-   from calc (`POST /projects/:id/quotations`), `GET /quotations`,
-   `GET /quotations/:id`. Status DAG helper + unit test. Snapshot + money cols.
-2. Lifecycle transitions: `approve` (Sales Manager+), `convert-proforma`,
-   `convert-contract`, `cancel`/`reject`. Guarded by `canTransitionQuoteStatus`.
-3. Wire project DAG: `projects` QUOTATION → PROFORMA blocked unless an
-   APPROVED quote exists (blocking condition in `ProjectsService.updateStatus`).
-   On CONTRACT, copy quote total into `projects.contract_amount_etb`.
-4. Branded PDF: `POST /quotations/:id/generate-pdf` — tenant logo/colors,
-   pricing table. (Email/BullMQ `send` can follow.)
-5. Admin UI `/quotations`: paginated list + right-drawer create-from-calc,
-   approve/convert actions, PDF download. Drawers + `{ items,…,totalPages }`.
+## Requirements (sliced commits) — ✅ all shipped
+1. ~~`quotations` schema + enum + migration + RLS; create quote from calc
+   (`POST /projects/:id/quotations`), `GET /quotations`, `GET /quotations/:id`.
+   Status DAG helper + unit test. Snapshot + money cols.~~
+2. ~~Lifecycle transitions: `approve` (Sales Manager+), `convert-proforma`,
+   `convert-contract`, `cancel`/`reject`. Guarded by `canTransitionQuoteStatus`.~~
+3. ~~Wire project DAG: manual PATCH into `projects` PROFORMA/CONTRACT blocked
+   (409); a quote conversion is the only path in, and it copies the quote total
+   into `projects.quoted_amount_etb` / `contract_amount_etb`. This avoids a
+   circular projects↔quotations dependency — quotations drives projects only.~~
+4. ~~Branded PDF: `POST /quotations/:id/generate-pdf` — tenant logo/colours,
+   pricing table, via Puppeteer. Hardened: JS disabled, request interception
+   (block file:/http:/private-IP SSRF), hex validation, role gate.~~ Email/BullMQ
+   `send` still to follow.
+5. ~~Admin UI `/quotations`: paginated list + right-drawer create-from-calc,
+   approve/convert actions, PDF download. Drawers + `{ items,…,totalPages }`.~~
 
-## Exit gate (full Phase 2)
+## Exit gate (full Phase 2) — ✅ MET
 Create customer → project → quote from calc → approve → convert toward
-contract → branded PDF; duplicate lead already flagged.
+contract → branded PDF; duplicate lead already flagged. Verified end-to-end
+against the live API (project→QUOTATION, manual PROFORMA blocked 409, quote
+DRAFT→APPROVED→PROFORMA→CONTRACT advancing the project + copying the amount,
+122 KB branded PDF).
+
+## Follow-ups (deferred, flagged in-code)
+- `sanitize-html` allowlist on the branding *write* side (defence-in-depth for
+  raw `pdfHeaderHtml`/`pdfFooterHtml`).
+- BullMQ worker + Chromium page pool for PDF concurrency (currently sync).
+- DNS-resolution SSRF check (current guard blocks literal private IPs only).
+- `POST /quotations/:id/send` — email the PDF to the customer with tracking.
 
 ## Risks
 - Quote status DAG must reject illegal transitions at the **service** layer.
