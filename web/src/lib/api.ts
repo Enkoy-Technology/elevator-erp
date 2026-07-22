@@ -26,6 +26,26 @@ export interface ProblemDetails {
   status: number;
   detail: string;
   instance: string;
+  recommendation?: DuplicateRecommendation;
+  matches?: DuplicateMatch[];
+}
+
+export type DuplicateRecommendation =
+  | 'OK'
+  | 'REVIEW_BEFORE_CREATE'
+  | 'HIGH_CONFIDENCE_DUPLICATE';
+
+export interface DuplicateMatch {
+  customerId: string;
+  name: string;
+  score: number;
+  recommendation: DuplicateRecommendation;
+}
+
+export interface DuplicateCheckResult {
+  recommendation: DuplicateRecommendation;
+  maxScore: number;
+  matches: DuplicateMatch[];
 }
 
 export class ApiError extends Error {
@@ -241,6 +261,7 @@ export interface CreateCustomerPayload {
   city?: string;
   customerType?: CustomerType;
   notes?: string;
+  acknowledgePossibleDuplicate?: boolean;
 }
 
 export const listCustomers = (options?: {
@@ -263,6 +284,16 @@ export const listCustomers = (options?: {
     `/customers${query ? `?${query}` : ''}`,
   );
 };
+
+export const checkCustomerDuplicate = (payload: {
+  name: string;
+  phone?: string;
+  buildingName?: string;
+}): Promise<DuplicateCheckResult> =>
+  apiFetch<DuplicateCheckResult>('/customers/check-duplicate', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 
 export const createCustomer = (
   payload: CreateCustomerPayload,
