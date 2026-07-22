@@ -3,21 +3,23 @@
 Multi-tenant Cloud SaaS ERP for elevator & electromechanical companies.
 NestJS 11 + TypeScript, Drizzle ORM, PostgreSQL 16 with RLS, Redis 7, BullMQ.
 
-> NOTE: This is a fresh scaffold. No package.json exists yet. The commands below
-> are the intended scripts — reconcile them against the real package.json the
-> moment it lands, and delete this note once verified.
-
 ## Commands
 
 Build: `pnpm run build`
 Test: `pnpm test`
+E2E test: `pnpm run test:e2e` (needs `docker compose up -d` + `pnpm run db:migrate`)
 Lint: `pnpm run lint --fix`
 Type check: `pnpm run typecheck`
 Single test: `pnpm test src/modules/elevator-calc/elevator-calc.service.spec.ts`
-DB migrate: `pnpm run db:migrate`
+DB migrate: `pnpm run db:migrate` (uses `DATABASE_ADMIN_URL`)
 DB generate: `pnpm run db:generate`
 DB seed: `pnpm run db:seed`
 Dev server: `pnpm run start:dev`
+
+Local dev: Postgres is on host port **5434** and the API on **3002** (5432/5433
+and 3000/3001 are used by other projects on this machine). The app connects as
+the non-owner `app_user` role (subject to RLS); only migrate/seed use the
+`postgres` owner via `DATABASE_ADMIN_URL`.
 
 ## Code Style
 
