@@ -1,0 +1,18 @@
+node_modules/
+dist/
+build/
+coverage/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+service-account*.json
+
+# OS / editor
+.DS_Store
+*.log
+.idea/
+.vscode/

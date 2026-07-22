@@ -1,0 +1,15 @@
+---
+description: Multi-tenancy and RLS rules
+globs:
+  - src/database/**/*.ts
+  - src/common/guards/**/*.ts
+---
+
+# Multi-Tenancy & RLS
+
+Every table definition in the Drizzle schema must include `tenantId: uuid('tenant_id').notNull()`.
+Every RLS policy must reference `current_setting('app.tenant_id')::uuid`.
+The `setTenantContext()` function in `src/database/tenant-context.ts` must be called before every query.
+
+Never hand-write `WHERE tenant_id = ?` — RLS handles isolation automatically.
+Never disable RLS in migration files except inside an explicit `admin_bypass` policy definition.

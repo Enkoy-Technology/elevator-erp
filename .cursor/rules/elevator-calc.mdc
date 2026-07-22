@@ -1,0 +1,18 @@
+---
+description: Elevator calculation engine rules
+globs: src/modules/elevator-calc/**/*.ts
+---
+
+# Elevator Calculation Engine
+
+All calculations must use `decimal.js` or `big.js` for arbitrary-precision arithmetic. Never use JavaScript `number` for pricing.
+
+Formula references are in `docs/elevator-calc-formulas.md`.
+
+When adding a new calculation parameter:
+1. Add to `CalcInputDto` with class-validator decorators
+2. Add to the Drizzle schema in `src/database/schema/elevator-specs.ts`
+3. Add a unit test in `src/modules/elevator-calc/elevator-calc.service.spec.ts`
+4. Update the formula documentation
+
+The `calculateSpecs()` method in `ElevatorCalcService` is the single entry point. All sub-calculations are private methods.

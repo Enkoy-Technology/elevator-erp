@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"],
+      "comment": "Reads DATABASE_URL from env. Only connects when the dev DB is up. Read-only queries recommended."
+    },
+    "redis": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-redis", "${REDIS_URL}"],
+      "comment": "Reads REDIS_URL from env. Inspect BullMQ queues and cache keys."
+    }
+  }
+}

@@ -1,0 +1,14 @@
+---
+description: Background job worker rules
+globs: src/workers/**/*.ts
+---
+
+# BullMQ Worker Conventions
+
+Each queue has a dedicated processor class in `src/workers/`.
+Use `BullModule.registerQueue()` in the worker module.
+Set `removeOnComplete: 10` and `removeOnFail: 5` to prevent Redis bloat.
+Retry policy: 3 retries, exponential backoff starting at 30s.
+
+Critical queues (sms-dispatch, sla-monitor) get 5 retries, 10s fixed backoff.
+Never throw unhandled errors — always catch and log to the structured logger.
