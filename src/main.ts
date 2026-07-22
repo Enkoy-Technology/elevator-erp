@@ -40,6 +40,8 @@ const bootstrap = async (): Promise<void> => {
     )
     .addTag('health', 'Liveness probe')
     .addTag('auth', 'Login, refresh, logout, and current user')
+    .addTag('customers', 'CRM customers')
+    .addTag('projects', 'Sales project pipeline')
     .addTag('elevator-specs', 'Technical specification and pricing calculator')
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);

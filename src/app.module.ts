@@ -10,6 +10,7 @@ import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { ElevatorCalcModule } from './modules/elevator-calc/elevator-calc.module';
+import { ProjectsModule } from './modules/projects/projects.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ElevatorCalcModule } from './modules/elevator-calc/elevator-calc.module
     AuthModule,
     ElevatorCalcModule,
     CustomersModule,
+    ProjectsModule,
   ],
   controllers: [AppController],
   providers: [
