@@ -71,3 +71,33 @@ export const notificationTypeEnum = pgEnum('notification_type', [
   'ASSIGNMENT',
   'MAINTENANCE',
 ]);
+
+export const maintenanceRecurrenceEnum = pgEnum('maintenance_recurrence', [
+  'DAILY',
+  'WEEKLY',
+  'BIWEEKLY',
+  'MONTHLY',
+  'QUARTERLY',
+  'BIANNUAL',
+  'ANNUAL',
+  'CUSTOM',
+]);
+
+export const maintenanceContractStatusEnum = pgEnum(
+  'maintenance_contract_status',
+  ['ACTIVE', 'PAUSED', 'ENDED'],
+);
+
+export const breakdownSeverityEnum = pgEnum('breakdown_severity', [
+  'EMERGENCY',
+  'CRITICAL',
+  'HIGH',
+  'MEDIUM',
+  'LOW',
+]);
+
+export const breakdownStatusEnum = pgEnum('breakdown_status', [
+  'OPEN',
+  'ASSIGNED',
+  'DONE',
+]);

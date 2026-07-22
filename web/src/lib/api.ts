@@ -731,3 +731,144 @@ export const markAllNotificationsRead = (): Promise<{ updated: number }> =>
   apiFetch<{ updated: number }>('/notifications/read-all', {
     method: 'POST',
   });
+
+export const MAINTENANCE_RECURRENCES = [
+  'DAILY',
+  'WEEKLY',
+  'BIWEEKLY',
+  'MONTHLY',
+  'QUARTERLY',
+  'BIANNUAL',
+  'ANNUAL',
+  'CUSTOM',
+] as const;
+export type MaintenanceRecurrence = (typeof MAINTENANCE_RECURRENCES)[number];
+
+export const BREAKDOWN_SEVERITIES = [
+  'EMERGENCY',
+  'CRITICAL',
+  'HIGH',
+  'MEDIUM',
+  'LOW',
+] as const;
+export type BreakdownSeverity = (typeof BREAKDOWN_SEVERITIES)[number];
+
+export const BREAKDOWN_STATUSES = ['OPEN', 'ASSIGNED', 'DONE'] as const;
+export type BreakdownStatus = (typeof BREAKDOWN_STATUSES)[number];
+
+export interface MaintenanceContract {
+  id: string;
+  assetId: string;
+  customerId: string;
+  recurrence: MaintenanceRecurrence;
+  status: 'ACTIVE' | 'PAUSED' | 'ENDED';
+  startDate: string;
+  nextServiceAt: string;
+  lastServiceAt: string | null;
+  assignedUserId: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface Breakdown {
+  id: string;
+  assetId: string;
+  customerId: string;
+  title: string;
+  description: string | null;
+  severity: BreakdownSeverity;
+  status: BreakdownStatus;
+  assignedUserId: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+}
+
+export const listMaintenanceContracts = (options?: {
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<Paginated<MaintenanceContract>> => {
+  const params = new URLSearchParams();
+  if (options?.status) {
+    params.set('status', options.status);
+  }
+  if (options?.page) {
+    params.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set('pageSize', String(options.pageSize));
+  }
+  const query = params.toString();
+  return apiFetch<Paginated<MaintenanceContract>>(
+    `/maintenance/contracts${query ? `?${query}` : ''}`,
+  );
+};
+
+export const createMaintenanceContract = (payload: {
+  assetId: string;
+  recurrence?: MaintenanceRecurrence;
+  startDate: string;
+  nextServiceAt: string;
+  assignedUserId?: string;
+  notes?: string;
+}): Promise<MaintenanceContract> =>
+  apiFetch<MaintenanceContract>('/maintenance/contracts', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const logServiceVisit = (
+  contractId: string,
+  payload?: { notes?: string },
+): Promise<{ visit: unknown; contract: MaintenanceContract }> =>
+  apiFetch(`/maintenance/contracts/${contractId}/visits`, {
+    method: 'POST',
+    body: JSON.stringify(payload ?? {}),
+  });
+
+export const listBreakdowns = (options?: {
+  status?: BreakdownStatus;
+  page?: number;
+  pageSize?: number;
+}): Promise<Paginated<Breakdown>> => {
+  const params = new URLSearchParams();
+  if (options?.status) {
+    params.set('status', options.status);
+  }
+  if (options?.page) {
+    params.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set('pageSize', String(options.pageSize));
+  }
+  const query = params.toString();
+  return apiFetch<Paginated<Breakdown>>(
+    `/maintenance/breakdowns${query ? `?${query}` : ''}`,
+  );
+};
+
+export const createBreakdown = (payload: {
+  assetId: string;
+  title: string;
+  description?: string;
+  severity?: BreakdownSeverity;
+  assignedUserId?: string;
+}): Promise<Breakdown> =>
+  apiFetch<Breakdown>('/maintenance/breakdowns', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const updateBreakdown = (
+  id: string,
+  payload: {
+    severity?: BreakdownSeverity;
+    status?: BreakdownStatus;
+    assignedUserId?: string | null;
+    description?: string | null;
+  },
+): Promise<Breakdown> =>
+  apiFetch<Breakdown>(`/maintenance/breakdowns/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });

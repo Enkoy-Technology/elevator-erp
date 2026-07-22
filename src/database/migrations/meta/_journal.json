@@ -120,6 +120,20 @@
       "when": 1784743001000,
       "tag": "0016_notifications_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1784744000000,
+      "tag": "0017_maintenance",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1784744001000,
+      "tag": "0018_maintenance_rls",
+      "breakpoints": true
     }
   ]
 }

@@ -8,3 +8,4 @@ export * from './projects';
 export * from './quotations';
 export * from './assets';
 export * from './notifications';
+export * from './maintenance';

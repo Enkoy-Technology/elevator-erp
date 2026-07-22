@@ -13,6 +13,7 @@ Source: client proposal *ERP SYSTEM SHINING STAR ELECTROMECHANICAL WORKS*
 | Employees | Staff directory + role assignment |
 | Assets | Elevators / stairs / other under a customer |
 | Notifications | In-app inbox + colleague notices |
+| Maintenance | Contracts, visits, breakdown tickets |
 
 ## Planned next (keep simple)
 
@@ -31,7 +32,7 @@ Source: client proposal *ERP SYSTEM SHINING STAR ELECTROMECHANICAL WORKS*
 - Simple in-app inbox: “quote approved”, “service due”, “assigned to you”
 - SMS/email later — start with **internal alerts only**
 
-### 4. Maintenance & follow-up
+### 4. Maintenance & follow-up ✅
 - Register a maintenance contract on an asset
 - Schedule next service date + mark visits done
 - Breakdown ticket: Open → Assigned → Done (no GPS/SLA theatre yet)
