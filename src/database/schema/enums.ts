@@ -25,3 +25,21 @@ export const subscriptionStatusEnum = pgEnum('subscription_status', [
   'SUSPENDED',
   'CANCELLED',
 ]);
+
+export const customerTypeEnum = pgEnum('customer_type', [
+  'RESIDENTIAL',
+  'COMMERCIAL',
+  'GOVERNMENT',
+]);
+
+export const projectStatusEnum = pgEnum('project_status', [
+  'LEAD',
+  'SITE_SURVEY',
+  'SPEC_CALCULATION',
+  'QUOTATION',
+  'PROFORMA',
+  'CONTRACT',
+  'EXECUTION',
+  'COMPLETED',
+  'CANCELLED',
+]);

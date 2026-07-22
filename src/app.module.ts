@@ -8,6 +8,7 @@ import { JwtAuthGuard, RolesGuard, TenantGuard } from './common/guards';
 import { AppConfigModule } from './config';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { CustomersModule } from './modules/customers/customers.module';
 import { ElevatorCalcModule } from './modules/elevator-calc/elevator-calc.module';
 
 @Module({
@@ -22,6 +23,7 @@ import { ElevatorCalcModule } from './modules/elevator-calc/elevator-calc.module
     ]),
     AuthModule,
     ElevatorCalcModule,
+    CustomersModule,
   ],
   controllers: [AppController],
   providers: [
