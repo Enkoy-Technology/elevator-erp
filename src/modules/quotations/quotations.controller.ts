@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Post,
@@ -20,6 +21,7 @@ import { CurrentUser, Roles } from '../../common/decorators';
 import { quoteStatusEnum, type QuoteStatus } from '../../database/schema';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { CreateQuotationDto } from './dto/create-quotation.dto';
+import { RejectQuotationDto } from './dto/reject-quotation.dto';
 import { QuotationsService } from './quotations.service';
 
 const QUOTE_STATUSES = quoteStatusEnum.enumValues;
@@ -77,5 +79,61 @@ export class QuotationsController {
     @Body() dto: CreateQuotationDto,
   ) {
     return this.quotationsService.createForProject(user, projectId, dto);
+  }
+
+  @Post('quotations/:id/approve')
+  @HttpCode(200)
+  @Roles('SALES_MANAGER')
+  @ApiOperation({ summary: 'Approve a DRAFT quotation (Sales Manager+)' })
+  approve(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.quotationsService.approve(user, id);
+  }
+
+  @Post('quotations/:id/reject')
+  @HttpCode(200)
+  @Roles('SALES_MANAGER')
+  @ApiOperation({ summary: 'Reject a DRAFT quotation with a reason' })
+  reject(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RejectQuotationDto,
+  ) {
+    return this.quotationsService.reject(user, id, dto.reason);
+  }
+
+  @Post('quotations/:id/cancel')
+  @HttpCode(200)
+  @Roles('SALES_MANAGER')
+  @ApiOperation({ summary: 'Cancel a quotation (any non-terminal status)' })
+  cancel(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.quotationsService.cancel(user, id);
+  }
+
+  @Post('quotations/:id/convert-proforma')
+  @HttpCode(200)
+  @Roles('SALES_MANAGER')
+  @ApiOperation({ summary: 'Convert an APPROVED quotation to a proforma' })
+  convertToProforma(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.quotationsService.convertToProforma(user, id);
+  }
+
+  @Post('quotations/:id/convert-contract')
+  @HttpCode(200)
+  @Roles('SALES_MANAGER')
+  @ApiOperation({ summary: 'Convert a PROFORMA quotation to a contract' })
+  convertToContract(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.quotationsService.convertToContract(user, id);
   }
 }

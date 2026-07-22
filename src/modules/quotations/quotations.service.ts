@@ -2,14 +2,17 @@ import { randomUUID } from 'node:crypto';
 
 import { Injectable, NotFoundException } from '@nestjs/common';
 
+import { WorkflowTransitionError } from '../../common/exceptions';
 import type { PaginatedResult } from '../../common/pagination';
 import type { QuoteStatus } from '../../database/schema';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { ElevatorCalcService } from '../elevator-calc/elevator-calc.service';
 import { ProjectsService } from '../projects/projects.service';
 import type { CreateQuotationDto } from './dto/create-quotation.dto';
+import { canTransitionQuoteStatus } from './quote-status';
 import {
   QuotationsRepository,
+  type QuotationInsert,
   type QuotationRecord,
 } from './quotations.repository';
 
@@ -81,6 +84,68 @@ export class QuotationsService {
       createdByUserId: user.userId,
       statusChangedAt: new Date(),
     });
+  }
+
+  approve(user: AuthenticatedUser, id: string): Promise<QuotationRecord> {
+    return this.transition(user, id, 'APPROVED', {
+      approvedByUserId: user.userId,
+      approvedAt: new Date(),
+    });
+  }
+
+  reject(
+    user: AuthenticatedUser,
+    id: string,
+    reason: string,
+  ): Promise<QuotationRecord> {
+    return this.transition(user, id, 'REJECTED', { rejectedReason: reason });
+  }
+
+  cancel(user: AuthenticatedUser, id: string): Promise<QuotationRecord> {
+    return this.transition(user, id, 'CANCELLED');
+  }
+
+  convertToProforma(
+    user: AuthenticatedUser,
+    id: string,
+  ): Promise<QuotationRecord> {
+    return this.transition(user, id, 'PROFORMA', { proformaAt: new Date() });
+  }
+
+  convertToContract(
+    user: AuthenticatedUser,
+    id: string,
+  ): Promise<QuotationRecord> {
+    return this.transition(user, id, 'CONTRACT', { contractAt: new Date() });
+  }
+
+  private async transition(
+    user: AuthenticatedUser,
+    id: string,
+    to: QuoteStatus,
+    extra: Partial<
+      Pick<
+        QuotationInsert,
+        | 'approvedByUserId'
+        | 'approvedAt'
+        | 'rejectedReason'
+        | 'proformaAt'
+        | 'contractAt'
+      >
+    > = {},
+  ): Promise<QuotationRecord> {
+    const quote = await this.getById(user, id);
+    if (!canTransitionQuoteStatus(quote.status, to)) {
+      throw new WorkflowTransitionError(
+        `Cannot transition quotation from ${quote.status} to ${to}`,
+      );
+    }
+    return this.quotationsRepository.updateStatus(
+      user.tenantId,
+      id,
+      to,
+      extra,
+    );
   }
 }
 

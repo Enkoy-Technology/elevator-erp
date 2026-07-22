@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { and, count, desc, eq, isNull } from 'drizzle-orm';
 
 import {
@@ -76,6 +76,35 @@ export class QuotationsRepository {
       const [row] = await tx.insert(quotations).values(values).returning();
       if (!row) {
         throw new Error('Failed to insert quotation');
+      }
+      return row;
+    });
+  }
+
+  async updateStatus(
+    tenantId: string,
+    id: string,
+    status: QuoteStatus,
+    extra: Partial<
+      Pick<
+        QuotationInsert,
+        | 'approvedByUserId'
+        | 'approvedAt'
+        | 'rejectedReason'
+        | 'proformaAt'
+        | 'contractAt'
+      >
+    > = {},
+  ): Promise<QuotationRecord> {
+    const now = new Date();
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const [row] = await tx
+        .update(quotations)
+        .set({ status, statusChangedAt: now, updatedAt: now, ...extra })
+        .where(and(eq(quotations.id, id), isNull(quotations.deletedAt)))
+        .returning();
+      if (!row) {
+        throw new NotFoundException('Quotation not found');
       }
       return row;
     });
