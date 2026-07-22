@@ -31,10 +31,10 @@ const field =
 
 const label = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500';
 
-const formatUsd = (value: string): string =>
-  new Intl.NumberFormat('en-US', {
+const formatMoney = (value: string): string =>
+  new Intl.NumberFormat('en-ET', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'ETB',
   }).format(Number(value));
 
 export default function CalculatorPage() {
@@ -280,12 +280,12 @@ export default function CalculatorPage() {
                 <section className="rounded-2xl bg-navy-800 p-6 text-white">
                   <p className="text-sm text-navy-100/70">Total price</p>
                   <p className="font-display mt-1 text-3xl font-bold tracking-tight text-gold-400">
-                    {formatUsd(result.pricing.totalPrice)}
+                    {formatMoney(result.pricing.totalPrice)}
                   </p>
                   <p className="mt-2 text-xs text-navy-100/60">
-                    Equipment {formatUsd(result.pricing.equipmentSubtotal)} ·
-                    Margin {formatUsd(result.pricing.marginAmount)} · Tax{' '}
-                    {formatUsd(result.pricing.taxAmount)}
+                    Equipment {formatMoney(result.pricing.equipmentSubtotal)} ·
+                    Margin {formatMoney(result.pricing.marginAmount)} · Tax{' '}
+                    {formatMoney(result.pricing.taxAmount)}
                   </p>
                 </section>
 
@@ -316,7 +316,7 @@ export default function CalculatorPage() {
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-6">
                   <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                    Pricing breakdown (USD)
+                    Pricing breakdown (ETB)
                   </h2>
                   <dl className="space-y-2 text-sm">
                     {(
@@ -338,7 +338,7 @@ export default function CalculatorPage() {
                       >
                         <dt className="text-slate-500">{k}</dt>
                         <dd className="font-medium tabular-nums">
-                          {formatUsd(v)}
+                          {formatMoney(v)}
                         </dd>
                       </div>
                     ))}

@@ -109,7 +109,7 @@ D_factor      = 1.00 CENTER_OPEN | 1.12 TELESCOPIC | 0.95 SWING
 MR_MRL_factor = 1.00 MR | 0.92 MRL
 ```
 
-### Base Cost Lookup Matrix (USD)
+### Base Cost Lookup Matrix (ETB)
 
 | Capacity (kg) | Q_base | Capacity (kg) | Q_base |
 |---|---|---|---|

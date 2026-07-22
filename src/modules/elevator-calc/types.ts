@@ -42,7 +42,7 @@ export interface TechnicalSpecs {
   machineRoomHeightMm: number | null;
 }
 
-/** Money fields serialized to 2-decimal strings (USD). */
+/** Money fields serialized to 2-decimal strings (ETB). */
 export interface PricingBreakdown {
   qBase: string;
   baseCost: string;
