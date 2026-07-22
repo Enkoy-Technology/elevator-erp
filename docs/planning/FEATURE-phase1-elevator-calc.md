@@ -27,3 +27,6 @@ as `POST /v1/elevator-specs/calculate`, with a calculator screen in the admin UI
 ## Risks
 - Floating-point drift if any path uses `number` — keep Decimal end-to-end and
   serialize money as 2-decimal strings in the API response.
+- TAD §4.2.4 printed intermediates have arithmetic typos (BASE_COST product and
+  INSTALLATION 6,885 vs formula 6,871.50). Engine follows the formulas; unit
+  tests lock the Decimal-correct totals and document the discrepancies.
