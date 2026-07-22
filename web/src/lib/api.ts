@@ -209,6 +209,14 @@ export const calculateSpecs = (
     body: JSON.stringify(input),
   });
 
+export interface Paginated<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
 export type CustomerType = 'RESIDENTIAL' | 'COMMERCIAL' | 'GOVERNMENT';
 
 export interface Customer {
@@ -235,11 +243,25 @@ export interface CreateCustomerPayload {
   notes?: string;
 }
 
-export const listCustomers = (search?: string): Promise<Customer[]> => {
-  const query = search?.trim()
-    ? `?q=${encodeURIComponent(search.trim())}`
-    : '';
-  return apiFetch<Customer[]>(`/customers${query}`);
+export const listCustomers = (options?: {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<Paginated<Customer>> => {
+  const params = new URLSearchParams();
+  if (options?.search?.trim()) {
+    params.set('q', options.search.trim());
+  }
+  if (options?.page) {
+    params.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set('pageSize', String(options.pageSize));
+  }
+  const query = params.toString();
+  return apiFetch<Paginated<Customer>>(
+    `/customers${query ? `?${query}` : ''}`,
+  );
 };
 
 export const createCustomer = (
@@ -285,9 +307,25 @@ export interface CreateProjectPayload {
   notes?: string;
 }
 
-export const listProjects = (status?: ProjectStatus): Promise<Project[]> => {
-  const query = status ? `?status=${encodeURIComponent(status)}` : '';
-  return apiFetch<Project[]>(`/projects${query}`);
+export const listProjects = (options?: {
+  status?: ProjectStatus;
+  page?: number;
+  pageSize?: number;
+}): Promise<Paginated<Project>> => {
+  const params = new URLSearchParams();
+  if (options?.status) {
+    params.set('status', options.status);
+  }
+  if (options?.page) {
+    params.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set('pageSize', String(options.pageSize));
+  }
+  const query = params.toString();
+  return apiFetch<Paginated<Project>>(
+    `/projects${query ? `?${query}` : ''}`,
+  );
 };
 
 export const createProject = (
