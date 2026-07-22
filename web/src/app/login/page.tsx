@@ -3,13 +3,16 @@
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 
+import Image from 'next/image';
+
 import { ApiError, login } from '@/lib/api';
+import logo from '../../../public/shining-star-logo.jpg';
 
 export default function LoginPage() {
   const router = useRouter();
   const [tenantSlug, setTenantSlug] = useState('demo');
   const [email, setEmail] = useState('ceo@demo.example.com');
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState('Demo!Passw0rd');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -36,12 +39,14 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-navy-900 p-6">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-500 text-2xl font-black text-navy-900">
-            E
+          <div className="mx-auto mb-4 w-40 rounded-2xl bg-white p-4">
+            <Image
+              src={logo}
+              alt="Shining Star Electromechanical"
+              priority
+              className="h-auto w-full"
+            />
           </div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-white">
-            Elevator ERP
-          </h1>
           <p className="mt-1 text-sm text-navy-100/70">
             Sign in to your company workspace
           </p>
@@ -114,8 +119,9 @@ export default function LoginPage() {
           </button>
 
           <p className="mt-5 text-center text-xs text-slate-400">
-            Demo workspace: <span className="font-mono">demo</span> ·{' '}
-            <span className="font-mono">ceo@demo.example.com</span>
+            Demo: <span className="font-mono">demo</span> ·{' '}
+            <span className="font-mono">ceo@demo.example.com</span> ·{' '}
+            <span className="font-mono">Demo!Passw0rd</span>
           </p>
         </form>
       </div>
