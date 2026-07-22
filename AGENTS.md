@@ -25,6 +25,12 @@ this machine). The app connects as the non-owner `app_user` role (subject to
 RLS); only migrate/seed use the `postgres` owner via `DATABASE_ADMIN_URL`.
 Set `CORS_ORIGINS=http://localhost:3003` so the browser UI can call the API.
 
+## Product scope
+
+Shining Star MVP is intentionally lean — see
+`docs/planning/SCOPE-shining-star-mvp.md`. Do not add crews, field phases,
+maintenance, inventory, or finance unless the user asks.
+
 ## Code Style
 
 - TypeScript strict mode. No `any` without an explicit `@ts-expect-error` comment.

@@ -18,7 +18,7 @@ const barlow = Barlow({
 });
 
 export const metadata: Metadata = {
-  title: 'Elevator ERP',
+  title: 'Shining Star Electromechanical — ERP',
   description:
     'Multi-tenant ERP for elevator & electromechanical companies',
 };

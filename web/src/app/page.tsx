@@ -123,48 +123,45 @@ export default function DashboardPage() {
               <span className="font-medium text-gold-400">
                 {profile.email}
               </span>{' '}
-              with the{' '}
+              ·{' '}
               <span className="font-medium text-gold-400">
                 {ROLE_LABELS[profile.role] ?? profile.role}
-              </span>{' '}
-              role. Module screens unlock here as each delivery phase ships.
+              </span>
+              . Use the sidebar for calculator, customers, projects, and
+              quotations.
             </p>
           </section>
 
           <section>
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
-              Module roadmap
+              Quick links
             </h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {MODULES.filter((module) => module.phase !== null).map(
+              {MODULES.filter((module) => module.href && module.href !== '/').map(
                 (module) => (
-                  <div
+                  <a
                     key={module.name}
+                    href={module.href!}
                     className="rounded-xl border border-slate-200 bg-white p-5 transition hover:border-navy-600/40 hover:shadow-sm"
                   >
-                    <div className="mb-3 flex items-center justify-between">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy-800/5 text-navy-800">
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="h-5 w-5"
-                        >
-                          <path d={module.icon} />
-                        </svg>
-                      </div>
-                      <span className="rounded-full bg-gold-500/15 px-2.5 py-1 text-[11px] font-semibold text-gold-600">
-                        Phase {module.phase}
-                      </span>
+                    <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-navy-800/5 text-navy-800">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-5 w-5"
+                      >
+                        <path d={module.icon} />
+                      </svg>
                     </div>
                     <p className="text-sm font-semibold">{module.name}</p>
                     <p className="mt-1 text-xs leading-relaxed text-slate-500">
                       {module.description}
                     </p>
-                  </div>
+                  </a>
                 ),
               )}
             </div>

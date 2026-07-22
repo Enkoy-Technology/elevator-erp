@@ -6,5 +6,3 @@ export * from './customers';
 export * from './customer-fingerprints';
 export * from './projects';
 export * from './quotations';
-export * from './crews';
-export * from './project-phases';

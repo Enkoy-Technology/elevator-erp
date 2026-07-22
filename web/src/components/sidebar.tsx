@@ -1,28 +1,55 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { MODULES } from './module-nav';
+import { toggleCollapsed, toggleHidden, useSidebarState } from './sidebar-state';
+import mark from '../../public/shining-star-mark.png';
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { collapsed, hidden } = useSidebarState();
+
+  if (hidden) {
+    return (
+      <button
+        type="button"
+        onClick={toggleHidden}
+        title="Show sidebar"
+        aria-label="Show sidebar"
+        className="fixed left-3 top-3 z-40 flex items-center gap-2 rounded-lg bg-navy-900 px-2.5 py-2 text-white shadow-lg transition hover:bg-navy-800"
+      >
+        <Icon path="M3 6h18M3 12h18M3 18h18" className="h-4 w-4" />
+        <span className="sr-only">Show sidebar</span>
+      </button>
+    );
+  }
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col bg-navy-900 text-navy-100">
-      <div className="flex items-center gap-3 px-5 py-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gold-500 font-display text-lg font-black text-navy-900">
-          E
+    <aside
+      className={`flex shrink-0 flex-col bg-navy-900 text-navy-100 transition-[width] duration-200 ${
+        collapsed ? 'w-16' : 'w-64'
+      }`}
+    >
+      <div className={`flex items-center gap-2.5 py-4 ${collapsed ? 'justify-center px-0' : 'px-4'}`}>
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white p-1">
+          <Image src={mark} alt="Shining Star Electromechanical" priority className="h-full w-full object-contain" />
         </div>
-        <div>
-          <p className="font-display text-sm font-bold tracking-tight text-white">
-            Elevator ERP
-          </p>
-          <p className="text-[11px] text-navy-100/60">Admin console</p>
-        </div>
+        {!collapsed && (
+          <div className="min-w-0">
+            <p className="font-display truncate text-sm font-bold tracking-tight text-white">
+              Shining Star
+            </p>
+            <p className="truncate text-[10px] uppercase tracking-wide text-navy-100/60">
+              Electromechanical
+            </p>
+          </div>
+        )}
       </div>
 
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden px-3 pb-4">
         {MODULES.map((module) => {
           const locked = module.phase !== null || !module.href;
           const active =
@@ -31,60 +58,95 @@ export function Sidebar() {
               ? pathname === '/'
               : pathname.startsWith(module.href));
 
-          const className = locked
-            ? 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-navy-100/40'
+          const layout = collapsed ? 'justify-center px-0' : 'gap-3 px-3';
+          const stateClass = locked
+            ? 'text-navy-100/40'
             : active
-              ? 'flex items-center gap-3 rounded-lg bg-navy-700 px-3 py-2.5 text-white'
-              : 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-navy-100/80 transition hover:bg-navy-800 hover:text-white';
+              ? 'bg-navy-700 text-white'
+              : 'text-navy-100/80 transition hover:bg-navy-800 hover:text-white';
+          const className = `flex items-center rounded-lg py-2.5 ${layout} ${stateClass}`;
 
           const content = (
             <>
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-[18px] w-[18px] shrink-0"
-              >
-                <path d={module.icon} />
-              </svg>
-              <span className="flex-1 truncate text-[13px] font-medium">
-                {module.name}
-              </span>
-              {locked && module.phase !== null && (
-                <span className="rounded-full bg-navy-800 px-2 py-0.5 text-[10px] font-semibold text-gold-400">
-                  P{module.phase}
-                </span>
+              <Icon path={module.icon} className="h-[18px] w-[18px] shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="flex-1 truncate text-[13px] font-medium">
+                    {module.name}
+                  </span>
+                  {locked && module.phase !== null && (
+                    <span className="rounded-full bg-navy-800 px-2 py-0.5 text-[10px] font-semibold text-gold-400">
+                      P{module.phase}
+                    </span>
+                  )}
+                </>
               )}
             </>
           );
 
+          const title = collapsed ? module.name : module.description;
+
           if (locked || !module.href) {
             return (
-              <div key={module.name} className={className} title={module.description}>
+              <div key={module.name} className={className} title={title}>
                 {content}
               </div>
             );
           }
 
           return (
-            <Link
-              key={module.name}
-              href={module.href}
-              className={className}
-              title={module.description}
-            >
+            <Link key={module.name} href={module.href} className={className} title={title}>
               {content}
             </Link>
           );
         })}
       </nav>
 
-      <div className="border-t border-navy-800 px-5 py-4 text-[11px] text-navy-100/50">
-        Phase badges show when each module ships.
+      <div
+        className={`border-t border-navy-800 ${
+          collapsed ? 'flex flex-col items-center gap-1 py-2' : 'flex items-center justify-between px-3 py-2'
+        }`}
+      >
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-medium text-navy-100/60 transition hover:bg-navy-800 hover:text-white"
+        >
+          <Icon
+            path="m11 17-5-5 5-5M18 17l-5-5 5-5"
+            className={`h-4 w-4 shrink-0 transition-transform ${collapsed ? 'rotate-180' : ''}`}
+          />
+          {!collapsed && <span>Collapse</span>}
+        </button>
+        <button
+          type="button"
+          onClick={toggleHidden}
+          title="Hide sidebar"
+          aria-label="Hide sidebar"
+          className="rounded-lg p-1.5 text-navy-100/60 transition hover:bg-navy-800 hover:text-white"
+        >
+          <Icon path="M18 6 6 18M6 6l12 12" className="h-4 w-4 shrink-0" />
+        </button>
       </div>
     </aside>
+  );
+}
+
+function Icon({ path, className }: { path: string; className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d={path} />
+    </svg>
   );
 }

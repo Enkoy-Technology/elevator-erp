@@ -8,10 +8,8 @@ import { JwtAuthGuard, RolesGuard, TenantGuard } from './common/guards';
 import { AppConfigModule } from './config';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
-import { CrewsModule } from './modules/crews/crews.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { ElevatorCalcModule } from './modules/elevator-calc/elevator-calc.module';
-import { InstallationModule } from './modules/installation/installation.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { QuotationsModule } from './modules/quotations/quotations.module';
 
@@ -30,8 +28,6 @@ import { QuotationsModule } from './modules/quotations/quotations.module';
     CustomersModule,
     ProjectsModule,
     QuotationsModule,
-    CrewsModule,
-    InstallationModule,
   ],
   controllers: [AppController],
   providers: [

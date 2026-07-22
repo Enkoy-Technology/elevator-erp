@@ -1,16 +1,18 @@
 @import 'tailwindcss';
 
 @theme {
-  /* Default tenant palette (seed branding); per-tenant theming lands later. */
-  --color-navy-950: #101a30;
-  --color-navy-900: #16233f;
-  --color-navy-800: #1b2a4a;
-  --color-navy-700: #24365d;
-  --color-navy-600: #2e4372;
-  --color-navy-100: #dbe2ef;
-  --color-gold-500: #e8b54d;
-  --color-gold-400: #f0c46a;
-  --color-gold-600: #d9a233;
+  /* Seed tenant palette: Shining Star Electromechanical (burnt orange on warm
+     charcoal). Class names kept (navy = warm dark, gold = brand orange);
+     per-tenant theming lands later. */
+  --color-navy-950: #12100e;
+  --color-navy-900: #1c1815;
+  --color-navy-800: #26211c;
+  --color-navy-700: #322b24;
+  --color-navy-600: #6f5f4f;
+  --color-navy-100: #ece4da;
+  --color-gold-500: #d1712f;
+  --color-gold-400: #f0a25c;
+  --color-gold-600: #b45c22;
 
   --font-sans: var(--font-ibm-plex), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-barlow), var(--font-ibm-plex), sans-serif;
