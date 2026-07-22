@@ -1,6 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
 
+import {
+  normalizePageQuery,
+  toPaginatedResult,
+  type PaginatedResult,
+} from '../../common/pagination';
 import { customers } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import type { CreateCustomerDto } from './dto/create-customer.dto';
@@ -12,21 +17,36 @@ export type CustomerRecord = typeof customers.$inferSelect;
 export class CustomersRepository {
   constructor(private readonly tenantDb: TenantDbService) {}
 
-  async list(tenantId: string, search?: string): Promise<CustomerRecord[]> {
+  async list(
+    tenantId: string,
+    options: { search?: string; page?: string; pageSize?: string },
+  ): Promise<PaginatedResult<CustomerRecord>> {
+    const { page, pageSize, offset } = normalizePageQuery(
+      options.page,
+      options.pageSize,
+    );
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       const filters = [isNull(customers.deletedAt)];
-      if (search && search.trim().length > 0) {
-        const pattern = `%${search.trim().toLowerCase()}%`;
+      if (options.search && options.search.trim().length > 0) {
+        const pattern = `%${options.search.trim().toLowerCase()}%`;
         filters.push(
           sql`(lower(${customers.name}) like ${pattern} or lower(coalesce(${customers.email}, '')) like ${pattern} or coalesce(${customers.phone}, '') like ${pattern})`,
         );
       }
-      return tx
+      const where = and(...filters);
+      const [totalRow] = await tx
+        .select({ value: count() })
+        .from(customers)
+        .where(where);
+      const total = Number(totalRow?.value ?? 0);
+      const items = await tx
         .select()
         .from(customers)
-        .where(and(...filters))
+        .where(where)
         .orderBy(desc(customers.createdAt))
-        .limit(100);
+        .limit(pageSize)
+        .offset(offset);
+      return toPaginatedResult(items, total, page, pageSize);
     });
   }
 

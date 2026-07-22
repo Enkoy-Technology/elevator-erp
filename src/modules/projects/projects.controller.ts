@@ -32,11 +32,13 @@ export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List projects (optional status filter)' })
-  @ApiOkResponse({ description: 'Project list' })
+  @ApiOperation({ summary: 'List projects (status filter + pagination)' })
+  @ApiOkResponse({ description: 'Paginated project list' })
   list(
     @CurrentUser() user: AuthenticatedUser,
     @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
     if (
       status !== undefined &&
@@ -46,10 +48,11 @@ export class ProjectsController {
         `status must be one of: ${PROJECT_STATUSES.join(', ')}`,
       );
     }
-    return this.projectsService.list(
-      user,
-      status as (typeof PROJECT_STATUSES)[number] | undefined,
-    );
+    return this.projectsService.list(user, {
+      status: status as (typeof PROJECT_STATUSES)[number] | undefined,
+      page,
+      pageSize,
+    });
   }
 
   @Get(':id')

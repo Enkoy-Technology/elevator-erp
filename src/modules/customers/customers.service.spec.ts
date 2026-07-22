@@ -55,9 +55,20 @@ describe('CustomersService', () => {
   });
 
   it('lists customers for the tenant', async () => {
-    repo.list.mockResolvedValue([sample]);
-    await expect(service.list(user, 'addis')).resolves.toEqual([sample]);
-    expect(repo.list).toHaveBeenCalledWith(user.tenantId, 'addis');
+    const page = {
+      items: [sample],
+      page: 1,
+      pageSize: 20,
+      total: 1,
+      totalPages: 1,
+    };
+    repo.list.mockResolvedValue(page);
+    await expect(
+      service.list(user, { search: 'addis' }),
+    ).resolves.toEqual(page);
+    expect(repo.list).toHaveBeenCalledWith(user.tenantId, {
+      search: 'addis',
+    });
   });
 
   it('returns a customer by id', async () => {

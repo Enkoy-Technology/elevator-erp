@@ -30,13 +30,15 @@ export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List customers (optional search)' })
-  @ApiOkResponse({ description: 'Customer list' })
+  @ApiOperation({ summary: 'List customers (search + pagination)' })
+  @ApiOkResponse({ description: 'Paginated customer list' })
   list(
     @CurrentUser() user: AuthenticatedUser,
     @Query('q') search?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
-    return this.customersService.list(user, search);
+    return this.customersService.list(user, { search, page, pageSize });
   }
 
   @Get(':id')

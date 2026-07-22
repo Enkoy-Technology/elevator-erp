@@ -1,6 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, isNull } from 'drizzle-orm';
 
+import {
+  normalizePageQuery,
+  toPaginatedResult,
+  type PaginatedResult,
+} from '../../common/pagination';
 import { projects, type ProjectStatus } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import type { CreateProjectDto } from './dto/create-project.dto';
@@ -13,19 +18,35 @@ export class ProjectsRepository {
 
   async list(
     tenantId: string,
-    status?: ProjectStatus,
-  ): Promise<ProjectRecord[]> {
+    options: {
+      status?: ProjectStatus;
+      page?: string;
+      pageSize?: string;
+    },
+  ): Promise<PaginatedResult<ProjectRecord>> {
+    const { page, pageSize, offset } = normalizePageQuery(
+      options.page,
+      options.pageSize,
+    );
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       const filters = [isNull(projects.deletedAt)];
-      if (status) {
-        filters.push(eq(projects.status, status));
+      if (options.status) {
+        filters.push(eq(projects.status, options.status));
       }
-      return tx
+      const where = and(...filters);
+      const [totalRow] = await tx
+        .select({ value: count() })
+        .from(projects)
+        .where(where);
+      const total = Number(totalRow?.value ?? 0);
+      const items = await tx
         .select()
         .from(projects)
-        .where(and(...filters))
+        .where(where)
         .orderBy(desc(projects.createdAt))
-        .limit(100);
+        .limit(pageSize)
+        .offset(offset);
+      return toPaginatedResult(items, total, page, pageSize);
     });
   }
 

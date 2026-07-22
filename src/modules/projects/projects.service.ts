@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { WorkflowTransitionError } from '../../common/exceptions';
+import type { PaginatedResult } from '../../common/pagination';
 import type { ProjectStatus } from '../../database/schema';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type { CreateProjectDto } from './dto/create-project.dto';
@@ -16,9 +17,13 @@ export class ProjectsService {
 
   list(
     user: AuthenticatedUser,
-    status?: ProjectStatus,
-  ): Promise<ProjectRecord[]> {
-    return this.projectsRepository.list(user.tenantId, status);
+    options: {
+      status?: ProjectStatus;
+      page?: string;
+      pageSize?: string;
+    },
+  ): Promise<PaginatedResult<ProjectRecord>> {
+    return this.projectsRepository.list(user.tenantId, options);
   }
 
   async getById(

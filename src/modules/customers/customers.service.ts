@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
+import type { PaginatedResult } from '../../common/pagination';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type { CreateCustomerDto } from './dto/create-customer.dto';
 import type { UpdateCustomerDto } from './dto/update-customer.dto';
@@ -12,8 +13,11 @@ import {
 export class CustomersService {
   constructor(private readonly customersRepository: CustomersRepository) {}
 
-  list(user: AuthenticatedUser, search?: string): Promise<CustomerRecord[]> {
-    return this.customersRepository.list(user.tenantId, search);
+  list(
+    user: AuthenticatedUser,
+    options: { search?: string; page?: string; pageSize?: string },
+  ): Promise<PaginatedResult<CustomerRecord>> {
+    return this.customersRepository.list(user.tenantId, options);
   }
 
   async getById(
