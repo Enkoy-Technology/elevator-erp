@@ -52,3 +52,23 @@ export const quoteStatusEnum = pgEnum('quote_status', [
   'CONTRACT',
   'CANCELLED',
 ]);
+
+export const crewTypeEnum = pgEnum('crew_type', [
+  'INSTALLATION',
+  'MAINTENANCE',
+  'EMERGENCY',
+]);
+
+export const installPhaseKindEnum = pgEnum('install_phase_kind', [
+  'SHAFT_PREPARATION',
+  'MECHANICAL_ASSEMBLY',
+  'ELECTRICAL_WIRING',
+  'TESTING_COMMISSIONING',
+  'HANDOVER',
+]);
+
+export const installPhaseStatusEnum = pgEnum('install_phase_status', [
+  'PENDING',
+  'IN_PROGRESS',
+  'COMPLETED',
+]);
