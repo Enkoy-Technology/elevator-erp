@@ -8,7 +8,15 @@ import type { Env } from './config';
 
 const bootstrap = async (): Promise<void> => {
   const app = await NestFactory.create(AppModule);
+  const config = app.get(ConfigService<Env, true>);
 
+  app.enableCors({
+    origin: config
+      .get('CORS_ORIGINS', { infer: true })
+      .split(',')
+      .map((origin) => origin.trim()),
+    credentials: true,
+  });
   app.setGlobalPrefix('v1');
   app.useGlobalPipes(
     new ValidationPipe({
@@ -44,7 +52,6 @@ const bootstrap = async (): Promise<void> => {
     },
   });
 
-  const config = app.get(ConfigService<Env, true>);
   const port = config.get('PORT', { infer: true });
   await app.listen(port);
   Logger.log(`API listening on http://localhost:${port}/v1`, 'Bootstrap');

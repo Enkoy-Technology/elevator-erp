@@ -11,6 +11,8 @@ export const envSchema = z.object({
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
   JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   JWT_REFRESH_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
+  /** Comma-separated list of allowed browser origins. */
+  CORS_ORIGINS: z.string().default('http://localhost:3003'),
 });
 
 export type Env = z.infer<typeof envSchema>;
