@@ -52,3 +52,15 @@ export const quoteStatusEnum = pgEnum('quote_status', [
   'CONTRACT',
   'CANCELLED',
 ]);
+
+export const assetCategoryEnum = pgEnum('asset_category', [
+  'ELEVATOR',
+  'STAIRS',
+  'OTHER',
+]);
+
+export const assetStatusEnum = pgEnum('asset_status', [
+  'ACTIVE',
+  'INACTIVE',
+  'DECOMMISSIONED',
+]);

@@ -56,6 +56,7 @@ const bootstrap = async (): Promise<void> => {
     .addTag('projects', 'Sales project pipeline')
     .addTag('quotations', 'Quotations, proforma, and contracts')
     .addTag('employees', 'Staff directory and roles')
+    .addTag('assets', 'Registered elevators, stairs, and other equipment')
     .addTag('elevator-specs', 'Technical specification and pricing calculator')
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);

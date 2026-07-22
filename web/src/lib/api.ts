@@ -576,3 +576,90 @@ export const updateEmployee = (
     method: 'PATCH',
     body: JSON.stringify(payload),
   });
+
+export const ASSET_CATEGORIES = ['ELEVATOR', 'STAIRS', 'OTHER'] as const;
+export type AssetCategory = (typeof ASSET_CATEGORIES)[number];
+
+export const ASSET_STATUSES = [
+  'ACTIVE',
+  'INACTIVE',
+  'DECOMMISSIONED',
+] as const;
+export type AssetStatus = (typeof ASSET_STATUSES)[number];
+
+export interface Asset {
+  id: string;
+  tenantId: string;
+  customerId: string;
+  projectId: string | null;
+  category: AssetCategory;
+  name: string;
+  buildingName: string | null;
+  serialNumber: string | null;
+  locationNotes: string | null;
+  status: AssetStatus;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface CreateAssetPayload {
+  customerId: string;
+  projectId?: string;
+  category: AssetCategory;
+  name: string;
+  buildingName?: string;
+  serialNumber?: string;
+  locationNotes?: string;
+  notes?: string;
+}
+
+export const listAssets = (options?: {
+  q?: string;
+  category?: AssetCategory;
+  customerId?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<Paginated<Asset>> => {
+  const params = new URLSearchParams();
+  if (options?.q) {
+    params.set('q', options.q);
+  }
+  if (options?.category) {
+    params.set('category', options.category);
+  }
+  if (options?.customerId) {
+    params.set('customerId', options.customerId);
+  }
+  if (options?.page) {
+    params.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set('pageSize', String(options.pageSize));
+  }
+  const query = params.toString();
+  return apiFetch<Paginated<Asset>>(`/assets${query ? `?${query}` : ''}`);
+};
+
+export const createAsset = (payload: CreateAssetPayload): Promise<Asset> =>
+  apiFetch<Asset>('/assets', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const updateAsset = (
+  id: string,
+  payload: {
+    projectId?: string | null;
+    category?: AssetCategory;
+    name?: string;
+    buildingName?: string | null;
+    serialNumber?: string | null;
+    locationNotes?: string | null;
+    status?: AssetStatus;
+    notes?: string | null;
+  },
+): Promise<Asset> =>
+  apiFetch<Asset>(`/assets/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });

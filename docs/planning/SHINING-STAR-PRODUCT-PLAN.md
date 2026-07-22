@@ -11,6 +11,7 @@ Source: client proposal *ERP SYSTEM SHINING STAR ELECTROMECHANICAL WORKS*
 | Projects | Lead → survey → quote → contract pipeline |
 | Quotations | Quote / proforma / contract + branded PDF |
 | Employees | Staff directory + role assignment |
+| Assets | Elevators / stairs / other under a customer |
 
 ## Planned next (keep simple)
 
@@ -20,7 +21,7 @@ Source: client proposal *ERP SYSTEM SHINING STAR ELECTROMECHANICAL WORKS*
 - Role controls what they can open (we already enforce this on the API)
 - Later: pick an employee as sales/project owner on a project (fields already exist)
 
-### 2. Asset registration (elevators, stairs, other)
+### 2. Asset registration (elevators, stairs, other) ✅
 - One **Assets** list with a **category**: `ELEVATOR` | `STAIRS` | `OTHER`
 - Link to customer + optional project/building name
 - No heavy checklists yet — just a register

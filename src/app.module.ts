@@ -7,6 +7,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { JwtAuthGuard, RolesGuard, TenantGuard } from './common/guards';
 import { AppConfigModule } from './config';
 import { DatabaseModule } from './database/database.module';
+import { AssetsModule } from './modules/assets/assets.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { ElevatorCalcModule } from './modules/elevator-calc/elevator-calc.module';
@@ -30,6 +31,7 @@ import { QuotationsModule } from './modules/quotations/quotations.module';
     ProjectsModule,
     QuotationsModule,
     EmployeesModule,
+    AssetsModule,
   ],
   controllers: [AppController],
   providers: [

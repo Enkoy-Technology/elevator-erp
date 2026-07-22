@@ -92,6 +92,20 @@
       "when": 1784741000000,
       "tag": "0012_drop_field_installation",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1784742000000,
+      "tag": "0013_assets",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1784742001000,
+      "tag": "0014_assets_rls",
+      "breakpoints": true
     }
   ]
 }
