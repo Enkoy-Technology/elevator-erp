@@ -45,10 +45,17 @@ export const MODULES: ModuleNavItem[] = [
     icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
   },
   {
-    name: 'Projects & Installation',
-    description: 'Site surveys, execution tracking',
-    phase: 3,
-    href: null,
+    name: 'Crews',
+    description: 'Installation & field crews',
+    phase: null,
+    href: '/crews',
+    icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2m8-10a4 4 0 100-8 4 4 0 000 8zm8 6a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75',
+  },
+  {
+    name: 'Installation',
+    description: 'Phases, checklists, handover',
+    phase: null,
+    href: '/installation',
     icon: 'M6 20V10m6 10V4m6 16v-7',
   },
   {

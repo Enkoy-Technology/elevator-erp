@@ -501,3 +501,116 @@ export const downloadQuotationPdf = async (
   anchor.remove();
   URL.revokeObjectURL(url);
 };
+
+export type CrewType = 'INSTALLATION' | 'MAINTENANCE' | 'EMERGENCY';
+
+export interface Crew {
+  id: string;
+  tenantId: string;
+  name: string;
+  crewType: CrewType;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export const listCrews = (options?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<Paginated<Crew>> => {
+  const params = new URLSearchParams();
+  if (options?.page) {
+    params.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set('pageSize', String(options.pageSize));
+  }
+  const query = params.toString();
+  return apiFetch<Paginated<Crew>>(`/crews${query ? `?${query}` : ''}`);
+};
+
+export const createCrew = (payload: {
+  name: string;
+  crewType?: CrewType;
+}): Promise<Crew> =>
+  apiFetch<Crew>('/crews', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export type InstallPhaseKind =
+  | 'SHAFT_PREPARATION'
+  | 'MECHANICAL_ASSEMBLY'
+  | 'ELECTRICAL_WIRING'
+  | 'TESTING_COMMISSIONING'
+  | 'HANDOVER';
+
+export type InstallPhaseStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
+
+export interface ChecklistItem {
+  id: string;
+  label: string;
+  required: boolean;
+  completed: boolean;
+  notes?: string | null;
+}
+
+export interface ProjectPhase {
+  id: string;
+  projectId: string;
+  phaseKind: InstallPhaseKind;
+  sortOrder: number;
+  status: InstallPhaseStatus;
+  checklistItems: ChecklistItem[];
+  signOffName: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export const listProjectPhases = (
+  projectId: string,
+): Promise<ProjectPhase[]> =>
+  apiFetch<ProjectPhase[]>(`/projects/${projectId}/phases`);
+
+export const startProjectPhase = (
+  projectId: string,
+  phaseId: string,
+): Promise<ProjectPhase> =>
+  apiFetch<ProjectPhase>(`/projects/${projectId}/phases/${phaseId}/start`, {
+    method: 'PATCH',
+  });
+
+export const updatePhaseChecklistItem = (
+  projectId: string,
+  phaseId: string,
+  itemId: string,
+  completed: boolean,
+): Promise<ProjectPhase> =>
+  apiFetch<ProjectPhase>(
+    `/projects/${projectId}/phases/${phaseId}/checklist/${itemId}`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ completed }),
+    },
+  );
+
+export const signOffPhase = (
+  projectId: string,
+  phaseId: string,
+  signOffName: string,
+): Promise<ProjectPhase> =>
+  apiFetch<ProjectPhase>(
+    `/projects/${projectId}/phases/${phaseId}/sign-off`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ signOffName }),
+    },
+  );
+
+export const completeProjectPhase = (
+  projectId: string,
+  phaseId: string,
+): Promise<ProjectPhase> =>
+  apiFetch<ProjectPhase>(
+    `/projects/${projectId}/phases/${phaseId}/complete`,
+    { method: 'PATCH' },
+  );
