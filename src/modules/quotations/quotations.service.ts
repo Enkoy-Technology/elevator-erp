@@ -9,6 +9,7 @@ import type { AuthenticatedUser } from '../../types/auth.types';
 import { ElevatorCalcService } from '../elevator-calc/elevator-calc.service';
 import { ProjectsService } from '../projects/projects.service';
 import type { CreateQuotationDto } from './dto/create-quotation.dto';
+import { QuotePdfService } from './quote-pdf.service';
 import { canTransitionQuoteStatus } from './quote-status';
 import {
   QuotationsRepository,
@@ -16,12 +17,18 @@ import {
   type QuotationRecord,
 } from './quotations.repository';
 
+export interface RenderedQuotePdf {
+  filename: string;
+  body: Buffer;
+}
+
 @Injectable()
 export class QuotationsService {
   constructor(
     private readonly quotationsRepository: QuotationsRepository,
     private readonly calcService: ElevatorCalcService,
     private readonly projectsService: ProjectsService,
+    private readonly pdfService: QuotePdfService,
   ) {}
 
   list(
@@ -137,6 +144,18 @@ export class QuotationsService {
       { contractAmountEtb: quote.totalPriceEtb },
     );
     return quote;
+  }
+
+  async generatePdf(
+    user: AuthenticatedUser,
+    id: string,
+  ): Promise<RenderedQuotePdf> {
+    const ctx = await this.quotationsRepository.getPdfContext(user.tenantId, id);
+    if (!ctx) {
+      throw new NotFoundException('Quotation not found');
+    }
+    const body = await this.pdfService.renderQuote(ctx);
+    return { filename: `${ctx.quote.quoteNumber}.pdf`, body };
   }
 
   private async transition(

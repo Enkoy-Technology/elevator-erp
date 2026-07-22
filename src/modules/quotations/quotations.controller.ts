@@ -8,13 +8,16 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
+  ApiProduces,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { isUUID } from 'class-validator';
 
 import { CurrentUser, Roles } from '../../common/decorators';
@@ -135,5 +138,27 @@ export class QuotationsController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.quotationsService.convertToContract(user, id);
+  }
+
+  @Post('quotations/:id/generate-pdf')
+  @Roles('SALES_MANAGER')
+  @ApiProduces('application/pdf')
+  @ApiOperation({ summary: 'Render the branded quotation PDF (tenant branding)' })
+  async generatePdf(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+  ) {
+    const { filename, body } = await this.quotationsService.generatePdf(
+      user,
+      id,
+    );
+    // @Res() bypasses Nest's @Header/@HttpCode — set headers on the raw response.
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${filename}"`,
+    );
+    res.send(body);
   }
 }

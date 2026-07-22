@@ -1,5 +1,10 @@
 import { NotFoundException } from '@nestjs/common';
 
+// puppeteer is pure ESM; jest doesn't transform node_modules. QuotePdfService
+// (imported transitively) pulls it in, so stub it — no unit test launches a
+// browser. Factory form avoids loading the real ESM module at all.
+jest.mock('puppeteer', () => ({ __esModule: true, default: { launch: jest.fn() } }));
+
 import { WorkflowTransitionError } from '../../common/exceptions';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type { QuotationRecord } from './quotations.repository';
@@ -55,6 +60,7 @@ describe('QuotationsService transitions', () => {
     repo as never,
     {} as never,
     projectsService as never,
+    {} as never,
   );
 
   beforeEach(() => jest.clearAllMocks());

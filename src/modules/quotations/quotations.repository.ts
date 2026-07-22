@@ -1,16 +1,30 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, count, desc, eq, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
 
 import {
   normalizePageQuery,
   toPaginatedResult,
   type PaginatedResult,
 } from '../../common/pagination';
-import { quotations, type QuoteStatus } from '../../database/schema';
+import {
+  customers,
+  projects,
+  quotations,
+  tenantBranding,
+  type QuoteStatus,
+} from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 
 export type QuotationRecord = typeof quotations.$inferSelect;
 export type QuotationInsert = typeof quotations.$inferInsert;
+export type TenantBrandingRecord = typeof tenantBranding.$inferSelect;
+
+export interface QuotationPdfContext {
+  quote: QuotationRecord;
+  projectName: string;
+  customerName: string;
+  branding: TenantBrandingRecord | null;
+}
 
 @Injectable()
 export class QuotationsRepository {
@@ -78,6 +92,48 @@ export class QuotationsRepository {
         throw new Error('Failed to insert quotation');
       }
       return row;
+    });
+  }
+
+  /** Quote + project/customer names + tenant branding in one round trip. */
+  async getPdfContext(
+    tenantId: string,
+    id: string,
+  ): Promise<QuotationPdfContext | null> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const [row] = await tx
+        .select({
+          quote: quotations,
+          projectName: projects.name,
+          customerName: sql<string>`coalesce(${customers.legalName}, ${customers.name})`,
+        })
+        .from(quotations)
+        .innerJoin(
+          projects,
+          and(
+            eq(quotations.tenantId, projects.tenantId),
+            eq(quotations.projectId, projects.id),
+          ),
+        )
+        .innerJoin(
+          customers,
+          and(
+            eq(quotations.tenantId, customers.tenantId),
+            eq(quotations.customerId, customers.id),
+          ),
+        )
+        .where(and(eq(quotations.id, id), isNull(quotations.deletedAt)))
+        .limit(1);
+      if (!row) {
+        return null;
+      }
+      const [branding] = await tx.select().from(tenantBranding).limit(1);
+      return {
+        quote: row.quote,
+        projectName: row.projectName,
+        customerName: row.customerName,
+        branding: branding ?? null,
+      };
     });
   }
 
