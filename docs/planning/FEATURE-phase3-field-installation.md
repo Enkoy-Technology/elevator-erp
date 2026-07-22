@@ -13,14 +13,12 @@ HANDOVER / COMPLETED.
 - Admin UI rules: right-side drawers, server-paginated lists (`AGENTS.md`).
 
 ## Requirements (sliced commits)
-1. Schema + RLS: `crews`, `crew_members`, `project_phases` (+ enums).
-2. Auto-create five phases when a project first enters `EXECUTION` (from
-   contract conversion or status advance); default checklist templates per phase.
-3. Crews API: list/create, add/remove members (`is_lead`).
-4. Phases API: list by project, assign crew, start, update checklist item,
-   complete (requires all `required` items; auto-opens next phase). Sign-off
-   stores name + signature URL (S3 upload deferred — accept URL string).
-5. Admin UI: crews page + project installation phases view (drawer actions).
+1. ~~Schema + RLS: `crews`, `crew_members`, `project_phases` (+ enums).~~
+2. ~~Auto-create five phases when listing for CONTRACT/EXECUTION (idempotent).~~
+3. ~~Crews API: list/create, add/remove members (`is_lead`).~~
+4. ~~Phases API: list, assign, start, checklist, sign-off, complete (+ project
+   COMPLETED on HANDOVER).~~
+5. ~~Admin UI: `/crews` + `/installation`.~~
 6. Deferred: multipart photo upload to S3, mobile `/field/*` + GPS, installed
    elevator registry + QR (can land as Phase 3 follow-ups or early Phase 5).
 
