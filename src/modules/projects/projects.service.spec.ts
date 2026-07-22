@@ -91,6 +91,38 @@ describe('ProjectsService', () => {
     expect(repo.updateStatus).not.toHaveBeenCalled();
   });
 
+  it('blocks a manual PATCH into PROFORMA (quotation-driven only)', async () => {
+    repo.findById.mockResolvedValue({ ...sample, status: 'QUOTATION' });
+    await expect(
+      service.updateStatus(user, sample.id, 'PROFORMA'),
+    ).rejects.toBeInstanceOf(WorkflowTransitionError);
+    expect(repo.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('advances QUOTATION -> PROFORMA via applyQuotationConversion', async () => {
+    repo.findById.mockResolvedValue({ ...sample, status: 'QUOTATION' });
+    repo.updateStatus.mockResolvedValue({ ...sample, status: 'PROFORMA' });
+    await expect(
+      service.applyQuotationConversion(user, sample.id, 'PROFORMA', {
+        quotedAmountEtb: '143.75',
+      }),
+    ).resolves.toMatchObject({ status: 'PROFORMA' });
+    expect(repo.updateStatus).toHaveBeenCalledWith(
+      user.tenantId,
+      sample.id,
+      'PROFORMA',
+      { quotedAmountEtb: '143.75' },
+    );
+  });
+
+  it('no-ops applyQuotationConversion when the project already advanced', async () => {
+    repo.findById.mockResolvedValue({ ...sample, status: 'CONTRACT' });
+    await expect(
+      service.applyQuotationConversion(user, sample.id, 'PROFORMA'),
+    ).resolves.toMatchObject({ status: 'CONTRACT' });
+    expect(repo.updateStatus).not.toHaveBeenCalled();
+  });
+
   it('throws NotFoundException when project is missing', async () => {
     repo.findById.mockResolvedValue(null);
     await expect(service.getById(user, sample.id)).rejects.toBeInstanceOf(

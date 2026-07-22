@@ -48,10 +48,13 @@ describe('QuotationsService transitions', () => {
     findById: jest.fn(),
     updateStatus: jest.fn(),
   };
+  const projectsService = {
+    applyQuotationConversion: jest.fn(),
+  };
   const service = new QuotationsService(
     repo as never,
     {} as never,
-    {} as never,
+    projectsService as never,
   );
 
   beforeEach(() => jest.clearAllMocks());
@@ -78,18 +81,30 @@ describe('QuotationsService transitions', () => {
     expect(repo.updateStatus).not.toHaveBeenCalled();
   });
 
-  it('allows APPROVED -> PROFORMA -> CONTRACT', async () => {
+  it('allows APPROVED -> PROFORMA -> CONTRACT and advances the project', async () => {
     repo.findById.mockResolvedValue({ ...draft, status: 'APPROVED' });
     repo.updateStatus.mockResolvedValue({ ...draft, status: 'PROFORMA' });
     await expect(
       service.convertToProforma(user, draft.id),
     ).resolves.toMatchObject({ status: 'PROFORMA' });
+    expect(projectsService.applyQuotationConversion).toHaveBeenCalledWith(
+      user,
+      draft.projectId,
+      'PROFORMA',
+      { quotedAmountEtb: draft.totalPriceEtb },
+    );
 
     repo.findById.mockResolvedValue({ ...draft, status: 'PROFORMA' });
     repo.updateStatus.mockResolvedValue({ ...draft, status: 'CONTRACT' });
     await expect(
       service.convertToContract(user, draft.id),
     ).resolves.toMatchObject({ status: 'CONTRACT' });
+    expect(projectsService.applyQuotationConversion).toHaveBeenCalledWith(
+      user,
+      draft.projectId,
+      'CONTRACT',
+      { contractAmountEtb: draft.totalPriceEtb },
+    );
   });
 
   it('cannot cancel an already-CONTRACT quote', async () => {

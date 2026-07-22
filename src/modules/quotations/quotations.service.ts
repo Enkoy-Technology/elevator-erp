@@ -105,18 +105,38 @@ export class QuotationsService {
     return this.transition(user, id, 'CANCELLED');
   }
 
-  convertToProforma(
+  async convertToProforma(
     user: AuthenticatedUser,
     id: string,
   ): Promise<QuotationRecord> {
-    return this.transition(user, id, 'PROFORMA', { proformaAt: new Date() });
+    const quote = await this.transition(user, id, 'PROFORMA', {
+      proformaAt: new Date(),
+    });
+    // Advance the linked project QUOTATION → PROFORMA and record the quoted
+    // amount. No-ops if the project already moved on.
+    await this.projectsService.applyQuotationConversion(
+      user,
+      quote.projectId,
+      'PROFORMA',
+      { quotedAmountEtb: quote.totalPriceEtb },
+    );
+    return quote;
   }
 
-  convertToContract(
+  async convertToContract(
     user: AuthenticatedUser,
     id: string,
   ): Promise<QuotationRecord> {
-    return this.transition(user, id, 'CONTRACT', { contractAt: new Date() });
+    const quote = await this.transition(user, id, 'CONTRACT', {
+      contractAt: new Date(),
+    });
+    await this.projectsService.applyQuotationConversion(
+      user,
+      quote.projectId,
+      'CONTRACT',
+      { contractAmountEtb: quote.totalPriceEtb },
+    );
+    return quote;
   }
 
   private async transition(

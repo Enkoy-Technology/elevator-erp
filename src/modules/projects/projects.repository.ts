@@ -11,6 +11,7 @@ import { TenantDbService } from '../../database/tenant-db.service';
 import type { CreateProjectDto } from './dto/create-project.dto';
 
 export type ProjectRecord = typeof projects.$inferSelect;
+export type ProjectInsert = typeof projects.$inferInsert;
 
 @Injectable()
 export class ProjectsRepository {
@@ -101,14 +102,19 @@ export class ProjectsRepository {
     tenantId: string,
     id: string,
     status: ProjectStatus,
+    extra: Partial<
+      Pick<ProjectInsert, 'quotedAmountEtb' | 'contractAmountEtb'>
+    > = {},
   ): Promise<ProjectRecord> {
+    const now = new Date();
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       const [row] = await tx
         .update(projects)
         .set({
           status,
-          statusChangedAt: new Date(),
-          updatedAt: new Date(),
+          statusChangedAt: now,
+          updatedAt: now,
+          ...extra,
         })
         .where(and(eq(projects.id, id), isNull(projects.deletedAt)))
         .returning();

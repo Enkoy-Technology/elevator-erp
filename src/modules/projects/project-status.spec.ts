@@ -23,7 +23,7 @@ describe('project status DAG', () => {
   it('allows CANCELLED from each non-terminal status except EXECUTION', () => {
     for (const [from, next] of Object.entries(PROJECT_STATUS_TRANSITIONS)) {
       if (from === 'EXECUTION' || from === 'COMPLETED' || from === 'CANCELLED') {
-        expect(next.includes('CANCELLED' as never)).toBe(false);
+        expect(next.includes('CANCELLED')).toBe(false);
       } else {
         expect(next).toContain('CANCELLED');
       }
