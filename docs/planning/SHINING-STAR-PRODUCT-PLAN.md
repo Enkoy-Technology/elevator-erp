@@ -14,6 +14,7 @@ Source: client proposal *ERP SYSTEM SHINING STAR ELECTROMECHANICAL WORKS*
 | Assets | Elevators / stairs / other under a customer |
 | Notifications | In-app inbox + colleague notices |
 | Maintenance | Contracts, visits, breakdown tickets |
+| Settings | Branding + EN / አማርኛ |
 
 ## Planned next (keep simple)
 
@@ -37,14 +38,14 @@ Source: client proposal *ERP SYSTEM SHINING STAR ELECTROMECHANICAL WORKS*
 - Schedule next service date + mark visits done
 - Breakdown ticket: Open → Assigned → Done (no GPS/SLA theatre yet)
 
-### 5. Settings
+### 5. Settings ✅
 - Company logo/colors (branding — partially in DB already)
 - Default language: **English / አማርኛ**
 - Notification preferences later
 
-### 6. Localization (EN + Amharic)
-- UI strings via i18n (next-intl or similar)
-- Documents stay branded; language toggle in Settings / header
+### 6. Localization (EN + Amharic) ✅ (shell + settings)
+- UI strings via lightweight dictionaries (expand later)
+- Documents stay branded; language toggle in Settings
 
 ## Explicitly later (PDF has them — we defer)
 - Full finance ledgers, inventory warehouses, marketing campaigns

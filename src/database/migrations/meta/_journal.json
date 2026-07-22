@@ -134,6 +134,13 @@
       "when": 1784744001000,
       "tag": "0018_maintenance_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1784745000000,
+      "tag": "0019_settings_locale",
+      "breakpoints": true
     }
   ]
 }

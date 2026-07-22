@@ -16,6 +16,7 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { QuotationsModule } from './modules/quotations/quotations.module';
+import { SettingsModule } from './modules/settings/settings.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { QuotationsModule } from './modules/quotations/quotations.module';
     AssetsModule,
     NotificationsModule,
     MaintenanceModule,
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [

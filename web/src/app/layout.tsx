@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { Barlow, IBM_Plex_Sans } from 'next/font/google';
 
+import { LocaleProvider } from '@/components/locale-provider';
+
 import './globals.css';
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -28,7 +30,9 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${ibmPlexSans.variable} ${barlow.variable}`}>
-      <body>{children}</body>
+      <body>
+        <LocaleProvider>{children}</LocaleProvider>
+      </body>
     </html>
   );
 }

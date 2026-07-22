@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { Sidebar } from '@/components/sidebar';
+import { useLocale } from '@/components/locale-provider';
 import { MODULES } from '@/components/module-nav';
 import {
   AuthProfile,
@@ -27,6 +28,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { t } = useLocale();
   const [profile, setProfile] = useState<AuthProfile | null>(null);
   const [apiUp, setApiUp] = useState<boolean | null>(null);
 
@@ -140,7 +142,7 @@ export default function DashboardPage() {
               {MODULES.filter((module) => module.href && module.href !== '/').map(
                 (module) => (
                   <a
-                    key={module.name}
+                    key={module.nameKey}
                     href={module.href!}
                     className="rounded-xl border border-slate-200 bg-white p-5 transition hover:border-navy-600/40 hover:shadow-sm"
                   >
@@ -157,7 +159,7 @@ export default function DashboardPage() {
                         <path d={module.icon} />
                       </svg>
                     </div>
-                    <p className="text-sm font-semibold">{module.name}</p>
+                    <p className="text-sm font-semibold">{t(module.nameKey)}</p>
                     <p className="mt-1 text-xs leading-relaxed text-slate-500">
                       {module.description}
                     </p>

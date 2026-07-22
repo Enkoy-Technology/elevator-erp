@@ -872,3 +872,36 @@ export const updateBreakdown = (
     method: 'PATCH',
     body: JSON.stringify(payload),
   });
+
+export type AppLocale = 'en' | 'am';
+
+export interface TenantSettings {
+  tenantId: string;
+  primaryColorHex: string;
+  secondaryColorHex: string;
+  logoUrl: string | null;
+  stampUrl: string | null;
+  officialAddress: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  defaultLocale: AppLocale;
+  updatedAt: string;
+}
+
+export const getSettings = (): Promise<TenantSettings> =>
+  apiFetch<TenantSettings>('/settings');
+
+export const updateSettings = (payload: {
+  primaryColorHex?: string;
+  secondaryColorHex?: string;
+  logoUrl?: string | null;
+  stampUrl?: string | null;
+  officialAddress?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  defaultLocale?: AppLocale;
+}): Promise<TenantSettings> =>
+  apiFetch<TenantSettings>('/settings', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });

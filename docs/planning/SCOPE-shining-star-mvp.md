@@ -14,9 +14,11 @@ Full client wishlist lives in `SHINING-STAR-PRODUCT-PLAN.md` — deliver it in
 - Assets (elevator / stairs / other)
 - Notifications (in-app inbox)
 - Maintenance (contracts + visits + breakdowns)
+- Settings (branding + EN / አማርኛ)
 
 ## Next (in order)
-1. **Settings** — branding + language (EN / Amharic)
+- Expand Amharic coverage across remaining screens
+- Optional polish from client feedback
 
 ## Do not build yet
 - Crews / GPS / multi-phase installation theatre

@@ -53,6 +53,8 @@ export const tenantBranding = pgTable('tenant_branding', {
   bankDetails: jsonb('bank_details'),
   pdfHeaderHtml: text('pdf_header_html'),
   pdfFooterHtml: text('pdf_footer_html'),
+  /** UI default language: `en` or `am`. */
+  defaultLocale: text('default_locale').notNull().default('en'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
