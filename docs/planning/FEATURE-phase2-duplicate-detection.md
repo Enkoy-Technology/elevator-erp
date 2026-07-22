@@ -11,14 +11,14 @@ silently insert near-identical accounts.
 - Endpoint: `POST /customers/check-duplicate`; create path must honor scores.
 
 ## Requirements
-- [ ] Enable `pg_trgm` + `fuzzystrmatch` (Soundex) via migration.
-- [ ] `customer_fingerprints` table (tenant-scoped, RLS) synced on create/update.
-- [ ] Composite scorer: name 35%, phone 25%, geo 25%, building 15%.
-- [ ] `POST /v1/customers/check-duplicate` returns matches + recommendation.
-- [ ] `POST /v1/customers` blocks `HIGH_CONFIDENCE_DUPLICATE` (≥0.90); allows
+- [x] Enable `pg_trgm` + `fuzzystrmatch` (Soundex) via migration.
+- [x] `customer_fingerprints` table (tenant-scoped, RLS) synced on create/update.
+- [x] Composite scorer: name 35%, phone 25%, geo 25%, building 15%.
+- [x] `POST /v1/customers/check-duplicate` returns matches + recommendation.
+- [x] `POST /v1/customers` blocks `HIGH_CONFIDENCE_DUPLICATE` (≥0.90); allows
       `REVIEW_BEFORE_CREATE` (≥0.75) only with `acknowledgePossibleDuplicate`.
-- [ ] Admin create drawer calls check-duplicate and surfaces review/block UI.
-- [ ] Unit tests for scorer thresholds and create-gate behavior.
+- [x] Admin create drawer calls check-duplicate and surfaces review/block UI.
+- [x] Unit tests for scorer thresholds and create-gate behavior.
 
 ## Open Questions
 - Missing signals: **renormalize weights** over signals present on both sides
