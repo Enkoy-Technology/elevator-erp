@@ -21,8 +21,8 @@ as `POST /v1/elevator-specs/calculate`, with a calculator screen in the admin UI
 - Spec persistence, templates, duplicate, tenant pricing-factor overrides
 
 ## Verification
-- [ ] `pnpm test` asserts worked example
-- [ ] Swagger + UI produce the same total for the fixture input
+- [x] `pnpm test` asserts worked example (formula-correct totals; TAD typos noted)
+- [x] Swagger + UI produce the same total for the fixture input (`157358.67`)
 
 ## Risks
 - Floating-point drift if any path uses `number` — keep Decimal end-to-end and

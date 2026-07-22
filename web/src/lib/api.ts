@@ -152,3 +152,59 @@ export const getHealth = async (): Promise<boolean> => {
     return false;
   }
 };
+
+export interface CalcInputPayload {
+  capacityKg: number;
+  stops: number;
+  travelHeightM: number;
+  speedMs: number;
+  machineRoomType: 'MR' | 'MRL';
+  doorType: 'CENTER_OPEN' | 'TELESCOPIC' | 'SWING';
+  doorWidthMm: number;
+  buildingUsage: 'RESIDENTIAL' | 'COMMERCIAL' | 'HOSPITAL' | 'INDUSTRIAL';
+  marginPercent: number;
+  taxPercent: number;
+}
+
+export interface CalcResult {
+  technical: {
+    capacityPersons: number;
+    carWidthMm: number;
+    carDepthMm: number;
+    carHeightMm: number;
+    shaftWidthMm: number;
+    shaftDepthMm: number;
+    pitDepthMm: number;
+    overheadClearanceMm: number;
+    counterweightMassKg: string;
+    motorPowerKw: string;
+    guideRailSpec: string;
+    machineRoomWidthMm: number | null;
+    machineRoomDepthMm: number | null;
+    machineRoomHeightMm: number | null;
+  };
+  pricing: {
+    qBase: string;
+    baseCost: string;
+    stopCost: string;
+    capacityMultiplier: string;
+    speedPremium: string;
+    doorPremium: string;
+    installationCost: string;
+    freightCost: string;
+    equipmentSubtotal: string;
+    totalBeforeMargin: string;
+    marginAmount: string;
+    subtotalWithMargin: string;
+    taxAmount: string;
+    totalPrice: string;
+  };
+}
+
+export const calculateSpecs = (
+  input: CalcInputPayload,
+): Promise<CalcResult> =>
+  apiFetch<CalcResult>('/elevator-specs/calculate', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });

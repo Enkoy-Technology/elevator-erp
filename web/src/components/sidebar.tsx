@@ -1,10 +1,17 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+
 import { MODULES } from './module-nav';
 
 export function Sidebar() {
+  const pathname = usePathname();
+
   return (
     <aside className="flex w-64 shrink-0 flex-col bg-navy-900 text-navy-100">
       <div className="flex items-center gap-3 px-5 py-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gold-500 text-lg font-black text-navy-900">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gold-500 font-display text-lg font-black text-navy-900">
           E
         </div>
         <div>
@@ -17,17 +24,21 @@ export function Sidebar() {
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">
         {MODULES.map((module) => {
-          const locked = module.phase !== null;
-          return (
-            <div
-              key={module.name}
-              className={
-                locked
-                  ? 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-navy-100/40'
-                  : 'flex items-center gap-3 rounded-lg bg-navy-700 px-3 py-2.5 text-white'
-              }
-              title={module.description}
-            >
+          const locked = module.phase !== null || !module.href;
+          const active =
+            !!module.href &&
+            (module.href === '/'
+              ? pathname === '/'
+              : pathname.startsWith(module.href));
+
+          const className = locked
+            ? 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-navy-100/40'
+            : active
+              ? 'flex items-center gap-3 rounded-lg bg-navy-700 px-3 py-2.5 text-white'
+              : 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-navy-100/80 transition hover:bg-navy-800 hover:text-white';
+
+          const content = (
+            <>
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -42,12 +53,31 @@ export function Sidebar() {
               <span className="flex-1 truncate text-[13px] font-medium">
                 {module.name}
               </span>
-              {locked && (
+              {locked && module.phase !== null && (
                 <span className="rounded-full bg-navy-800 px-2 py-0.5 text-[10px] font-semibold text-gold-400">
                   P{module.phase}
                 </span>
               )}
-            </div>
+            </>
+          );
+
+          if (locked || !module.href) {
+            return (
+              <div key={module.name} className={className} title={module.description}>
+                {content}
+              </div>
+            );
+          }
+
+          return (
+            <Link
+              key={module.name}
+              href={module.href}
+              className={className}
+              title={module.description}
+            >
+              {content}
+            </Link>
           );
         })}
       </nav>
