@@ -208,3 +208,117 @@ export const calculateSpecs = (
     method: 'POST',
     body: JSON.stringify(input),
   });
+
+export type CustomerType = 'RESIDENTIAL' | 'COMMERCIAL' | 'GOVERNMENT';
+
+export interface Customer {
+  id: string;
+  tenantId: string;
+  name: string;
+  legalName: string | null;
+  email: string | null;
+  phone: string | null;
+  city: string | null;
+  country: string;
+  customerType: CustomerType;
+  creditLimitEtb: string;
+  outstandingBalanceEtb: string;
+  createdAt: string;
+}
+
+export interface CreateCustomerPayload {
+  name: string;
+  email?: string;
+  phone?: string;
+  city?: string;
+  customerType?: CustomerType;
+  notes?: string;
+}
+
+export const listCustomers = (search?: string): Promise<Customer[]> => {
+  const query = search?.trim()
+    ? `?q=${encodeURIComponent(search.trim())}`
+    : '';
+  return apiFetch<Customer[]>(`/customers${query}`);
+};
+
+export const createCustomer = (
+  payload: CreateCustomerPayload,
+): Promise<Customer> =>
+  apiFetch<Customer>('/customers', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export type ProjectStatus =
+  | 'LEAD'
+  | 'SITE_SURVEY'
+  | 'SPEC_CALCULATION'
+  | 'QUOTATION'
+  | 'PROFORMA'
+  | 'CONTRACT'
+  | 'EXECUTION'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+export interface Project {
+  id: string;
+  tenantId: string;
+  customerId: string;
+  name: string;
+  code: string | null;
+  status: ProjectStatus;
+  siteCity: string | null;
+  siteCountry: string;
+  quotedAmountEtb: string | null;
+  contractAmountEtb: string | null;
+  createdAt: string;
+  statusChangedAt: string;
+}
+
+export interface CreateProjectPayload {
+  customerId: string;
+  name: string;
+  code?: string;
+  siteCity?: string;
+  buildingName?: string;
+  notes?: string;
+}
+
+export const listProjects = (status?: ProjectStatus): Promise<Project[]> => {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  return apiFetch<Project[]>(`/projects${query}`);
+};
+
+export const createProject = (
+  payload: CreateProjectPayload,
+): Promise<Project> =>
+  apiFetch<Project>('/projects', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const updateProjectStatus = (
+  id: string,
+  status: ProjectStatus,
+): Promise<Project> =>
+  apiFetch<Project>(`/projects/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+
+/** Next allowed statuses for UI advance buttons (mirrors API DAG). */
+export const NEXT_PROJECT_STATUSES: Record<
+  ProjectStatus,
+  readonly ProjectStatus[]
+> = {
+  LEAD: ['SITE_SURVEY', 'CANCELLED'],
+  SITE_SURVEY: ['SPEC_CALCULATION', 'CANCELLED'],
+  SPEC_CALCULATION: ['QUOTATION', 'CANCELLED'],
+  QUOTATION: ['PROFORMA', 'CANCELLED'],
+  PROFORMA: ['CONTRACT', 'CANCELLED'],
+  CONTRACT: ['EXECUTION', 'CANCELLED'],
+  EXECUTION: ['COMPLETED'],
+  COMPLETED: [],
+  CANCELLED: [],
+};
