@@ -14,9 +14,9 @@ consume Phase 1 pricing. Currency throughout: **ETB**.
 2. ~~Projects schema + status transition API (`WorkflowTransitionError`)~~
 3. ~~Admin UI: customers list/create + projects pipeline~~
 4. ~~Duplicate detection — see `FEATURE-phase2-duplicate-detection.md`~~
-5. Follow-ups: quotation/proforma/contract, branded PDF
+5. ~~Quotations → proforma → contract + branded PDF — see `FEATURE-phase2-quotations.md`~~
 
-## Exit gate (full Phase 2)
+## Exit gate (full Phase 2) — ✅ MET
 Create customer → project → quote from calc → convert toward contract;
 duplicate lead flagged. Early slices unlock CRM UI before quotes land.
 
