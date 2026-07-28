@@ -46,6 +46,35 @@ export class ApiError extends Error {
 export const getAccessToken = (): string | null =>
   typeof window === 'undefined' ? null : localStorage.getItem(ACCESS_KEY);
 
+export type UserRole =
+  | 'CEO'
+  | 'ADMIN'
+  | 'SALES_MANAGER'
+  | 'TECHNICAL_LEAD'
+  | 'FIELD_ENGINEER'
+  | 'FINANCE'
+  | 'WAREHOUSE_MANAGER'
+  | 'DISPATCHER'
+  | 'CUSTOMER';
+
+/**
+ * Role straight off the access token, for deciding what to render. Presentation
+ * only — the API re-checks every request, so a tampered token changes what this
+ * browser draws and nothing else.
+ */
+export const getCurrentRole = (): UserRole | null => {
+  const payload = getAccessToken()?.split('.')[1];
+  if (!payload) {
+    return null;
+  }
+  try {
+    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+    return (JSON.parse(json) as { role?: UserRole }).role ?? null;
+  } catch {
+    return null;
+  }
+};
+
 const getRefreshToken = (): string | null =>
   typeof window === 'undefined' ? null : localStorage.getItem(REFRESH_KEY);
 
@@ -791,16 +820,25 @@ export interface UpcomingService {
   overdue: boolean;
 }
 
-export interface DashboardSummary {
+export interface SalesFigures {
   pipeline: PipelineStage[];
   openPipelineValueEtb: string;
   wonThisMonth: { count: number; valueEtb: string };
+}
+
+export interface ServiceFigures {
   servicesDueThisWeek: number;
   servicesOverdue: number;
   openBreakdowns: number;
   emergencyBreakdowns: number;
-  totals: { customers: number; assets: number; employees: number };
   upcomingServices: UpcomingService[];
+}
+
+/** Sections absent from the response are ones this role may not see. */
+export interface DashboardSummary {
+  sales?: SalesFigures;
+  service?: ServiceFigures;
+  totals?: { customers: number; assets: number; employees: number };
 }
 
 export const getDashboardSummary = (): Promise<DashboardSummary> =>

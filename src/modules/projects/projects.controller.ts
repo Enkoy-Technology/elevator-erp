@@ -28,6 +28,7 @@ import { ProjectsService } from './projects.service';
 @ApiTags('projects')
 @ApiBearerAuth('access-token')
 @Controller('projects')
+@Roles('SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 

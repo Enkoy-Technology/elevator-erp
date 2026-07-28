@@ -14,6 +14,7 @@ import { SettingsService } from './settings.service';
 @ApiTags('settings')
 @ApiBearerAuth('access-token')
 @Controller('settings')
+@Roles('ADMIN')
 export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 

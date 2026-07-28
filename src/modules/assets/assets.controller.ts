@@ -30,6 +30,13 @@ import {
 @ApiTags('assets')
 @ApiBearerAuth('access-token')
 @Controller('assets')
+@Roles(
+  'SALES_MANAGER',
+  'TECHNICAL_LEAD',
+  'FIELD_ENGINEER',
+  'DISPATCHER',
+  'WAREHOUSE_MANAGER',
+)
 export class AssetsController {
   constructor(private readonly assetsService: AssetsService) {}
 

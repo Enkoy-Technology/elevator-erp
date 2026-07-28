@@ -20,6 +20,6 @@ export class DashboardController {
   })
   @ApiOkResponse({ description: 'Aggregated tenant figures' })
   summary(@CurrentUser() user: AuthenticatedUser): Promise<DashboardSummary> {
-    return this.dashboardRepository.summary(user.tenantId);
+    return this.dashboardRepository.summary(user.tenantId, user.role);
   }
 }

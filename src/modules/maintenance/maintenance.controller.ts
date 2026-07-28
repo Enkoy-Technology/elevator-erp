@@ -31,6 +31,7 @@ import { MaintenanceService } from './maintenance.service';
 @ApiTags('maintenance')
 @ApiBearerAuth('access-token')
 @Controller('maintenance')
+@Roles('TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER')
 export class MaintenanceController {
   constructor(private readonly maintenanceService: MaintenanceService) {}
 

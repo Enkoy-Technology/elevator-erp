@@ -3,10 +3,12 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { modulesForRole } from '@/components/module-nav';
 import { Sidebar } from '@/components/sidebar';
 import {
   AuthProfile,
   getAccessToken,
+  getCurrentRole,
   getDashboardSummary,
   getProfile,
   logout,
@@ -102,12 +104,21 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<AuthProfile | null>(null);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Hrefs this role can actually open, so no tile links somewhere that 403s. */
+  const [openable, setOpenable] = useState<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
     if (!getAccessToken()) {
       router.replace('/login');
       return;
     }
+    setOpenable(
+      new Set(
+        modulesForRole(getCurrentRole())
+          .map((module) => module.href)
+          .filter((href): href is string => href !== null),
+      ),
+    );
     getProfile()
       .then(setProfile)
       .catch(() => router.replace('/login'));
@@ -131,9 +142,10 @@ export default function DashboardPage() {
     .join('')
     .toUpperCase();
 
-  const peakStage = summary
-    ? Math.max(...summary.pipeline.map((stage) => stage.count), 1)
-    : 1;
+  const peakStage = Math.max(
+    ...(summary?.sales?.pipeline.map((stage) => stage.count) ?? []),
+    1,
+  );
 
   const onLogout = async () => {
     await logout();
@@ -187,49 +199,63 @@ export default function DashboardPage() {
           ) : (
             <>
               <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                <StatTile
-                  label="Open pipeline"
-                  value={etb(summary.openPipelineValueEtb)}
-                  sub={`${summary.pipeline.reduce((n, s) => n + s.count, 0)} active projects`}
-                  href="/projects"
-                />
-                <StatTile
-                  label="Won this month"
-                  value={etb(summary.wonThisMonth.valueEtb)}
-                  sub={`${summary.wonThisMonth.count} reached contract`}
-                  tone={summary.wonThisMonth.count > 0 ? 'good' : 'plain'}
-                  href="/projects"
-                />
-                <StatTile
-                  label="Service due (7 days)"
-                  value={String(summary.servicesDueThisWeek)}
-                  sub={
-                    summary.servicesOverdue > 0
-                      ? `${summary.servicesOverdue} already overdue`
-                      : 'nothing overdue'
-                  }
-                  tone={summary.servicesOverdue > 0 ? 'warn' : 'plain'}
-                  href="/maintenance"
-                />
-                <StatTile
-                  label="Open breakdowns"
-                  value={String(summary.openBreakdowns)}
-                  sub={
-                    summary.emergencyBreakdowns > 0
-                      ? `${summary.emergencyBreakdowns} emergency`
-                      : 'no emergencies'
-                  }
-                  tone={
-                    summary.emergencyBreakdowns > 0
-                      ? 'danger'
-                      : summary.openBreakdowns > 0
-                        ? 'warn'
-                        : 'plain'
-                  }
-                  href="/maintenance"
-                />
+                {summary.sales ? (
+                  <>
+                    <StatTile
+                      label="Open pipeline"
+                      value={etb(summary.sales.openPipelineValueEtb)}
+                      sub={`${summary.sales.pipeline.reduce((n, s) => n + s.count, 0)} active projects`}
+                      href="/projects"
+                    />
+                    <StatTile
+                      label="Won this month"
+                      value={etb(summary.sales.wonThisMonth.valueEtb)}
+                      sub={`${summary.sales.wonThisMonth.count} reached contract`}
+                      tone={
+                        summary.sales.wonThisMonth.count > 0 ? 'good' : 'plain'
+                      }
+                      href="/projects"
+                    />
+                  </>
+                ) : null}
+
+                {summary.service ? (
+                  <>
+                    <StatTile
+                      label="Service due (7 days)"
+                      value={String(summary.service.servicesDueThisWeek)}
+                      sub={
+                        summary.service.servicesOverdue > 0
+                          ? `${summary.service.servicesOverdue} already overdue`
+                          : 'nothing overdue'
+                      }
+                      tone={
+                        summary.service.servicesOverdue > 0 ? 'warn' : 'plain'
+                      }
+                      href="/maintenance"
+                    />
+                    <StatTile
+                      label="Open breakdowns"
+                      value={String(summary.service.openBreakdowns)}
+                      sub={
+                        summary.service.emergencyBreakdowns > 0
+                          ? `${summary.service.emergencyBreakdowns} emergency`
+                          : 'no emergencies'
+                      }
+                      tone={
+                        summary.service.emergencyBreakdowns > 0
+                          ? 'danger'
+                          : summary.service.openBreakdowns > 0
+                            ? 'warn'
+                            : 'plain'
+                      }
+                      href="/maintenance"
+                    />
+                  </>
+                ) : null}
               </section>
 
+              {summary.sales ? (
               <section className="rounded-2xl border border-slate-200 bg-white p-6">
                 <div className="mb-5 flex items-baseline justify-between">
                   <h2 className="font-display text-base font-semibold">
@@ -243,7 +269,7 @@ export default function DashboardPage() {
                   </a>
                 </div>
                 <ul className="space-y-2.5">
-                  {summary.pipeline.map((stage) => (
+                  {summary.sales.pipeline.map((stage) => (
                     <li key={stage.status} className="flex items-center gap-3">
                       <span className="w-28 shrink-0 text-xs font-medium text-slate-600">
                         {STAGE_LABELS[stage.status]}
@@ -270,19 +296,21 @@ export default function DashboardPage() {
                   ))}
                 </ul>
               </section>
+              ) : null}
 
               <div className="grid gap-6 lg:grid-cols-2">
+                {summary.service ? (
                 <section className="rounded-2xl border border-slate-200 bg-white p-6">
                   <h2 className="font-display mb-4 text-base font-semibold">
                     Service visits coming up
                   </h2>
-                  {summary.upcomingServices.length === 0 ? (
+                  {summary.service.upcomingServices.length === 0 ? (
                     <p className="text-sm text-slate-500">
                       Nothing scheduled in the next 7 days.
                     </p>
                   ) : (
                     <ul className="divide-y divide-slate-100">
-                      {summary.upcomingServices.map((visit) => (
+                      {summary.service.upcomingServices.map((visit) => (
                         <li
                           key={visit.contractId}
                           className="flex items-center justify-between gap-3 py-2.5"
@@ -310,7 +338,9 @@ export default function DashboardPage() {
                     </ul>
                   )}
                 </section>
+                ) : null}
 
+                {summary.totals ? (
                 <section className="rounded-2xl border border-slate-200 bg-white p-6">
                   <h2 className="font-display mb-4 text-base font-semibold">
                     On the books
@@ -332,24 +362,29 @@ export default function DashboardPage() {
                         value: summary.totals.employees,
                         href: '/employees',
                       },
-                    ].map((row) => (
-                      <div
-                        key={row.label}
-                        className="flex items-center justify-between border-b border-slate-100 pb-2.5 last:border-0"
-                      >
-                        <dt className="text-sm text-slate-600">{row.label}</dt>
-                        <dd>
-                          <a
-                            href={row.href}
-                            className="text-sm font-semibold tabular-nums text-navy-800 hover:underline"
-                          >
-                            {row.value}
-                          </a>
-                        </dd>
-                      </div>
-                    ))}
+                    ]
+                      .filter((row) => openable.has(row.href))
+                      .map((row) => (
+                        <div
+                          key={row.label}
+                          className="flex items-center justify-between border-b border-slate-100 pb-2.5 last:border-0"
+                        >
+                          <dt className="text-sm text-slate-600">
+                            {row.label}
+                          </dt>
+                          <dd>
+                            <a
+                              href={row.href}
+                              className="text-sm font-semibold tabular-nums text-navy-800 hover:underline"
+                            >
+                              {row.value}
+                            </a>
+                          </dd>
+                        </div>
+                      ))}
                   </dl>
                 </section>
+                ) : null}
               </div>
             </>
           )}

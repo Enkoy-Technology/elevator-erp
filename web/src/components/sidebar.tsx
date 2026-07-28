@@ -3,9 +3,12 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+
+import { getCurrentRole } from '@/lib/api';
 
 import { useLocale } from './locale-provider';
-import { MODULES } from './module-nav';
+import { modulesForRole } from './module-nav';
 import { toggleCollapsed, toggleHidden, useSidebarState } from './sidebar-state';
 import mark from '../../public/shining-star-mark.png';
 
@@ -13,6 +16,12 @@ export function Sidebar() {
   const pathname = usePathname();
   const { collapsed, hidden } = useSidebarState();
   const { t } = useLocale();
+  // Read after mount: localStorage is unavailable during the server render.
+  const [modules, setModules] = useState(() => modulesForRole(null));
+
+  useEffect(() => {
+    setModules(modulesForRole(getCurrentRole()));
+  }, [pathname]);
 
   if (hidden) {
     return (
@@ -59,7 +68,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden px-3 pb-4">
-        {MODULES.map((module) => {
+        {modules.map((module) => {
           const label = t(module.nameKey);
           const locked = module.phase !== null || !module.href;
           const active =

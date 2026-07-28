@@ -27,6 +27,9 @@ import { UpdateCustomerDto } from './dto/update-customer.dto';
 @ApiTags('customers')
 @ApiBearerAuth('access-token')
 @Controller('customers')
+// Class-level @Roles is the read gate; per-route @Roles below narrows writes.
+// CEO and ADMIN bypass both (RolesGuard SUPER_ROLES).
+@Roles('SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE', 'DISPATCHER')
 export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 

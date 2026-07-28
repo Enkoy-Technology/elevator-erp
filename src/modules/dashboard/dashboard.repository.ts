@@ -10,7 +10,9 @@ import {
   users,
 } from '../../database/schema';
 import type { ProjectStatus } from '../../database/schema/projects';
+import type { TenantTransaction } from '../../database/database.types';
 import { TenantDbService } from '../../database/tenant-db.service';
+import type { UserRole } from '../../types/auth.types';
 
 export interface PipelineStage {
   status: ProjectStatus;
@@ -26,17 +28,55 @@ export interface UpcomingService {
   overdue: boolean;
 }
 
-export interface DashboardSummary {
+export interface SalesFigures {
   pipeline: PipelineStage[];
   openPipelineValueEtb: string;
   wonThisMonth: { count: number; valueEtb: string };
+}
+
+export interface ServiceFigures {
   servicesDueThisWeek: number;
   servicesOverdue: number;
   openBreakdowns: number;
   emergencyBreakdowns: number;
-  totals: { customers: number; assets: number; employees: number };
   upcomingServices: UpcomingService[];
 }
+
+/**
+ * Sections are omitted, not blanked, for roles that shouldn't see them — a
+ * field engineer never receives deal values over the wire at all.
+ */
+export interface DashboardSummary {
+  sales?: SalesFigures;
+  service?: ServiceFigures;
+  totals?: { customers: number; assets: number; employees: number };
+}
+
+/** Roles that may see money: deal values and pipeline totals. */
+const SALES_ROLES: readonly UserRole[] = [
+  'CEO',
+  'ADMIN',
+  'SALES_MANAGER',
+  'FINANCE',
+];
+
+/** Roles that run or dispatch service work. */
+const SERVICE_ROLES: readonly UserRole[] = [
+  'CEO',
+  'ADMIN',
+  'TECHNICAL_LEAD',
+  'FIELD_ENGINEER',
+  'DISPATCHER',
+];
+
+/** Roles that may see headcount and the customer book size. */
+const TOTALS_ROLES: readonly UserRole[] = [
+  'CEO',
+  'ADMIN',
+  'SALES_MANAGER',
+  'FINANCE',
+  'TECHNICAL_LEAD',
+];
 
 /** Stages a project can still be won from — excludes COMPLETED and CANCELLED. */
 const OPEN_STAGES: readonly ProjectStatus[] = [
@@ -65,16 +105,42 @@ export class DashboardRepository {
   constructor(private readonly tenantDb: TenantDbService) {}
 
   /**
-   * One transaction, one tenant context, all figures for the landing page.
+   * One transaction, one tenant context, the figures this role is entitled to.
    * Every query is a COUNT/SUM aggregate — no rows are shipped to the app
-   * except the short upcoming-services list.
+   * except the short upcoming-services list. Sections the role cannot see are
+   * never queried, so they cost nothing and cannot leak.
    */
-  async summary(tenantId: string): Promise<DashboardSummary> {
+  async summary(tenantId: string, role: UserRole): Promise<DashboardSummary> {
     const today = todayIso();
     const weekAhead = addDays(today, 7);
     const monthStart = `${today.slice(0, 7)}-01`;
 
+    const wantsSales = SALES_ROLES.includes(role);
+    const wantsService = SERVICE_ROLES.includes(role);
+    const wantsTotals = TOTALS_ROLES.includes(role);
+
     return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const summary: DashboardSummary = {};
+
+      if (wantsSales) {
+        summary.sales = await this.salesFigures(tx, monthStart);
+      }
+      if (wantsService) {
+        summary.service = await this.serviceFigures(tx, today, weekAhead);
+      }
+      if (wantsTotals) {
+        summary.totals = await this.totals(tx);
+      }
+
+      return summary;
+    });
+  }
+
+  private async salesFigures(
+    tx: TenantTransaction,
+    monthStart: string,
+  ): Promise<SalesFigures> {
+    {
       const live = isNull(projects.deletedAt);
 
       const stageRows = await tx
@@ -118,6 +184,23 @@ export class DashboardRepository {
           ),
         );
 
+      return {
+        pipeline,
+        openPipelineValueEtb,
+        wonThisMonth: {
+          count: Number(won?.count ?? 0),
+          valueEtb: money(won?.valueEtb ?? 0),
+        },
+      };
+    }
+  }
+
+  private async serviceFigures(
+    tx: TenantTransaction,
+    today: string,
+    weekAhead: string,
+  ): Promise<ServiceFigures> {
+    {
       const activeContract = and(
         isNull(maintenanceContracts.deletedAt),
         eq(maintenanceContracts.status, 'ACTIVE'),
@@ -156,21 +239,6 @@ export class DashboardRepository {
         .from(breakdowns)
         .where(and(liveBreakdown, eq(breakdowns.severity, 'EMERGENCY')));
 
-      const [customerTotal] = await tx
-        .select({ count: count() })
-        .from(customers)
-        .where(isNull(customers.deletedAt));
-
-      const [assetTotal] = await tx
-        .select({ count: count() })
-        .from(assets)
-        .where(isNull(assets.deletedAt));
-
-      const [employeeTotal] = await tx
-        .select({ count: count() })
-        .from(users)
-        .where(and(isNull(users.deletedAt), ne(users.role, 'CUSTOMER')));
-
       const upcoming = await tx
         .select({
           contractId: maintenanceContracts.id,
@@ -198,26 +266,40 @@ export class DashboardRepository {
         .limit(8);
 
       return {
-        pipeline,
-        openPipelineValueEtb,
-        wonThisMonth: {
-          count: Number(won?.count ?? 0),
-          valueEtb: money(won?.valueEtb ?? 0),
-        },
         servicesDueThisWeek: Number(dueThisWeek?.count ?? 0),
         servicesOverdue: Number(overdue?.count ?? 0),
         openBreakdowns: Number(openBreakdowns?.count ?? 0),
         emergencyBreakdowns: Number(emergencies?.count ?? 0),
-        totals: {
-          customers: Number(customerTotal?.count ?? 0),
-          assets: Number(assetTotal?.count ?? 0),
-          employees: Number(employeeTotal?.count ?? 0),
-        },
         upcomingServices: upcoming.map((row) => ({
           ...row,
           overdue: row.nextServiceAt < today,
         })),
       };
-    });
+    }
+  }
+
+  private async totals(
+    tx: TenantTransaction,
+  ): Promise<NonNullable<DashboardSummary['totals']>> {
+    const [customerTotal] = await tx
+      .select({ count: count() })
+      .from(customers)
+      .where(isNull(customers.deletedAt));
+
+    const [assetTotal] = await tx
+      .select({ count: count() })
+      .from(assets)
+      .where(isNull(assets.deletedAt));
+
+    const [employeeTotal] = await tx
+      .select({ count: count() })
+      .from(users)
+      .where(and(isNull(users.deletedAt), ne(users.role, 'CUSTOMER')));
+
+    return {
+      customers: Number(customerTotal?.count ?? 0),
+      assets: Number(assetTotal?.count ?? 0),
+      employees: Number(employeeTotal?.count ?? 0),
+    };
   }
 }

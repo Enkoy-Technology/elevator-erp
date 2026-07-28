@@ -23,6 +23,7 @@ import { EmployeesService } from './employees.service';
 @ApiTags('employees')
 @ApiBearerAuth('access-token')
 @Controller('employees')
+@Roles('ADMIN')
 export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
 
