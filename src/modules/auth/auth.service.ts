@@ -128,7 +128,6 @@ export class AuthService {
       sub: user.id,
       tenantId: user.tenantId,
       role: user.role,
-      permissions: [] as string[],
     };
 
     const [accessToken, refreshToken] = await Promise.all([

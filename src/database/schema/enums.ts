@@ -44,15 +44,6 @@ export const projectStatusEnum = pgEnum('project_status', [
   'CANCELLED',
 ]);
 
-export const quoteStatusEnum = pgEnum('quote_status', [
-  'DRAFT',
-  'APPROVED',
-  'REJECTED',
-  'PROFORMA',
-  'CONTRACT',
-  'CANCELLED',
-]);
-
 export const assetCategoryEnum = pgEnum('asset_category', [
   'ELEVATOR',
   'STAIRS',
@@ -80,7 +71,6 @@ export const maintenanceRecurrenceEnum = pgEnum('maintenance_recurrence', [
   'QUARTERLY',
   'BIANNUAL',
   'ANNUAL',
-  'CUSTOM',
 ]);
 
 export const maintenanceContractStatusEnum = pgEnum(

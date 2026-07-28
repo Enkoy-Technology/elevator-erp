@@ -4,14 +4,14 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { Sidebar } from '@/components/sidebar';
-import { useLocale } from '@/components/locale-provider';
-import { MODULES } from '@/components/module-nav';
 import {
   AuthProfile,
   getAccessToken,
-  getHealth,
+  getDashboardSummary,
   getProfile,
   logout,
+  type DashboardSummary,
+  type PipelineStage,
 } from '@/lib/api';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -26,11 +26,82 @@ const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrator',
 };
 
+const STAGE_LABELS: Record<PipelineStage['status'], string> = {
+  LEAD: 'Lead',
+  SITE_SURVEY: 'Site survey',
+  SPEC_CALCULATION: 'Spec',
+  QUOTATION: 'Quotation',
+  PROFORMA: 'Proforma',
+  CONTRACT: 'Contract',
+  EXECUTION: 'Execution',
+};
+
+const etb = (value: string | number): string =>
+  `${Number(value).toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })} ETB`;
+
+const dayLabel = (isoDate: string): string =>
+  new Date(`${isoDate}T00:00:00Z`).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
+
+function StatTile({
+  label,
+  value,
+  sub,
+  tone = 'plain',
+  href,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: 'plain' | 'warn' | 'danger' | 'good';
+  href?: string;
+}) {
+  const toneClass = {
+    plain: 'border-slate-200 bg-white',
+    good: 'border-emerald-200 bg-emerald-50',
+    warn: 'border-amber-200 bg-amber-50',
+    danger: 'border-red-200 bg-red-50',
+  }[tone];
+  const valueClass = {
+    plain: 'text-slate-900',
+    good: 'text-emerald-700',
+    warn: 'text-amber-800',
+    danger: 'text-red-700',
+  }[tone];
+
+  const body = (
+    <>
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <p className={`font-display mt-1.5 text-2xl font-semibold ${valueClass}`}>
+        {value}
+      </p>
+      {sub ? <p className="mt-1 text-xs text-slate-500">{sub}</p> : null}
+    </>
+  );
+
+  const className = `rounded-xl border p-4 ${toneClass}`;
+  return href ? (
+    <a href={href} className={`${className} block transition hover:shadow-sm`}>
+      {body}
+    </a>
+  ) : (
+    <div className={className}>{body}</div>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
-  const { t } = useLocale();
   const [profile, setProfile] = useState<AuthProfile | null>(null);
-  const [apiUp, setApiUp] = useState<boolean | null>(null);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!getAccessToken()) {
@@ -40,13 +111,10 @@ export default function DashboardPage() {
     getProfile()
       .then(setProfile)
       .catch(() => router.replace('/login'));
-    void getHealth().then(setApiUp);
+    getDashboardSummary()
+      .then(setSummary)
+      .catch(() => setError('Could not load dashboard figures'));
   }, [router]);
-
-  const onLogout = async () => {
-    await logout();
-    router.replace('/login');
-  };
 
   if (!profile) {
     return (
@@ -63,6 +131,15 @@ export default function DashboardPage() {
     .join('')
     .toUpperCase();
 
+  const peakStage = summary
+    ? Math.max(...summary.pipeline.map((stage) => stage.count), 1)
+    : 1;
+
+  const onLogout = async () => {
+    await logout();
+    router.replace('/login');
+  };
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
@@ -72,26 +149,10 @@ export default function DashboardPage() {
           <div>
             <h1 className="font-display text-lg font-semibold">Dashboard</h1>
             <p className="text-xs text-slate-500">
-              Workspace overview and delivery roadmap
+              Where the business stands today
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <span
-              className={
-                apiUp === false
-                  ? 'flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700'
-                  : 'flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700'
-              }
-            >
-              <span
-                className={
-                  apiUp === false
-                    ? 'h-1.5 w-1.5 rounded-full bg-red-500'
-                    : 'h-1.5 w-1.5 rounded-full bg-emerald-500'
-                }
-              />
-              {apiUp === false ? 'API offline' : 'API online'}
-            </span>
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-navy-800 text-xs font-bold text-white">
                 {initials}
@@ -115,59 +176,183 @@ export default function DashboardPage() {
         </header>
 
         <main className="flex-1 space-y-8 px-8 py-8">
-          <section className="rounded-2xl bg-navy-800 p-6 text-white">
-            <p className="text-sm text-navy-100/70">Welcome back,</p>
-            <h2 className="font-display mt-0.5 text-2xl font-semibold tracking-tight">
-              {profile.fullName}
-            </h2>
-            <p className="mt-2 max-w-xl text-sm text-navy-100/80">
-              Signed in as{' '}
-              <span className="font-medium text-gold-400">
-                {profile.email}
-              </span>{' '}
-              ·{' '}
-              <span className="font-medium text-gold-400">
-                {ROLE_LABELS[profile.role] ?? profile.role}
-              </span>
-              . Use the sidebar for calculator, customers, projects, and
-              quotations.
+          {error ? (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
             </p>
-          </section>
+          ) : null}
 
-          <section>
-            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
-              Quick links
-            </h3>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {MODULES.filter((module) => module.href && module.href !== '/').map(
-                (module) => (
+          {!summary ? (
+            <p className="text-sm text-slate-500">Loading figures…</p>
+          ) : (
+            <>
+              <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <StatTile
+                  label="Open pipeline"
+                  value={etb(summary.openPipelineValueEtb)}
+                  sub={`${summary.pipeline.reduce((n, s) => n + s.count, 0)} active projects`}
+                  href="/projects"
+                />
+                <StatTile
+                  label="Won this month"
+                  value={etb(summary.wonThisMonth.valueEtb)}
+                  sub={`${summary.wonThisMonth.count} reached contract`}
+                  tone={summary.wonThisMonth.count > 0 ? 'good' : 'plain'}
+                  href="/projects"
+                />
+                <StatTile
+                  label="Service due (7 days)"
+                  value={String(summary.servicesDueThisWeek)}
+                  sub={
+                    summary.servicesOverdue > 0
+                      ? `${summary.servicesOverdue} already overdue`
+                      : 'nothing overdue'
+                  }
+                  tone={summary.servicesOverdue > 0 ? 'warn' : 'plain'}
+                  href="/maintenance"
+                />
+                <StatTile
+                  label="Open breakdowns"
+                  value={String(summary.openBreakdowns)}
+                  sub={
+                    summary.emergencyBreakdowns > 0
+                      ? `${summary.emergencyBreakdowns} emergency`
+                      : 'no emergencies'
+                  }
+                  tone={
+                    summary.emergencyBreakdowns > 0
+                      ? 'danger'
+                      : summary.openBreakdowns > 0
+                        ? 'warn'
+                        : 'plain'
+                  }
+                  href="/maintenance"
+                />
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 bg-white p-6">
+                <div className="mb-5 flex items-baseline justify-between">
+                  <h2 className="font-display text-base font-semibold">
+                    Sales pipeline
+                  </h2>
                   <a
-                    key={module.nameKey}
-                    href={module.href!}
-                    className="rounded-xl border border-slate-200 bg-white p-5 transition hover:border-navy-600/40 hover:shadow-sm"
+                    href="/projects"
+                    className="text-xs font-medium text-navy-700 hover:underline"
                   >
-                    <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-navy-800/5 text-navy-800">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="h-5 w-5"
-                      >
-                        <path d={module.icon} />
-                      </svg>
-                    </div>
-                    <p className="text-sm font-semibold">{t(module.nameKey)}</p>
-                    <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                      {module.description}
-                    </p>
+                    View projects →
                   </a>
-                ),
-              )}
-            </div>
-          </section>
+                </div>
+                <ul className="space-y-2.5">
+                  {summary.pipeline.map((stage) => (
+                    <li key={stage.status} className="flex items-center gap-3">
+                      <span className="w-28 shrink-0 text-xs font-medium text-slate-600">
+                        {STAGE_LABELS[stage.status]}
+                      </span>
+                      <span className="h-6 flex-1 overflow-hidden rounded bg-slate-100">
+                        {stage.count > 0 ? (
+                          <span
+                            className="flex h-full items-center justify-end rounded bg-navy-800 px-2 text-[11px] font-semibold text-white"
+                            style={{
+                              width: `${Math.max(
+                                (stage.count / peakStage) * 100,
+                                8,
+                              )}%`,
+                            }}
+                          >
+                            {stage.count}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="w-32 shrink-0 text-right text-xs tabular-nums text-slate-500">
+                        {Number(stage.valueEtb) > 0 ? etb(stage.valueEtb) : '—'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                <section className="rounded-2xl border border-slate-200 bg-white p-6">
+                  <h2 className="font-display mb-4 text-base font-semibold">
+                    Service visits coming up
+                  </h2>
+                  {summary.upcomingServices.length === 0 ? (
+                    <p className="text-sm text-slate-500">
+                      Nothing scheduled in the next 7 days.
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-slate-100">
+                      {summary.upcomingServices.map((visit) => (
+                        <li
+                          key={visit.contractId}
+                          className="flex items-center justify-between gap-3 py-2.5"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">
+                              {visit.assetName}
+                            </p>
+                            <p className="truncate text-xs text-slate-500">
+                              {visit.customerName}
+                            </p>
+                          </div>
+                          <span
+                            className={
+                              visit.overdue
+                                ? 'shrink-0 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700'
+                                : 'shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600'
+                            }
+                          >
+                            {visit.overdue ? 'Overdue · ' : ''}
+                            {dayLabel(visit.nextServiceAt)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-6">
+                  <h2 className="font-display mb-4 text-base font-semibold">
+                    On the books
+                  </h2>
+                  <dl className="space-y-3">
+                    {[
+                      {
+                        label: 'Customers',
+                        value: summary.totals.customers,
+                        href: '/customers',
+                      },
+                      {
+                        label: 'Registered assets',
+                        value: summary.totals.assets,
+                        href: '/assets',
+                      },
+                      {
+                        label: 'Staff',
+                        value: summary.totals.employees,
+                        href: '/employees',
+                      },
+                    ].map((row) => (
+                      <div
+                        key={row.label}
+                        className="flex items-center justify-between border-b border-slate-100 pb-2.5 last:border-0"
+                      >
+                        <dt className="text-sm text-slate-600">{row.label}</dt>
+                        <dd>
+                          <a
+                            href={row.href}
+                            className="text-sm font-semibold tabular-nums text-navy-800 hover:underline"
+                          >
+                            {row.value}
+                          </a>
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              </div>
+            </>
+          )}
         </main>
       </div>
     </div>

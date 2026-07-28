@@ -26,26 +26,14 @@ export interface ProblemDetails {
   status: number;
   detail: string;
   instance: string;
-  recommendation?: DuplicateRecommendation;
-  matches?: DuplicateMatch[];
 }
 
-export type DuplicateRecommendation =
-  | 'OK'
-  | 'REVIEW_BEFORE_CREATE'
-  | 'HIGH_CONFIDENCE_DUPLICATE';
-
-export interface DuplicateMatch {
-  customerId: string;
+/** Advisory look-alike hit from POST /customers/check-duplicate. */
+export interface SimilarCustomer {
+  id: string;
   name: string;
-  score: number;
-  recommendation: DuplicateRecommendation;
-}
-
-export interface DuplicateCheckResult {
-  recommendation: DuplicateRecommendation;
-  maxScore: number;
-  matches: DuplicateMatch[];
+  phone: string | null;
+  city: string | null;
 }
 
 export class ApiError extends Error {
@@ -261,7 +249,6 @@ export interface CreateCustomerPayload {
   city?: string;
   customerType?: CustomerType;
   notes?: string;
-  acknowledgePossibleDuplicate?: boolean;
 }
 
 export const listCustomers = (options?: {
@@ -288,9 +275,8 @@ export const listCustomers = (options?: {
 export const checkCustomerDuplicate = (payload: {
   name: string;
   phone?: string;
-  buildingName?: string;
-}): Promise<DuplicateCheckResult> =>
-  apiFetch<DuplicateCheckResult>('/customers/check-duplicate', {
+}): Promise<SimilarCustomer[]> =>
+  apiFetch<SimilarCustomer[]>('/customers/check-duplicate', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -370,10 +356,11 @@ export const createProject = (
 export const updateProjectStatus = (
   id: string,
   status: ProjectStatus,
+  amounts?: { quotedAmountEtb?: string; contractAmountEtb?: string },
 ): Promise<Project> =>
   apiFetch<Project>(`/projects/${id}/status`, {
     method: 'PATCH',
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, ...amounts }),
   });
 
 /** Next allowed statuses for UI advance buttons (mirrors API DAG). */
@@ -392,115 +379,6 @@ export const NEXT_PROJECT_STATUSES: Record<
   CANCELLED: [],
 };
 
-export type QuoteStatus =
-  | 'DRAFT'
-  | 'APPROVED'
-  | 'REJECTED'
-  | 'PROFORMA'
-  | 'CONTRACT'
-  | 'CANCELLED';
-
-export interface Quotation {
-  id: string;
-  tenantId: string;
-  projectId: string;
-  customerId: string;
-  quoteNumber: string;
-  status: QuoteStatus;
-  marginPercent: string;
-  taxPercent: string;
-  subtotalEtb: string;
-  totalPriceEtb: string;
-  validUntil: string | null;
-  createdAt: string;
-}
-
-export interface CreateQuotationPayload extends CalcInputPayload {
-  validUntil?: string;
-  notes?: string;
-}
-
-export const listQuotations = (options?: {
-  projectId?: string;
-  status?: QuoteStatus;
-  page?: number;
-  pageSize?: number;
-}): Promise<Paginated<Quotation>> => {
-  const params = new URLSearchParams();
-  if (options?.projectId) {
-    params.set('projectId', options.projectId);
-  }
-  if (options?.status) {
-    params.set('status', options.status);
-  }
-  if (options?.page) {
-    params.set('page', String(options.page));
-  }
-  if (options?.pageSize) {
-    params.set('pageSize', String(options.pageSize));
-  }
-  const query = params.toString();
-  return apiFetch<Paginated<Quotation>>(
-    `/quotations${query ? `?${query}` : ''}`,
-  );
-};
-
-export const createQuotationFromCalc = (
-  projectId: string,
-  payload: CreateQuotationPayload,
-): Promise<Quotation> =>
-  apiFetch<Quotation>(`/projects/${projectId}/quotations`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-
-export const approveQuotation = (id: string): Promise<Quotation> =>
-  apiFetch<Quotation>(`/quotations/${id}/approve`, { method: 'POST' });
-
-export const rejectQuotation = (
-  id: string,
-  reason: string,
-): Promise<Quotation> =>
-  apiFetch<Quotation>(`/quotations/${id}/reject`, {
-    method: 'POST',
-    body: JSON.stringify({ reason }),
-  });
-
-export const cancelQuotation = (id: string): Promise<Quotation> =>
-  apiFetch<Quotation>(`/quotations/${id}/cancel`, { method: 'POST' });
-
-export const convertQuotationToProforma = (id: string): Promise<Quotation> =>
-  apiFetch<Quotation>(`/quotations/${id}/convert-proforma`, { method: 'POST' });
-
-export const convertQuotationToContract = (id: string): Promise<Quotation> =>
-  apiFetch<Quotation>(`/quotations/${id}/convert-contract`, { method: 'POST' });
-
-/**
- * Fetch the branded PDF (binary, not JSON) and trigger a browser download.
- * apiFetch can't be used here because it assumes a JSON body.
- */
-export const downloadQuotationPdf = async (
-  id: string,
-  quoteNumber: string,
-): Promise<void> => {
-  const token = getAccessToken();
-  const response = await fetch(`${API_URL}/quotations/${id}/generate-pdf`, {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!response.ok) {
-    throw new ApiError(await parseProblem(response));
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `${quoteNumber}.pdf`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-};
 
 export const EMPLOYEE_ROLES = [
   'CEO',
@@ -740,7 +618,6 @@ export const MAINTENANCE_RECURRENCES = [
   'QUARTERLY',
   'BIANNUAL',
   'ANNUAL',
-  'CUSTOM',
 ] as const;
 export type MaintenanceRecurrence = (typeof MAINTENANCE_RECURRENCES)[number];
 
@@ -890,6 +767,44 @@ export interface TenantSettings {
 
 export const getSettings = (): Promise<TenantSettings> =>
   apiFetch<TenantSettings>('/settings');
+
+export type ProjectPipelineStatus =
+  | 'LEAD'
+  | 'SITE_SURVEY'
+  | 'SPEC_CALCULATION'
+  | 'QUOTATION'
+  | 'PROFORMA'
+  | 'CONTRACT'
+  | 'EXECUTION';
+
+export interface PipelineStage {
+  status: ProjectPipelineStatus;
+  count: number;
+  valueEtb: string;
+}
+
+export interface UpcomingService {
+  contractId: string;
+  assetName: string;
+  customerName: string;
+  nextServiceAt: string;
+  overdue: boolean;
+}
+
+export interface DashboardSummary {
+  pipeline: PipelineStage[];
+  openPipelineValueEtb: string;
+  wonThisMonth: { count: number; valueEtb: string };
+  servicesDueThisWeek: number;
+  servicesOverdue: number;
+  openBreakdowns: number;
+  emergencyBreakdowns: number;
+  totals: { customers: number; assets: number; employees: number };
+  upcomingServices: UpcomingService[];
+}
+
+export const getDashboardSummary = (): Promise<DashboardSummary> =>
+  apiFetch<DashboardSummary>('/dashboard/summary');
 
 export const updateSettings = (payload: {
   primaryColorHex?: string;

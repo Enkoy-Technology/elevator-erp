@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Decimal } from 'decimal.js';
 
 import {
   computeCarDimensions,
@@ -13,11 +14,14 @@ import {
   computeShaftDimensions,
   computeSpeedPremium,
   D,
+  D_FACTOR,
   lookupQBase,
   money,
+  MR_FACTOR,
   passengerCapacity,
   qty2,
   selectGuideRail,
+  U_FACTOR,
 } from './calc-math';
 import type { CalcInput, CalcResult } from './types';
 
@@ -46,28 +50,11 @@ export class ElevatorCalcService {
     const qBase = lookupQBase(input.capacityKg);
     const nFactor = D(1).plus(D(input.stops - 2).mul('0.08'));
     const vFactor = D(1).plus(
-      DecimalMax0(D(input.speedMs).minus(1)).mul('0.15'),
+      Decimal.max(0, D(input.speedMs).minus(1)).mul('0.15'),
     );
-    const uFactor = D(
-      (
-        {
-          RESIDENTIAL: '1.00',
-          COMMERCIAL: '1.15',
-          HOSPITAL: '1.25',
-          INDUSTRIAL: '1.20',
-        } as const
-      )[input.buildingUsage],
-    );
-    const dFactor = D(
-      (
-        {
-          CENTER_OPEN: '1.00',
-          TELESCOPIC: '1.12',
-          SWING: '0.95',
-        } as const
-      )[input.doorType],
-    );
-    const mrFactor = D(input.machineRoomType === 'MRL' ? '0.92' : '1.00');
+    const uFactor = D(U_FACTOR[input.buildingUsage]);
+    const dFactor = D(D_FACTOR[input.doorType]);
+    const mrFactor = D(MR_FACTOR[input.machineRoomType]);
 
     const baseCost = qBase
       .mul(nFactor)
@@ -76,10 +63,12 @@ export class ElevatorCalcService {
       .mul(dFactor)
       .mul(mrFactor);
     const stopCost = qBase.mul('0.04').mul(input.stops - 2);
-    const capacityMultiplier = DecimalClamp(
-      D(1).plus(D(input.capacityKg - 1000).div(1000).mul('0.05')),
-      D('0.8'),
-      D(2),
+    const capacityMultiplier = Decimal.min(
+      2,
+      Decimal.max(
+        '0.8',
+        D(1).plus(D(input.capacityKg - 1000).div(1000).mul('0.05')),
+      ),
     );
     const speedPremium = computeSpeedPremium(qBase, input.speedMs);
     const doorPremium = computeDoorPremium(
@@ -152,16 +141,3 @@ export class ElevatorCalcService {
     };
   }
 }
-
-const DecimalMax0 = (value: ReturnType<typeof D>): ReturnType<typeof D> =>
-  value.isNeg() ? D(0) : value;
-
-const DecimalClamp = (
-  value: ReturnType<typeof D>,
-  min: ReturnType<typeof D>,
-  max: ReturnType<typeof D>,
-): ReturnType<typeof D> => {
-  if (value.lt(min)) return min;
-  if (value.gt(max)) return max;
-  return value;
-};

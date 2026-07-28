@@ -177,10 +177,10 @@ export class MaintenanceRepository {
         );
       }
       const visitedDay = toIsoDate();
-      const nextServiceAt =
-        contract.recurrence === 'CUSTOM'
-          ? contract.nextServiceAt
-          : advanceServiceDate(visitedDay, contract.recurrence);
+      const nextServiceAt = advanceServiceDate(
+        visitedDay,
+        contract.recurrence,
+      );
 
       const [visit] = await tx
         .insert(serviceVisits)

@@ -10,7 +10,6 @@ describe('ProjectsService', () => {
     userId: '11111111-1111-1111-1111-111111111111',
     tenantId: '22222222-2222-2222-2222-222222222222',
     role: 'CEO',
-    permissions: [],
   };
 
   const sample: ProjectRecord = {
@@ -91,36 +90,34 @@ describe('ProjectsService', () => {
     expect(repo.updateStatus).not.toHaveBeenCalled();
   });
 
-  it('blocks a manual PATCH into PROFORMA (quotation-driven only)', async () => {
-    repo.findById.mockResolvedValue({ ...sample, status: 'QUOTATION' });
-    await expect(
-      service.updateStatus(user, sample.id, 'PROFORMA'),
-    ).rejects.toBeInstanceOf(WorkflowTransitionError);
-    expect(repo.updateStatus).not.toHaveBeenCalled();
-  });
-
-  it('advances QUOTATION -> PROFORMA via applyQuotationConversion', async () => {
+  it('advances QUOTATION -> PROFORMA by hand now that quotes are gone', async () => {
     repo.findById.mockResolvedValue({ ...sample, status: 'QUOTATION' });
     repo.updateStatus.mockResolvedValue({ ...sample, status: 'PROFORMA' });
     await expect(
-      service.applyQuotationConversion(user, sample.id, 'PROFORMA', {
-        quotedAmountEtb: '143.75',
-      }),
+      service.updateStatus(user, sample.id, 'PROFORMA'),
     ).resolves.toMatchObject({ status: 'PROFORMA' });
     expect(repo.updateStatus).toHaveBeenCalledWith(
       user.tenantId,
       sample.id,
       'PROFORMA',
-      { quotedAmountEtb: '143.75' },
+      {},
     );
   });
 
-  it('no-ops applyQuotationConversion when the project already advanced', async () => {
-    repo.findById.mockResolvedValue({ ...sample, status: 'CONTRACT' });
+  it('records the deal value alongside the status change', async () => {
+    repo.findById.mockResolvedValue({ ...sample, status: 'PROFORMA' });
+    repo.updateStatus.mockResolvedValue({ ...sample, status: 'CONTRACT' });
     await expect(
-      service.applyQuotationConversion(user, sample.id, 'PROFORMA'),
+      service.updateStatus(user, sample.id, 'CONTRACT', {
+        contractAmountEtb: '165000.00',
+      }),
     ).resolves.toMatchObject({ status: 'CONTRACT' });
-    expect(repo.updateStatus).not.toHaveBeenCalled();
+    expect(repo.updateStatus).toHaveBeenCalledWith(
+      user.tenantId,
+      sample.id,
+      'CONTRACT',
+      { contractAmountEtb: '165000.00' },
+    );
   });
 
   it('throws NotFoundException when project is missing', async () => {

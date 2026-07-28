@@ -1,12 +1,29 @@
 import type { MaintenanceRecurrence } from './dto/maintenance.dto';
 
+/** Last day of the month `date` currently sits in. */
+const daysInMonth = (date: Date): number =>
+  new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+
+/**
+ * setUTCMonth overflows on short months — Jan 31 + 1 month lands on Mar 3 and
+ * silently skips February. Clamp to the last valid day instead.
+ */
+const addMonths = (date: Date, months: number): void => {
+  const day = date.getUTCDate();
+  date.setUTCDate(1);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  date.setUTCDate(Math.min(day, daysInMonth(date)));
+};
+
 /** Advance a YYYY-MM-DD service date by the contract recurrence. */
 export const advanceServiceDate = (
   fromIsoDate: string,
   recurrence: MaintenanceRecurrence,
 ): string => {
   const [year, month, day] = fromIsoDate.split('-').map(Number);
-  const date = new Date(Date.UTC(year!, month! - 1, day!));
+  const date = new Date(Date.UTC(year!, month! - 1, day));
   switch (recurrence) {
     case 'DAILY':
       date.setUTCDate(date.getUTCDate() + 1);
@@ -18,19 +35,17 @@ export const advanceServiceDate = (
       date.setUTCDate(date.getUTCDate() + 14);
       break;
     case 'MONTHLY':
-      date.setUTCMonth(date.getUTCMonth() + 1);
+      addMonths(date, 1);
       break;
     case 'QUARTERLY':
-      date.setUTCMonth(date.getUTCMonth() + 3);
+      addMonths(date, 3);
       break;
     case 'BIANNUAL':
-      date.setUTCMonth(date.getUTCMonth() + 6);
+      addMonths(date, 6);
       break;
     case 'ANNUAL':
-      date.setUTCFullYear(date.getUTCFullYear() + 1);
+      addMonths(date, 12);
       break;
-    case 'CUSTOM':
-      return fromIsoDate;
   }
   return date.toISOString().slice(0, 10);
 };

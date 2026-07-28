@@ -141,6 +141,20 @@
       "when": 1784745000000,
       "tag": "0019_settings_locale",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1784746000000,
+      "tag": "0020_drop_fingerprints_and_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1784747000000,
+      "tag": "0021_drop_quotations",
+      "breakpoints": true
     }
   ]
 }

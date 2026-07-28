@@ -17,7 +17,6 @@ export interface JwtPayload {
   sub: string;
   tenantId: string;
   role: UserRole;
-  permissions: string[];
   type: 'access' | 'refresh';
 }
 
@@ -25,5 +24,4 @@ export interface AuthenticatedUser {
   userId: string;
   tenantId: string;
   role: UserRole;
-  permissions: string[];
 }

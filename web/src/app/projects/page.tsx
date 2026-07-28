@@ -40,6 +40,55 @@ const STATUS_LABEL: Record<ProjectStatus, string> = {
   CANCELLED: 'Cancelled',
 };
 
+/** Stages where the rep learns a number worth recording. */
+const AMOUNT_FIELD = {
+  QUOTATION: 'quotedAmountEtb',
+  CONTRACT: 'contractAmountEtb',
+} as const;
+
+const ETB_AMOUNT = /^\d{1,12}(\.\d{1,2})?$/;
+
+const CANCELLED = Symbol('cancelled');
+const INVALID = Symbol('invalid');
+
+type DealValue =
+  | { quotedAmountEtb?: string; contractAmountEtb?: string }
+  | undefined;
+
+/**
+ * Quotations were dropped, so the deal value is captured here instead.
+ * ponytail: window.prompt is the whole UI — swap for a drawer field if reps
+ * find it clumsy.
+ */
+const promptForDealValue = (
+  project: Project,
+  next: ProjectStatus,
+): DealValue | typeof CANCELLED | typeof INVALID => {
+  const field = AMOUNT_FIELD[next as keyof typeof AMOUNT_FIELD];
+  if (!field) {
+    return undefined;
+  }
+  const entered = window.prompt(
+    next === 'QUOTATION'
+      ? `Price offered to the customer for "${project.name}" (ETB). Leave blank to skip.`
+      : `Signed contract value for "${project.name}" (ETB). Leave blank to skip.`,
+    (next === 'QUOTATION' ? project.quotedAmountEtb : project.contractAmountEtb) ??
+      project.quotedAmountEtb ??
+      '',
+  );
+  if (entered === null) {
+    return CANCELLED;
+  }
+  const trimmed = entered.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (!ETB_AMOUNT.test(trimmed)) {
+    return INVALID;
+  }
+  return { [field]: trimmed };
+};
+
 export default function ProjectsPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -147,10 +196,19 @@ export default function ProjectsPage() {
   };
 
   const onAdvance = async (project: Project, next: ProjectStatus) => {
+    const amounts = promptForDealValue(project, next);
+    if (amounts === CANCELLED) {
+      return;
+    }
+    if (amounts === INVALID) {
+      setError('Amount must be a number with up to 2 decimals, e.g. 172345.21');
+      return;
+    }
+
     setAdvancingId(project.id);
     setError(null);
     try {
-      await updateProjectStatus(project.id, next);
+      await updateProjectStatus(project.id, next, amounts);
       await refresh(page, statusFilter);
     } catch (err) {
       setError(

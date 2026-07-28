@@ -16,8 +16,10 @@
 
   --font-sans: var(--font-ibm-plex), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-barlow), var(--font-ibm-plex), sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), ui-monospace, monospace;
 }
 
 body {
   @apply bg-slate-100 font-sans text-slate-900 antialiased;
 }
+

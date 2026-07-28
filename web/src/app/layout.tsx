@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Barlow, IBM_Plex_Sans } from 'next/font/google';
+import { Barlow, IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google';
 
 import { LocaleProvider } from '@/components/locale-provider';
 
@@ -19,6 +19,14 @@ const barlow = Barlow({
   display: 'swap',
 });
 
+/** Dimension callouts and data readouts — tabular figures on technical drawings. */
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-ibm-plex-mono',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   title: 'Shining Star Electromechanical — ERP',
   description:
@@ -29,7 +37,10 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${ibmPlexSans.variable} ${barlow.variable}`}>
+    <html
+      lang="en"
+      className={`${ibmPlexSans.variable} ${barlow.variable} ${ibmPlexMono.variable}`}
+    >
       <body>
         <LocaleProvider>{children}</LocaleProvider>
       </body>

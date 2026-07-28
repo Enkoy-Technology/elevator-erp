@@ -28,20 +28,21 @@ const BASE_COST_MATRIX: ReadonlyArray<readonly [number, number]> = [
   [5000, 145_000],
 ];
 
-const U_FACTOR: Record<BuildingUsage, string> = {
+/** §4.2.1 BASE_COST multipliers. */
+export const U_FACTOR: Record<BuildingUsage, string> = {
   RESIDENTIAL: '1.00',
   COMMERCIAL: '1.15',
   HOSPITAL: '1.25',
   INDUSTRIAL: '1.20',
 };
 
-const D_FACTOR: Record<DoorType, string> = {
+export const D_FACTOR: Record<DoorType, string> = {
   CENTER_OPEN: '1.00',
   TELESCOPIC: '1.12',
   SWING: '0.95',
 };
 
-const MR_FACTOR: Record<MachineRoomType, string> = {
+export const MR_FACTOR: Record<MachineRoomType, string> = {
   MR: '1.00',
   MRL: '0.92',
 };

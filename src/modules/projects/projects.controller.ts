@@ -76,12 +76,21 @@ export class ProjectsController {
 
   @Patch(':id/status')
   @Roles('SALES_MANAGER')
-  @ApiOperation({ summary: 'Advance or cancel project via status DAG' })
+  @ApiOperation({
+    summary: 'Advance or cancel project via status DAG, optionally with the deal value',
+  })
   updateStatus(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateProjectStatusDto,
   ) {
-    return this.projectsService.updateStatus(user, id, dto.status);
+    return this.projectsService.updateStatus(user, id, dto.status, {
+      ...(dto.quotedAmountEtb !== undefined
+        ? { quotedAmountEtb: dto.quotedAmountEtb }
+        : {}),
+      ...(dto.contractAmountEtb !== undefined
+        ? { contractAmountEtb: dto.contractAmountEtb }
+        : {}),
+    });
   }
 }

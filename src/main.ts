@@ -51,10 +51,10 @@ const bootstrap = async (): Promise<void> => {
       'access-token',
     )
     .addTag('health', 'Liveness probe')
+    .addTag('dashboard', 'Pipeline and workload figures for the home page')
     .addTag('auth', 'Login, refresh, logout, and current user')
     .addTag('customers', 'CRM customers')
     .addTag('projects', 'Sales project pipeline')
-    .addTag('quotations', 'Quotations, proforma, and contracts')
     .addTag('employees', 'Staff directory and roles')
     .addTag('assets', 'Registered elevators, stairs, and other equipment')
     .addTag('notifications', 'In-app notification inbox')

@@ -44,7 +44,9 @@ export class CustomersController {
 
   @Post('check-duplicate')
   @Roles('SALES_MANAGER')
-  @ApiOperation({ summary: 'Fuzzy duplicate check before create' })
+  @ApiOperation({
+    summary: 'Warn about look-alike customers before create (advisory only)',
+  })
   checkDuplicate(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CheckDuplicateCustomerDto,
@@ -63,7 +65,7 @@ export class CustomersController {
 
   @Post()
   @Roles('SALES_MANAGER')
-  @ApiOperation({ summary: 'Create customer (duplicate-gated)' })
+  @ApiOperation({ summary: 'Create customer' })
   create(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateCustomerDto,

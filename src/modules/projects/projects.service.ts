@@ -12,14 +12,6 @@ import {
   type ProjectRecord,
 } from './projects.repository';
 
-// PROFORMA/CONTRACT are reached only by converting a quotation (which requires
-// an approved quote), never by a direct status PATCH — see FEATURE-phase2-
-// quotations.md #3. QuotationsService drives them via applyQuotationConversion.
-const QUOTATION_DRIVEN_STATUSES: ReadonlySet<ProjectStatus> = new Set([
-  'PROFORMA',
-  'CONTRACT',
-]);
-
 @Injectable()
 export class ProjectsService {
   constructor(private readonly projectsRepository: ProjectsRepository) {}
@@ -57,16 +49,19 @@ export class ProjectsService {
     );
   }
 
+  /**
+   * Advance or cancel a project along the status DAG. Deal values are set here
+   * because that is when the rep knows them — quoted on the way into QUOTATION,
+   * contract value on the way into CONTRACT.
+   */
   async updateStatus(
     user: AuthenticatedUser,
     id: string,
     nextStatus: ProjectStatus,
+    amounts: Partial<
+      Pick<ProjectInsert, 'quotedAmountEtb' | 'contractAmountEtb'>
+    > = {},
   ): Promise<ProjectRecord> {
-    if (QUOTATION_DRIVEN_STATUSES.has(nextStatus)) {
-      throw new WorkflowTransitionError(
-        `Project reaches ${nextStatus} by converting a quotation, not a direct status change`,
-      );
-    }
     const project = await this.getById(user, id);
     if (!canTransitionProjectStatus(project.status, nextStatus)) {
       throw new WorkflowTransitionError(
@@ -77,31 +72,7 @@ export class ProjectsService {
       user.tenantId,
       id,
       nextStatus,
-    );
-  }
-
-  /**
-   * Advance a project as a side-effect of a quotation conversion. Skips the
-   * manual-PATCH block above (this IS the sanctioned path) and no-ops if the
-   * project has already moved past the target (independent of the quote).
-   */
-  async applyQuotationConversion(
-    user: AuthenticatedUser,
-    projectId: string,
-    nextStatus: ProjectStatus,
-    extra: Partial<
-      Pick<ProjectInsert, 'quotedAmountEtb' | 'contractAmountEtb'>
-    > = {},
-  ): Promise<ProjectRecord> {
-    const project = await this.getById(user, projectId);
-    if (!canTransitionProjectStatus(project.status, nextStatus)) {
-      return project;
-    }
-    return this.projectsRepository.updateStatus(
-      user.tenantId,
-      projectId,
-      nextStatus,
-      extra,
+      amounts,
     );
   }
 }

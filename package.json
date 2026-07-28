@@ -5,7 +5,7 @@
   "description": "Multi-tenant Cloud SaaS ERP for elevator & electromechanical companies",
   "license": "UNLICENSED",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "dev": "pnpm run infra:up && pnpm run db:migrate && concurrently -k -n api,web -c cyan,magenta \"pnpm run start:dev\" \"pnpm run web:dev\"",
@@ -22,8 +22,8 @@
     "test": "jest",
     "test:e2e": "jest --config test/jest-e2e.json --runInBand",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/database/migrate.ts",
-    "db:seed": "tsx src/database/seed.ts"
+    "db:migrate": "tsx --env-file-if-exists=.env src/database/migrate.ts",
+    "db:seed": "tsx --env-file-if-exists=.env src/database/seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.28",
@@ -42,7 +42,6 @@
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.22.0",
-    "puppeteer": "^25.3.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "zod": "^4.4.3"

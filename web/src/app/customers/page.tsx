@@ -21,8 +21,7 @@ import {
   listCustomers,
   type Customer,
   type CustomerType,
-  type DuplicateMatch,
-  type DuplicateRecommendation,
+  type SimilarCustomer,
 } from '@/lib/api';
 
 const PAGE_SIZE = 20;
@@ -46,10 +45,7 @@ export default function CustomersPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [dupRecommendation, setDupRecommendation] =
-    useState<DuplicateRecommendation | null>(null);
-  const [dupMatches, setDupMatches] = useState<DuplicateMatch[]>([]);
-  const [acknowledgeDuplicate, setAcknowledgeDuplicate] = useState(false);
+  const [similar, setSimilar] = useState<SimilarCustomer[]>([]);
 
   const refresh = useCallback(async (nextPage: number, q: string) => {
     setLoading(true);
@@ -94,9 +90,7 @@ export default function CustomersPage() {
     setCity('Addis Ababa');
     setCustomerType('COMMERCIAL');
     setFormError(null);
-    setDupRecommendation(null);
-    setDupMatches([]);
-    setAcknowledgeDuplicate(false);
+    setSimilar([]);
   };
 
   const openDrawer = () => {
@@ -107,18 +101,24 @@ export default function CustomersPage() {
   const closeDrawer = () => {
     setDrawerOpen(false);
     setFormError(null);
-    setDupRecommendation(null);
-    setDupMatches([]);
-    setAcknowledgeDuplicate(false);
+    setSimilar([]);
   };
 
-  const applyDuplicateProblem = (err: ApiError) => {
-    setFormError(err.message);
-    if (err.problem.recommendation) {
-      setDupRecommendation(err.problem.recommendation);
+  /**
+   * Advisory look-alike lookup on blur. Never blocks the form — a failed
+   * check just clears the warning.
+   */
+  const checkSimilar = async () => {
+    if (name.trim().length < 2) {
+      setSimilar([]);
+      return;
     }
-    if (err.problem.matches) {
-      setDupMatches(err.problem.matches);
+    try {
+      setSimilar(
+        await checkCustomerDuplicate({ name, phone: phone || undefined }),
+      );
+    } catch {
+      setSimilar([]);
     }
   };
 
@@ -127,39 +127,12 @@ export default function CustomersPage() {
     setSubmitting(true);
     setFormError(null);
     try {
-      const check = await checkCustomerDuplicate({
-        name,
-        phone: phone || undefined,
-      });
-      setDupRecommendation(check.recommendation);
-      setDupMatches(check.matches);
-
-      if (check.recommendation === 'HIGH_CONFIDENCE_DUPLICATE') {
-        setFormError(
-          'A highly similar customer already exists. Creation is blocked.',
-        );
-        return;
-      }
-      if (
-        check.recommendation === 'REVIEW_BEFORE_CREATE' &&
-        !acknowledgeDuplicate
-      ) {
-        setFormError(
-          'Possible duplicate found. Review matches below, then confirm to continue.',
-        );
-        return;
-      }
-
       await createCustomer({
         name,
         email: email || undefined,
         phone: phone || undefined,
         city: city || undefined,
         customerType,
-        acknowledgePossibleDuplicate:
-          check.recommendation === 'REVIEW_BEFORE_CREATE'
-            ? true
-            : undefined,
       });
       closeDrawer();
       setPage(1);
@@ -167,11 +140,9 @@ export default function CustomersPage() {
       setSearchInput('');
       await refresh(1, '');
     } catch (err) {
-      if (err instanceof ApiError) {
-        applyDuplicateProblem(err);
-      } else {
-        setFormError('Failed to create customer');
-      }
+      setFormError(
+        err instanceof ApiError ? err.message : 'Failed to create customer',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -311,7 +282,7 @@ export default function CustomersPage() {
         open={drawerOpen}
         onClose={closeDrawer}
         title="Create customer"
-        description="Duplicate check runs before save."
+        description="Look-alike customers are flagged as a warning."
         footer={
           <div className="flex gap-2">
             <button
@@ -324,16 +295,12 @@ export default function CustomersPage() {
             <button
               type="submit"
               form="create-customer-form"
-              disabled={
-                submitting ||
-                dupRecommendation === 'HIGH_CONFIDENCE_DUPLICATE'
-              }
+              disabled={submitting}
               className="flex-1 rounded-lg bg-navy-800 py-2.5 text-sm font-semibold text-white transition hover:bg-navy-700 disabled:opacity-60"
             >
               {submitting
                 ? 'Saving…'
-                : dupRecommendation === 'REVIEW_BEFORE_CREATE' &&
-                    acknowledgeDuplicate
+                : similar.length > 0
                   ? 'Create anyway'
                   : 'Save customer'}
             </button>
@@ -346,51 +313,32 @@ export default function CustomersPage() {
           className="space-y-4"
         >
           {formError ? (
-            <p
-              className={
-                dupRecommendation === 'HIGH_CONFIDENCE_DUPLICATE'
-                  ? 'rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700'
-                  : 'rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900'
-              }
-            >
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {formError}
             </p>
           ) : null}
 
-          {dupMatches.length > 0 ? (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Similar customers
+          {similar.length > 0 ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                Already in the system
               </p>
               <ul className="mt-2 space-y-1.5">
-                {dupMatches.map((m) => (
+                {similar.map((m) => (
                   <li
-                    key={m.customerId}
-                    className="flex items-center justify-between gap-2 text-sm text-slate-700"
+                    key={m.id}
+                    className="flex items-center justify-between gap-2 text-sm text-amber-900"
                   >
                     <span className="truncate font-medium">{m.name}</span>
-                    <span className="shrink-0 text-xs text-slate-500">
-                      {(m.score * 100).toFixed(0)}%
+                    <span className="shrink-0 text-xs text-amber-700">
+                      {[m.phone, m.city].filter(Boolean).join(' · ')}
                     </span>
                   </li>
                 ))}
               </ul>
-              {dupRecommendation === 'REVIEW_BEFORE_CREATE' ? (
-                <label className="mt-3 flex items-start gap-2 text-sm text-slate-700">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={acknowledgeDuplicate}
-                    onChange={(e) =>
-                      setAcknowledgeDuplicate(e.target.checked)
-                    }
-                  />
-                  <span>
-                    I reviewed these matches and want to create a new customer
-                    anyway.
-                  </span>
-                </label>
-              ) : null}
+              <p className="mt-2 text-xs text-amber-800">
+                You can still save — this is only a heads-up.
+              </p>
             </div>
           ) : null}
 
@@ -407,11 +355,9 @@ export default function CustomersPage() {
               value={name}
               onChange={(e) => {
                 setName(e.target.value);
-                setDupRecommendation(null);
-                setDupMatches([]);
-                setAcknowledgeDuplicate(false);
                 setFormError(null);
               }}
+              onBlur={() => void checkSimilar()}
             />
           </div>
           <div>
@@ -436,11 +382,9 @@ export default function CustomersPage() {
               value={phone}
               onChange={(e) => {
                 setPhone(e.target.value);
-                setDupRecommendation(null);
-                setDupMatches([]);
-                setAcknowledgeDuplicate(false);
                 setFormError(null);
               }}
+              onBlur={() => void checkSimilar()}
             />
           </div>
           <div>

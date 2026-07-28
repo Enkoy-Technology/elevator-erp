@@ -10,12 +10,12 @@ import { DatabaseModule } from './database/database.module';
 import { AssetsModule } from './modules/assets/assets.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CustomersModule } from './modules/customers/customers.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ElevatorCalcModule } from './modules/elevator-calc/elevator-calc.module';
 import { EmployeesModule } from './modules/employees/employees.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ProjectsModule } from './modules/projects/projects.module';
-import { QuotationsModule } from './modules/quotations/quotations.module';
 import { SettingsModule } from './modules/settings/settings.module';
 
 @Module({
@@ -32,12 +32,12 @@ import { SettingsModule } from './modules/settings/settings.module';
     ElevatorCalcModule,
     CustomersModule,
     ProjectsModule,
-    QuotationsModule,
     EmployeesModule,
     AssetsModule,
     NotificationsModule,
     MaintenanceModule,
     SettingsModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [

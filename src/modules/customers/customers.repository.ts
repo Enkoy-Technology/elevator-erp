@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, or, sql } from 'drizzle-orm';
 
 import {
   normalizePageQuery,
@@ -12,6 +12,16 @@ import type { CreateCustomerDto } from './dto/create-customer.dto';
 import type { UpdateCustomerDto } from './dto/update-customer.dto';
 
 export type CustomerRecord = typeof customers.$inferSelect;
+
+export interface SimilarCustomer {
+  id: string;
+  name: string;
+  phone: string | null;
+  city: string | null;
+}
+
+/** Enough digits to be a real phone rather than an area code. */
+const MIN_PHONE_DIGITS = 7;
 
 @Injectable()
 export class CustomersRepository {
@@ -48,6 +58,50 @@ export class CustomersRepository {
         .offset(offset);
       return toPaginatedResult(items, total, page, pageSize);
     });
+  }
+
+  /**
+   * Look-alike check for the create form. Warns, never blocks: name contains
+   * in either direction (so "Addis Heights" matches "Addis Heights PLC" and
+   * vice versa), or the same trailing 9 phone digits on either phone column
+   * (so +251911000000, 0911000000 and 911000000 all match).
+   */
+  async findSimilar(
+    tenantId: string,
+    name: string,
+    phone?: string,
+  ): Promise<SimilarCustomer[]> {
+    const needle = name.trim().toLowerCase();
+    if (!needle) {
+      return [];
+    }
+    const digits = (phone ?? '').replace(/\D/g, '').slice(-9);
+
+    const signals = [
+      sql`(lower(${customers.name}) like ${`%${needle}%`} or ${needle} like '%' || lower(${customers.name}) || '%')`,
+    ];
+    if (digits.length >= MIN_PHONE_DIGITS) {
+      signals.push(
+        sql`${digits} in (
+          right(regexp_replace(coalesce(${customers.phone}, ''), '\\D', '', 'g'), 9),
+          right(regexp_replace(coalesce(${customers.alternatePhone}, ''), '\\D', '', 'g'), 9)
+        )`,
+      );
+    }
+
+    return this.tenantDb.withTenant(tenantId, (tx) =>
+      tx
+        .select({
+          id: customers.id,
+          name: customers.name,
+          phone: customers.phone,
+          city: customers.city,
+        })
+        .from(customers)
+        .where(and(isNull(customers.deletedAt), or(...signals)))
+        .orderBy(desc(customers.createdAt))
+        .limit(5),
+    );
   }
 
   async findById(

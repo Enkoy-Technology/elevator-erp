@@ -9,6 +9,11 @@ import {
   MinLength,
 } from 'class-validator';
 
+/**
+ * `CUSTOM` was removed in migration 0020: there was no interval column to
+ * drive it, so those contracts never advanced their next service date. Add it
+ * back together with a `custom_interval_days` column if a client asks.
+ */
 export const MAINTENANCE_RECURRENCES = [
   'DAILY',
   'WEEKLY',
@@ -17,7 +22,6 @@ export const MAINTENANCE_RECURRENCES = [
   'QUARTERLY',
   'BIANNUAL',
   'ANNUAL',
-  'CUSTOM',
 ] as const;
 
 export const MAINTENANCE_CONTRACT_STATUSES = [

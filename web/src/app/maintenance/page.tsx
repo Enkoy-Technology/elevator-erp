@@ -38,10 +38,16 @@ const PAGE_SIZE = 20;
 
 const todayIso = (): string => new Date().toISOString().slice(0, 10);
 
+/** Mirrors the API's advanceServiceDate: clamp instead of overflowing a short
+ *  month (Jan 31 + 1 month must be Feb 28, not Mar 3). */
 const addMonthsIso = (iso: string, months: number): string => {
   const [y, m, d] = iso.split('-').map(Number);
-  const date = new Date(Date.UTC(y!, m! - 1, d!));
+  const date = new Date(Date.UTC(y, m - 1, 1));
   date.setUTCMonth(date.getUTCMonth() + months);
+  const lastDay = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  date.setUTCDate(Math.min(d, lastDay));
   return date.toISOString().slice(0, 10);
 };
 

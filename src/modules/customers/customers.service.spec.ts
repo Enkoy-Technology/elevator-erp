@@ -1,6 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
 
-import { DuplicateCustomerError } from '../../common/exceptions';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type { CustomerRecord } from './customers.repository';
 import { CustomersService } from './customers.service';
@@ -10,7 +9,6 @@ describe('CustomersService', () => {
     userId: '11111111-1111-1111-1111-111111111111',
     tenantId: '22222222-2222-2222-2222-222222222222',
     role: 'CEO',
-    permissions: [],
   };
 
   const sample: CustomerRecord = {
@@ -44,26 +42,16 @@ describe('CustomersService', () => {
   const repo = {
     list: jest.fn(),
     findById: jest.fn(),
+    findSimilar: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
     softDelete: jest.fn(),
   };
 
-  const duplicates = {
-    check: jest.fn(),
-    upsertFingerprint: jest.fn(),
-  };
-
-  const service = new CustomersService(repo as never, duplicates as never);
+  const service = new CustomersService(repo as never);
 
   beforeEach(() => {
     jest.clearAllMocks();
-    duplicates.check.mockResolvedValue({
-      recommendation: 'OK',
-      maxScore: 0,
-      matches: [],
-    });
-    duplicates.upsertFingerprint.mockResolvedValue(undefined);
   });
 
   it('lists customers for the tenant', async () => {
@@ -95,60 +83,34 @@ describe('CustomersService', () => {
     );
   });
 
-  it('creates a customer and upserts fingerprint', async () => {
+  it('returns look-alike customers for the create form', async () => {
+    const matches = [
+      {
+        id: sample.id,
+        name: sample.name,
+        phone: sample.phone,
+        city: sample.city,
+      },
+    ];
+    repo.findSimilar.mockResolvedValue(matches);
+    await expect(
+      service.checkDuplicate(user, {
+        name: 'Addis Heights',
+        phone: '0911000000',
+      }),
+    ).resolves.toEqual(matches);
+    expect(repo.findSimilar).toHaveBeenCalledWith(
+      user.tenantId,
+      'Addis Heights',
+      '0911000000',
+    );
+  });
+
+  it('creates a customer even when look-alikes exist — the check is advisory', async () => {
     const dto = { name: 'Addis Heights PLC' };
     repo.create.mockResolvedValue(sample);
     await expect(service.create(user, dto)).resolves.toEqual(sample);
-    expect(repo.create).toHaveBeenCalledWith(
-      user.tenantId,
-      user.userId,
-      dto,
-    );
-    expect(duplicates.upsertFingerprint).toHaveBeenCalled();
-  });
-
-  it('blocks HIGH_CONFIDENCE_DUPLICATE creates', async () => {
-    duplicates.check.mockResolvedValue({
-      recommendation: 'HIGH_CONFIDENCE_DUPLICATE',
-      maxScore: 0.95,
-      matches: [
-        {
-          customerId: sample.id,
-          name: sample.name,
-          score: 0.95,
-          recommendation: 'HIGH_CONFIDENCE_DUPLICATE',
-        },
-      ],
-    });
-    await expect(
-      service.create(user, { name: 'Addis Heights PLC' }),
-    ).rejects.toBeInstanceOf(DuplicateCustomerError);
-    expect(repo.create).not.toHaveBeenCalled();
-  });
-
-  it('requires acknowledge for REVIEW_BEFORE_CREATE', async () => {
-    duplicates.check.mockResolvedValue({
-      recommendation: 'REVIEW_BEFORE_CREATE',
-      maxScore: 0.8,
-      matches: [
-        {
-          customerId: sample.id,
-          name: sample.name,
-          score: 0.8,
-          recommendation: 'REVIEW_BEFORE_CREATE',
-        },
-      ],
-    });
-    await expect(
-      service.create(user, { name: 'Addis Heights PLC' }),
-    ).rejects.toBeInstanceOf(DuplicateCustomerError);
-
-    repo.create.mockResolvedValue(sample);
-    await expect(
-      service.create(user, {
-        name: 'Addis Heights PLC',
-        acknowledgePossibleDuplicate: true,
-      }),
-    ).resolves.toEqual(sample);
+    expect(repo.create).toHaveBeenCalledWith(user.tenantId, user.userId, dto);
+    expect(repo.findSimilar).not.toHaveBeenCalled();
   });
 });

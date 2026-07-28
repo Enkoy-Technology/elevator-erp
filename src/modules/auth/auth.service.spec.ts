@@ -139,8 +139,7 @@ describe('AuthService', () => {
       sub: USER_ID,
       tenantId: TENANT_ID,
       role: 'CEO',
-      permissions: [],
-      type: 'access',
+      type:'access',
     });
     await expect(service.refresh(accessToken)).rejects.toBeInstanceOf(
       UnauthorizedException,
@@ -176,8 +175,7 @@ describe('AuthService', () => {
       sub: USER_ID,
       tenantId: TENANT_ID,
       role: 'CEO',
-      permissions: [],
-      type: 'refresh',
+      type:'refresh',
     });
     usersRepository.findActiveById.mockResolvedValue({
       ...user,
