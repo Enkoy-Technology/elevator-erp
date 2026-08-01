@@ -13,6 +13,21 @@ export const envSchema = z.object({
   JWT_REFRESH_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
   /** Comma-separated list of allowed browser origins. */
   CORS_ORIGINS: z.string().default('http://localhost:3003'),
+  /**
+   * Express `trust proxy` hop count. Set to the number of reverse proxies in
+   * front of the API (e.g. 1 behind a single load balancer) so throttling
+   * keys on the real client IP instead of the proxy's. 0 = direct exposure.
+   */
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
+}).superRefine((env, ctx) => {
+  // HS256 secrets shorter than the 256-bit hash weaken the whole auth chain.
+  if (env.NODE_ENV === 'production' && env.JWT_SECRET.length < 32) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['JWT_SECRET'],
+      message: 'JWT_SECRET must be at least 32 characters in production',
+    });
+  }
 });
 
 export type Env = z.infer<typeof envSchema>;
