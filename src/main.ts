@@ -30,11 +30,19 @@ const bootstrap = async (): Promise<void> => {
 
   // Visiting http://localhost:PORT/ should not 404 — send humans to Swagger.
   const expressApp = app.getHttpAdapter().getInstance() as {
+    set: (setting: string, value: unknown) => void;
     get: (
       path: string,
       handler: (req: Request, res: Response) => void,
     ) => void;
   };
+  // Behind a load balancer the throttler must key on the real client IP,
+  // not the proxy's — otherwise one attacker can exhaust everyone's login
+  // budget. Set TRUST_PROXY_HOPS to the number of proxies in front.
+  const trustProxyHops = config.get('TRUST_PROXY_HOPS', { infer: true });
+  if (trustProxyHops > 0) {
+    expressApp.set('trust proxy', trustProxyHops);
+  }
   expressApp.get('/', (_req, res) => {
     res.redirect(302, '/docs');
   });
