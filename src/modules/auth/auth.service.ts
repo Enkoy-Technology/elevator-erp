@@ -75,10 +75,15 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const user = await this.usersRepository.findActiveById(
-      payload.tenantId,
-      payload.sub,
-    );
+    // Re-check the tenant too — a suspended tenant must not be able to keep
+    // rotating refresh tokens for the remainder of the refresh TTL.
+    const [tenant, user] = await Promise.all([
+      this.tenantsRepository.findActiveById(payload.tenantId),
+      this.usersRepository.findActiveById(payload.tenantId, payload.sub),
+    ]);
+    if (!tenant || BLOCKED_SUBSCRIPTION_STATUSES.has(tenant.subscriptionStatus)) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
     if (
       !user ||
       !user.refreshTokenHash ||
