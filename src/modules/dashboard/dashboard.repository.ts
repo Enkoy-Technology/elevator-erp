@@ -177,10 +177,12 @@ export class DashboardRepository {
         .where(
           and(
             live,
-            // statusChangedAt is when it entered its current stage, so this is
-            // "reached CONTRACT or beyond during the current month".
-            sql`${projects.status} in ('CONTRACT', 'EXECUTION', 'COMPLETED')`,
-            gte(projects.statusChangedAt, new Date(`${monthStart}T00:00:00Z`)),
+            // wonAt is stamped once, on entering CONTRACT — unlike
+            // statusChangedAt it doesn't reset (and double-count) when the
+            // project advances to EXECUTION or COMPLETED later. A deal won
+            // and then cancelled in the same month no longer counts.
+            gte(projects.wonAt, new Date(`${monthStart}T00:00:00Z`)),
+            ne(projects.status, 'CANCELLED'),
           ),
         );
 
