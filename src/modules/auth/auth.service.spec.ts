@@ -51,6 +51,7 @@ describe('AuthService', () => {
 
     tenantsRepository = {
       resolveActiveBySlug: jest.fn(),
+      findActiveById: jest.fn(),
     } as unknown as jest.Mocked<TenantsRepository>;
     usersRepository = {
       findActiveByEmail: jest.fn(),
@@ -157,6 +158,10 @@ describe('AuthService', () => {
     const storedHash = usersRepository.setRefreshTokenHash.mock.calls.at(
       -1,
     )?.[2] as string;
+    tenantsRepository.findActiveById.mockResolvedValue({
+      id: TENANT_ID,
+      subscriptionStatus: 'ACTIVE',
+    });
     usersRepository.findActiveById.mockResolvedValue({
       ...user,
       refreshTokenHash: storedHash,
@@ -177,10 +182,31 @@ describe('AuthService', () => {
       role: 'CEO',
       type:'refresh',
     });
+    tenantsRepository.findActiveById.mockResolvedValue({
+      id: TENANT_ID,
+      subscriptionStatus: 'ACTIVE',
+    });
     usersRepository.findActiveById.mockResolvedValue({
       ...user,
       refreshTokenHash: 'a'.repeat(64),
     });
+    await expect(service.refresh(refreshToken)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+  });
+
+  it('rejects refresh once the tenant is suspended', async () => {
+    const refreshToken = jwtService.sign({
+      sub: USER_ID,
+      tenantId: TENANT_ID,
+      role: 'CEO',
+      type:'refresh',
+    });
+    tenantsRepository.findActiveById.mockResolvedValue({
+      id: TENANT_ID,
+      subscriptionStatus: 'SUSPENDED',
+    });
+    usersRepository.findActiveById.mockResolvedValue(user);
     await expect(service.refresh(refreshToken)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
