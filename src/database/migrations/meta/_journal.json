@@ -155,6 +155,20 @@
       "when": 1784747000000,
       "tag": "0021_drop_quotations",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1784748000000,
+      "tag": "0022_projects_won_at_and_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784749000000,
+      "tag": "0023_asset_category_escalator",
+      "breakpoints": true
     }
   ]
 }
