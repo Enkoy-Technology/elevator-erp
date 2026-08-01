@@ -102,7 +102,7 @@ const parseProblem = async (response: Response): Promise<ProblemDetails> => {
   }
 };
 
-const refreshTokens = async (): Promise<boolean> => {
+const doRefresh = async (): Promise<boolean> => {
   const refreshToken = getRefreshToken();
   if (!refreshToken) {
     return false;
@@ -118,6 +118,20 @@ const refreshTokens = async (): Promise<boolean> => {
   }
   storeTokens((await response.json()) as TokenPair);
   return true;
+};
+
+// Refresh tokens rotate server-side, so two concurrent refreshes would
+// invalidate each other and log the user out. All 401s share one in-flight
+// refresh instead.
+// ponytail: per-tab lock only — two open tabs can still race the rotation;
+// add a BroadcastChannel lock if stray logouts are ever reported.
+let refreshInFlight: Promise<boolean> | null = null;
+
+const refreshTokens = (): Promise<boolean> => {
+  refreshInFlight ??= doRefresh().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
 };
 
 /**
