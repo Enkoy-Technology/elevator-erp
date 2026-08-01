@@ -37,6 +37,7 @@ describe('ProjectsService', () => {
     actualStartDate: null,
     actualEndDate: null,
     statusChangedAt: new Date('2026-01-01T00:00:00.000Z'),
+    wonAt: null,
     notes: null,
     createdByUserId: user.userId,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -99,6 +100,7 @@ describe('ProjectsService', () => {
     expect(repo.updateStatus).toHaveBeenCalledWith(
       user.tenantId,
       sample.id,
+      'QUOTATION',
       'PROFORMA',
       {},
     );
@@ -115,6 +117,7 @@ describe('ProjectsService', () => {
     expect(repo.updateStatus).toHaveBeenCalledWith(
       user.tenantId,
       sample.id,
+      'PROFORMA',
       'CONTRACT',
       { contractAmountEtb: '165000.00' },
     );
