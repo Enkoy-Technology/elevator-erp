@@ -50,5 +50,22 @@ export const advanceServiceDate = (
   return date.toISOString().slice(0, 10);
 };
 
+/**
+ * Next service date after a visit, anchored to the *scheduled* date so the
+ * cadence doesn't drift when a visit happens late. Catches up past-due
+ * intervals until the result is strictly after the visit day.
+ */
+export const nextServiceDateAfter = (
+  scheduledIsoDate: string,
+  visitedIsoDate: string,
+  recurrence: MaintenanceRecurrence,
+): string => {
+  let next = advanceServiceDate(scheduledIsoDate, recurrence);
+  while (next <= visitedIsoDate) {
+    next = advanceServiceDate(next, recurrence);
+  }
+  return next;
+};
+
 export const toIsoDate = (value: Date = new Date()): string =>
   value.toISOString().slice(0, 10);
