@@ -12,11 +12,15 @@ import { ApiError, login } from '@/lib/api';
 import lobby from '../../../public/lift-lobby.jpg';
 import logo from '../../../public/shining-star-logo.jpg';
 
+// Demo credentials are a dev convenience only; production builds ship an
+// empty form and no hint. NODE_ENV is inlined at build time.
+const IS_DEV = process.env.NODE_ENV !== 'production';
+
 export default function LoginPage() {
   const router = useRouter();
-  const [tenantSlug, setTenantSlug] = useState('demo');
-  const [email, setEmail] = useState('ceo@demo.example.com');
-  const [password, setPassword] = useState('Demo!Passw0rd');
+  const [tenantSlug, setTenantSlug] = useState(IS_DEV ? 'demo' : '');
+  const [email, setEmail] = useState(IS_DEV ? 'ceo@demo.example.com' : '');
+  const [password, setPassword] = useState(IS_DEV ? 'Demo!Passw0rd' : '');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -215,14 +219,16 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-10 border-t border-navy-100 pt-5">
-            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-navy-600">
-              Demo workspace
-            </p>
-            <p className="mt-1.5 font-mono text-xs leading-relaxed text-navy-600/80">
-              demo · ceo@demo.example.com · Demo!Passw0rd
-            </p>
-          </div>
+          {IS_DEV && (
+            <div className="mt-10 border-t border-navy-100 pt-5">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-navy-600">
+                Demo workspace
+              </p>
+              <p className="mt-1.5 font-mono text-xs leading-relaxed text-navy-600/80">
+                demo · ceo@demo.example.com · Demo!Passw0rd
+              </p>
+            </div>
+          )}
         </div>
       </section>
     </main>
