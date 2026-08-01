@@ -1,4 +1,8 @@
-import { advanceServiceDate, toIsoDate } from './recurrence';
+import {
+  advanceServiceDate,
+  nextServiceDateAfter,
+  toIsoDate,
+} from './recurrence';
 
 describe('advanceServiceDate', () => {
   it('advances by days for the short recurrences', () => {
@@ -24,6 +28,33 @@ describe('advanceServiceDate', () => {
   it('crosses year boundaries', () => {
     expect(advanceServiceDate('2026-12-20', 'MONTHLY')).toBe('2027-01-20');
     expect(advanceServiceDate('2026-12-31', 'DAILY')).toBe('2027-01-01');
+  });
+});
+
+describe('nextServiceDateAfter', () => {
+  it('anchors to the schedule when the visit is on time or early', () => {
+    expect(nextServiceDateAfter('2026-03-10', '2026-03-10', 'MONTHLY')).toBe(
+      '2026-04-10',
+    );
+    expect(nextServiceDateAfter('2026-03-10', '2026-03-05', 'MONTHLY')).toBe(
+      '2026-04-10',
+    );
+  });
+
+  it('does not drift when the visit happens late', () => {
+    // Scheduled the 10th, visited the 25th — next stays on the 10th cadence.
+    expect(nextServiceDateAfter('2026-03-10', '2026-03-25', 'MONTHLY')).toBe(
+      '2026-04-10',
+    );
+  });
+
+  it('catches up when overdue by more than one interval', () => {
+    expect(nextServiceDateAfter('2026-01-10', '2026-03-25', 'MONTHLY')).toBe(
+      '2026-04-10',
+    );
+    expect(nextServiceDateAfter('2026-03-01', '2026-03-25', 'WEEKLY')).toBe(
+      '2026-03-29',
+    );
   });
 });
 
