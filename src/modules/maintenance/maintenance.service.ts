@@ -53,8 +53,16 @@ export class MaintenanceService {
     );
   }
 
-  listVisits(user: AuthenticatedUser, contractId: string) {
-    return this.maintenanceRepository.listVisits(user.tenantId, contractId);
+  listVisits(
+    user: AuthenticatedUser,
+    contractId: string,
+    options: { page?: string; pageSize?: string } = {},
+  ) {
+    return this.maintenanceRepository.listVisits(
+      user.tenantId,
+      contractId,
+      options,
+    );
   }
 
   listBreakdowns(

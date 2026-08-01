@@ -84,12 +84,14 @@ export class MaintenanceController {
   }
 
   @Get('contracts/:id/visits')
-  @ApiOperation({ summary: 'List visits for a contract' })
+  @ApiOperation({ summary: 'List visits for a contract (paginated)' })
   listVisits(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
-    return this.maintenanceService.listVisits(user, id);
+    return this.maintenanceService.listVisits(user, id, { page, pageSize });
   }
 
   @Get('breakdowns')
