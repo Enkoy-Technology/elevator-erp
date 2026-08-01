@@ -1,8 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { DRIZZLE } from '../../../database/database.constants';
 import type { Database } from '../../../database/database.types';
+import { tenants } from '../../../database/schema';
+import { TenantDbService } from '../../../database/tenant-db.service';
 
 export interface TenantLoginInfo {
   id: string;
@@ -16,7 +18,10 @@ export interface TenantLoginInfo {
  */
 @Injectable()
 export class TenantsRepository {
-  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: Database,
+    private readonly tenantDb: TenantDbService,
+  ) {}
 
   async resolveActiveBySlug(slug: string): Promise<TenantLoginInfo | null> {
     const result = await this.db.execute<{
@@ -28,5 +33,23 @@ export class TenantsRepository {
       return null;
     }
     return { id: row.id, subscriptionStatus: row.subscription_status };
+  }
+
+  /**
+   * Token refresh already knows the tenant id, so this reads the tenant's own
+   * row under its RLS context — no SECURITY DEFINER needed.
+   */
+  async findActiveById(tenantId: string): Promise<TenantLoginInfo | null> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const rows = await tx
+        .select({
+          id: tenants.id,
+          subscriptionStatus: tenants.subscriptionStatus,
+        })
+        .from(tenants)
+        .where(and(eq(tenants.id, tenantId), isNull(tenants.deletedAt)))
+        .limit(1);
+      return rows[0] ?? null;
+    });
   }
 }
