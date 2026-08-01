@@ -50,6 +50,8 @@ export const projects = pgTable(
     statusChangedAt: timestamp('status_changed_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
+    /** Set once, when the project first enters CONTRACT — the "won" moment. */
+    wonAt: timestamp('won_at', { withTimezone: true }),
     notes: text('notes'),
     createdByUserId: uuid('created_by_user_id'),
     createdAt: timestamp('created_at', { withTimezone: true })
