@@ -71,6 +71,7 @@ export class ProjectsService {
     return this.projectsRepository.updateStatus(
       user.tenantId,
       id,
+      project.status,
       nextStatus,
       amounts,
     );
