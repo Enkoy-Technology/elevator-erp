@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { and, count, desc, eq, isNull } from 'drizzle-orm';
 
+import { WorkflowTransitionError } from '../../common/exceptions';
 import {
   normalizePageQuery,
   toPaginatedResult,
@@ -98,9 +99,14 @@ export class ProjectsRepository {
     });
   }
 
+  /**
+   * Compare-and-swap: the update only lands if the project is still in
+   * `expectedStatus`, so two concurrent transitions cannot both apply.
+   */
   async updateStatus(
     tenantId: string,
     id: string,
+    expectedStatus: ProjectStatus,
     status: ProjectStatus,
     extra: Partial<
       Pick<ProjectInsert, 'quotedAmountEtb' | 'contractAmountEtb'>
@@ -114,11 +120,28 @@ export class ProjectsRepository {
           status,
           statusChangedAt: now,
           updatedAt: now,
+          ...(status === 'CONTRACT' ? { wonAt: now } : {}),
           ...extra,
         })
-        .where(and(eq(projects.id, id), isNull(projects.deletedAt)))
+        .where(
+          and(
+            eq(projects.id, id),
+            eq(projects.status, expectedStatus),
+            isNull(projects.deletedAt),
+          ),
+        )
         .returning();
       if (!row) {
+        const exists = await tx
+          .select({ id: projects.id })
+          .from(projects)
+          .where(and(eq(projects.id, id), isNull(projects.deletedAt)))
+          .limit(1);
+        if (exists[0]) {
+          throw new WorkflowTransitionError(
+            'Project status changed concurrently — reload and retry',
+          );
+        }
         throw new NotFoundException('Project not found');
       }
       return row;
