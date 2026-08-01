@@ -31,6 +31,7 @@ const PAGE_SIZE = 20;
 
 const CATEGORY_LABEL: Record<AssetCategory, string> = {
   ELEVATOR: 'Elevator',
+  ESCALATOR: 'Escalator',
   STAIRS: 'Stairs',
   OTHER: 'Other',
 };

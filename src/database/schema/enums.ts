@@ -46,6 +46,7 @@ export const projectStatusEnum = pgEnum('project_status', [
 
 export const assetCategoryEnum = pgEnum('asset_category', [
   'ELEVATOR',
+  'ESCALATOR',
   'STAIRS',
   'OTHER',
 ]);

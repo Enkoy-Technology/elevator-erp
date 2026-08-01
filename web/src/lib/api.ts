@@ -498,7 +498,12 @@ export const updateEmployee = (
     body: JSON.stringify(payload),
   });
 
-export const ASSET_CATEGORIES = ['ELEVATOR', 'STAIRS', 'OTHER'] as const;
+export const ASSET_CATEGORIES = [
+  'ELEVATOR',
+  'ESCALATOR',
+  'STAIRS',
+  'OTHER',
+] as const;
 export type AssetCategory = (typeof ASSET_CATEGORIES)[number];
 
 export const ASSET_STATUSES = [

@@ -8,7 +8,12 @@ import {
   MinLength,
 } from 'class-validator';
 
-export const ASSET_CATEGORIES = ['ELEVATOR', 'STAIRS', 'OTHER'] as const;
+export const ASSET_CATEGORIES = [
+  'ELEVATOR',
+  'ESCALATOR',
+  'STAIRS',
+  'OTHER',
+] as const;
 export const ASSET_STATUSES = [
   'ACTIVE',
   'INACTIVE',
