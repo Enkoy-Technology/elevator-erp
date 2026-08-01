@@ -1,4 +1,5 @@
 import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiBearerAuth,
   ApiNoContentResponse,
@@ -26,6 +27,11 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(200)
+  // Credential guessing must not ride the generous API-wide limits.
+  @Throttle({
+    burst: { ttl: 60_000, limit: 5 },
+    sustained: { ttl: 900_000, limit: 20 },
+  })
   @ApiOperation({ summary: 'Exchange tenant slug + credentials for JWT pair' })
   @ApiOkResponse({ description: 'Access + refresh tokens' })
   @ApiUnauthorizedResponse({ description: 'Invalid credentials' })
