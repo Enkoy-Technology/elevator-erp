@@ -25,7 +25,7 @@ import type {
   UpdateBreakdownDto,
   UpdateMaintenanceContractDto,
 } from './dto/maintenance.dto';
-import { advanceServiceDate, toIsoDate } from './recurrence';
+import { nextServiceDateAfter, toIsoDate } from './recurrence';
 
 export type MaintenanceContractRecord =
   typeof maintenanceContracts.$inferSelect;
@@ -177,7 +177,8 @@ export class MaintenanceRepository {
         );
       }
       const visitedDay = toIsoDate();
-      const nextServiceAt = advanceServiceDate(
+      const nextServiceAt = nextServiceDateAfter(
+        contract.nextServiceAt,
         visitedDay,
         contract.recurrence,
       );
@@ -215,7 +216,12 @@ export class MaintenanceRepository {
   async listVisits(
     tenantId: string,
     contractId: string,
-  ): Promise<ServiceVisitRecord[]> {
+    options: { page?: string; pageSize?: string } = {},
+  ): Promise<PaginatedResult<ServiceVisitRecord>> {
+    const { page, pageSize, offset } = normalizePageQuery(
+      options.page,
+      options.pageSize,
+    );
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       const contract = await tx
         .select({ id: maintenanceContracts.id })
@@ -230,11 +236,24 @@ export class MaintenanceRepository {
       if (!contract[0]) {
         throw new NotFoundException('Maintenance contract not found');
       }
-      return tx
+      const where = eq(serviceVisits.contractId, contractId);
+      const [totalRow] = await tx
+        .select({ value: count() })
+        .from(serviceVisits)
+        .where(where);
+      const items = await tx
         .select()
         .from(serviceVisits)
-        .where(eq(serviceVisits.contractId, contractId))
-        .orderBy(desc(serviceVisits.visitedAt));
+        .where(where)
+        .orderBy(desc(serviceVisits.visitedAt))
+        .limit(pageSize)
+        .offset(offset);
+      return toPaginatedResult(
+        items,
+        Number(totalRow?.value ?? 0),
+        page,
+        pageSize,
+      );
     });
   }
 
