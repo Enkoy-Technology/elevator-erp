@@ -4,17 +4,37 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Tenant isolation is the platform's core guarantee and is only verified by
+    # the e2e suite, so CI runs it against a real Postgres with RLS applied.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: elevator_erp
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d elevator_erp"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_ADMIN_URL: postgresql://postgres:postgres@localhost:5434/elevator_erp
+      DATABASE_URL: postgresql://app_user:app_password@localhost:5434/elevator_erp
+      JWT_SECRET: ci-only-secret-not-used-in-any-deployment
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run typecheck
       - run: pnpm run lint
       - run: pnpm test
+      - run: pnpm run db:migrate
+      - run: pnpm run test:e2e
       - run: pnpm run build
 
   security:
