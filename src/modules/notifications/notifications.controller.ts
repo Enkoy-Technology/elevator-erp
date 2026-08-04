@@ -42,12 +42,6 @@ export class NotificationsController {
     });
   }
 
-  @Get('unread-count')
-  @ApiOperation({ summary: 'Unread notification count' })
-  unreadCount(@CurrentUser() user: AuthenticatedUser) {
-    return this.notificationsService.unreadCount(user);
-  }
-
   @Post()
   @Roles('SALES_MANAGER', 'TECHNICAL_LEAD', 'DISPATCHER')
   @ApiOperation({ summary: 'Send a notification to a colleague' })

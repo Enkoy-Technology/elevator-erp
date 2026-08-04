@@ -55,21 +55,6 @@ export class NotificationsRepository {
     });
   }
 
-  async unreadCount(tenantId: string, userId: string): Promise<number> {
-    return this.tenantDb.withTenant(tenantId, async (tx) => {
-      const [row] = await tx
-        .select({ value: count() })
-        .from(notifications)
-        .where(
-          and(
-            eq(notifications.userId, userId),
-            isNull(notifications.readAt),
-          ),
-        );
-      return Number(row?.value ?? 0);
-    });
-  }
-
   async create(
     tenantId: string,
     createdByUserId: string,

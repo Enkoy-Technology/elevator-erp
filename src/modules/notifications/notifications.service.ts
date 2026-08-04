@@ -25,14 +25,6 @@ export class NotificationsService {
     );
   }
 
-  async unreadCount(user: AuthenticatedUser) {
-    const count = await this.notificationsRepository.unreadCount(
-      user.tenantId,
-      user.userId,
-    );
-    return { count };
-  }
-
   create(user: AuthenticatedUser, dto: CreateNotificationDto) {
     return this.notificationsRepository.create(
       user.tenantId,
