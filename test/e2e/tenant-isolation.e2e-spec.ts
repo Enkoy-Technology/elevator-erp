@@ -46,11 +46,19 @@ describe('Tenant isolation (RLS)', () => {
   beforeAll(async () => {
     available = (await canConnect(ADMIN_URL)) && (await canConnect(APP_URL));
     if (!available) {
+      // These are the only tests that verify tenant isolation. Passing them
+      // without a database would report the platform's core security property
+      // as proven when nothing ran, so an unreachable DB is a failure unless
+      // the caller opts out explicitly.
+      const message =
+        'Tenant isolation e2e could not reach Postgres. ' +
+        'Run `docker compose up -d && pnpm run db:migrate` first, ' +
+        'or set ALLOW_E2E_SKIP=1 to skip deliberately.';
+      if (process.env.ALLOW_E2E_SKIP !== '1') {
+        throw new Error(message);
+      }
       // eslint-disable-next-line no-console
-      console.warn(
-        'Skipping tenant isolation e2e: Postgres not reachable. ' +
-          'Run `docker compose up -d && pnpm run db:migrate` first.',
-      );
+      console.warn(`SKIPPED — ${message}`);
       return;
     }
 
