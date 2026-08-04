@@ -1,11 +1,12 @@
 # Elevator ERP Cloud SaaS Platform
 
 Multi-tenant Cloud SaaS ERP for elevator & electromechanical companies.
-NestJS 11 + TypeScript, Drizzle ORM, PostgreSQL 16 with RLS, Redis 7, BullMQ.
+NestJS 11 + TypeScript, Drizzle ORM, PostgreSQL 16 with RLS.
+(Redis/BullMQ were removed as unused; reintroduce them with the worker slice.)
 
 ## Commands
 
-Dev (all-in-one): `pnpm run dev` — Docker Postgres+Redis, migrate, API (`:3002`) + admin UI (`:3003`)
+Dev (all-in-one): `pnpm run dev` — Docker Postgres, migrate, API (`:3002`) + admin UI (`:3003`)
 Infra only: `pnpm run infra:up` / `pnpm run infra:down`
 Build: `pnpm run build`
 Test: `pnpm test`
@@ -103,7 +104,7 @@ Never commit `.env` or any file containing secrets.
 ## Error Handling
 
 Let domain errors propagate to the global exception filter. Do not wrap individual calls in try/catch.
-Use custom exception classes: `TenantIsolationError`, `WorkflowTransitionError`, `SlaBreachError`.
+Use custom exception classes: `TenantIsolationError`, `WorkflowTransitionError`.
 The global filter in `/common/filters/all-exceptions.filter.ts` catches everything and formats RFC 7807 Problem Details.
 
 ## Testing
