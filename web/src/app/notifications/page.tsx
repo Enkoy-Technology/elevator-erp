@@ -25,6 +25,7 @@ import {
   type AppNotification,
   type Employee,
   type NotificationType,
+  optional,
 } from '@/lib/api';
 
 const PAGE_SIZE = 20;
@@ -75,7 +76,7 @@ export default function NotificationsPage() {
             page: nextPage,
             pageSize: PAGE_SIZE,
           }),
-          listEmployees({ page: 1, pageSize: 100 }),
+          optional(listEmployees({ page: 1, pageSize: 100 })),
         ]);
         setItems(notifPage.items);
         setPage(notifPage.page);

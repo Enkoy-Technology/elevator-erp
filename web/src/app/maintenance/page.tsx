@@ -32,6 +32,7 @@ import {
   type Employee,
   type MaintenanceContract,
   type MaintenanceRecurrence,
+  optional,
 } from '@/lib/api';
 
 const PAGE_SIZE = 20;
@@ -92,8 +93,8 @@ export default function MaintenancePage() {
       setError(null);
       try {
         const [assetPage, employeePage] = await Promise.all([
-          listAssets({ page: 1, pageSize: 100 }),
-          listEmployees({ page: 1, pageSize: 100 }),
+          optional(listAssets({ page: 1, pageSize: 100 })),
+          optional(listEmployees({ page: 1, pageSize: 100 })),
         ]);
         setAssets(assetPage.items);
         setEmployees(employeePage.items);

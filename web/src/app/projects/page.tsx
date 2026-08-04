@@ -24,6 +24,7 @@ import {
   type Customer,
   type Project,
   type ProjectStatus,
+  optional,
 } from '@/lib/api';
 
 const PAGE_SIZE = 20;
@@ -119,7 +120,7 @@ export default function ProjectsPage() {
             page: nextPage,
             pageSize: PAGE_SIZE,
           }),
-          listCustomers({ page: 1, pageSize: 100 }),
+          optional(listCustomers({ page: 1, pageSize: 100 })),
         ]);
         setProjects(projectPage.items);
         setPage(projectPage.page);

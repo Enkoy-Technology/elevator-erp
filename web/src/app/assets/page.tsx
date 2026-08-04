@@ -25,6 +25,7 @@ import {
   type AssetCategory,
   type AssetStatus,
   type Customer,
+  optional,
 } from '@/lib/api';
 
 const PAGE_SIZE = 20;
@@ -80,7 +81,7 @@ export default function AssetsPage() {
             page: nextPage,
             pageSize: PAGE_SIZE,
           }),
-          listCustomers({ page: 1, pageSize: 100 }),
+          optional(listCustomers({ page: 1, pageSize: 100 })),
         ]);
         setAssets(assetPage.items);
         setPage(assetPage.page);

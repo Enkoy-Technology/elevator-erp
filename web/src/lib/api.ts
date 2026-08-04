@@ -195,15 +195,6 @@ export const logout = async (): Promise<void> => {
 export const getProfile = (): Promise<AuthProfile> =>
   apiFetch<AuthProfile>('/auth/me');
 
-export const getHealth = async (): Promise<boolean> => {
-  try {
-    const response = await fetch(`${API_URL}/health`);
-    return response.ok;
-  } catch {
-    return false;
-  }
-};
-
 export interface CalcInputPayload {
   capacityKg: number;
   stops: number;
@@ -267,6 +258,23 @@ export interface Paginated<T> {
   total: number;
   totalPages: number;
 }
+
+/**
+ * Wrap a reference-data fetch (dropdown options, id→name maps) so a 403 or an
+ * outage degrades that one list to empty instead of failing the whole page.
+ * The endpoints behind these lists are gated to narrower roles than the pages
+ * that display them, so this is the normal path, not just an error path.
+ */
+export const optional = <T>(
+  request: Promise<Paginated<T>>,
+): Promise<Paginated<T>> =>
+  request.catch(() => ({
+    items: [] as T[],
+    page: 1,
+    pageSize: 0,
+    total: 0,
+    totalPages: 0,
+  }));
 
 export type CustomerType = 'RESIDENTIAL' | 'COMMERCIAL' | 'GOVERNMENT';
 
@@ -630,9 +638,6 @@ export const listNotifications = (options?: {
     `/notifications${query ? `?${query}` : ''}`,
   );
 };
-
-export const getUnreadNotificationCount = (): Promise<{ count: number }> =>
-  apiFetch<{ count: number }>('/notifications/unread-count');
 
 export const createNotification = (payload: {
   userId: string;
