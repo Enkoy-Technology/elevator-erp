@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { fieldClass, labelClass } from '@/components/form-styles';
+import { btnGhost, btnPrimary, btnSecondary, fieldClass, labelClass } from '@/components/form-styles';
 import { Pagination } from '@/components/pagination';
 import { SideDrawer } from '@/components/side-drawer';
 import { Sidebar } from '@/components/sidebar';
@@ -235,19 +235,13 @@ export default function ProjectsPage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <Link
-                href="/customers"
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-slate-600 transition hover:border-navy-600 hover:text-navy-800"
-              >
+              <Link href="/customers" className={btnGhost}>
                 Customers
               </Link>
-              <span className="rounded-lg bg-navy-800 px-3 py-1.5 font-medium text-white">
-                Project pipeline
-              </span>
               <button
                 type="button"
                 onClick={openDrawer}
-                className="rounded-lg bg-navy-800 px-3 py-1.5 font-semibold text-white transition hover:bg-navy-700"
+                className={btnPrimary}
               >
                 Create project
               </button>
@@ -389,7 +383,7 @@ export default function ProjectsPage() {
             <button
               type="button"
               onClick={closeDrawer}
-              className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              className={`${btnSecondary} flex-1`}
             >
               Cancel
             </button>
@@ -397,7 +391,7 @@ export default function ProjectsPage() {
               type="submit"
               form="create-project-form"
               disabled={submitting || customers.length === 0}
-              className="flex-1 rounded-lg bg-navy-800 py-2.5 text-sm font-semibold text-white transition hover:bg-navy-700 disabled:opacity-60"
+              className={`${btnPrimary} flex-1`}
             >
               {submitting ? 'Saving…' : 'Save lead'}
             </button>

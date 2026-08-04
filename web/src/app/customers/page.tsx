@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { fieldClass, labelClass } from '@/components/form-styles';
+import { btnGhost, btnPrimary, btnSecondary, fieldClass, labelClass } from '@/components/form-styles';
 import { Pagination } from '@/components/pagination';
 import { SideDrawer } from '@/components/side-drawer';
 import { Sidebar } from '@/components/sidebar';
@@ -161,20 +161,10 @@ export default function CustomersPage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="rounded-lg bg-navy-800 px-3 py-1.5 font-medium text-white">
-                Customers
-              </span>
-              <Link
-                href="/projects"
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-slate-600 transition hover:border-navy-600 hover:text-navy-800"
-              >
+              <Link href="/projects" className={btnGhost}>
                 Project pipeline
               </Link>
-              <button
-                type="button"
-                onClick={openDrawer}
-                className="rounded-lg bg-navy-800 px-3 py-1.5 font-semibold text-white transition hover:bg-navy-700"
-              >
+              <button type="button" onClick={openDrawer} className={btnPrimary}>
                 Create customer
               </button>
             </div>
@@ -207,7 +197,7 @@ export default function CustomersPage() {
               </div>
               <button
                 type="submit"
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-navy-600 hover:text-navy-800"
+                className={btnSecondary}
               >
                 Search
               </button>
@@ -288,7 +278,7 @@ export default function CustomersPage() {
             <button
               type="button"
               onClick={closeDrawer}
-              className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              className={`${btnSecondary} flex-1`}
             >
               Cancel
             </button>
@@ -296,7 +286,7 @@ export default function CustomersPage() {
               type="submit"
               form="create-customer-form"
               disabled={submitting}
-              className="flex-1 rounded-lg bg-navy-800 py-2.5 text-sm font-semibold text-white transition hover:bg-navy-700 disabled:opacity-60"
+              className={`${btnPrimary} flex-1`}
             >
               {submitting
                 ? 'Saving…'
