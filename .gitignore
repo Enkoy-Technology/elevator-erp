@@ -17,3 +17,6 @@ service-account*.json
 *.log
 .idea/
 .vscode/
+
+# Playwright MCP scratch output (screenshots, snapshots, console logs)
+.playwright-mcp/
