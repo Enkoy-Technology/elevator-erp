@@ -1,18 +1,36 @@
 @import 'tailwindcss';
 
 @theme {
-  /* Seed tenant palette: Shining Star Electromechanical (burnt orange on warm
-     charcoal). Class names kept (navy = warm dark, gold = brand orange);
-     per-tenant theming lands later. */
-  --color-navy-950: #12100e;
-  --color-navy-900: #1c1815;
-  --color-navy-800: #26211c;
-  --color-navy-700: #322b24;
-  --color-navy-600: #6f5f4f;
-  --color-navy-100: #ece4da;
-  --color-gold-500: #d1712f;
-  --color-gold-400: #f0a25c;
-  --color-gold-600: #b45c22;
+  /* Shining Star Electro Mechanical, sampled from the 2026 company profile:
+     logo orange #FB9D19 on black, over warm off-white. The `navy-*` names are
+     historical — they are the black/charcoal ramp. Per-tenant theming later. */
+  --color-navy-950: #0a0a0a;
+  --color-navy-900: #141414;
+  --color-navy-800: #1f1f1f;
+  --color-navy-700: #2e2e2e;
+  --color-navy-600: #6b6257;
+  --color-navy-100: #ede8e1;
+
+  /* Brand orange. Always carries black text, never white: on #fb9d19 black
+     reads ~11:1 and white only ~2.2:1, which fails contrast outright. */
+  --color-gold-400: #ffbc5c;
+  --color-gold-500: #fb9d19;
+  --color-gold-600: #de8400;
+
+  /* Tailwind's stock slate is blue-cold and fought the warm brand on every
+     surface. Same scale, re-cut warm so greys sit under the orange. */
+  --color-slate-50: #faf8f5;
+  --color-slate-100: #f4f1ec;
+  --color-slate-200: #e7e2da;
+  --color-slate-300: #d6cfc4;
+  --color-slate-400: #a89f92;
+  /* Muted body text: dark enough to clear AA (4.5:1) on every ground it lands
+     on, including the tinted slate-100 page background. */
+  --color-slate-500: #726a5f;
+  --color-slate-600: #5c554c;
+  --color-slate-700: #443e37;
+  --color-slate-800: #2b2721;
+  --color-slate-900: #17150f;
 
   --font-sans: var(--font-ibm-plex), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-barlow), var(--font-ibm-plex), sans-serif;
@@ -23,3 +41,25 @@ body {
   @apply bg-slate-100 font-sans text-slate-900 antialiased;
 }
 
+@layer base {
+  /* Tailwind v4's preflight sets buttons to `cursor: default`, so every
+     control in the app stopped reading as clickable. Put the pointer back. */
+  button:not(:disabled),
+  [role='button']:not(:disabled),
+  summary,
+  select:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role='button'][aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+
+  /* One visible focus treatment for everything keyboard-reachable. */
+  :focus-visible {
+    outline: 2px solid var(--color-gold-500);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}
