@@ -176,6 +176,13 @@
       "when": 1784750000000,
       "tag": "0024_drop_unshipped_feature_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1784751000000,
+      "tag": "0025_scope_rls_policies_and_list_indexes",
+      "breakpoints": true
     }
   ]
 }
