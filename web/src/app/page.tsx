@@ -196,6 +196,11 @@ export default function DashboardPage() {
 
           {!summary ? (
             <p className="text-sm text-slate-500">Loading figures…</p>
+          ) : !summary.sales && !summary.service && !summary.totals ? (
+            <p className="text-sm text-slate-500">
+              No summary figures are shared with your role. Use the sidebar to
+              reach your work.
+            </p>
           ) : (
             <>
               <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">

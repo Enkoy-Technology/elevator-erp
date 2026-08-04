@@ -69,13 +69,18 @@ const SERVICE_ROLES: readonly UserRole[] = [
   'DISPATCHER',
 ];
 
-/** Roles that may see headcount and the customer book size. */
+/**
+ * Roles that may see headcount and the customer book size. WAREHOUSE_MANAGER
+ * is here because the equipment count is the only figure they own — without it
+ * their dashboard is empty and the role has nothing to land on.
+ */
 const TOTALS_ROLES: readonly UserRole[] = [
   'CEO',
   'ADMIN',
   'SALES_MANAGER',
   'FINANCE',
   'TECHNICAL_LEAD',
+  'WAREHOUSE_MANAGER',
 ];
 
 /** Stages a project can still be won from — excludes COMPLETED and CANCELLED. */
@@ -92,7 +97,34 @@ const OPEN_STAGES: readonly ProjectStatus[] = [
 const money = (value: string | number | null): string =>
   Number(value ?? 0).toFixed(2);
 
-const todayIso = (): string => new Date().toISOString().slice(0, 10);
+/**
+ * Service dates and "this month" are business-calendar facts, not UTC ones.
+ * On a UTC clock the whole dashboard is a day behind between local midnight
+ * and 03:00, and a month behind on the 1st.
+ * ponytail: one company-wide zone; move to a per-tenant setting if the product
+ * ever sells outside East Africa.
+ */
+const BUSINESS_TIMEZONE = 'Africa/Addis_Ababa';
+
+/** Today's calendar date in the business timezone. en-CA formats as ISO. */
+const todayIso = (): string =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+
+/** The instant at which a business-local calendar day begins. */
+const businessDayStart = (isoDate: string): Date => {
+  // Probe at midday so a DST transition can never land on the sample.
+  const probe = new Date(`${isoDate}T12:00:00Z`);
+  const offsetMs =
+    new Date(probe.toLocaleString('en-US', { timeZone: BUSINESS_TIMEZONE }))
+      .getTime() -
+    new Date(probe.toLocaleString('en-US', { timeZone: 'UTC' })).getTime();
+  return new Date(new Date(`${isoDate}T00:00:00Z`).getTime() - offsetMs);
+};
 
 const addDays = (isoDate: string, days: number): string => {
   const date = new Date(`${isoDate}T00:00:00.000Z`);
@@ -112,7 +144,9 @@ export class DashboardRepository {
    */
   async summary(tenantId: string, role: UserRole): Promise<DashboardSummary> {
     const today = todayIso();
-    const weekAhead = addDays(today, 7);
+    // Inclusive on both ends, so +6 is a 7-day window. +7 counted the same
+    // service in two consecutive weeks.
+    const weekAhead = addDays(today, 6);
     const monthStart = `${today.slice(0, 7)}-01`;
 
     const wantsSales = SALES_ROLES.includes(role);
@@ -181,7 +215,7 @@ export class DashboardRepository {
             // statusChangedAt it doesn't reset (and double-count) when the
             // project advances to EXECUTION or COMPLETED later. A deal won
             // and then cancelled in the same month no longer counts.
-            gte(projects.wonAt, new Date(`${monthStart}T00:00:00Z`)),
+            gte(projects.wonAt, businessDayStart(monthStart)),
             ne(projects.status, 'CANCELLED'),
           ),
         );
