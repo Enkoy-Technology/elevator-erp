@@ -78,12 +78,14 @@ export function Sidebar() {
               : pathname.startsWith(module.href));
 
           const layout = collapsed ? 'justify-center px-0' : 'gap-3 px-3';
+          // The active item is the one place brand orange appears in the nav:
+          // a hard-edged marker echoing the wedges in the company profile.
           const stateClass = locked
             ? 'text-navy-100/40'
             : active
-              ? 'bg-navy-700 text-white'
-              : 'text-navy-100/80 transition hover:bg-navy-800 hover:text-white';
-          const className = `flex items-center rounded-lg py-2.5 ${layout} ${stateClass}`;
+              ? 'bg-navy-800 font-semibold text-gold-500 before:absolute before:left-0 before:top-1/2 before:h-6 before:w-[3px] before:-translate-y-1/2 before:bg-gold-500'
+              : 'text-navy-100/70 transition hover:bg-navy-800 hover:text-white';
+          const className = `relative flex items-center rounded-lg py-2.5 ${layout} ${stateClass}`;
 
           const content = (
             <>
