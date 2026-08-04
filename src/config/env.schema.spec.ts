@@ -2,7 +2,6 @@ import { validateEnv } from './env.schema';
 
 const validEnv = {
   DATABASE_URL: 'postgresql://app_user:pw@localhost:5432/erp',
-  REDIS_URL: 'redis://localhost:6379',
   JWT_SECRET: 'a-sufficiently-long-secret',
 };
 
