@@ -169,6 +169,13 @@
       "when": 1784749000000,
       "tag": "0023_asset_category_escalator",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784750000000,
+      "tag": "0024_drop_unshipped_feature_columns",
+      "breakpoints": true
     }
   ]
 }

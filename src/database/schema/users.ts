@@ -1,7 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
-  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -28,11 +27,6 @@ export const users = pgTable(
     phone: text('phone'),
     role: userRoleEnum('role').notNull(),
     isActive: boolean('is_active').notNull().default(true),
-    emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
-    phoneVerifiedAt: timestamp('phone_verified_at', { withTimezone: true }),
-    mfaEnabled: boolean('mfa_enabled').notNull().default(false),
-    mfaTotpSecret: text('mfa_totp_secret'),
-    notificationPreferences: jsonb('notification_preferences'),
     refreshTokenHash: text('refresh_token_hash'),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
