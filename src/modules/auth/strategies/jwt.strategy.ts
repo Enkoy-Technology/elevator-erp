@@ -5,10 +5,14 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 
 import type { Env } from '../../../config';
 import type { AuthenticatedUser, JwtPayload } from '../../../types/auth.types';
+import { UsersRepository } from '../repositories/users.repository';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(config: ConfigService<Env, true>) {
+  constructor(
+    config: ConfigService<Env, true>,
+    private readonly usersRepository: UsersRepository,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -16,14 +20,27 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  validate(payload: JwtPayload): AuthenticatedUser {
+  /**
+   * The token is only a claim; the row is the truth. Without this lookup a
+   * deactivated or demoted user keeps their old access for the rest of the
+   * token TTL, because nothing else in the guard chain reads the users table.
+   * The role comes from the row too, so a demotion applies on the next request.
+   */
+  async validate(payload: JwtPayload): Promise<AuthenticatedUser> {
     if (payload.type !== 'access') {
       throw new UnauthorizedException('Refresh tokens cannot access the API');
     }
+    const user = await this.usersRepository.findActiveById(
+      payload.tenantId,
+      payload.sub,
+    );
+    if (!user) {
+      throw new UnauthorizedException('Account is no longer active');
+    }
     return {
-      userId: payload.sub,
-      tenantId: payload.tenantId,
-      role: payload.role,
+      userId: user.id,
+      tenantId: user.tenantId,
+      role: user.role,
     };
   }
 }
