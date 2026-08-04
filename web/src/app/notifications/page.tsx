@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { fieldClass, labelClass } from '@/components/form-styles';
+import { btnPrimary, btnSecondary, fieldClass, labelClass } from '@/components/form-styles';
 import { Pagination } from '@/components/pagination';
 import { SideDrawer } from '@/components/side-drawer';
 import { Sidebar } from '@/components/sidebar';
@@ -199,7 +199,7 @@ export default function NotificationsPage() {
               <button
                 type="button"
                 onClick={openDrawer}
-                className="rounded-lg bg-navy-800 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-navy-700"
+                className={btnPrimary}
               >
                 Send notice
               </button>
@@ -326,7 +326,7 @@ export default function NotificationsPage() {
             <button
               type="button"
               onClick={closeDrawer}
-              className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              className={`${btnSecondary} flex-1`}
             >
               Cancel
             </button>
@@ -334,7 +334,7 @@ export default function NotificationsPage() {
               type="submit"
               form="notify-form"
               disabled={submitting}
-              className="flex-1 rounded-lg bg-navy-800 py-2.5 text-sm font-semibold text-white transition hover:bg-navy-700 disabled:opacity-60"
+              className={`${btnPrimary} flex-1`}
             >
               {submitting ? 'Sending…' : 'Send'}
             </button>

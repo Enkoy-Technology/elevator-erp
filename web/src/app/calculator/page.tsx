@@ -1,5 +1,7 @@
 'use client';
 
+import { btnPrimary } from '@/components/form-styles';
+
 import { FormEvent, useEffect, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -249,7 +251,7 @@ export default function CalculatorPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex-1 rounded-lg bg-navy-800 py-2.5 text-sm font-semibold text-white transition hover:bg-navy-700 disabled:opacity-60"
+                className={`${btnPrimary} flex-1`}
               >
                 {submitting ? 'Calculating…' : 'Calculate'}
               </button>

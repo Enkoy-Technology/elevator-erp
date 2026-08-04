@@ -8,7 +8,7 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { fieldClass, labelClass } from '@/components/form-styles';
+import { btnPrimary, btnSecondary, fieldClass, labelClass } from '@/components/form-styles';
 import { Pagination } from '@/components/pagination';
 import { SideDrawer } from '@/components/side-drawer';
 import { Sidebar } from '@/components/sidebar';
@@ -270,7 +270,7 @@ export default function MaintenancePage() {
                     setContractNotes('');
                     setContractDrawer(true);
                   }}
-                  className="rounded-lg bg-navy-800 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-navy-700"
+                  className={btnPrimary}
                 >
                   New contract
                 </button>
@@ -285,7 +285,7 @@ export default function MaintenancePage() {
                     setBdAssignee('');
                     setBreakdownDrawer(true);
                   }}
-                  className="rounded-lg bg-navy-800 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-navy-700"
+                  className={btnPrimary}
                 >
                   Open breakdown
                 </button>
@@ -492,7 +492,7 @@ export default function MaintenancePage() {
             <button
               type="button"
               onClick={() => setContractDrawer(false)}
-              className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium"
+              className={`${btnSecondary} flex-1`}
             >
               Cancel
             </button>
@@ -500,7 +500,7 @@ export default function MaintenancePage() {
               type="submit"
               form="contract-form"
               disabled={submitting}
-              className="flex-1 rounded-lg bg-navy-800 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              className={`${btnPrimary} flex-1`}
             >
               {submitting ? 'Saving…' : 'Create'}
             </button>
@@ -608,7 +608,7 @@ export default function MaintenancePage() {
             <button
               type="button"
               onClick={() => setVisitDrawer(false)}
-              className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium"
+              className={`${btnSecondary} flex-1`}
             >
               Cancel
             </button>
@@ -616,7 +616,7 @@ export default function MaintenancePage() {
               type="submit"
               form="visit-form"
               disabled={submitting}
-              className="flex-1 rounded-lg bg-navy-800 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              className={`${btnPrimary} flex-1`}
             >
               {submitting ? 'Saving…' : 'Log visit'}
             </button>
@@ -658,7 +658,7 @@ export default function MaintenancePage() {
             <button
               type="button"
               onClick={() => setBreakdownDrawer(false)}
-              className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium"
+              className={`${btnSecondary} flex-1`}
             >
               Cancel
             </button>
@@ -666,7 +666,7 @@ export default function MaintenancePage() {
               type="submit"
               form="breakdown-form"
               disabled={submitting}
-              className="flex-1 rounded-lg bg-navy-800 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              className={`${btnPrimary} flex-1`}
             >
               {submitting ? 'Saving…' : 'Open ticket'}
             </button>
