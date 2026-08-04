@@ -64,16 +64,19 @@ function StatTile({
   tone?: 'plain' | 'warn' | 'danger' | 'good';
   href?: string;
 }) {
-  const toneClass = {
-    plain: 'border-slate-200 bg-white',
-    good: 'border-emerald-200 bg-emerald-50',
-    warn: 'border-amber-200 bg-amber-50',
-    danger: 'border-red-200 bg-red-50',
-  }[tone];
+  // Tiles stay on one surface; the number carries the status. Four tinted
+  // cards in a row read as noise and competed with the brand orange.
+  const toneClass = 'border-slate-200 bg-white';
   const valueClass = {
     plain: 'text-slate-900',
-    good: 'text-emerald-700',
-    warn: 'text-amber-800',
+    good: 'text-slate-900',
+    warn: 'text-amber-700',
+    danger: 'text-red-700',
+  }[tone];
+  const subClass = {
+    plain: 'text-slate-500',
+    good: 'text-slate-500',
+    warn: 'text-amber-700',
     danger: 'text-red-700',
   }[tone];
 
@@ -85,7 +88,7 @@ function StatTile({
       <p className={`font-display mt-1.5 text-2xl font-semibold ${valueClass}`}>
         {value}
       </p>
-      {sub ? <p className="mt-1 text-xs text-slate-500">{sub}</p> : null}
+      {sub ? <p className={`mt-1 text-xs ${subClass}`}>{sub}</p> : null}
     </>
   );
 
@@ -282,7 +285,7 @@ export default function DashboardPage() {
                       <span className="h-6 flex-1 overflow-hidden rounded bg-slate-100">
                         {stage.count > 0 ? (
                           <span
-                            className="flex h-full items-center justify-end rounded bg-navy-800 px-2 text-[11px] font-semibold text-white"
+                            className="flex h-full items-center justify-end rounded bg-gold-500 px-2 text-[11px] font-semibold text-navy-950"
                             style={{
                               width: `${Math.max(
                                 (stage.count / peakStage) * 100,
