@@ -6,12 +6,35 @@ import {
   IsString,
   Matches,
   MaxLength,
+  Validate,
+  ValidatorConstraint,
+  isDateString,
+  type ValidatorConstraintInterface,
 } from 'class-validator';
 
 export const LOCALES = ['en', 'am'] as const;
 export type AppLocale = (typeof LOCALES)[number];
 
 const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
+
+// No date library needed: prefixing with a fixed non-leap year (2001) and
+// delegating to class-validator's own isDateString(strict) rejects
+// calendar-invalid MM-DD (e.g. '02-30', '04-31') with the day-of-month table
+// class-validator already carries. Deliberately also rejects '02-29' — a
+// leap-day fiscal year boundary is inherently ambiguous, so it is never
+// valid regardless of which real year it's used in.
+@ValidatorConstraint({ name: 'isValidFiscalYearBoundary', async: false })
+class IsValidFiscalYearBoundaryConstraint
+  implements ValidatorConstraintInterface
+{
+  validate(value: unknown): boolean {
+    return typeof value === 'string' && isDateString(`2001-${value}`, { strict: true });
+  }
+
+  defaultMessage(): string {
+    return 'fiscalYearStart must be a calendar-valid MM-DD';
+  }
+}
 
 export class UpdateSettingsDto {
   @ApiPropertyOptional({ example: '#1B2A4A' })
@@ -60,9 +83,6 @@ export class UpdateSettingsDto {
   @IsIn(LOCALES)
   defaultLocale?: AppLocale;
 
-  // Regex is deliberately calendar-naive (accepts '02-30'): a day-of-month
-  // check is not worth a date library for a value admins set once. See
-  // task-1.3-brief.md.
   @ApiPropertyOptional({
     example: '07-08',
     description: 'MM-DD boundary of the tenant’s fiscal year',
@@ -70,5 +90,6 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsString()
   @Matches(/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/)
+  @Validate(IsValidFiscalYearBoundaryConstraint)
   fiscalYearStart?: string;
 }
