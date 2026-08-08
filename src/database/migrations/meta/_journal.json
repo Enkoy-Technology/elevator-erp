@@ -183,6 +183,27 @@
       "when": 1784751000000,
       "tag": "0025_scope_rls_policies_and_list_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1786220480983,
+      "tag": "0026_busy_rumiko_fujikawa",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1786221749523,
+      "tag": "0027_brainy_nocturne",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1786224048906,
+      "tag": "0028_revoke_delete_rate_versions",
+      "breakpoints": true
     }
   ]
 }

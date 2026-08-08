@@ -1,11 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 
-import { tenantBranding } from '../../database/schema';
+import { tenantBranding, tenants } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import type { UpdateSettingsDto } from './dto/update-settings.dto';
 
-export type SettingsRecord = typeof tenantBranding.$inferSelect;
+export type SettingsRecord = typeof tenantBranding.$inferSelect & {
+  fiscalYearStart: string;
+};
 
 @Injectable()
 export class SettingsRepository {
@@ -18,7 +20,15 @@ export class SettingsRepository {
       if (!row) {
         throw new NotFoundException('Tenant branding not found');
       }
-      return row;
+      const [tenant] = await tx
+        .select({ fiscalYearStart: tenants.fiscalYearStart })
+        .from(tenants)
+        .where(eq(tenants.id, tenantId))
+        .limit(1);
+      if (!tenant) {
+        throw new NotFoundException('Tenant not found');
+      }
+      return { ...row, fiscalYearStart: tenant.fiscalYearStart };
     });
   }
 
@@ -57,7 +67,27 @@ export class SettingsRepository {
       if (!row) {
         throw new NotFoundException('Tenant branding not found');
       }
-      return row;
+
+      // Only touch `tenants` (and its updatedAt, which subscription/billing
+      // flows also read) when this PATCH actually changes something on it —
+      // a branding-only update has no business bumping it.
+      const [tenant] =
+        dto.fiscalYearStart !== undefined
+          ? await tx
+              .update(tenants)
+              .set({ fiscalYearStart: dto.fiscalYearStart, updatedAt: new Date() })
+              .where(eq(tenants.id, tenantId))
+              .returning({ fiscalYearStart: tenants.fiscalYearStart })
+          : await tx
+              .select({ fiscalYearStart: tenants.fiscalYearStart })
+              .from(tenants)
+              .where(eq(tenants.id, tenantId))
+              .limit(1);
+      if (!tenant) {
+        throw new NotFoundException('Tenant not found');
+      }
+
+      return { ...row, fiscalYearStart: tenant.fiscalYearStart };
     });
   }
 }
