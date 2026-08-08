@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { hash } from 'bcrypt';
 
+import { BCRYPT_ROUNDS } from '../../common/security.constants';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type { CreateEmployeeDto, UpdateEmployeeDto } from './dto/employee.dto';
-import { BCRYPT_ROUNDS, EmployeesRepository } from './employees.repository';
+import { EmployeesRepository } from './employees.repository';
 
 @Injectable()
 export class EmployeesService {
