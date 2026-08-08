@@ -1,5 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 
+import { CustomerInUseError } from '../../common/exceptions';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type { CustomerRecord } from './customers.repository';
 import { CustomersService } from './customers.service';
@@ -112,5 +113,20 @@ describe('CustomersService', () => {
     await expect(service.create(user, dto)).resolves.toEqual(sample);
     expect(repo.create).toHaveBeenCalledWith(user.tenantId, user.userId, dto);
     expect(repo.findSimilar).not.toHaveBeenCalled();
+  });
+
+  it('deletes a customer with no linked records', async () => {
+    repo.softDelete.mockResolvedValue(undefined);
+    await expect(
+      service.softDelete(user, sample.id),
+    ).resolves.toBeUndefined();
+    expect(repo.softDelete).toHaveBeenCalledWith(user.tenantId, sample.id);
+  });
+
+  it('surfaces CustomerInUseError when the customer still has linked records', async () => {
+    repo.softDelete.mockRejectedValue(new CustomerInUseError(1, 0, 0));
+    await expect(service.softDelete(user, sample.id)).rejects.toBeInstanceOf(
+      CustomerInUseError,
+    );
   });
 });
