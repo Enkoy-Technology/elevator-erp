@@ -12,7 +12,7 @@ Delivery plan: `docs/planning/ROADMAP.md`.
 ```bash
 pnpm install
 cp .env.example .env          # defaults work with the compose file below
-pnpm run db:seed              # once: demo tenant + CEO user (needs DB up — see below)
+pnpm run db:seed:dev          # once: demo tenant + CEO user (needs DB up — see below)
 pnpm run dev                  # Postgres + Redis + migrate + API + admin UI
 ```
 
@@ -22,7 +22,12 @@ pnpm run dev                  # Postgres + Redis + migrate + API + admin UI
 2. `pnpm run db:migrate` — apply pending migrations
 3. API (`start:dev`) on **http://localhost:3002** and admin UI (`web:dev`) on **http://localhost:3003**
 
-First-time only (after install / empty DB): run `pnpm run db:seed` once (with infra up). You can run `pnpm run infra:up && pnpm run db:migrate && pnpm run db:seed` then `pnpm run dev`.
+First-time only (after install / empty DB): run `pnpm run db:seed:dev` once (with infra up). You can run `pnpm run infra:up && pnpm run db:migrate && pnpm run db:seed:dev` then `pnpm run dev`.
+
+`db:seed` refuses to run unless `ALLOW_DEMO_SEED=1` is set, in every
+environment — `db:seed:dev` is `db:seed` with that override baked in for
+local use. Never set `ALLOW_DEMO_SEED=1` when pointed at a production
+database.
 
 Demo login (UI or API): workspace `demo`, `ceo@demo.example.com` / `Demo!Passw0rd`.
 

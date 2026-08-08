@@ -9,9 +9,13 @@ import * as schema from './schema';
 const BCRYPT_ROUNDS = 12;
 
 export const assertSeedAllowed = (env: NodeJS.ProcessEnv): void => {
-  if (env.NODE_ENV === 'production' && env.ALLOW_DEMO_SEED !== '1') {
+  // Gated in every environment, not just NODE_ENV=production: an operator
+  // shell with no NODE_ENV set but DATABASE_ADMIN_URL pointed at a real
+  // database must not sail through just because the shell isn't labeled
+  // "production".
+  if (env.ALLOW_DEMO_SEED !== '1') {
     throw new Error(
-      'Refusing to seed demo data in production. Set ALLOW_DEMO_SEED=1 to override.',
+      'Refusing to seed demo data. Set ALLOW_DEMO_SEED=1 to override.',
     );
   }
 };
