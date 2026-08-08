@@ -21,6 +21,13 @@ ALTER ROLE app_user PASSWORD '<strong generated password>';
 
 Never leave `app_user` on the migration's default password (`app_password`).
 
+## 1a. Statutory rates
+
+After every `pnpm run db:migrate`, run `pnpm run db:seed:rates`. This seeds
+the current Ethiopian statutory rates (VAT, WHT, PAYE bands, pension) if they
+are not already present — idempotent, safe to run on every deploy, no
+`ALLOW_DEMO_SEED` gate (these are not demo data).
+
 ## 2. Required environment values
 
 | Variable | Value |
