@@ -8,6 +8,7 @@ describe('RatesService', () => {
     findActive: jest.fn(),
     findAll: jest.fn(),
     create: jest.fn(),
+    rotate: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -45,5 +46,17 @@ describe('RatesService', () => {
     expect(service.fiscalYearFor('2026-05-01', '07-08')).toEqual({
       start: '2025-07-08', end: '2026-07-07', label: 'FY2025/26',
     });
+  });
+
+  it('create() delegates rotation to the repository', async () => {
+    repo.rotate.mockResolvedValue({ id: 'v3', kind: 'VAT', validFrom: '2026-08-08', validTo: null, payload: { percent: '16' } });
+    const result = await service.create('VAT', '2026-08-08', { percent: '16' }, 'VAT Proclamation X');
+    expect(repo.rotate).toHaveBeenCalledWith({
+      kind: 'VAT',
+      validFrom: '2026-08-08',
+      payload: { percent: '16' },
+      source: 'VAT Proclamation X',
+    });
+    expect(result.id).toBe('v3');
   });
 });

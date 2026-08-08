@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import { RateNotFoundError } from '../../common/exceptions';
 import type { RateKind } from '../../database/schema';
 import { RatesRepository, type RateVersionRecord } from './rates.repository';
 
@@ -10,12 +11,10 @@ export type RateVersion = Pick<
   'id' | 'kind' | 'validFrom' | 'validTo' | 'payload'
 >;
 
-export class RateNotFoundError extends Error {
-  constructor(kind: RateKind, onDate: string) {
-    super(`No ${kind} rate version covers ${onDate}`);
-    this.name = 'RateNotFoundError';
-  }
-}
+// Re-exported so existing imports of `RateNotFoundError` from this module
+// keep working; the class itself now lives in common/exceptions (1.3) so it
+// can extend DomainError and map to 404 without a controller try/catch.
+export { RateNotFoundError };
 
 export interface FiscalYear {
   start: string;
@@ -41,6 +40,16 @@ export class RatesService {
       throw new RateNotFoundError(kind, onDate);
     }
     return version;
+  }
+
+  /** Closes the currently-open version of `kind` and opens a new one. */
+  async create(
+    kind: RateKind,
+    validFrom: string,
+    payload: unknown,
+    source: string,
+  ): Promise<RateVersion> {
+    return this.ratesRepo.rotate({ kind, validFrom, payload, source });
   }
 
   /**
