@@ -24,7 +24,8 @@
     "test:e2e": "jest --config test/jest-e2e.json --runInBand",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env src/database/migrate.ts",
-    "db:seed": "tsx --env-file-if-exists=.env src/database/seed.ts"
+    "db:seed": "tsx --env-file-if-exists=.env src/database/seed.ts",
+    "db:seed:dev": "ALLOW_DEMO_SEED=1 tsx --env-file-if-exists=.env src/database/seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.28",
