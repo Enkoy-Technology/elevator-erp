@@ -4,6 +4,8 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 
+import { RatesRepository } from '../modules/rates/rates.repository';
+import { seedRates } from '../modules/rates/seed-rates';
 import * as schema from './schema';
 
 const BCRYPT_ROUNDS = 12;
@@ -31,6 +33,11 @@ const main = async (): Promise<void> => {
   const db = drizzle(pool, { schema });
 
   try {
+    // Statutory rates are not demo data — seed them regardless of whether
+    // the demo tenant below already exists, so re-running this script never
+    // skips them once the demo tenant is in place.
+    await seedRates(new RatesRepository(db));
+
     const existing = await db
       .select({ id: schema.tenants.id })
       .from(schema.tenants)

@@ -6,6 +6,7 @@ import type { Database } from '../../database/database.types';
 import { rateVersions, type RateKind } from '../../database/schema';
 
 export type RateVersionRecord = typeof rateVersions.$inferSelect;
+export type RateVersionInsert = typeof rateVersions.$inferInsert;
 
 /**
  * rate_versions is a GLOBAL table (no tenant_id, no RLS) — statutory rates
@@ -35,5 +36,22 @@ export class RatesRepository {
       .orderBy(desc(rateVersions.validFrom))
       .limit(1);
     return rows[0];
+  }
+
+  /** Kinds that currently have an open (valid_to IS NULL) version — used to seed idempotently. */
+  async findOpenKinds(): Promise<RateKind[]> {
+    const rows = await this.db
+      .select({ kind: rateVersions.kind })
+      .from(rateVersions)
+      .where(isNull(rateVersions.validTo));
+    return rows.map((row) => row.kind);
+  }
+
+  async create(values: RateVersionInsert): Promise<RateVersionRecord> {
+    const [row] = await this.db.insert(rateVersions).values(values).returning();
+    if (!row) {
+      throw new Error('Failed to insert rate version');
+    }
+    return row;
   }
 }
