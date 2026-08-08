@@ -146,6 +146,11 @@ export class AuthService {
       ),
     ]);
 
+    // Single session per user by design for launch: this overwrites any
+    // existing refreshTokenHash, so logging in on a second device evicts
+    // the first at its next refresh. Upgrade path, if ever needed: a
+    // refresh-token table with one row per session instead of one column
+    // per user.
     await this.usersRepository.setRefreshTokenHash(
       user.tenantId,
       user.id,

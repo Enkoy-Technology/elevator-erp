@@ -45,3 +45,7 @@ pnpm audit --prod
 ```
 
 Resolve or explicitly accept any reported vulnerabilities before shipping.
+
+## Known behaviors
+
+- Single session per user: logging in on a second device signs the first out within 15 minutes. By design for launch.
