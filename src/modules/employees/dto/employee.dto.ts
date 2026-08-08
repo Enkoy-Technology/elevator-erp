@@ -67,4 +67,15 @@ export class UpdateEmployeeDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    example: 'NewTempPass!123',
+    minLength: 8,
+    description: 'Set to reset the password. Omit to leave it unchanged.',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(8)
+  @MaxLength(72)
+  password?: string;
 }

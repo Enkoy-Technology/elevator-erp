@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
+import { hash } from 'bcrypt';
 
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type { CreateEmployeeDto, UpdateEmployeeDto } from './dto/employee.dto';
-import { EmployeesRepository } from './employees.repository';
+import { BCRYPT_ROUNDS, EmployeesRepository } from './employees.repository';
 
 @Injectable()
 export class EmployeesService {
@@ -25,7 +26,17 @@ export class EmployeesService {
     });
   }
 
-  update(user: AuthenticatedUser, id: string, dto: UpdateEmployeeDto) {
-    return this.employeesRepository.update(user.tenantId, id, dto);
+  async update(user: AuthenticatedUser, id: string, dto: UpdateEmployeeDto) {
+    return this.employeesRepository.update(user.tenantId, id, {
+      fullName: dto.fullName,
+      phone: dto.phone,
+      role: dto.role,
+      isActive: dto.isActive,
+      // Hashed here (never persisted or logged as plaintext) so a reset
+      // never touches the wire or the DB layer unhashed.
+      ...(dto.password !== undefined
+        ? { passwordHash: await hash(dto.password, BCRYPT_ROUNDS) }
+        : {}),
+    });
   }
 }

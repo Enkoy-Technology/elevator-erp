@@ -11,7 +11,7 @@ import { users } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import type { UserRole } from '../../types/auth.types';
 
-const BCRYPT_ROUNDS = 12;
+export const BCRYPT_ROUNDS = 12;
 
 export type EmployeePublic = {
   id: string;
@@ -132,6 +132,8 @@ export class EmployeesRepository {
       phone?: string | null;
       role?: UserRole;
       isActive?: boolean;
+      /** Already-hashed — the service hashes the plaintext before this call. */
+      passwordHash?: string;
     },
   ): Promise<EmployeePublic> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
@@ -142,6 +144,11 @@ export class EmployeesRepository {
           ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
           ...(patch.role !== undefined ? { role: patch.role } : {}),
           ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
+          // A password reset invalidates any live session — never leave a
+          // refresh token valid for credentials that no longer apply.
+          ...(patch.passwordHash !== undefined
+            ? { passwordHash: patch.passwordHash, refreshTokenHash: null }
+            : {}),
           updatedAt: new Date(),
         })
         .where(
