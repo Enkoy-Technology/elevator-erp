@@ -340,6 +340,18 @@ export const createCustomer = (
     body: JSON.stringify(payload),
   });
 
+export const updateCustomer = (
+  id: string,
+  payload: Partial<CreateCustomerPayload>,
+): Promise<Customer> =>
+  apiFetch<Customer>(`/customers/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+
+export const deleteCustomer = (id: string): Promise<void> =>
+  apiFetch<void>(`/customers/${id}`, { method: 'DELETE' });
+
 export type ProjectStatus =
   | 'LEAD'
   | 'SITE_SURVEY'

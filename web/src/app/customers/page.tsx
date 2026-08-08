@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { btnGhost, btnPrimary, btnSecondary, fieldClass, labelClass } from '@/components/form-styles';
+import { btnDanger, btnGhost, btnPrimary, btnSecondary, fieldClass, labelClass } from '@/components/form-styles';
 import { Pagination } from '@/components/pagination';
 import { SideDrawer } from '@/components/side-drawer';
 import { Sidebar } from '@/components/sidebar';
@@ -17,14 +17,23 @@ import {
   ApiError,
   checkCustomerDuplicate,
   createCustomer,
+  deleteCustomer,
   getAccessToken,
+  getCurrentRole,
   listCustomers,
+  updateCustomer,
   type Customer,
   type CustomerType,
   type SimilarCustomer,
+  type UserRole,
 } from '@/lib/api';
 
 const PAGE_SIZE = 20;
+
+/** Mirrors @Roles('SALES_MANAGER') on the customers PATCH/DELETE routes;
+ *  CEO and ADMIN bypass via RolesGuard's SUPER_ROLES. */
+const canWriteCustomers = (role: UserRole | null): boolean =>
+  role === 'SALES_MANAGER' || role === 'CEO' || role === 'ADMIN';
 
 export default function CustomersPage() {
   const router = useRouter();
@@ -34,7 +43,9 @@ export default function CustomersPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  const [role, setRole] = useState<UserRole | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -46,6 +57,9 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [similar, setSimilar] = useState<SimilarCustomer[]>([]);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const canWrite = canWriteCustomers(role);
 
   const refresh = useCallback(async (nextPage: number, q: string) => {
     setLoading(true);
@@ -74,6 +88,7 @@ export default function CustomersPage() {
       router.replace('/login');
       return;
     }
+    setRole(getCurrentRole());
     void refresh(page, search);
   }, [router, refresh, page, search]);
 
@@ -84,6 +99,7 @@ export default function CustomersPage() {
   };
 
   const resetForm = () => {
+    setEditId(null);
     setName('');
     setEmail('');
     setPhone('');
@@ -93,8 +109,20 @@ export default function CustomersPage() {
     setSimilar([]);
   };
 
-  const openDrawer = () => {
+  const openCreate = () => {
     resetForm();
+    setDrawerOpen(true);
+  };
+
+  const openEdit = (customer: Customer) => {
+    setEditId(customer.id);
+    setName(customer.name);
+    setEmail(customer.email ?? '');
+    setPhone(customer.phone ?? '');
+    setCity(customer.city ?? '');
+    setCustomerType(customer.customerType);
+    setFormError(null);
+    setSimilar([]);
     setDrawerOpen(true);
   };
 
@@ -106,10 +134,11 @@ export default function CustomersPage() {
 
   /**
    * Advisory look-alike lookup on blur. Never blocks the form — a failed
-   * check just clears the warning.
+   * check just clears the warning. Create only: editing an existing
+   * customer against itself isn't a duplicate.
    */
   const checkSimilar = async () => {
-    if (name.trim().length < 2) {
+    if (editId || name.trim().length < 2) {
       setSimilar([]);
       return;
     }
@@ -122,18 +151,23 @@ export default function CustomersPage() {
     }
   };
 
-  const onCreate = async (event: FormEvent) => {
+  const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
     setFormError(null);
     try {
-      await createCustomer({
+      const payload = {
         name,
         email: email || undefined,
         phone: phone || undefined,
         city: city || undefined,
         customerType,
-      });
+      };
+      if (editId) {
+        await updateCustomer(editId, payload);
+      } else {
+        await createCustomer(payload);
+      }
       closeDrawer();
       setPage(1);
       setSearch('');
@@ -141,10 +175,29 @@ export default function CustomersPage() {
       await refresh(1, '');
     } catch (err) {
       setFormError(
-        err instanceof ApiError ? err.message : 'Failed to create customer',
+        err instanceof ApiError
+          ? err.message
+          : `Failed to ${editId ? 'save' : 'create'} customer`,
       );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const onDelete = async (id: string) => {
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteCustomer(id);
+      setDeleteConfirmId(null);
+      await refresh(page, search);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : 'Failed to delete customer',
+      );
+      setDeleteConfirmId(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -164,7 +217,7 @@ export default function CustomersPage() {
               <Link href="/projects" className={btnGhost}>
                 Project pipeline
               </Link>
-              <button type="button" onClick={openDrawer} className={btnPrimary}>
+              <button type="button" onClick={openCreate} className={btnPrimary}>
                 Create customer
               </button>
             </div>
@@ -210,7 +263,7 @@ export default function CustomersPage() {
                 <p className="text-sm text-slate-500">No customers yet.</p>
                 <button
                   type="button"
-                  onClick={openDrawer}
+                  onClick={openCreate}
                   className="mt-3 text-sm font-semibold text-navy-800 hover:underline"
                 >
                   Create your first customer
@@ -227,6 +280,9 @@ export default function CustomersPage() {
                         <th className="py-2 pr-4 font-semibold">City</th>
                         <th className="py-2 pr-4 font-semibold">Contact</th>
                         <th className="py-2 font-semibold">Balance (ETB)</th>
+                        {canWrite ? (
+                          <th className="py-2 pl-4 font-semibold">Actions</th>
+                        ) : null}
                       </tr>
                     </thead>
                     <tbody>
@@ -250,6 +306,50 @@ export default function CustomersPage() {
                           <td className="py-3 text-slate-600">
                             {c.outstandingBalanceEtb}
                           </td>
+                          {canWrite ? (
+                            <td className="py-3 pl-4">
+                              {deleteConfirmId === c.id ? (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-xs text-slate-600">
+                                    Delete {c.name}? This cannot be undone.
+                                  </span>
+                                  <button
+                                    type="button"
+                                    disabled={deleting}
+                                    onClick={() => void onDelete(c.id)}
+                                    className={`${btnDanger} px-2.5 py-1 text-xs`}
+                                  >
+                                    {deleting ? 'Deleting…' : 'Confirm'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={deleting}
+                                    onClick={() => setDeleteConfirmId(null)}
+                                    className={`${btnGhost} px-2.5 py-1 text-xs`}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => openEdit(c)}
+                                    className="text-sm font-semibold text-navy-800 hover:underline"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeleteConfirmId(c.id)}
+                                    className="text-sm font-semibold text-red-600 hover:underline"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          ) : null}
                         </tr>
                       ))}
                     </tbody>
@@ -271,8 +371,12 @@ export default function CustomersPage() {
       <SideDrawer
         open={drawerOpen}
         onClose={closeDrawer}
-        title="Create customer"
-        description="Look-alike customers are flagged as a warning."
+        title={editId ? 'Edit customer' : 'Create customer'}
+        description={
+          editId
+            ? undefined
+            : 'Look-alike customers are flagged as a warning.'
+        }
         footer={
           <div className="flex gap-2">
             <button
@@ -284,22 +388,24 @@ export default function CustomersPage() {
             </button>
             <button
               type="submit"
-              form="create-customer-form"
+              form="customer-form"
               disabled={submitting}
               className={`${btnPrimary} flex-1`}
             >
               {submitting
                 ? 'Saving…'
-                : similar.length > 0
-                  ? 'Create anyway'
-                  : 'Save customer'}
+                : editId
+                  ? 'Save changes'
+                  : similar.length > 0
+                    ? 'Create anyway'
+                    : 'Save customer'}
             </button>
           </div>
         }
       >
         <form
-          id="create-customer-form"
-          onSubmit={(e) => void onCreate(e)}
+          id="customer-form"
+          onSubmit={(e) => void onSubmit(e)}
           className="space-y-4"
         >
           {formError ? (
