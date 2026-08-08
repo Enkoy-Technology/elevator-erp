@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -46,5 +47,8 @@ export class CreateNotificationDto {
   @IsOptional()
   @IsString()
   @MaxLength(300)
+  @Matches(/^\/(?!\/)[a-zA-Z0-9/_?=&-]*$/, {
+    message: 'linkPath must be a relative in-app path starting with /',
+  })
   linkPath?: string;
 }
