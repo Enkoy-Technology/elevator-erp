@@ -59,4 +59,16 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsIn(LOCALES)
   defaultLocale?: AppLocale;
+
+  // Regex is deliberately calendar-naive (accepts '02-30'): a day-of-month
+  // check is not worth a date library for a value admins set once. See
+  // task-1.3-brief.md.
+  @ApiPropertyOptional({
+    example: '07-08',
+    description: 'MM-DD boundary of the tenant’s fiscal year',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/)
+  fiscalYearStart?: string;
 }

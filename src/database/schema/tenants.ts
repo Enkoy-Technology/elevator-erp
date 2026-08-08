@@ -17,6 +17,8 @@ export const tenants = pgTable('tenants', {
   subscriptionStatus: subscriptionStatusEnum('subscription_status')
     .notNull()
     .default('TRIAL'),
+  /** MM-DD boundary of the Ethiopian fiscal year (see RatesService.fiscalYearFor). */
+  fiscalYearStart: text('fiscal_year_start').notNull().default('07-08'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
