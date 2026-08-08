@@ -8,7 +8,17 @@ import * as schema from './schema';
 
 const BCRYPT_ROUNDS = 12;
 
+export const assertSeedAllowed = (env: NodeJS.ProcessEnv): void => {
+  if (env.NODE_ENV === 'production' && env.ALLOW_DEMO_SEED !== '1') {
+    throw new Error(
+      'Refusing to seed demo data in production. Set ALLOW_DEMO_SEED=1 to override.',
+    );
+  }
+};
+
 const main = async (): Promise<void> => {
+  assertSeedAllowed(process.env);
+
   const url = process.env.DATABASE_ADMIN_URL ?? process.env.DATABASE_URL;
   if (!url) {
     throw new Error('DATABASE_ADMIN_URL (or DATABASE_URL) must be set');
@@ -58,7 +68,9 @@ const main = async (): Promise<void> => {
   }
 };
 
-main().catch((error: unknown) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
