@@ -1,7 +1,8 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, count, eq, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { hash } from 'bcrypt';
 
+import { LastAdminError } from '../../common/exceptions';
 import {
   normalizePageQuery,
   toPaginatedResult,
@@ -9,9 +10,14 @@ import {
 } from '../../common/pagination';
 import { users } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
+import type { TenantTransaction } from '../../database/database.types';
 import type { UserRole } from '../../types/auth.types';
 
 export const BCRYPT_ROUNDS = 12;
+
+/** Roles that can administer the tenant; the tenant must always keep at
+ * least one active user in one of these roles. */
+const ADMIN_CAPABLE_ROLES: readonly UserRole[] = ['ADMIN', 'CEO'];
 
 export type EmployeePublic = {
   id: string;
@@ -137,6 +143,10 @@ export class EmployeesRepository {
     },
   ): Promise<EmployeePublic> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
+      if (patch.role !== undefined || patch.isActive !== undefined) {
+        await this.assertNotLastAdmin(tx, id, patch);
+      }
+
       const [row] = await tx
         .update(users)
         .set({
@@ -173,5 +183,58 @@ export class EmployeesRepository {
       }
       return row;
     });
+  }
+
+  /**
+   * Rejects an update that would leave the tenant with zero active
+   * ADMIN/CEO users. Runs inside the caller's transaction so the read and
+   * the subsequent update are consistent.
+   */
+  private async assertNotLastAdmin(
+    tx: TenantTransaction,
+    id: string,
+    patch: { role?: UserRole; isActive?: boolean },
+  ): Promise<void> {
+    const [current] = await tx
+      .select({ role: users.role, isActive: users.isActive })
+      .from(users)
+      .where(
+        and(
+          eq(users.id, id),
+          isNull(users.deletedAt),
+          ne(users.role, 'CUSTOMER'),
+        ),
+      )
+      .limit(1);
+    if (!current) {
+      throw new NotFoundException('Employee not found');
+    }
+
+    const wasAdminCapable =
+      current.isActive && ADMIN_CAPABLE_ROLES.includes(current.role);
+    const prospectiveRole = patch.role ?? current.role;
+    const prospectiveIsActive = patch.isActive ?? current.isActive;
+    const willBeAdminCapable =
+      prospectiveIsActive && ADMIN_CAPABLE_ROLES.includes(prospectiveRole);
+
+    if (!wasAdminCapable || willBeAdminCapable) {
+      return;
+    }
+
+    const [another] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(
+        and(
+          eq(users.isActive, true),
+          isNull(users.deletedAt),
+          inArray(users.role, ADMIN_CAPABLE_ROLES),
+          ne(users.id, id),
+        ),
+      )
+      .limit(1);
+    if (!another) {
+      throw new LastAdminError();
+    }
   }
 }

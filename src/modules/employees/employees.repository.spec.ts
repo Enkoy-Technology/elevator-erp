@@ -1,8 +1,13 @@
+import { LastAdminError } from '../../common/exceptions';
 import { EmployeesRepository } from './employees.repository';
 
-// The password-reset DB write lives in EmployeesRepository.update() because
-// nulling refreshTokenHash must happen in the same UPDATE statement as the
-// passwordHash write — a separate call could race with a concurrent login.
+// The last-admin guard and the password-reset DB write both live in
+// EmployeesRepository.update() because the guard's count-then-update must
+// run inside the same tenant transaction as the read it depends on (see
+// TenantDbService.withTenant), and nulling refreshTokenHash must happen in
+// the same UPDATE statement as the passwordHash write. That means the
+// logic — and these tests — live at the repository layer, not the service
+// layer.
 
 type Row = Record<string, unknown>;
 
@@ -54,6 +59,56 @@ const repoWithTx = (selectResults: Row[][], updateRows: Row[]) => {
   const repo = new EmployeesRepository({ withTenant } as never);
   return { repo, select, update, updateChain };
 };
+
+describe('EmployeesRepository.update — last-admin guard', () => {
+  it('rejects deactivating the last active ADMIN', async () => {
+    const { repo, update } = repoWithTx(
+      [[{ role: 'ADMIN', isActive: true }], []],
+      [],
+    );
+
+    await expect(
+      repo.update(TENANT_ID, TARGET_ID, { isActive: false }),
+    ).rejects.toBeInstanceOf(LastAdminError);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('rejects demoting the last active CEO', async () => {
+    const { repo, update } = repoWithTx(
+      [[{ role: 'CEO', isActive: true }], []],
+      [],
+    );
+
+    await expect(
+      repo.update(TENANT_ID, TARGET_ID, { role: 'SALES_MANAGER' }),
+    ).rejects.toBeInstanceOf(LastAdminError);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('allows deactivating an admin when another active admin-capable user exists', async () => {
+    const updatedRow = sampleRow({ isActive: false });
+    const { repo, update } = repoWithTx(
+      [[{ role: 'ADMIN', isActive: true }], [{ id: 'other-admin-id' }]],
+      [updatedRow],
+    );
+
+    await expect(
+      repo.update(TENANT_ID, TARGET_ID, { isActive: false }),
+    ).resolves.toEqual(updatedRow);
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips the guard query entirely when neither role nor isActive changes', async () => {
+    const updatedRow = sampleRow({ fullName: 'New Name' });
+    const { repo, select, update } = repoWithTx([], [updatedRow]);
+
+    await expect(
+      repo.update(TENANT_ID, TARGET_ID, { fullName: 'New Name' }),
+    ).resolves.toEqual(updatedRow);
+    expect(select).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('EmployeesRepository.update — password reset', () => {
   it('nulls refreshTokenHash in the same UPDATE that sets passwordHash', async () => {

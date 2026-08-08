@@ -59,4 +59,13 @@ describe('EmployeesService', () => {
     const patch = repo.update.mock.calls[0]?.[2];
     expect(patch.passwordHash).toBeUndefined();
   });
+
+  it('propagates LastAdminError from the repository unchanged', async () => {
+    class LastAdminErrorStub extends Error {}
+    repo.update.mockRejectedValue(new LastAdminErrorStub());
+
+    await expect(
+      service.update(user, sample.id, { isActive: false }),
+    ).rejects.toBeInstanceOf(LastAdminErrorStub);
+  });
 });
