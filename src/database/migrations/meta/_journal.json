@@ -183,6 +183,13 @@
       "when": 1784751000000,
       "tag": "0025_scope_rls_policies_and_list_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1786220480983,
+      "tag": "0026_busy_rumiko_fujikawa",
+      "breakpoints": true
     }
   ]
 }

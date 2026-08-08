@@ -6,3 +6,4 @@ export * from './projects';
 export * from './assets';
 export * from './notifications';
 export * from './maintenance';
+export * from './rate-tables';
