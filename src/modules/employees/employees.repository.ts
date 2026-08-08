@@ -8,12 +8,11 @@ import {
   toPaginatedResult,
   type PaginatedResult,
 } from '../../common/pagination';
+import { BCRYPT_ROUNDS } from '../../common/security.constants';
 import { users } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import type { TenantTransaction } from '../../database/database.types';
 import type { UserRole } from '../../types/auth.types';
-
-export const BCRYPT_ROUNDS = 12;
 
 /** Roles that can administer the tenant; the tenant must always keep at
  * least one active user in one of these roles. */
@@ -144,6 +143,16 @@ export class EmployeesRepository {
   ): Promise<EmployeePublic> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       if (patch.role !== undefined || patch.isActive !== undefined) {
+        // Serialize the whole last-admin invariant per tenant. Without this,
+        // two concurrent demotions of two different admins can each see the
+        // other still active under READ COMMITTED and both pass the guard —
+        // classic write skew, landing the tenant at zero admins. The lock is
+        // transaction-scoped (released on commit/rollback) and only taken
+        // when the patch actually touches role/isActive, so ordinary edits
+        // never queue behind it.
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${tenantId}::text)::bigint)`,
+        );
         await this.assertNotLastAdmin(tx, id, patch);
       }
 

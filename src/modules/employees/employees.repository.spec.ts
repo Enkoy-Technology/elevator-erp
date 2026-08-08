@@ -52,17 +52,18 @@ const repoWithTx = (selectResults: Row[][], updateRows: Row[]) => {
   );
   const updateChain = makeUpdateChain(updateRows);
   const update = jest.fn(() => updateChain);
+  const execute = jest.fn(() => Promise.resolve());
   const withTenant = jest.fn(
     async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
-      fn({ select, update }),
+      fn({ select, update, execute }),
   );
   const repo = new EmployeesRepository({ withTenant } as never);
-  return { repo, select, update, updateChain };
+  return { repo, select, update, updateChain, execute };
 };
 
 describe('EmployeesRepository.update — last-admin guard', () => {
   it('rejects deactivating the last active ADMIN', async () => {
-    const { repo, update } = repoWithTx(
+    const { repo, update, execute } = repoWithTx(
       [[{ role: 'ADMIN', isActive: true }], []],
       [],
     );
@@ -71,6 +72,7 @@ describe('EmployeesRepository.update — last-admin guard', () => {
       repo.update(TENANT_ID, TARGET_ID, { isActive: false }),
     ).rejects.toBeInstanceOf(LastAdminError);
     expect(update).not.toHaveBeenCalled();
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it('rejects demoting the last active CEO', async () => {
@@ -98,15 +100,16 @@ describe('EmployeesRepository.update — last-admin guard', () => {
     expect(update).toHaveBeenCalledTimes(1);
   });
 
-  it('skips the guard query entirely when neither role nor isActive changes', async () => {
+  it('skips the guard query and the advisory lock when neither role nor isActive changes', async () => {
     const updatedRow = sampleRow({ fullName: 'New Name' });
-    const { repo, select, update } = repoWithTx([], [updatedRow]);
+    const { repo, select, update, execute } = repoWithTx([], [updatedRow]);
 
     await expect(
       repo.update(TENANT_ID, TARGET_ID, { fullName: 'New Name' }),
     ).resolves.toEqual(updatedRow);
     expect(select).not.toHaveBeenCalled();
     expect(update).toHaveBeenCalledTimes(1);
+    expect(execute).not.toHaveBeenCalled();
   });
 });
 
