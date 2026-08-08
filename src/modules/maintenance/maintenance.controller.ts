@@ -111,14 +111,13 @@ export class MaintenanceController {
     @Query('pageSize') pageSize?: string,
     @Query('status') status?: string,
   ) {
-    const parsed =
-      status && (BREAKDOWN_STATUSES as readonly string[]).includes(status)
-        ? (status as BreakdownStatus)
-        : undefined;
+    if (status && !(BREAKDOWN_STATUSES as readonly string[]).includes(status)) {
+      throw new BadRequestException(`Invalid status filter: ${status}`);
+    }
     return this.maintenanceService.listBreakdowns(user, {
       page,
       pageSize,
-      status: parsed,
+      status: status as BreakdownStatus | undefined,
     });
   }
 
