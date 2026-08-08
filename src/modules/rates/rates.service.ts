@@ -3,6 +3,13 @@ import { Injectable } from '@nestjs/common';
 import type { RateKind } from '../../database/schema';
 import { RatesRepository, type RateVersionRecord } from './rates.repository';
 
+// Binding interface for downstream tasks: the resolved rate version without
+// repository-only fields (source, createdAt).
+export type RateVersion = Pick<
+  RateVersionRecord,
+  'id' | 'kind' | 'validFrom' | 'validTo' | 'payload'
+>;
+
 export class RateNotFoundError extends Error {
   constructor(kind: RateKind, onDate: string) {
     super(`No ${kind} rate version covers ${onDate}`);
@@ -28,7 +35,7 @@ function formatDate(d: Date): string {
 export class RatesService {
   constructor(private readonly ratesRepo: RatesRepository) {}
 
-  async resolve(kind: RateKind, onDate: string): Promise<RateVersionRecord> {
+  async resolve(kind: RateKind, onDate: string): Promise<RateVersion> {
     const version = await this.ratesRepo.findActive(kind, onDate);
     if (!version) {
       throw new RateNotFoundError(kind, onDate);
