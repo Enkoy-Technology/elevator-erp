@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { and, count, eq, gte, isNull, lte, ne, sql, sum } from 'drizzle-orm';
 
+import { BUSINESS_TIMEZONE, todayIso } from '../../common/business-time';
 import {
   assets,
   breakdowns,
@@ -96,24 +97,6 @@ const OPEN_STAGES: readonly ProjectStatus[] = [
 
 const money = (value: string | number | null): string =>
   Number(value ?? 0).toFixed(2);
-
-/**
- * Service dates and "this month" are business-calendar facts, not UTC ones.
- * On a UTC clock the whole dashboard is a day behind between local midnight
- * and 03:00, and a month behind on the 1st.
- * ponytail: one company-wide zone; move to a per-tenant setting if the product
- * ever sells outside East Africa.
- */
-const BUSINESS_TIMEZONE = 'Africa/Addis_Ababa';
-
-/** Today's calendar date in the business timezone. en-CA formats as ISO. */
-const todayIso = (): string =>
-  new Intl.DateTimeFormat('en-CA', {
-    timeZone: BUSINESS_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
 
 /** The instant at which a business-local calendar day begins. */
 const businessDayStart = (isoDate: string): Date => {

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { and, count, desc, eq, isNull } from 'drizzle-orm';
 
+import { todayIso } from '../../common/business-time';
 import {
   normalizePageQuery,
   toPaginatedResult,
@@ -26,7 +27,7 @@ import type {
   UpdateBreakdownDto,
   UpdateMaintenanceContractDto,
 } from './dto/maintenance.dto';
-import { nextServiceDateAfter, toIsoDate } from './recurrence';
+import { nextServiceDateAfter } from './recurrence';
 
 export type MaintenanceContractRecord =
   typeof maintenanceContracts.$inferSelect;
@@ -176,7 +177,7 @@ export class MaintenanceRepository {
           'Only active contracts can log service visits',
         );
       }
-      const visitedDay = toIsoDate();
+      const visitedDay = todayIso();
       const nextServiceAt = nextServiceDateAfter(
         contract.nextServiceAt,
         visitedDay,
