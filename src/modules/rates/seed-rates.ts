@@ -42,13 +42,16 @@ export const RATE_SEEDS: RateVersionInsert[] = [
     kind: 'PAYE_BANDS',
     validFrom: '2025-07-08',
     payload: {
+      // Half-open intervals: `from` inclusive, `to` exclusive, so a
+      // fractional salary exactly on a boundary (e.g. 2000.50) lands in
+      // exactly one band. `to: null` marks the open-ended top band.
       bands: [
         { from: '0', to: '2000', ratePercent: '0' },
-        { from: '2001', to: '4000', ratePercent: '15' },
-        { from: '4001', to: '7000', ratePercent: '20' },
-        { from: '7001', to: '10000', ratePercent: '25' },
-        { from: '10001', to: '14000', ratePercent: '30' },
-        { from: '14001', to: null, ratePercent: '35' },
+        { from: '2000', to: '4000', ratePercent: '15' },
+        { from: '4000', to: '7000', ratePercent: '20' },
+        { from: '7000', to: '10000', ratePercent: '25' },
+        { from: '10000', to: '14000', ratePercent: '30' },
+        { from: '14000', to: null, ratePercent: '35' },
       ],
     },
     source: INCOME_TAX_AMENDMENT_UNVERIFIED,
