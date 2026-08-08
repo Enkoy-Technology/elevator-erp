@@ -22,10 +22,21 @@ describe('UpdateSettingsDto fiscalYearStart', () => {
     expect(await validateFiscalYearStart(undefined)).toHaveLength(0);
   });
 
-  // Documented gap, not a bug: the regex checks digit shape, not calendar
-  // validity, so a nonexistent day like 30 February passes. A day-of-month
-  // table isn't worth it for a value an admin sets once, per task-1.3-brief.md.
-  it('accepts 02-30 — the regex is calendar-naive by design', async () => {
-    expect(await validateFiscalYearStart('02-30')).toHaveLength(0);
+  it('rejects a calendar-invalid day (30 February)', async () => {
+    expect(await validateFiscalYearStart('02-30')).not.toHaveLength(0);
+  });
+
+  it('rejects a calendar-invalid day (31 April)', async () => {
+    expect(await validateFiscalYearStart('04-31')).not.toHaveLength(0);
+  });
+
+  // Deliberate: a leap-day fiscal year boundary is ambiguous in non-leap
+  // years, so 29 February is never a valid boundary.
+  it('rejects 02-29 even though it is a real day in leap years', async () => {
+    expect(await validateFiscalYearStart('02-29')).not.toHaveLength(0);
+  });
+
+  it('accepts 02-28 — the last day of February in a non-leap year', async () => {
+    expect(await validateFiscalYearStart('02-28')).toHaveLength(0);
   });
 });
