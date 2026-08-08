@@ -16,6 +16,7 @@ import { EmployeesModule } from './modules/employees/employees.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { RatesModule } from './modules/rates/rates.module';
 import { SettingsModule } from './modules/settings/settings.module';
 
 @Module({
@@ -36,6 +37,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     AssetsModule,
     NotificationsModule,
     MaintenanceModule,
+    RatesModule,
     SettingsModule,
     DashboardModule,
   ],
