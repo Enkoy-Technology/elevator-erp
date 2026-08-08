@@ -499,6 +499,7 @@ export const updateEmployee = (
     phone?: string;
     role?: EmployeeRole;
     isActive?: boolean;
+    password?: string;
   },
 ): Promise<Employee> =>
   apiFetch<Employee>(`/employees/${id}`, {

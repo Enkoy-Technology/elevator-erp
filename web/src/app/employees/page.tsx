@@ -137,6 +137,7 @@ export default function EmployeesPage() {
           phone: phone || undefined,
           role,
           isActive,
+          ...(password ? { password } : {}),
         });
       } else {
         await createEmployee({
@@ -394,6 +395,7 @@ export default function EmployeesPage() {
               <input
                 id="password"
                 type="password"
+                autoComplete="new-password"
                 className={fieldClass}
                 required
                 minLength={8}
@@ -402,14 +404,31 @@ export default function EmployeesPage() {
               />
             </div>
           ) : (
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={isActive}
-                onChange={(e) => setIsActive(e.target.checked)}
-              />
-              Active (can log in)
-            </label>
+            <>
+              <div>
+                <label className={labelClass} htmlFor="password">
+                  New password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  autoComplete="new-password"
+                  className={fieldClass}
+                  minLength={8}
+                  placeholder="Leave blank to keep the current password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={isActive}
+                  onChange={(e) => setIsActive(e.target.checked)}
+                />
+                Active (can log in)
+              </label>
+            </>
           )}
         </form>
       </SideDrawer>
