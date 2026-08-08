@@ -12,12 +12,12 @@ export class LoginDto {
   })
   tenantSlug!: string;
 
-  @ApiProperty({ example: 'ceo@demo.example.com' })
+  @ApiProperty({ example: 'user@example.com' })
   @IsEmail()
   @MaxLength(320)
   email!: string;
 
-  @ApiProperty({ example: 'Demo!Passw0rd', minLength: 8 })
+  @ApiProperty({ example: 'YourPassword1!', minLength: 8 })
   @IsString()
   @MinLength(8)
   @MaxLength(128)
