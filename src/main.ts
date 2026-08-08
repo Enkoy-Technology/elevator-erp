@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
+import helmet from 'helmet';
 
 import { AppModule } from './app.module';
 import type { Env } from './config';
@@ -10,7 +11,9 @@ import type { Env } from './config';
 const bootstrap = async (): Promise<void> => {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService<Env, true>);
+  const isProduction = config.get('NODE_ENV', { infer: true }) === 'production';
 
+  app.use(helmet());
   app.enableCors({
     origin: config
       .get('CORS_ORIGINS', { infer: true })
@@ -47,44 +50,53 @@ const bootstrap = async (): Promise<void> => {
     res.redirect(302, '/docs');
   });
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Elevator ERP API')
-    .setDescription(
-      'Multi-tenant Cloud SaaS ERP for elevator & electromechanical companies. ' +
-        'Authenticate via POST /v1/auth/login, then click Authorize and paste the accessToken.',
-    )
-    .setVersion('0.1.0')
-    .addBearerAuth(
-      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', in: 'header' },
-      'access-token',
-    )
-    .addTag('health', 'Liveness probe')
-    .addTag('dashboard', 'Pipeline and workload figures for the home page')
-    .addTag('auth', 'Login, refresh, logout, and current user')
-    .addTag('customers', 'CRM customers')
-    .addTag('projects', 'Sales project pipeline')
-    .addTag('employees', 'Staff directory and roles')
-    .addTag('assets', 'Registered elevators, stairs, and other equipment')
-    .addTag('notifications', 'In-app notification inbox')
-    .addTag('maintenance', 'Service contracts, visits, and breakdowns')
-    .addTag('settings', 'Tenant branding and language')
-    .addTag('elevator-specs', 'Technical specification and pricing calculator')
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, document, {
-    // Keep Swagger outside the /v1 global prefix so the UI lives at /docs.
-    useGlobalPrefix: false,
-    swaggerOptions: {
-      persistAuthorization: true,
-      tagsSorter: 'alpha',
-      operationsSorter: 'alpha',
-    },
-  });
+  // Swagger exposes the full API surface and request/response shapes —
+  // keep it off in production.
+  if (!isProduction) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Elevator ERP API')
+      .setDescription(
+        'Multi-tenant Cloud SaaS ERP for elevator & electromechanical companies. ' +
+          'Authenticate via POST /v1/auth/login, then click Authorize and paste the accessToken.',
+      )
+      .setVersion('0.1.0')
+      .addBearerAuth(
+        { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', in: 'header' },
+        'access-token',
+      )
+      .addTag('health', 'Liveness probe')
+      .addTag('dashboard', 'Pipeline and workload figures for the home page')
+      .addTag('auth', 'Login, refresh, logout, and current user')
+      .addTag('customers', 'CRM customers')
+      .addTag('projects', 'Sales project pipeline')
+      .addTag('employees', 'Staff directory and roles')
+      .addTag('assets', 'Registered elevators, stairs, and other equipment')
+      .addTag('notifications', 'In-app notification inbox')
+      .addTag('maintenance', 'Service contracts, visits, and breakdowns')
+      .addTag('settings', 'Tenant branding and language')
+      .addTag(
+        'elevator-specs',
+        'Technical specification and pricing calculator',
+      )
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('docs', app, document, {
+      // Keep Swagger outside the /v1 global prefix so the UI lives at /docs.
+      useGlobalPrefix: false,
+      swaggerOptions: {
+        persistAuthorization: true,
+        tagsSorter: 'alpha',
+        operationsSorter: 'alpha',
+      },
+    });
+  }
 
   const port = config.get('PORT', { infer: true });
   await app.listen(port);
   Logger.log(`API listening on http://localhost:${port}/v1`, 'Bootstrap');
-  Logger.log(`Swagger UI at http://localhost:${port}/docs`, 'Bootstrap');
+  if (!isProduction) {
+    Logger.log(`Swagger UI at http://localhost:${port}/docs`, 'Bootstrap');
+  }
 };
 
 void bootstrap();
