@@ -1,3 +1,4 @@
+import { ratePayloadSchemaFor } from './rate-payloads';
 import { RATE_SEEDS, seedRates } from './seed-rates';
 import { RatesRepository, type RateVersionInsert } from './rates.repository';
 
@@ -42,4 +43,17 @@ describe('seedRates', () => {
 
     expect(repo.create).not.toHaveBeenCalled();
   });
+});
+
+describe('RATE_SEEDS payloads', () => {
+  // The seeds are the proof: if a seed's payload doesn't match its kind's
+  // zod schema, the schema is wrong (or the seed is) — either way, POST
+  // /rates would reject the government's own current rates.
+  it.each(RATE_SEEDS.map((seed) => [seed.kind, seed] as const))(
+    '%s payload parses against its schema',
+    (kind, seed) => {
+      const result = ratePayloadSchemaFor(kind).safeParse(seed.payload);
+      expect(result.success).toBe(true);
+    },
+  );
 });

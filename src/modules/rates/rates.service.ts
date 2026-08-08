@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { RateNotFoundError } from '../../common/exceptions';
 import type { RateKind } from '../../database/schema';
+import { parseRatePayload } from './rate-payloads';
 import { RatesRepository, type RateVersionRecord } from './rates.repository';
 
 // Binding interface for downstream tasks: the resolved rate version without
@@ -46,10 +47,11 @@ export class RatesService {
   async create(
     kind: RateKind,
     validFrom: string,
-    payload: unknown,
+    payload: Record<string, unknown>,
     source: string,
   ): Promise<RateVersion> {
-    return this.ratesRepo.rotate({ kind, validFrom, payload, source });
+    const parsed = parseRatePayload(kind, payload);
+    return this.ratesRepo.rotate({ kind, validFrom, payload: parsed, source });
   }
 
   /**

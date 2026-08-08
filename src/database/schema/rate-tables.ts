@@ -19,7 +19,7 @@ export const rateVersions = pgTable('rate_versions', {
   kind: text('kind', { enum: rateKinds }).notNull(),
   validFrom: date('valid_from').notNull(),
   validTo: date('valid_to'), // null = open-ended current version
-  payload: jsonb('payload').notNull(),
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
   source: text('source').notNull(), // e.g. 'VAT Proclamation 1341/2024'
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

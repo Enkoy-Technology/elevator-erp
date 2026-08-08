@@ -12,7 +12,7 @@ export type RateVersionInsert = typeof rateVersions.$inferInsert;
 export interface RotateRateVersionInput {
   kind: RateKind;
   validFrom: string;
-  payload: unknown;
+  payload: Record<string, unknown>;
   source: string;
 }
 
