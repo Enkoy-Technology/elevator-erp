@@ -22,6 +22,7 @@ import type {
   CreateBreakdownDto,
   CreateMaintenanceContractDto,
   LogServiceVisitDto,
+  MaintenanceContractStatus,
   UpdateBreakdownDto,
   UpdateMaintenanceContractDto,
 } from './dto/maintenance.dto';
@@ -38,7 +39,11 @@ export class MaintenanceRepository {
 
   async listContracts(
     tenantId: string,
-    options: { page?: string; pageSize?: string; status?: string },
+    options: {
+      page?: string;
+      pageSize?: string;
+      status?: MaintenanceContractStatus;
+    },
   ): Promise<PaginatedResult<MaintenanceContractRecord>> {
     const { page, pageSize, offset } = normalizePageQuery(
       options.page,
@@ -47,12 +52,7 @@ export class MaintenanceRepository {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       const filters = [isNull(maintenanceContracts.deletedAt)];
       if (options.status) {
-        filters.push(
-          eq(
-            maintenanceContracts.status,
-            options.status as MaintenanceContractRecord['status'],
-          ),
-        );
+        filters.push(eq(maintenanceContracts.status, options.status));
       }
       const where = and(...filters);
       const [totalRow] = await tx
