@@ -35,7 +35,10 @@ const main = async (): Promise<void> => {
   try {
     // Statutory rates are not demo data — seed them regardless of whether
     // the demo tenant below already exists, so re-running this script never
-    // skips them once the demo tenant is in place.
+    // skips them once the demo tenant is in place. This script is gated by
+    // assertSeedAllowed above and must never run in production; the
+    // production path for rates is `pnpm run db:seed:rates`
+    // (seed-rates.cli.ts), which has no demo gate and runs on every deploy.
     await seedRates(new RatesRepository(db));
 
     const existing = await db
