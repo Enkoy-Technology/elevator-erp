@@ -46,6 +46,27 @@ pnpm audit --prod
 
 Resolve or explicitly accept any reported vulnerabilities before shipping.
 
+`pnpm audit --prod` currently reports `js-yaml` (via `@nestjs/swagger`) —
+accepted because Swagger is disabled in production; re-evaluate on
+dependency bumps.
+
+## 4. Web app build
+
+The admin UI's Content-Security-Policy `connect-src` is baked in at **build
+time** from `NEXT_PUBLIC_API_URL` (see `web/next.config.ts`). The production
+build must run with `NEXT_PUBLIC_API_URL` set to the real API origin:
+
+```sh
+NEXT_PUBLIC_API_URL=https://api.example.com/v1 pnpm run web:build
+```
+
+Shipping a build made without it silently defaults to `localhost:3002` in
+the CSP, which blocks every API call in production with nothing but a
+browser-console CSP violation — no server-side error, no failed health
+check. If `NEXT_PUBLIC_API_URL` is set but not a valid URL, the build now
+fails immediately instead of shipping that broken CSP.
+
 ## Known behaviors
 
 - Single session per user: logging in on a second device signs the first out within 15 minutes. By design for launch.
+- Production CSP keeps `script-src 'unsafe-inline'` (documented tradeoff — see `web/next.config.ts`).

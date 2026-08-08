@@ -10,11 +10,20 @@ const scriptSrc = isProd
 // Same origin resolution as src/lib/api.ts, so connect-src covers exactly the
 // API this build actually talks to instead of a blanket https://*.
 const apiOrigin = (() => {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3002/v1';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+  // Unset (dev, CI) — fall back to the local API. Set but malformed is a
+  // config mistake, not a dev default: fail the build loudly instead of
+  // silently baking localhost into a production CSP.
+  if (apiUrl === undefined) {
+    return 'http://localhost:3002';
+  }
   try {
     return new URL(apiUrl).origin;
   } catch {
-    return 'http://localhost:3002';
+    throw new Error(
+      `NEXT_PUBLIC_API_URL is set but not a valid URL: "${apiUrl}". ` +
+        'Fix it or unset it to use the localhost default.',
+    );
   }
 })();
 
