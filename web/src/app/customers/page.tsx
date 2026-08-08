@@ -74,10 +74,12 @@ export default function CustomersPage() {
       setPage(result.page);
       setTotal(result.total);
       setTotalPages(result.totalPages);
+      return result;
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : 'Failed to load customers',
       );
+      return undefined;
     } finally {
       setLoading(false);
     }
@@ -190,7 +192,13 @@ export default function CustomersPage() {
     try {
       await deleteCustomer(id);
       setDeleteConfirmId(null);
-      await refresh(page, search);
+      const result = await refresh(page, search);
+      // Deleting the last row of a page > 1 leaves nothing to show on it;
+      // fall back one page rather than stranding the user on an empty page
+      // with no Pagination control to get back.
+      if (result && result.items.length === 0 && page > 1) {
+        await refresh(page - 1, search);
+      }
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : 'Failed to delete customer',
