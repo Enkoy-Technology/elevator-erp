@@ -17,6 +17,7 @@
     "web:dev": "pnpm --dir web dev",
     "web:build": "pnpm --dir web build",
     "web:typecheck": "pnpm --dir web typecheck",
+    "web:lint": "pnpm --dir web lint",
     "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "jest",
