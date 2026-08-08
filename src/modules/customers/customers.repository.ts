@@ -1,12 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { and, count, desc, eq, isNull, or, sql } from 'drizzle-orm';
 
+import { CustomerInUseError } from '../../common/exceptions';
 import {
   normalizePageQuery,
   toPaginatedResult,
   type PaginatedResult,
 } from '../../common/pagination';
-import { customers } from '../../database/schema';
+import {
+  assets,
+  customers,
+  maintenanceContracts,
+  projects,
+} from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import type { CreateCustomerDto } from './dto/create-customer.dto';
 import type { UpdateCustomerDto } from './dto/update-customer.dto';
@@ -202,6 +208,33 @@ export class CustomersRepository {
 
   async softDelete(tenantId: string, id: string): Promise<void> {
     await this.tenantDb.withTenant(tenantId, async (tx) => {
+      // Same tenant transaction as the delete itself, so the dependent
+      // counts and the delete are consistent — no window where a project
+      // gets attached between the check and the write.
+      const [projectRow] = await tx
+        .select({ value: count() })
+        .from(projects)
+        .where(and(eq(projects.customerId, id), isNull(projects.deletedAt)));
+      const [assetRow] = await tx
+        .select({ value: count() })
+        .from(assets)
+        .where(and(eq(assets.customerId, id), isNull(assets.deletedAt)));
+      const [contractRow] = await tx
+        .select({ value: count() })
+        .from(maintenanceContracts)
+        .where(
+          and(
+            eq(maintenanceContracts.customerId, id),
+            isNull(maintenanceContracts.deletedAt),
+          ),
+        );
+      const projectCount = Number(projectRow?.value ?? 0);
+      const assetCount = Number(assetRow?.value ?? 0);
+      const contractCount = Number(contractRow?.value ?? 0);
+      if (projectCount + assetCount + contractCount > 0) {
+        throw new CustomerInUseError(projectCount, assetCount, contractCount);
+      }
+
       const [row] = await tx
         .update(customers)
         .set({ deletedAt: new Date(), updatedAt: new Date() })
