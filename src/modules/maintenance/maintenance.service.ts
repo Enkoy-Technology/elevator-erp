@@ -6,6 +6,7 @@ import type {
   CreateBreakdownDto,
   CreateMaintenanceContractDto,
   LogServiceVisitDto,
+  MaintenanceContractStatus,
   UpdateBreakdownDto,
   UpdateMaintenanceContractDto,
 } from './dto/maintenance.dto';
@@ -19,7 +20,11 @@ export class MaintenanceService {
 
   listContracts(
     user: AuthenticatedUser,
-    options: { page?: string; pageSize?: string; status?: string },
+    options: {
+      page?: string;
+      pageSize?: string;
+      status?: MaintenanceContractStatus;
+    },
   ) {
     return this.maintenanceRepository.listContracts(user.tenantId, options);
   }

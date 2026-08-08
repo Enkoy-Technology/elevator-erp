@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -22,9 +23,11 @@ import {
   CreateBreakdownDto,
   CreateMaintenanceContractDto,
   LogServiceVisitDto,
+  MAINTENANCE_CONTRACT_STATUSES,
   UpdateBreakdownDto,
   UpdateMaintenanceContractDto,
   type BreakdownStatus,
+  type MaintenanceContractStatus,
 } from './dto/maintenance.dto';
 import { MaintenanceService } from './maintenance.service';
 
@@ -44,10 +47,16 @@ export class MaintenanceController {
     @Query('pageSize') pageSize?: string,
     @Query('status') status?: string,
   ) {
+    if (
+      status &&
+      !(MAINTENANCE_CONTRACT_STATUSES as readonly string[]).includes(status)
+    ) {
+      throw new BadRequestException(`Invalid status filter: ${status}`);
+    }
     return this.maintenanceService.listContracts(user, {
       page,
       pageSize,
-      status,
+      status: status as MaintenanceContractStatus | undefined,
     });
   }
 
