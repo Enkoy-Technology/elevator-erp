@@ -22,6 +22,7 @@ import {
   normalizeEthiopic,
 } from '../../src/common/text/ethiopic-normalize';
 import { CustomersRepository } from '../../src/modules/customers/customers.repository';
+import { ProjectsRepository } from '../../src/modules/projects/projects.repository';
 import { TenantDbService } from '../../src/database/tenant-db.service';
 import * as schema from '../../src/database/schema';
 
@@ -53,6 +54,7 @@ describe('Ethiopic homophone search (end to end)', () => {
   let tenantId: string;
   let userId: string;
   let repo: CustomersRepository;
+  let projectsRepo: ProjectsRepository;
 
   beforeAll(async () => {
     available = (await canConnect(ADMIN_URL)) && (await canConnect(APP_URL));
@@ -89,12 +91,16 @@ describe('Ethiopic homophone search (end to end)', () => {
     const db = drizzle(appPool, { schema });
     const tenantDb = new TenantDbService(db);
     repo = new CustomersRepository(tenantDb);
+    projectsRepo = new ProjectsRepository(tenantDb);
   });
 
   afterAll(async () => {
     if (!available) {
       return;
     }
+    await adminPool.query(`delete from projects where tenant_id = $1`, [
+      tenantId,
+    ]);
     await adminPool.query(`delete from customers where tenant_id = $1`, [
       tenantId,
     ]);
@@ -187,6 +193,23 @@ describe('Ethiopic homophone search (end to end)', () => {
 
       const result = await repo.list(tenantId, { search: 'ሰራተኛ' });
       expect(result.items.map((c) => c.id)).toContain(legacyId);
+    },
+  );
+
+  guarded(
+    'a project written with ሐ is found by a search for its ኀ homophone (REC 6)',
+    async () => {
+      const customer = await repo.create(tenantId, userId, {
+        name: `Project Search Customer ${slug}`,
+      });
+      const created = await projectsRepo.create(tenantId, userId, {
+        customerId: customer.id,
+        name: 'ሐይሉ Tower Install',
+      });
+      expect(created.nameNormalized).toBe(normalizeEthiopic('ሐይሉ Tower Install'));
+
+      const result = await projectsRepo.list(tenantId, { q: 'ኀይሉ' });
+      expect(result.items.map((p) => p.id)).toContain(created.id);
     },
   );
 });

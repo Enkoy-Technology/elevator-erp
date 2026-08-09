@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, count, desc, eq, getTableColumns, isNull } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
 
 import { WorkflowTransitionError } from '../../common/exceptions';
 import {
@@ -15,6 +15,13 @@ import type { CreateProjectDto } from './dto/create-project.dto';
 export type ProjectRecord = typeof projects.$inferSelect;
 export type ProjectInsert = typeof projects.$inferInsert;
 
+/** Same shape `list()`/`streamAll()` build the `q` filter with, mirroring
+ * CustomersRepository.list()'s coalesce(nameNormalized, lower(name)) pattern
+ * so an out-of-band row with a NULL nameNormalized never silently drops out
+ * of search. */
+const nameSearchFilter = (q: string) =>
+  sql`coalesce(${projects.nameNormalized}, lower(${projects.name})) like ${`%${normalizeEthiopic(q.trim())}%`}`;
+
 /** `streamAll()`'s row shape: the raw `customerId` FK is replaced (not
  * appended) with the joined customer's display name — see REC 5. */
 export type ProjectExportRow = Omit<ProjectRecord, 'customerId'> & {
@@ -29,6 +36,7 @@ export class ProjectsRepository {
     tenantId: string,
     options: {
       status?: ProjectStatus;
+      q?: string;
       page?: string;
       pageSize?: string;
     },
@@ -41,6 +49,9 @@ export class ProjectsRepository {
       const filters = [isNull(projects.deletedAt)];
       if (options.status) {
         filters.push(eq(projects.status, options.status));
+      }
+      if (options.q && options.q.trim().length > 0) {
+        filters.push(nameSearchFilter(options.q));
       }
       const where = and(...filters);
       const [totalRow] = await tx
@@ -76,7 +87,7 @@ export class ProjectsRepository {
    */
   async *streamAll(
     tenantId: string,
-    options: { status?: ProjectStatus },
+    options: { status?: ProjectStatus; q?: string },
   ): AsyncGenerator<ProjectExportRow> {
     const BATCH_SIZE = 500;
     let offset = 0;
@@ -87,6 +98,9 @@ export class ProjectsRepository {
         const filters = [isNull(projects.deletedAt)];
         if (options.status) {
           filters.push(eq(projects.status, options.status));
+        }
+        if (options.q && options.q.trim().length > 0) {
+          filters.push(nameSearchFilter(options.q));
         }
         return tx
           .select({ ...projectColumns, customerName: customers.name })

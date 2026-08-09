@@ -72,13 +72,14 @@ export class ProjectsController {
   @Get()
   @ApiOperation({
     summary:
-      'List projects (status filter + pagination), or stream a CSV/XLSX export with ?format=',
+      'List projects (status/name-search filter + pagination), or stream a CSV/XLSX export with ?format=',
   })
   @ApiOkResponse({ description: 'Paginated project list' })
   async list(
     @CurrentUser() user: AuthenticatedUser,
     @Res({ passthrough: false }) res: Response,
     @Query('status') status?: string,
+    @Query('q') q?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('format') formatRaw?: string,
@@ -96,6 +97,7 @@ export class ProjectsController {
     if (!format) {
       const result = await this.projectsService.list(user, {
         status: parsedStatus,
+        q,
         page,
         pageSize,
       });
@@ -104,6 +106,7 @@ export class ProjectsController {
     }
     const rows = this.projectsService.streamAll(user, {
       status: parsedStatus,
+      q,
     });
     const filename = `projects-${todayIso()}`;
     if (format === 'csv') {

@@ -1,6 +1,25 @@
 import { normalizeEthiopic } from '../../common/text/ethiopic-normalize';
 import { ProjectsRepository } from './projects.repository';
 
+// Pulls every literal string embedded in a drizzle SQL fragment's
+// queryChunks — mirrors the identical helper in customers.repository.spec.ts.
+const extractSqlLiterals = (fragment: unknown): string[] => {
+  const out: string[] = [];
+  const walk = (x: unknown): void => {
+    if (typeof x === 'string') {
+      out.push(x);
+      return;
+    }
+    if (x && typeof x === 'object' && 'queryChunks' in x) {
+      for (const chunk of (x as { queryChunks: unknown[] }).queryChunks) {
+        walk(chunk);
+      }
+    }
+  };
+  walk(fragment);
+  return out;
+};
+
 // Pulls the column name out of a drizzle asc()/desc() SQL wrapper — same
 // queryChunks shape as above, used to assert the PK tiebreaker is actually
 // present in orderBy() without needing a real column/table object.
@@ -129,5 +148,58 @@ describe('ProjectsRepository.streamAll — customer display name (REC 5)', () =>
     // customer row can never be joined even if RLS were somehow bypassed.
     const columnNames = extractOrderByColumnNames(joinedWith);
     expect(columnNames.filter((n) => n === 'tenant_id')).toHaveLength(2);
+  });
+});
+
+// Mirrors CustomersRepository's Ethiopic-normalized search coverage (REC 6):
+// projects.nameNormalized has existed since the 0029-era migration but
+// list()/streamAll() never read it until now.
+describe('ProjectsRepository — Ethiopic-normalized name search (q)', () => {
+  it('list() searches nameNormalized with the query run through normalizeEthiopic, not the raw query', async () => {
+    let where: unknown;
+    const countChain: Record<string, jest.Mock> = {};
+    countChain.from = jest.fn(() => countChain);
+    countChain.where = jest.fn(() => Promise.resolve([{ value: 0 }]));
+    const itemsChain: Record<string, jest.Mock> = {};
+    itemsChain.from = jest.fn(() => itemsChain);
+    itemsChain.where = jest.fn((w: unknown) => {
+      where = w;
+      return itemsChain;
+    });
+    itemsChain.orderBy = jest.fn(() => itemsChain);
+    itemsChain.limit = jest.fn(() => itemsChain);
+    itemsChain.offset = jest.fn(() => Promise.resolve([]));
+    const select = jest.fn();
+    select.mockReturnValueOnce(countChain).mockReturnValueOnce(itemsChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new ProjectsRepository({ withTenant } as never);
+
+    // ኃይሉ (XAA order) should match a project stored as ሃይሉ (HAA order) — the
+    // homophone-fold this feature exists for.
+    await repo.list(TENANT_ID, { q: 'ኃይሉ' });
+
+    const literals = extractSqlLiterals(where);
+    expect(literals).toContain(`%${normalizeEthiopic('ኃይሉ')}%`);
+    expect(literals).toContain('%ሃይሉ%');
+  });
+
+  it('streamAll() applies the same normalized search leg as list()', async () => {
+    let where: unknown;
+    const chain = makeStreamChain((w) => (where = w));
+    const select = jest.fn(() => chain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new ProjectsRepository({ withTenant } as never);
+
+    const gen = repo.streamAll(TENANT_ID, { q: 'ኃይሉ' });
+    await gen.next();
+
+    const literals = extractSqlLiterals(where);
+    expect(literals).toContain('%ሃይሉ%');
   });
 });
