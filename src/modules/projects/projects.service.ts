@@ -8,6 +8,7 @@ import type { CreateProjectDto } from './dto/create-project.dto';
 import { canTransitionProjectStatus } from './project-status';
 import {
   ProjectsRepository,
+  type ProjectExportRow,
   type ProjectInsert,
   type ProjectRecord,
 } from './projects.repository';
@@ -30,7 +31,7 @@ export class ProjectsService {
   streamAll(
     user: AuthenticatedUser,
     options: { status?: ProjectStatus },
-  ): AsyncGenerator<ProjectRecord> {
+  ): AsyncGenerator<ProjectExportRow> {
     return this.projectsRepository.streamAll(user.tenantId, options);
   }
 

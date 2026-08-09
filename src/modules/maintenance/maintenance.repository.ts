@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, count, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getTableColumns, isNull } from 'drizzle-orm';
 
 import { todayIso } from '../../common/business-time';
 import {
@@ -14,6 +14,7 @@ import {
 import {
   assets,
   breakdowns,
+  customers,
   maintenanceContracts,
   serviceVisits,
 } from '../../database/schema';
@@ -33,6 +34,22 @@ export type MaintenanceContractRecord =
   typeof maintenanceContracts.$inferSelect;
 export type ServiceVisitRecord = typeof serviceVisits.$inferSelect;
 export type BreakdownRecord = typeof breakdowns.$inferSelect;
+
+/** `streamAllContracts()`'s row shape: both FKs are replaced (not
+ * appended) with their joined display names — see REC 5. Mirrors
+ * BreakdownExportRow below: contracts have the same assetId+customerId FK
+ * shape as breakdowns, so both get the same treatment. */
+export type MaintenanceContractExportRow = Omit<
+  MaintenanceContractRecord,
+  'assetId' | 'customerId'
+> & { assetName: string | null; customerName: string | null };
+
+/** `streamAllBreakdowns()`'s row shape: both FKs are replaced (not
+ * appended) with their joined display names — see REC 5. */
+export type BreakdownExportRow = Omit<
+  BreakdownRecord,
+  'assetId' | 'customerId'
+> & { assetName: string | null; customerName: string | null };
 
 @Injectable()
 export class MaintenanceRepository {
@@ -80,10 +97,13 @@ export class MaintenanceRepository {
    * Streams every contract matching the same filters `listContracts()`
    * honors, for bulk export, in batches of BATCH_SIZE.
    *
-   * ponytail: offset batching — concurrent writes during export can
-   * skip/duplicate rows across batch boundaries; acceptable for ad-hoc
-   * admin downloads, switch to keyset cursor before this feeds accounting
-   * reconciliation. Perf ceiling: keyset if large-tenant exports time out.
+   * ponytail: offset batching, ties broken by the `id` tiebreaker below so
+   * equal `nextServiceAt` values (e.g. a batch of monthly contracts all due
+   * the same day) no longer duplicate or skip rows across batch boundaries
+   * — concurrent inserts/deletes can still shift the offset window;
+   * acceptable for ad-hoc admin downloads, switch to keyset cursor before
+   * this feeds accounting reconciliation. Perf ceiling: keyset if
+   * large-tenant exports time out.
    *
    * Tenant-scoping subtlety: `app.tenant_id` is a transaction-local GUC
    * (set by `withTenant`), so each batch opens its own `withTenant`
@@ -92,9 +112,14 @@ export class MaintenanceRepository {
   async *streamAllContracts(
     tenantId: string,
     options: { status?: MaintenanceContractStatus },
-  ): AsyncGenerator<MaintenanceContractRecord> {
+  ): AsyncGenerator<MaintenanceContractExportRow> {
     const BATCH_SIZE = 500;
     let offset = 0;
+    const {
+      assetId: _assetId,
+      customerId: _customerId,
+      ...contractColumns
+    } = getTableColumns(maintenanceContracts);
     for (;;) {
       const batch = await this.tenantDb.withTenant(tenantId, (tx) => {
         const filters = [isNull(maintenanceContracts.deletedAt)];
@@ -102,10 +127,28 @@ export class MaintenanceRepository {
           filters.push(eq(maintenanceContracts.status, options.status));
         }
         return tx
-          .select()
+          .select({
+            ...contractColumns,
+            assetName: assets.name,
+            customerName: customers.name,
+          })
           .from(maintenanceContracts)
+          .leftJoin(
+            assets,
+            and(
+              eq(maintenanceContracts.tenantId, assets.tenantId),
+              eq(maintenanceContracts.assetId, assets.id),
+            ),
+          )
+          .leftJoin(
+            customers,
+            and(
+              eq(maintenanceContracts.tenantId, customers.tenantId),
+              eq(maintenanceContracts.customerId, customers.id),
+            ),
+          )
           .where(and(...filters))
-          .orderBy(maintenanceContracts.nextServiceAt)
+          .orderBy(maintenanceContracts.nextServiceAt, asc(maintenanceContracts.id))
           .limit(BATCH_SIZE)
           .offset(offset);
       });
@@ -339,10 +382,13 @@ export class MaintenanceRepository {
    * Streams every breakdown matching the same filters `listBreakdowns()`
    * honors, for bulk export, in batches of BATCH_SIZE.
    *
-   * ponytail: offset batching — concurrent writes during export can
-   * skip/duplicate rows across batch boundaries; acceptable for ad-hoc
-   * admin downloads, switch to keyset cursor before this feeds accounting
-   * reconciliation. Perf ceiling: keyset if large-tenant exports time out.
+   * ponytail: offset batching, ties broken by the `id` tiebreaker below so
+   * equal `createdAt` values (e.g. a bulk-logged incident batch) no longer
+   * duplicate or skip rows across batch boundaries — concurrent
+   * inserts/deletes can still shift the offset window; acceptable for
+   * ad-hoc admin downloads, switch to keyset cursor before this feeds
+   * accounting reconciliation. Perf ceiling: keyset if large-tenant exports
+   * time out.
    *
    * Tenant-scoping subtlety: `app.tenant_id` is a transaction-local GUC
    * (set by `withTenant`), so each batch opens its own `withTenant`
@@ -351,9 +397,11 @@ export class MaintenanceRepository {
   async *streamAllBreakdowns(
     tenantId: string,
     options: { status?: BreakdownStatus },
-  ): AsyncGenerator<BreakdownRecord> {
+  ): AsyncGenerator<BreakdownExportRow> {
     const BATCH_SIZE = 500;
     let offset = 0;
+    const { assetId: _assetId, customerId: _customerId, ...breakdownColumns } =
+      getTableColumns(breakdowns);
     for (;;) {
       const batch = await this.tenantDb.withTenant(tenantId, (tx) => {
         const filters = [isNull(breakdowns.deletedAt)];
@@ -361,10 +409,28 @@ export class MaintenanceRepository {
           filters.push(eq(breakdowns.status, options.status));
         }
         return tx
-          .select()
+          .select({
+            ...breakdownColumns,
+            assetName: assets.name,
+            customerName: customers.name,
+          })
           .from(breakdowns)
+          .leftJoin(
+            assets,
+            and(
+              eq(breakdowns.tenantId, assets.tenantId),
+              eq(breakdowns.assetId, assets.id),
+            ),
+          )
+          .leftJoin(
+            customers,
+            and(
+              eq(breakdowns.tenantId, customers.tenantId),
+              eq(breakdowns.customerId, customers.id),
+            ),
+          )
           .where(and(...filters))
-          .orderBy(desc(breakdowns.createdAt))
+          .orderBy(desc(breakdowns.createdAt), asc(breakdowns.id))
           .limit(BATCH_SIZE)
           .offset(offset);
       });

@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
 
 import {
   normalizePageQuery,
@@ -19,6 +19,12 @@ import type {
 } from './dto/asset.dto';
 
 export type AssetRecord = typeof assets.$inferSelect;
+
+/** `streamAll()`'s row shape: the raw `customerId` FK is replaced (not
+ * appended) with the joined customer's display name — see REC 5. */
+export type AssetExportRow = Omit<AssetRecord, 'customerId'> & {
+  customerName: string | null;
+};
 
 @Injectable()
 export class AssetsRepository {
@@ -73,10 +79,12 @@ export class AssetsRepository {
    * Streams every asset matching the same filters `list()` honors, for bulk
    * export, in batches of BATCH_SIZE.
    *
-   * ponytail: offset batching — concurrent writes during export can
-   * skip/duplicate rows across batch boundaries; acceptable for ad-hoc
-   * admin downloads, switch to keyset cursor before this feeds accounting
-   * reconciliation. Perf ceiling: keyset if large-tenant exports time out.
+   * ponytail: offset batching, ties broken by the `id` tiebreaker below so
+   * equal `createdAt` values (bulk import, seed data) no longer duplicate
+   * or skip rows across batch boundaries — concurrent inserts/deletes can
+   * still shift the offset window; acceptable for ad-hoc admin downloads,
+   * switch to keyset cursor before this feeds accounting reconciliation.
+   * Perf ceiling: keyset if large-tenant exports time out.
    *
    * Tenant-scoping subtlety: `app.tenant_id` is a transaction-local GUC
    * (set by `withTenant`), so each batch opens its own `withTenant`
@@ -85,9 +93,11 @@ export class AssetsRepository {
   async *streamAll(
     tenantId: string,
     options: { search?: string; category?: AssetCategory; customerId?: string },
-  ): AsyncGenerator<AssetRecord> {
+  ): AsyncGenerator<AssetExportRow> {
     const BATCH_SIZE = 500;
     let offset = 0;
+    const { customerId: _customerId, ...assetColumns } =
+      getTableColumns(assets);
     for (;;) {
       const batch = await this.tenantDb.withTenant(tenantId, (tx) => {
         const filters = [isNull(assets.deletedAt)];
@@ -104,10 +114,17 @@ export class AssetsRepository {
           );
         }
         return tx
-          .select()
+          .select({ ...assetColumns, customerName: customers.name })
           .from(assets)
+          .leftJoin(
+            customers,
+            and(
+              eq(assets.tenantId, customers.tenantId),
+              eq(assets.customerId, customers.id),
+            ),
+          )
           .where(and(...filters))
-          .orderBy(desc(assets.createdAt))
+          .orderBy(desc(assets.createdAt), asc(assets.id))
           .limit(BATCH_SIZE)
           .offset(offset);
       });

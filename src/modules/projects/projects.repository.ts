@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, count, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getTableColumns, isNull } from 'drizzle-orm';
 
 import { WorkflowTransitionError } from '../../common/exceptions';
 import {
@@ -8,12 +8,18 @@ import {
   type PaginatedResult,
 } from '../../common/pagination';
 import { normalizeEthiopic } from '../../common/text/ethiopic-normalize';
-import { projects, type ProjectStatus } from '../../database/schema';
+import { customers, projects, type ProjectStatus } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import type { CreateProjectDto } from './dto/create-project.dto';
 
 export type ProjectRecord = typeof projects.$inferSelect;
 export type ProjectInsert = typeof projects.$inferInsert;
+
+/** `streamAll()`'s row shape: the raw `customerId` FK is replaced (not
+ * appended) with the joined customer's display name — see REC 5. */
+export type ProjectExportRow = Omit<ProjectRecord, 'customerId'> & {
+  customerName: string | null;
+};
 
 @Injectable()
 export class ProjectsRepository {
@@ -57,10 +63,12 @@ export class ProjectsRepository {
    * Streams every project matching the same filters `list()` honors, for
    * bulk export, in batches of BATCH_SIZE.
    *
-   * ponytail: offset batching — concurrent writes during export can
-   * skip/duplicate rows across batch boundaries; acceptable for ad-hoc
-   * admin downloads, switch to keyset cursor before this feeds accounting
-   * reconciliation. Perf ceiling: keyset if large-tenant exports time out.
+   * ponytail: offset batching, ties broken by the `id` tiebreaker below so
+   * equal `createdAt` values (bulk import, seed data) no longer duplicate
+   * or skip rows across batch boundaries — concurrent inserts/deletes can
+   * still shift the offset window; acceptable for ad-hoc admin downloads,
+   * switch to keyset cursor before this feeds accounting reconciliation.
+   * Perf ceiling: keyset if large-tenant exports time out.
    *
    * Tenant-scoping subtlety: `app.tenant_id` is a transaction-local GUC
    * (set by `withTenant`), so each batch opens its own `withTenant`
@@ -69,9 +77,11 @@ export class ProjectsRepository {
   async *streamAll(
     tenantId: string,
     options: { status?: ProjectStatus },
-  ): AsyncGenerator<ProjectRecord> {
+  ): AsyncGenerator<ProjectExportRow> {
     const BATCH_SIZE = 500;
     let offset = 0;
+    const { customerId: _customerId, ...projectColumns } =
+      getTableColumns(projects);
     for (;;) {
       const batch = await this.tenantDb.withTenant(tenantId, (tx) => {
         const filters = [isNull(projects.deletedAt)];
@@ -79,10 +89,17 @@ export class ProjectsRepository {
           filters.push(eq(projects.status, options.status));
         }
         return tx
-          .select()
+          .select({ ...projectColumns, customerName: customers.name })
           .from(projects)
+          .leftJoin(
+            customers,
+            and(
+              eq(projects.tenantId, customers.tenantId),
+              eq(projects.customerId, customers.id),
+            ),
+          )
           .where(and(...filters))
-          .orderBy(desc(projects.createdAt))
+          .orderBy(desc(projects.createdAt), asc(projects.id))
           .limit(BATCH_SIZE)
           .offset(offset);
       });

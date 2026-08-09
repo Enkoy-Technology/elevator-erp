@@ -10,7 +10,11 @@ import type {
   UpdateBreakdownDto,
   UpdateMaintenanceContractDto,
 } from './dto/maintenance.dto';
-import { MaintenanceRepository } from './maintenance.repository';
+import {
+  MaintenanceRepository,
+  type BreakdownExportRow,
+  type MaintenanceContractExportRow,
+} from './maintenance.repository';
 
 @Injectable()
 export class MaintenanceService {
@@ -32,7 +36,7 @@ export class MaintenanceService {
   streamAllContracts(
     user: AuthenticatedUser,
     options: { status?: MaintenanceContractStatus },
-  ) {
+  ): AsyncGenerator<MaintenanceContractExportRow> {
     return this.maintenanceRepository.streamAllContracts(
       user.tenantId,
       options,
@@ -94,7 +98,7 @@ export class MaintenanceService {
   streamAllBreakdowns(
     user: AuthenticatedUser,
     options: { status?: BreakdownStatus },
-  ) {
+  ): AsyncGenerator<BreakdownExportRow> {
     return this.maintenanceRepository.streamAllBreakdowns(
       user.tenantId,
       options,

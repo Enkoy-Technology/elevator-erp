@@ -38,8 +38,8 @@ import { MaintenanceService } from './maintenance.service';
 
 export const MAINTENANCE_CONTRACTS_EXPORT_COLUMNS: ColumnDef[] = [
   { key: 'id', header: 'ID' },
-  { key: 'assetId', header: 'Asset ID' },
-  { key: 'customerId', header: 'Customer ID' },
+  { key: 'assetName', header: 'Asset' },
+  { key: 'customerName', header: 'Customer' },
   { key: 'recurrence', header: 'Recurrence' },
   { key: 'status', header: 'Status' },
   { key: 'startDate', header: 'Start Date', format: 'date' },
@@ -53,8 +53,8 @@ export const MAINTENANCE_CONTRACTS_EXPORT_COLUMNS: ColumnDef[] = [
 
 export const BREAKDOWNS_EXPORT_COLUMNS: ColumnDef[] = [
   { key: 'id', header: 'ID' },
-  { key: 'assetId', header: 'Asset ID' },
-  { key: 'customerId', header: 'Customer ID' },
+  { key: 'assetName', header: 'Asset' },
+  { key: 'customerName', header: 'Customer' },
   { key: 'title', header: 'Title' },
   { key: 'description', header: 'Description' },
   { key: 'severity', header: 'Severity' },

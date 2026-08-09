@@ -34,7 +34,7 @@ import {
 
 export const ASSETS_EXPORT_COLUMNS: ColumnDef[] = [
   { key: 'id', header: 'ID' },
-  { key: 'customerId', header: 'Customer ID' },
+  { key: 'customerName', header: 'Customer' },
   { key: 'projectId', header: 'Project ID' },
   { key: 'category', header: 'Category' },
   { key: 'name', header: 'Name' },
