@@ -60,10 +60,67 @@ const escapeCsvField = (field: string): string => {
 // leading `'` forces Excel to treat the field as text. CSV path only — ExcelJS (writeXlsx)
 // sets plain string cell values, which Excel never evaluates as formulas, so the XLSX path
 // must NOT get this treatment.
+// Trade-off (standard OWASP CSV-injection mitigation): this also prefixes legitimate text that
+// happens to start with +/-/@, e.g. a "+251..." phone number column — accepted, since there's
+// no way to distinguish that from a payload by shape alone, and a stray leading `'` in a phone
+// number is far cheaper than a live formula/DDE exploit in a downloaded export.
 const FORMULA_INJECTION_RE = /^[\t\r]*[=+@-]/;
 
 const neutralizeCsvFormula = (field: string): string =>
   FORMULA_INJECTION_RE.test(field) ? `'${field}` : field;
+
+/**
+ * Races an arbitrary operation against the response closing/erroring (e.g. a client disconnect
+ * mid-export). `attach(resolve, reject)` wires up the operation's own completion and returns a
+ * detach callback; whichever side settles first wins, and every listener — the shared
+ * close/error pair plus whatever `attach` registered — is removed on every branch so nothing
+ * leaks. Without this, a cancelled request can park forever: a pending write never resumes, an
+ * `await workbook.commit()` never resolves (ExcelJS's finalizer only listens for the stream's
+ * 'finish'/'error', never 'close'), and the row iterable (a DB cursor in callers) never gets
+ * cleaned up.
+ */
+const raceAgainstDisconnect = <T>(
+  res: Response,
+  attach: (
+    resolve: (value: T) => void,
+    reject: (err: Error) => void,
+  ) => () => void,
+): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    // Must stay `let`, assigned after res.once() below: attach() can settle synchronously
+    // (onClose/onError firing before attach() returns), and a `const` here would leave onClose/
+    // onError reading `detach` out of its temporal dead zone in that exact case.
+    // eslint-disable-next-line prefer-const
+    let detach: (() => void) | undefined;
+    const onClose = (): void => {
+      detach?.();
+      res.off('error', onError);
+      reject(
+        new Error('Response closed before completion (client disconnected)'),
+      );
+    };
+    const onError = (err: Error): void => {
+      detach?.();
+      res.off('close', onClose);
+      reject(err);
+    };
+    res.once('close', onClose);
+    res.once('error', onError);
+    // attach() may settle synchronously (e.g. a test firing 'close' as a direct side effect);
+    // `detach` is assigned before that can matter since resolve/reject are idempotent.
+    detach = attach(
+      (value) => {
+        res.off('close', onClose);
+        res.off('error', onError);
+        resolve(value);
+      },
+      (err) => {
+        res.off('close', onClose);
+        res.off('error', onError);
+        reject(err);
+      },
+    );
+  });
 
 const writeWithBackpressure = async (
   res: Response,
@@ -73,31 +130,34 @@ const writeWithBackpressure = async (
   if (canContinue) {
     return;
   }
-  // Race drain against the response closing/erroring (e.g. client disconnect mid-export).
-  // Without this, a cancelled request parks here forever: the for-await loop never resumes,
-  // the row iterable (a DB cursor in callers) never gets return()/finally-cleaned up, and the
-  // request is uncancellable.
-  await new Promise<void>((resolve, reject) => {
-    const onDrain = (): void => {
-      res.off('close', onClose);
-      res.off('error', onError);
-      resolve();
-    };
-    const onClose = (): void => {
-      res.off('drain', onDrain);
-      res.off('error', onError);
-      reject(new Error('Response closed before drain (client disconnected)'));
-    };
-    const onError = (err: Error): void => {
-      res.off('drain', onDrain);
-      res.off('close', onClose);
-      reject(err);
-    };
-    res.once('drain', onDrain);
-    res.once('close', onClose);
-    res.once('error', onError);
+  await raceAgainstDisconnect<void>(res, (resolve, _reject) => {
+    res.once('drain', resolve);
+    return () => res.off('drain', resolve);
   });
 };
+
+/** Drives one step of an async iterator, racing it against the response's close/error. */
+const nextResolvers =
+  <T>(iterator: AsyncIterator<T>) =>
+  (
+    resolve: (value: IteratorResult<T>) => void,
+    reject: (err: Error) => void,
+  ): (() => void) => {
+    let cancelled = false;
+    void iterator.next().then(
+      (result) => {
+        if (!cancelled) resolve(result);
+      },
+      (err: unknown) => {
+        if (!cancelled) {
+          reject(err instanceof Error ? err : new Error(String(err)));
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  };
 
 /**
  * Headers are already sent by the time a write can fail (backpressure wait rejected, or the
@@ -167,22 +227,47 @@ export async function writeXlsx(
     useStyles: true,
   });
   const sheet = workbook.addWorksheet('Export');
-
-  const headerRow = sheet.addRow(columns.map((col) => col.header));
-  headerRow.font = { bold: true };
-  headerRow.commit();
+  const iterator = rows[Symbol.asyncIterator]();
 
   try {
-    for await (const row of rows) {
+    // row.commit() is a real stream write, so the header must be protected by the same
+    // try/catch as the row loop below, not run before it.
+    const headerRow = sheet.addRow(columns.map((col) => col.header));
+    headerRow.font = { bold: true };
+    headerRow.commit();
+
+    // Drive the iterator by hand (instead of `for await`) so each step can be raced against
+    // the response closing/erroring — a disconnect mid-export must interrupt the loop rather
+    // than wait for a row that's never going to be consumed.
+    for (
+      let step = await raceAgainstDisconnect(res, nextResolvers(iterator));
+      !step.done;
+      step = await raceAgainstDisconnect(res, nextResolvers(iterator))
+    ) {
       const values = columns.map((col) =>
-        formatCell(row[col.key], col.format),
+        formatCell(step.value[col.key], col.format),
       );
       sheet.addRow(values).commit();
     }
 
     sheet.commit();
-    await workbook.commit();
+    // ExcelJS gives no way to abort an in-flight commit(), so a losing detach here is a no-op —
+    // the promise just gets ignored once the race is lost, unlike the drain/next-step races
+    // above which can genuinely stop listening.
+    await raceAgainstDisconnect<void>(res, (resolve, reject) => {
+      void workbook.commit().then(resolve, reject);
+      return () => {};
+    });
   } catch (err) {
+    // Run the row iterable's cleanup (e.g. a DB cursor's `finally`) even when we bailed out
+    // early on a disconnect rather than the iterable completing or throwing itself. Mirrors
+    // native `for await`'s IteratorClose: a throwing/rejecting return() must not shadow the
+    // loop's own error or skip destroying the response.
+    try {
+      await iterator.return?.();
+    } catch {
+      // Original `err` below still wins; res still gets destroyed.
+    }
     destroyOnError(res, err);
   }
 }

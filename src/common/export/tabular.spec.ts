@@ -249,7 +249,7 @@ describe('writeCsv', () => {
 
     await expect(
       writeCsv(res as never, 'report', columns, rowsWithCleanup(cleanup)),
-    ).rejects.toThrow('Response closed before drain');
+    ).rejects.toThrow('Response closed before completion');
 
     expect(cleanup.ran).toBe(true);
     expect(res.destroyed).toBe(true);
@@ -284,6 +284,19 @@ describe('writeCsv', () => {
       rowsOf([{ name: '\t=1+1', amount: '1' }]),
     );
     expect(res.textWithoutBom()).toBe("Name,Amount\r\n'\t=1+1,1\r\n");
+  });
+
+  it('prefixes a CR-guarded formula payload too (another naive first-char-check bypass)', async () => {
+    const res = new MockResponse();
+    await writeCsv(
+      res as never,
+      'report',
+      columns,
+      rowsOf([{ name: '\r=1+1', amount: '1' }]),
+    );
+    // The '\r' that guards the payload also triggers RFC 4180 quoting (escapeCsvField runs
+    // after the '-prefix is applied), so the whole field is quoted on top of being prefixed.
+    expect(res.textWithoutBom()).toBe('Name,Amount\r\n"\'\r=1+1",1\r\n');
   });
 
   it('does not prefix a money field, even one starting with "-" (a legitimate negative amount)', async () => {
@@ -369,6 +382,59 @@ describe('writeXlsx', () => {
     await expect(
       writeXlsx(res as never, 'report', columns, rowsThenThrow()),
     ).rejects.toThrow('cursor exploded');
+    expect(res.destroyed).toBe(true);
+    expect(res.destroyedWith).toBeInstanceOf(Error);
+  });
+
+  it('rejects (instead of hanging on workbook.commit()) and lets the row iterable clean up when the response closes mid-row-iteration', async () => {
+    const res = new MockResponse();
+    const cleanup = { ran: false };
+    // Fires 'close' as a direct side effect between the two rows — simulates a client
+    // disconnect landing while the exporter is between rows, independent of any write-based
+    // backpressure (XLSX writes don't route through writeWithBackpressure).
+    async function* rowsThatDisconnectMidStream(): AsyncIterable<
+      Record<string, unknown>
+    > {
+      try {
+        yield { name: 'a', amount: '1' };
+        res.emit('close');
+        yield { name: 'b', amount: '2' };
+      } finally {
+        cleanup.ran = true;
+      }
+    }
+
+    await expect(
+      writeXlsx(res as never, 'report', columns, rowsThatDisconnectMidStream()),
+    ).rejects.toThrow('Response closed before completion');
+
+    expect(cleanup.ran).toBe(true);
+    expect(res.destroyed).toBe(true);
+  });
+
+  it('still surfaces the original disconnect error and destroys the response even when the row iterable’s own cleanup then fails', async () => {
+    const res = new MockResponse();
+    // Disconnects mid-stream (the original error, same trigger as the test above), but this
+    // generator's `finally` (run by our explicit `iterator.return?.()` call in the catch block)
+    // itself throws — e.g. closing a DB cursor fails. That secondary failure must not shadow
+    // the original disconnect error or skip destroying the response.
+    async function* rowsThatFailToCleanUp(): AsyncIterable<
+      Record<string, unknown>
+    > {
+      try {
+        yield { name: 'a', amount: '1' };
+        res.emit('close');
+        yield { name: 'b', amount: '2' };
+      } finally {
+        // Deliberate: this test exercises exactly this hazard (a cleanup that fails on its own).
+        // eslint-disable-next-line no-unsafe-finally
+        throw new Error('cursor close also failed');
+      }
+    }
+
+    await expect(
+      writeXlsx(res as never, 'report', columns, rowsThatFailToCleanUp()),
+    ).rejects.toThrow('Response closed before completion');
     expect(res.destroyed).toBe(true);
     expect(res.destroyedWith).toBeInstanceOf(Error);
   });
