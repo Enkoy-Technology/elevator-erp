@@ -26,7 +26,10 @@ export class ExportQueryDto {
  * anything else must be one of the known values or the request 400s.
  */
 export const parseExportFormat = (format?: string): ExportFormat | undefined => {
-  if (format === undefined) {
+  // An empty `?format=` (as opposed to the param being absent entirely) is
+  // still "no format requested" — treat it the same as undefined instead of
+  // 400ing a client that sends an empty query value.
+  if (format === undefined || format === '') {
     return undefined;
   }
   if (!(EXPORT_FORMATS as readonly string[]).includes(format)) {
