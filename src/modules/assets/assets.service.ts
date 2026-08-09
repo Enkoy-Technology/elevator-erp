@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
 import type { AuthenticatedUser } from '../../types/auth.types';
-import { AssetsRepository } from './assets.repository';
+import { AssetsRepository, type AssetExportRow } from './assets.repository';
 import type {
   AssetCategory,
   CreateAssetDto,
@@ -28,7 +28,7 @@ export class AssetsService {
   streamAll(
     user: AuthenticatedUser,
     options: { search?: string; category?: AssetCategory; customerId?: string },
-  ) {
+  ): AsyncGenerator<AssetExportRow> {
     return this.assetsRepository.streamAll(user.tenantId, options);
   }
 

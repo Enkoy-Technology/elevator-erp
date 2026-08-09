@@ -32,7 +32,7 @@ import { ProjectsService } from './projects.service';
 
 export const PROJECTS_EXPORT_COLUMNS: ColumnDef[] = [
   { key: 'id', header: 'ID' },
-  { key: 'customerId', header: 'Customer ID' },
+  { key: 'customerName', header: 'Customer' },
   { key: 'name', header: 'Name' },
   { key: 'code', header: 'Code' },
   { key: 'status', header: 'Status' },
