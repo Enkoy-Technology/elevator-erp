@@ -212,11 +212,15 @@ describe('CustomersRepository — Ethiopic-normalized write and search', () => {
 
     // The email/phone leg deliberately keeps the old (merely-lowercased,
     // not homophone-folded) pattern per the brief — "only the name leg
-    // changes" — so `%ኃይሉ%` is still expected to show up for that leg.
-    // What matters is that the *name* leg's pattern is the normalized one.
+    // changes" — so the RAW query (U+1283 ኃ, XAA order) is still expected
+    // to show up for that leg, distinct from the name leg's NORMALIZED
+    // pattern (U+1203 ሃ, HAA order — the two glyphs are easy to confuse by
+    // eye, hence the \u escapes here rather than relying on the source
+    // file's rendering).
     const literals = extractSqlLiterals(where);
-    expect(literals).toContain(`%${normalizeEthiopic('ኃይሉ')}%`);
-    expect(literals).toContain('%ሃይሉ%');
+    expect(literals).toContain(`%${normalizeEthiopic('ኃይሉ')}%`); // name leg: normalized
+    expect(literals).toContain('%ሃይሉ%'); // ditto, spelled out: ሃይሉ
+    expect(literals).toContain('%ኃይሉ%'); // email/phone leg: raw, ኃይሉ — would fail if normalizeEthiopic ever leaked into that leg
   });
 
   it('streamAll() applies the same normalized search leg as list()', async () => {

@@ -20,16 +20,6 @@ const MIGRATION_PATH = join(
   '0029_lying_marten_broadcloak.sql',
 );
 
-const extractTranslateArgs = (sql: string): { from: string; to: string } => {
-  const match = sql.match(/translate\("name", '([^']*)', '([^']*)'\)/);
-  if (!match) {
-    throw new Error(
-      `Could not find a translate("name", '...', '...') call in ${MIGRATION_PATH}`,
-    );
-  }
-  return { from: match[1]!, to: match[2]! };
-};
-
 describe('Ethiopic backfill migration stays in sync with ethiopic-normalize.ts', () => {
   it('the translate() literals in the migration match the live fold table', () => {
     const sql = readFileSync(MIGRATION_PATH, 'utf8');
@@ -44,9 +34,5 @@ describe('Ethiopic backfill migration stays in sync with ethiopic-normalize.ts',
       expect(from).toBe(ETHIOPIC_TRANSLATE_FROM);
       expect(to).toBe(ETHIOPIC_TRANSLATE_TO);
     }
-
-    const { from, to } = extractTranslateArgs(sql);
-    expect(from).toBe(ETHIOPIC_TRANSLATE_FROM);
-    expect(to).toBe(ETHIOPIC_TRANSLATE_TO);
   });
 });
