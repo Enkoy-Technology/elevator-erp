@@ -55,14 +55,60 @@ const escapeCsvField = (field: string): string => {
   return field;
 };
 
+// CSV formula/DDE injection: Excel treats a field starting with = + - @ (optionally after a
+// leading tab/CR used to dodge naive checks) as a live formula when the CSV is opened. A
+// leading `'` forces Excel to treat the field as text. CSV path only — ExcelJS (writeXlsx)
+// sets plain string cell values, which Excel never evaluates as formulas, so the XLSX path
+// must NOT get this treatment.
+const FORMULA_INJECTION_RE = /^[\t\r]*[=+@-]/;
+
+const neutralizeCsvFormula = (field: string): string =>
+  FORMULA_INJECTION_RE.test(field) ? `'${field}` : field;
+
 const writeWithBackpressure = async (
   res: Response,
   chunk: string | Buffer,
 ): Promise<void> => {
   const canContinue = res.write(chunk);
-  if (!canContinue) {
-    await new Promise<void>((resolve) => res.once('drain', resolve));
+  if (canContinue) {
+    return;
   }
+  // Race drain against the response closing/erroring (e.g. client disconnect mid-export).
+  // Without this, a cancelled request parks here forever: the for-await loop never resumes,
+  // the row iterable (a DB cursor in callers) never gets return()/finally-cleaned up, and the
+  // request is uncancellable.
+  await new Promise<void>((resolve, reject) => {
+    const onDrain = (): void => {
+      res.off('close', onClose);
+      res.off('error', onError);
+      resolve();
+    };
+    const onClose = (): void => {
+      res.off('drain', onDrain);
+      res.off('error', onError);
+      reject(new Error('Response closed before drain (client disconnected)'));
+    };
+    const onError = (err: Error): void => {
+      res.off('drain', onDrain);
+      res.off('close', onClose);
+      reject(err);
+    };
+    res.once('drain', onDrain);
+    res.once('close', onClose);
+    res.once('error', onError);
+  });
+};
+
+/**
+ * Headers are already sent by the time a write can fail (backpressure wait rejected, or the
+ * row iterator itself throws mid-stream — e.g. a DB cursor error). The global exception filter
+ * can't turn either into a fresh HTTP response at that point, so destroy the socket directly
+ * instead of letting the response hang half-written.
+ */
+const destroyOnError = (res: Response, err: unknown): never => {
+  const error = err instanceof Error ? err : new Error(String(err));
+  res.destroy(error);
+  throw error;
 };
 
 export async function writeCsv(
@@ -73,21 +119,32 @@ export async function writeCsv(
 ): Promise<void> {
   setDownloadHeaders(res, filename, 'csv', 'text/csv; charset=utf-8');
 
-  await writeWithBackpressure(res, UTF8_BOM);
-  await writeWithBackpressure(
-    res,
-    columns.map((col) => escapeCsvField(col.header)).join(',') + '\r\n',
-  );
+  try {
+    await writeWithBackpressure(res, UTF8_BOM);
+    await writeWithBackpressure(
+      res,
+      columns.map((col) => escapeCsvField(col.header)).join(',') + '\r\n',
+    );
 
-  for await (const row of rows) {
-    const line =
-      columns
-        .map((col) => escapeCsvField(formatCell(row[col.key], col.format)))
-        .join(',') + '\r\n';
-    await writeWithBackpressure(res, line);
+    for await (const row of rows) {
+      const line =
+        columns
+          .map((col) => {
+            const value = formatCell(row[col.key], col.format);
+            // Money columns are trusted internal decimal strings (never tenant free text) —
+            // exempt them so a legitimate leading '-' on a negative amount stays clean.
+            const safe =
+              col.format === 'money' ? value : neutralizeCsvFormula(value);
+            return escapeCsvField(safe);
+          })
+          .join(',') + '\r\n';
+      await writeWithBackpressure(res, line);
+    }
+
+    res.end();
+  } catch (err) {
+    destroyOnError(res, err);
   }
-
-  res.end();
 }
 
 export async function writeXlsx(
@@ -115,13 +172,17 @@ export async function writeXlsx(
   headerRow.font = { bold: true };
   headerRow.commit();
 
-  for await (const row of rows) {
-    const values = columns.map((col) =>
-      formatCell(row[col.key], col.format),
-    );
-    sheet.addRow(values).commit();
-  }
+  try {
+    for await (const row of rows) {
+      const values = columns.map((col) =>
+        formatCell(row[col.key], col.format),
+      );
+      sheet.addRow(values).commit();
+    }
 
-  sheet.commit();
-  await workbook.commit();
+    sheet.commit();
+    await workbook.commit();
+  } catch (err) {
+    destroyOnError(res, err);
+  }
 }

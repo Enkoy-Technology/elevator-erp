@@ -9,6 +9,13 @@ class MockResponse extends EventEmitter {
   ended = false;
   writeReturnValue = true;
   drainWaits = 0;
+  destroyed = false;
+  destroyedWith: unknown;
+  /** What a backpressured write() resolves via, instead of always draining cleanly. */
+  backpressureEvent: 'drain' | 'close' | 'error' = 'drain';
+  /** 1-based write() call number from which backpressure kicks in. Overrides writeReturnValue. */
+  backpressureFromCall: number | null = null;
+  writeCount = 0;
 
   setHeader(name: string, value: string): this {
     this.headers[name.toLowerCase()] = value;
@@ -16,15 +23,26 @@ class MockResponse extends EventEmitter {
   }
 
   write(chunk: unknown): boolean {
+    this.writeCount += 1;
     this.chunks.push(
       Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string),
     );
-    if (!this.writeReturnValue) {
-      // Simulate the socket draining on the next tick, like a real backpressured stream.
+    const backpressured =
+      this.backpressureFromCall !== null
+        ? this.writeCount >= this.backpressureFromCall
+        : !this.writeReturnValue;
+    if (backpressured) {
+      // Simulate the socket settling on the next tick, like a real backpressured stream.
       this.drainWaits += 1;
-      setImmediate(() => this.emit('drain'));
+      setImmediate(() => {
+        if (this.backpressureEvent === 'error') {
+          this.emit('error', new Error('mock stream error'));
+        } else {
+          this.emit(this.backpressureEvent);
+        }
+      });
     }
-    return this.writeReturnValue;
+    return !backpressured;
   }
 
   end(chunk?: unknown): this {
@@ -33,6 +51,13 @@ class MockResponse extends EventEmitter {
     }
     this.ended = true;
     this.emit('finish');
+    return this;
+  }
+
+  destroy(err?: unknown): this {
+    this.destroyed = true;
+    this.destroyedWith = err;
+    this.emit('close');
     return this;
   }
 
@@ -55,6 +80,24 @@ async function* rowsOf(
   for (const row of rows) {
     yield row;
   }
+}
+
+/** Yields two rows, then (if the consumer aborts early) records that its cleanup ran — like a DB cursor's finally block. */
+async function* rowsWithCleanup(
+  cleanup: { ran: boolean },
+): AsyncIterable<Record<string, unknown>> {
+  try {
+    yield { name: 'a', amount: '1' };
+    yield { name: 'b', amount: '2' };
+  } finally {
+    cleanup.ran = true;
+  }
+}
+
+/** Yields one row, then throws — simulating a DB cursor failing mid-stream. */
+async function* rowsThenThrow(): AsyncIterable<Record<string, unknown>> {
+  yield { name: 'a', amount: '1' };
+  throw new Error('cursor exploded');
 }
 
 const columns: ColumnDef[] = [
@@ -195,6 +238,64 @@ describe('writeCsv', () => {
     await writeCsv(res as never, 'report', columns, rowsOf([]));
     expect(res.ended).toBe(true);
   });
+
+  it('rejects (instead of hanging) and lets the row iterable clean up when the response closes mid-backpressure', async () => {
+    const res = new MockResponse();
+    // BOM (call 1) and header (call 2) succeed; the first row's write (call 3) backpressures
+    // and the client disconnects (fires 'close') instead of ever draining.
+    res.backpressureFromCall = 3;
+    res.backpressureEvent = 'close';
+    const cleanup = { ran: false };
+
+    await expect(
+      writeCsv(res as never, 'report', columns, rowsWithCleanup(cleanup)),
+    ).rejects.toThrow('Response closed before drain');
+
+    expect(cleanup.ran).toBe(true);
+    expect(res.destroyed).toBe(true);
+  });
+
+  it('destroys the response instead of hanging when the row iterator throws mid-stream', async () => {
+    const res = new MockResponse();
+    await expect(
+      writeCsv(res as never, 'report', columns, rowsThenThrow()),
+    ).rejects.toThrow('cursor exploded');
+    expect(res.destroyed).toBe(true);
+    expect(res.destroyedWith).toBeInstanceOf(Error);
+  });
+
+  it('prefixes a leading formula character in a non-money field to defuse CSV formula/DDE injection', async () => {
+    const res = new MockResponse();
+    await writeCsv(
+      res as never,
+      'report',
+      columns,
+      rowsOf([{ name: '=cmd()', amount: '1' }]),
+    );
+    expect(res.textWithoutBom()).toBe("Name,Amount\r\n'=cmd(),1\r\n");
+  });
+
+  it('prefixes a tab-guarded formula payload too (naive first-char checks miss this)', async () => {
+    const res = new MockResponse();
+    await writeCsv(
+      res as never,
+      'report',
+      columns,
+      rowsOf([{ name: '\t=1+1', amount: '1' }]),
+    );
+    expect(res.textWithoutBom()).toBe("Name,Amount\r\n'\t=1+1,1\r\n");
+  });
+
+  it('does not prefix a money field, even one starting with "-" (a legitimate negative amount)', async () => {
+    const res = new MockResponse();
+    await writeCsv(
+      res as never,
+      'report',
+      columns,
+      rowsOf([{ name: 'x', amount: '-1500.00' }]),
+    );
+    expect(res.textWithoutBom()).toBe('Name,Amount\r\nx,-1500.00\r\n');
+  });
 });
 
 describe('writeXlsx', () => {
@@ -261,5 +362,14 @@ describe('writeXlsx', () => {
     const dataRow = sheet.getRow(2);
     expect(dataRow.getCell(1).value ?? '').toBe('');
     expect(dataRow.getCell(2).value ?? '').toBe('');
+  });
+
+  it('destroys the response instead of hanging when the row iterator throws mid-stream', async () => {
+    const res = new MockResponse();
+    await expect(
+      writeXlsx(res as never, 'report', columns, rowsThenThrow()),
+    ).rejects.toThrow('cursor exploded');
+    expect(res.destroyed).toBe(true);
+    expect(res.destroyedWith).toBeInstanceOf(Error);
   });
 });
