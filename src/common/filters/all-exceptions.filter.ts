@@ -30,6 +30,24 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
+    // Mid-stream export cancellation: writeCsv/writeXlsx (tabular.ts) call
+    // res.destroy() and rethrow once headers are already flushed — e.g. the
+    // client cancelled an in-progress download. status()/setHeader()/json()
+    // this late throw ERR_HTTP_HEADERS_SENT, and would otherwise turn a
+    // routine cancelled download into a fake 500 incident. Skip writing to
+    // the response (it can't be reused once headers are sent) — but this
+    // filter is the app-wide APP_FILTER, so still log: a real bug surfacing
+    // after a partial write (not just a benign client-cancelled download)
+    // must not vanish from the logs along with the response.
+    if (response.headersSent) {
+      this.logger.error(
+        `Exception after headers already sent on ${request.method} ${request.url} (client disconnect or mid-stream error)`,
+        exception instanceof Error ? exception.stack : String(exception),
+      );
+      response.destroy();
+      return;
+    }
+
     const problem = this.toProblemDetails(exception, request.url);
 
     if (problem.status >= 500) {
