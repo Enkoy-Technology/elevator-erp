@@ -3,8 +3,12 @@ import { ETHIOPIC_FONT_FACE_CSS } from './fonts';
 
 const DEFAULT_PRIMARY = '#1B2A4A';
 
-export const esc = (value: string): string =>
-  value
+// Accepts unknown (not just string) so callers rendering a non-string field
+// (e.g. a technicalSpec value that's a number or an arbitrary JSON leaf)
+// don't each need their own `esc(String(x))` workaround — String(value) is
+// the one coercion rule, applied here instead of at every call site.
+export const esc = (value: unknown): string =>
+  String(value)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

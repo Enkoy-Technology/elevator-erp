@@ -12,17 +12,10 @@ import {
 
 import type { TenantBranding } from '../document-pdf.service';
 import { sanitizeHex } from './layout';
+import { formatEtb } from './money-format';
 import { fmtDate, PRICING_ROWS, TECH_ROWS, type QuotationTemplateData } from './quotation.template';
 
-/**
- * Money strings land in text runs verbatim — never passed through Number()
- * (per the brief's money rule for this renderer). This is deliberately
- * simpler than quotation.template.ts's formatEtb, which adds thousands
- * separators via Intl.NumberFormat(Number(value)) for the PDF; the Word
- * output shows the raw decimal string instead (e.g. "143750.00 ETB" rather
- * than "143,750.00 ETB").
- */
-const money = (value: string | null | undefined): string => `${value ?? '0.00'} ETB`;
+export { formatEtb };
 
 const cell = (
   text: string,
@@ -72,7 +65,7 @@ export const buildQuotationDocx = (data: object, branding: TenantBranding | null
     row(r.label, `${String(tech[r.key])}${r.unit ? ` ${r.unit}` : ''}`),
   );
   const pricingRows = PRICING_ROWS.filter((r) => pricing[r.key] != null).map((r) =>
-    row(r.label, money(pricing[r.key])),
+    row(r.label, formatEtb(pricing[r.key])),
   );
 
   const phones = (branding?.phones ?? []).filter(Boolean).join(' · ');
@@ -121,10 +114,10 @@ export const buildQuotationDocx = (data: object, branding: TenantBranding | null
     fullWidthTable(pricingRows.length ? pricingRows : [row('See pricing breakdown', '')]),
     heading('Totals', primary),
     fullWidthTable([
-      row('Subtotal', money(d.subtotalEtb)),
-      row(`Margin (${d.marginPercent ?? '0'}%)`, money(d.marginAmountEtb)),
-      row(`Tax (${d.taxPercent ?? '0'}%)`, money(d.taxAmountEtb)),
-      row('Total', money(d.totalPriceEtb)),
+      row('Subtotal', formatEtb(d.subtotalEtb)),
+      row(`Margin (${d.marginPercent ?? '0'}%)`, formatEtb(d.marginAmountEtb)),
+      row(`Tax (${d.taxPercent ?? '0'}%)`, formatEtb(d.taxAmountEtb)),
+      row('Total', formatEtb(d.totalPriceEtb)),
     ]),
     ...(d.notes
       ? [heading('Notes', primary), new Paragraph({ children: [new TextRun(d.notes)] })]

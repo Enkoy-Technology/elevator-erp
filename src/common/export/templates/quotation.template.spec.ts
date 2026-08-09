@@ -1,13 +1,9 @@
 import type { TenantBranding } from '../document-pdf.service';
-import { buildQuotationHtml, formatEtb, type QuotationTemplateData } from './quotation.template';
+import { buildQuotationHtml, type QuotationTemplateData } from './quotation.template';
 
-describe('formatEtb', () => {
-  it('formats decimal strings with thousands separators and ETB suffix', () => {
-    expect(formatEtb('1234.5')).toBe('1,234.50 ETB');
-    expect(formatEtb('0')).toBe('0.00 ETB');
-    expect(formatEtb(null)).toBe('0.00 ETB');
-  });
-});
+// formatEtb() itself (grouping, null/''/garbage handling, and the
+// PDF/docx-shared-formatter assertion) is covered in money-format.spec.ts —
+// this file only needs to prove buildQuotationHtml actually calls it.
 
 describe('buildQuotationHtml', () => {
   const branding: TenantBranding = {
