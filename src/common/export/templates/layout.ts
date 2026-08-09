@@ -14,11 +14,26 @@ export const esc = (value: string): string =>
 // esc() is the wrong escaper for a CSS value: it stops `<style>` breakout
 // but not `; { } url()`. primaryColor lands inside a <style> block, so allow
 // only a literal 3/6-digit hex and fall back to the brand default otherwise.
+//
+// Always returns 6-digit form: a 3-digit value is valid CSS (harmless for
+// the PDF path) but the docx renderer's TextRun `color` option validates
+// against `docx`'s own hex parser, which rejects 3-digit shorthand outright
+// (throws at Document-build time) — normalizing here, in the one shared
+// sanitizer both renderers call, is cheaper than teaching the docx template
+// its own color-shape rule.
 export const sanitizeHex = (
   value: string | null | undefined,
   fallback: string = DEFAULT_PRIMARY,
-): string =>
-  value && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value) ? value : fallback;
+): string => {
+  if (!value || !/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value)) {
+    return fallback;
+  }
+  if (value.length === 4) {
+    const [r, g, b] = value.slice(1);
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+  return value;
+};
 
 export interface LayoutOptions {
   branding: TenantBranding | null;
