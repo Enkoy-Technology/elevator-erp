@@ -38,10 +38,11 @@ describe('ProjectsController.list — format wiring', () => {
     const page = { items: [], page: 1, pageSize: 20, total: 0, totalPages: 0 };
     service.list.mockResolvedValue(page);
 
-    await controller.list(user, res as never, 'LEAD', '1', '20', undefined);
+    await controller.list(user, res as never, 'LEAD', undefined, '1', '20', undefined);
 
     expect(service.list).toHaveBeenCalledWith(user, {
       status: 'LEAD',
+      q: undefined,
       page: '1',
       pageSize: '20',
     });
@@ -56,9 +57,12 @@ describe('ProjectsController.list — format wiring', () => {
     })();
     service.streamAll.mockReturnValue(rows);
 
-    await controller.list(user, res as never, 'LEAD', undefined, undefined, 'csv');
+    await controller.list(user, res as never, 'LEAD', undefined, undefined, undefined, 'csv');
 
-    expect(service.streamAll).toHaveBeenCalledWith(user, { status: 'LEAD' });
+    expect(service.streamAll).toHaveBeenCalledWith(user, {
+      status: 'LEAD',
+      q: undefined,
+    });
     expect(mockWriteCsv).toHaveBeenCalledWith(
       res,
       expect.stringMatching(/^projects-\d{4}-\d{2}-\d{2}$/),
@@ -72,7 +76,7 @@ describe('ProjectsController.list — format wiring', () => {
     const rows = (async function* () {})();
     service.streamAll.mockReturnValue(rows);
 
-    await controller.list(user, res as never, undefined, undefined, undefined, 'xlsx');
+    await controller.list(user, res as never, undefined, undefined, undefined, undefined, 'xlsx');
 
     expect(mockWriteXlsx).toHaveBeenCalledWith(
       res,
@@ -85,7 +89,7 @@ describe('ProjectsController.list — format wiring', () => {
 
   it('rejects an invalid status before touching the service, same as the JSON path', async () => {
     await expect(
-      controller.list(user, res as never, 'BOGUS', undefined, undefined, undefined),
+      controller.list(user, res as never, 'BOGUS', undefined, undefined, undefined, undefined),
     ).rejects.toThrow(BadRequestException);
     expect(service.list).not.toHaveBeenCalled();
     expect(service.streamAll).not.toHaveBeenCalled();
@@ -93,9 +97,30 @@ describe('ProjectsController.list — format wiring', () => {
 
   it('rejects an unknown format with a 400 before touching the service', async () => {
     await expect(
-      controller.list(user, res as never, undefined, undefined, undefined, 'pdf'),
+      controller.list(user, res as never, undefined, undefined, undefined, undefined, 'pdf'),
     ).rejects.toThrow(/format must be one of/);
     expect(service.list).not.toHaveBeenCalled();
     expect(service.streamAll).not.toHaveBeenCalled();
+  });
+
+  it('passes q through to both the JSON list and the export stream', async () => {
+    const page = { items: [], page: 1, pageSize: 20, total: 0, totalPages: 0 };
+    service.list.mockResolvedValue(page);
+
+    await controller.list(user, res as never, undefined, 'ሃይሉ', undefined, undefined, undefined);
+
+    expect(service.list).toHaveBeenCalledWith(
+      user,
+      expect.objectContaining({ q: 'ሃይሉ' }),
+    );
+
+    const rows = (async function* () {})();
+    service.streamAll.mockReturnValue(rows);
+    await controller.list(user, res as never, undefined, 'ሃይሉ', undefined, undefined, 'csv');
+
+    expect(service.streamAll).toHaveBeenCalledWith(
+      user,
+      expect.objectContaining({ q: 'ሃይሉ' }),
+    );
   });
 });
