@@ -107,9 +107,11 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
     const buf = await service.renderDocumentDocx('quotation', data, branding);
 
     expect(Buffer.isBuffer(buf)).toBe(true);
-    // "PK\x03\x04" — local file header magic, present at the start of every
-    // non-empty ZIP (and therefore every .docx).
-    expect(buf.subarray(0, 4).toString('latin1')).toBe('PK');
+    // Local file header magic (PK\x03\x04), present at the start of every
+    // non-empty ZIP (and therefore every .docx). Asserted as explicit bytes,
+    // not a string literal — a string containing the raw 0x03/0x04
+    // control bytes reads as "PK" in a diff/editor while asserting more.
+    expect(buf.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
     expect(buf.length).toBeGreaterThan(1024);
 
     const documentXml = extractZipEntry(buf, 'word/document.xml').toString('utf8');
