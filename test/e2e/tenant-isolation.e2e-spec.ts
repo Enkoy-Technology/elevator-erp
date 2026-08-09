@@ -11,6 +11,10 @@ import { randomUUID } from 'node:crypto';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 
+import {
+  CustomersRepository,
+  type CustomerRecord,
+} from '../../src/modules/customers/customers.repository';
 import { TenantDbService } from '../../src/database/tenant-db.service';
 import * as schema from '../../src/database/schema';
 
@@ -87,12 +91,28 @@ describe('Tenant isolation (RLS)', () => {
         [tenantId, email],
       );
     }
+
+    // Fixtures for the streamAll cross-tenant assertion below: one customer
+    // per tenant, distinguishable by name.
+    for (const [tenantId, name] of [
+      [tenantA, `Isolation Customer A ${slugA}`],
+      [tenantB, `Isolation Customer B ${slugB}`],
+    ] as const) {
+      await adminPool.query(
+        `insert into customers (tenant_id, name) values ($1, $2)`,
+        [tenantId, name],
+      );
+    }
   });
 
   afterAll(async () => {
     if (!available) {
       return;
     }
+    await adminPool.query(
+      `delete from customers where tenant_id = any($1::uuid[])`,
+      [[tenantA, tenantB]],
+    );
     await adminPool.query(
       `delete from users where tenant_id = any($1::uuid[])`,
       [[tenantA, tenantB]],
@@ -194,4 +214,33 @@ describe('Tenant isolation (RLS)', () => {
     );
     expect(result.rows[0]?.id).toBe(tenantA);
   });
+
+  guarded(
+    'CustomersRepository.streamAll scopes the export stream to its tenant, batch by batch',
+    async () => {
+      const db = drizzle(appPool, { schema });
+      const tenantDb = new TenantDbService(db);
+      const repo = new CustomersRepository(tenantDb);
+
+      // Each yielded row comes from its own withTenant() transaction (the
+      // generator opens one per batch) — collecting the full stream proves
+      // that per-batch re-entry into withTenant still enforces isolation,
+      // not just the first batch.
+      const rowsA: CustomerRecord[] = [];
+      for await (const row of repo.streamAll(tenantA, {})) {
+        rowsA.push(row);
+      }
+      expect(rowsA.length).toBeGreaterThan(0);
+      expect(rowsA.every((row) => row.tenantId === tenantA)).toBe(true);
+      expect(rowsA.some((row) => row.name.includes(slugA))).toBe(true);
+      expect(rowsA.some((row) => row.tenantId === tenantB)).toBe(false);
+
+      const rowsB: CustomerRecord[] = [];
+      for await (const row of repo.streamAll(tenantB, {})) {
+        rowsB.push(row);
+      }
+      expect(rowsB.every((row) => row.tenantId === tenantB)).toBe(true);
+      expect(rowsB.some((row) => row.tenantId === tenantA)).toBe(false);
+    },
+  );
 });
