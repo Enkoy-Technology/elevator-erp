@@ -7,6 +7,7 @@ import {
   toPaginatedResult,
   type PaginatedResult,
 } from '../../common/pagination';
+import { normalizeEthiopic } from '../../common/text/ethiopic-normalize';
 import { projects, type ProjectStatus } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import type { CreateProjectDto } from './dto/create-project.dto';
@@ -121,6 +122,7 @@ export class ProjectsRepository {
           tenantId,
           customerId: dto.customerId,
           name: dto.name,
+          nameNormalized: normalizeEthiopic(dto.name),
           code: dto.code,
           siteAddressLine1: dto.siteAddressLine1,
           siteAddressLine2: dto.siteAddressLine2,

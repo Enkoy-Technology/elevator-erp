@@ -17,6 +17,7 @@ describe('ProjectsService', () => {
     id: '44444444-4444-4444-4444-444444444444',
     customerId: '55555555-5555-5555-5555-555555555555',
     name: 'Bole Twin Towers — Lift A',
+    nameNormalized: 'bole twin towers — lift a',
     code: 'PRJ-001',
     status: 'LEAD',
     siteAddressLine1: null,

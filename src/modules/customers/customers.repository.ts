@@ -7,6 +7,7 @@ import {
   toPaginatedResult,
   type PaginatedResult,
 } from '../../common/pagination';
+import { normalizeEthiopic } from '../../common/text/ethiopic-normalize';
 import {
   assets,
   customers,
@@ -45,8 +46,13 @@ export class CustomersRepository {
       const filters = [isNull(customers.deletedAt)];
       if (options.search && options.search.trim().length > 0) {
         const pattern = `%${options.search.trim().toLowerCase()}%`;
+        const namePattern = `%${normalizeEthiopic(options.search.trim())}%`;
+        // coalesce() to a plain-lowercase `name` match covers any row whose
+        // nameNormalized is NULL (see the comment on the same pattern in
+        // findSimilar() below) so an out-of-band insert never becomes
+        // silently unsearchable by name.
         filters.push(
-          sql`(lower(${customers.name}) like ${pattern} or lower(coalesce(${customers.email}, '')) like ${pattern} or coalesce(${customers.phone}, '') like ${pattern})`,
+          sql`(coalesce(${customers.nameNormalized}, lower(${customers.name})) like ${namePattern} or lower(coalesce(${customers.email}, '')) like ${pattern} or coalesce(${customers.phone}, '') like ${pattern})`,
         );
       }
       const where = and(...filters);
@@ -92,8 +98,9 @@ export class CustomersRepository {
         const filters = [isNull(customers.deletedAt)];
         if (options.search && options.search.trim().length > 0) {
           const pattern = `%${options.search.trim().toLowerCase()}%`;
+          const namePattern = `%${normalizeEthiopic(options.search.trim())}%`;
           filters.push(
-            sql`(lower(${customers.name}) like ${pattern} or lower(coalesce(${customers.email}, '')) like ${pattern} or coalesce(${customers.phone}, '') like ${pattern})`,
+            sql`(coalesce(${customers.nameNormalized}, lower(${customers.name})) like ${namePattern} or lower(coalesce(${customers.email}, '')) like ${pattern} or coalesce(${customers.phone}, '') like ${pattern})`,
           );
         }
         return tx
@@ -125,14 +132,20 @@ export class CustomersRepository {
     name: string,
     phone?: string,
   ): Promise<SimilarCustomer[]> {
-    const needle = name.trim().toLowerCase();
+    const needle = normalizeEthiopic(name.trim());
     if (!needle) {
       return [];
     }
     const digits = (phone ?? '').replace(/\D/g, '').slice(-9);
 
+    // coalesce() falls back to a plain-lowercase match on `name` for any row
+    // whose `nameNormalized` is NULL (out-of-band insert that bypassed this
+    // repository) — without it, a NULL row would silently stop matching
+    // anything, recreating the exact "customer looks missing, duplicate
+    // gets created" bug this column exists to fix.
+    const normalizedName = sql`coalesce(${customers.nameNormalized}, lower(${customers.name}))`;
     const signals = [
-      sql`(lower(${customers.name}) like ${`%${needle}%`} or ${needle} like '%' || lower(${customers.name}) || '%')`,
+      sql`(${normalizedName} like ${`%${needle}%`} or ${needle} like '%' || ${normalizedName} || '%')`,
     ];
     if (digits.length >= MIN_PHONE_DIGITS) {
       signals.push(
@@ -185,6 +198,7 @@ export class CustomersRepository {
         .values({
           tenantId,
           name: dto.name,
+          nameNormalized: normalizeEthiopic(dto.name),
           legalName: dto.legalName,
           email: dto.email?.toLowerCase(),
           phone: dto.phone,
@@ -217,7 +231,9 @@ export class CustomersRepository {
       const [row] = await tx
         .update(customers)
         .set({
-          ...(dto.name !== undefined ? { name: dto.name } : {}),
+          ...(dto.name !== undefined
+            ? { name: dto.name, nameNormalized: normalizeEthiopic(dto.name) }
+            : {}),
           ...(dto.legalName !== undefined ? { legalName: dto.legalName } : {}),
           ...(dto.email !== undefined
             ? { email: dto.email?.toLowerCase() }

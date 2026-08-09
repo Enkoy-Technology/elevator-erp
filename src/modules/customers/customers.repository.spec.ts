@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 
 import { CustomerInUseError } from '../../common/exceptions';
+import { normalizeEthiopic } from '../../common/text/ethiopic-normalize';
 import { CustomersRepository } from './customers.repository';
 
 // The dependent-record guard and the soft-delete write both have to run in
@@ -82,5 +83,192 @@ describe('CustomersRepository.softDelete — dependent-record guard', () => {
     await expect(
       repo.softDelete(TENANT_ID, CUSTOMER_ID),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+// Pulls every literal string embedded in a drizzle SQL fragment's
+// queryChunks (the tagged-template params), skipping the raw-text wrapper
+// objects and columns. Verified against drizzle-orm's actual object shape
+// in a throwaway script before writing these tests — see task-5-report.md.
+const extractSqlLiterals = (fragment: unknown): string[] => {
+  const out: string[] = [];
+  const walk = (x: unknown): void => {
+    if (typeof x === 'string') {
+      out.push(x);
+      return;
+    }
+    if (x && typeof x === 'object' && 'queryChunks' in x) {
+      for (const chunk of (x as { queryChunks: unknown[] }).queryChunks) {
+        walk(chunk);
+      }
+    }
+  };
+  walk(fragment);
+  return out;
+};
+
+describe('CustomersRepository — Ethiopic-normalized write and search', () => {
+  const makeInsertChain = (rows: Row[], captureValues: (v: unknown) => void) => {
+    const chain: Record<string, jest.Mock> = {};
+    chain.values = jest.fn((v: unknown) => {
+      captureValues(v);
+      return chain;
+    });
+    chain.returning = jest.fn(() => Promise.resolve(rows));
+    return chain;
+  };
+
+  it('create() stores normalizeEthiopic(name) in nameNormalized alongside the original name', async () => {
+    let captured: Record<string, unknown> = {};
+    const insertChain = makeInsertChain(
+      [{ id: CUSTOMER_ID, name: 'ሐይሉ Elevator PLC' }],
+      (v) => (captured = v as Record<string, unknown>),
+    );
+    const insert = jest.fn(() => insertChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ insert }),
+    );
+    const repo = new CustomersRepository({ withTenant } as never);
+
+    await repo.create(TENANT_ID, 'creator-id', {
+      name: 'ሐይሉ Elevator PLC',
+    });
+
+    expect(captured.name).toBe('ሐይሉ Elevator PLC');
+    expect(captured.nameNormalized).toBe(normalizeEthiopic('ሐይሉ Elevator PLC'));
+    expect(captured.nameNormalized).toBe('ሀይሉ elevator plc');
+  });
+
+  it('update() re-derives nameNormalized whenever name changes, and omits both when it does not', async () => {
+    const updateChain: Record<string, jest.Mock> = {};
+    let captured: Record<string, unknown> = {};
+    updateChain.set = jest.fn((v: Record<string, unknown>) => {
+      captured = v;
+      return updateChain;
+    });
+    updateChain.where = jest.fn(() => updateChain);
+    updateChain.returning = jest.fn(() =>
+      Promise.resolve([{ id: CUSTOMER_ID }]),
+    );
+    const update = jest.fn(() => updateChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ update }),
+    );
+    const repo = new CustomersRepository({ withTenant } as never);
+
+    await repo.update(TENANT_ID, CUSTOMER_ID, { name: 'ኀይሉ Trading' });
+    expect(captured.name).toBe('ኀይሉ Trading');
+    expect(captured.nameNormalized).toBe(normalizeEthiopic('ኀይሉ Trading'));
+
+    await repo.update(TENANT_ID, CUSTOMER_ID, { city: 'Adama' });
+    expect(captured).not.toHaveProperty('name');
+    expect(captured).not.toHaveProperty('nameNormalized');
+  });
+
+  const makeListChains = (
+    onCountWhere: (w: unknown) => void,
+    onItemsWhere: (w: unknown) => void,
+  ) => {
+    const countChain: Record<string, jest.Mock> = {};
+    countChain.from = jest.fn(() => countChain);
+    countChain.where = jest.fn((w: unknown) => {
+      onCountWhere(w);
+      return Promise.resolve([{ value: 0 }]);
+    });
+
+    const itemsChain: Record<string, jest.Mock> = {};
+    itemsChain.from = jest.fn(() => itemsChain);
+    itemsChain.where = jest.fn((w: unknown) => {
+      onItemsWhere(w);
+      return itemsChain;
+    });
+    itemsChain.orderBy = jest.fn(() => itemsChain);
+    itemsChain.limit = jest.fn(() => itemsChain);
+    itemsChain.offset = jest.fn(() => Promise.resolve([]));
+
+    const select = jest.fn();
+    select.mockReturnValueOnce(countChain).mockReturnValueOnce(itemsChain);
+    return { select };
+  };
+
+  it('list() searches nameNormalized with the query run through normalizeEthiopic, not the raw query', async () => {
+    let where: unknown;
+    const { select } = makeListChains(
+      (w) => (where = w),
+      () => {},
+    );
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new CustomersRepository({ withTenant } as never);
+
+    // ኃይሉ (XAA order) should match a customer stored as ሃይሉ (HAA order) —
+    // the whole point of this feature — so the query pattern embedded in
+    // the WHERE clause must be the *normalized* form, not the raw one.
+    await repo.list(TENANT_ID, { search: 'ኃይሉ' });
+
+    // The email/phone leg deliberately keeps the old (merely-lowercased,
+    // not homophone-folded) pattern per the brief — "only the name leg
+    // changes" — so `%ኃይሉ%` is still expected to show up for that leg.
+    // What matters is that the *name* leg's pattern is the normalized one.
+    const literals = extractSqlLiterals(where);
+    expect(literals).toContain(`%${normalizeEthiopic('ኃይሉ')}%`);
+    expect(literals).toContain('%ሃይሉ%');
+  });
+
+  it('streamAll() applies the same normalized search leg as list()', async () => {
+    let where: unknown;
+    const countChain: Record<string, jest.Mock> = {};
+    // streamAll has no count query — only the batch select.
+    const itemsChain: Record<string, jest.Mock> = {};
+    itemsChain.from = jest.fn(() => itemsChain);
+    itemsChain.where = jest.fn((w: unknown) => {
+      where = w;
+      return itemsChain;
+    });
+    itemsChain.orderBy = jest.fn(() => itemsChain);
+    itemsChain.limit = jest.fn(() => itemsChain);
+    itemsChain.offset = jest.fn(() => Promise.resolve([]));
+    const select = jest.fn(() => itemsChain);
+    void countChain;
+
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new CustomersRepository({ withTenant } as never);
+
+    const gen = repo.streamAll(TENANT_ID, { search: 'ኃይሉ' });
+    await gen.next();
+
+    const literals = extractSqlLiterals(where);
+    expect(literals).toContain('%ሃይሉ%');
+  });
+
+  it('findSimilar() compares nameNormalized in both directions using the normalized needle', async () => {
+    let where: unknown;
+    const selectChain: Record<string, jest.Mock> = {};
+    selectChain.from = jest.fn(() => selectChain);
+    selectChain.where = jest.fn((w: unknown) => {
+      where = w;
+      return selectChain;
+    });
+    selectChain.orderBy = jest.fn(() => selectChain);
+    selectChain.limit = jest.fn(() => Promise.resolve([]));
+    const select = jest.fn(() => selectChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new CustomersRepository({ withTenant } as never);
+
+    await repo.findSimilar(TENANT_ID, 'ኀይሉ Trading');
+
+    const literals = extractSqlLiterals(where);
+    expect(literals).toContain(`%${normalizeEthiopic('ኀይሉ Trading')}%`);
+    expect(literals.some((l) => l.includes('ኀይሉ'))).toBe(false);
   });
 });
