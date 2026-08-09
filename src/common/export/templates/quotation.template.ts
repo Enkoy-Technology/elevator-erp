@@ -12,7 +12,8 @@ export const formatEtb = (value: string | null | undefined): string => {
   return `${etbFormatter.format(Number.isFinite(n) ? n : 0)} ETB`;
 };
 
-const fmtDate = (d: Date | string | null | undefined): string => {
+/** Exported for reuse by other renderers of the same template (e.g. the docx renderer). */
+export const fmtDate = (d: Date | string | null | undefined): string => {
   if (!d) {
     return '—';
   }
@@ -45,7 +46,9 @@ export interface QuotationTemplateData {
   notes?: string | null;
 }
 
-const PRICING_ROWS: ReadonlyArray<{ key: string; label: string }> = [
+// Exported (alongside fmtDate above) so the docx renderer mirrors the same
+// row set/labels as this PDF template instead of maintaining a second copy.
+export const PRICING_ROWS: ReadonlyArray<{ key: string; label: string }> = [
   { key: 'baseCost', label: 'Base equipment' },
   { key: 'stopCost', label: 'Additional stops' },
   { key: 'speedPremium', label: 'Speed premium' },
@@ -54,7 +57,7 @@ const PRICING_ROWS: ReadonlyArray<{ key: string; label: string }> = [
   { key: 'freightCost', label: 'Freight' },
 ];
 
-const TECH_ROWS: ReadonlyArray<{ key: string; label: string; unit?: string }> = [
+export const TECH_ROWS: ReadonlyArray<{ key: string; label: string; unit?: string }> = [
   { key: 'capacityPersons', label: 'Rated capacity', unit: 'persons' },
   { key: 'carWidthMm', label: 'Car width', unit: 'mm' },
   { key: 'carDepthMm', label: 'Car depth', unit: 'mm' },

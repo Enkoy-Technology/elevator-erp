@@ -78,6 +78,17 @@ describe('buildQuotationHtml', () => {
     expect(html).toContain('#1B2A4A');
   });
 
+  it('expands a 3-digit hex primary colour to 6 digits', () => {
+    // sanitizeHex normalizes to 6-digit form for every caller (docx's own
+    // color validator rejects 3-digit hex outright — see
+    // quotation.docx-template.spec.ts's regression test for that renderer).
+    // 3-digit hex was, and remains, valid CSS, so this is a display-only
+    // change for the PDF path.
+    const html = buildQuotationHtml(data, { ...branding, primaryColor: '#abc' });
+    expect(html).toContain('#aabbcc');
+    expect(html).not.toContain('--primary: #abc;');
+  });
+
   it('rejects a CSS-injection payload in the primary colour', () => {
     const html = buildQuotationHtml(data, {
       ...branding,
