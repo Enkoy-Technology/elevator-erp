@@ -227,9 +227,12 @@ export async function writeXlsx(
     useStyles: true,
   });
   const sheet = workbook.addWorksheet('Export');
-  const iterator = rows[Symbol.asyncIterator]();
 
+  // Acquired inside try (not before) so a runtime-non-iterable `rows` throws into the
+  // catch/destroyOnError path below instead of escaping teardown.
+  let iterator: AsyncIterator<Record<string, unknown>> | undefined;
   try {
+    iterator = rows[Symbol.asyncIterator]();
     // row.commit() is a real stream write, so the header must be protected by the same
     // try/catch as the row loop below, not run before it.
     const headerRow = sheet.addRow(columns.map((col) => col.header));
@@ -264,7 +267,7 @@ export async function writeXlsx(
     // native `for await`'s IteratorClose: a throwing/rejecting return() must not shadow the
     // loop's own error or skip destroying the response.
     try {
-      await iterator.return?.();
+      await iterator?.return?.();
     } catch {
       // Original `err` below still wins; res still gets destroyed.
     }

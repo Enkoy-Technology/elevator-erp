@@ -69,6 +69,56 @@ export class AssetsRepository {
     });
   }
 
+  /**
+   * Streams every asset matching the same filters `list()` honors, for bulk
+   * export, in batches of BATCH_SIZE.
+   *
+   * ponytail: offset pagination — fine at current row counts; move to
+   * keyset (createdAt, id) if exports start timing out on large tenants.
+   *
+   * Tenant-scoping subtlety: `app.tenant_id` is a transaction-local GUC
+   * (set by `withTenant`), so each batch opens its own `withTenant`
+   * transaction rather than reusing one `tx` across the whole generator.
+   */
+  async *streamAll(
+    tenantId: string,
+    options: { search?: string; category?: AssetCategory; customerId?: string },
+  ): AsyncGenerator<AssetRecord> {
+    const BATCH_SIZE = 500;
+    let offset = 0;
+    for (;;) {
+      const batch = await this.tenantDb.withTenant(tenantId, (tx) => {
+        const filters = [isNull(assets.deletedAt)];
+        if (options.category) {
+          filters.push(eq(assets.category, options.category));
+        }
+        if (options.customerId) {
+          filters.push(eq(assets.customerId, options.customerId));
+        }
+        if (options.search && options.search.trim().length > 0) {
+          const pattern = `%${options.search.trim().toLowerCase()}%`;
+          filters.push(
+            sql`(lower(${assets.name}) like ${pattern} or lower(coalesce(${assets.serialNumber}, '')) like ${pattern} or lower(coalesce(${assets.buildingName}, '')) like ${pattern})`,
+          );
+        }
+        return tx
+          .select()
+          .from(assets)
+          .where(and(...filters))
+          .orderBy(desc(assets.createdAt))
+          .limit(BATCH_SIZE)
+          .offset(offset);
+      });
+      for (const row of batch) {
+        yield row;
+      }
+      if (batch.length < BATCH_SIZE) {
+        return;
+      }
+      offset += BATCH_SIZE;
+    }
+  }
+
   async findById(tenantId: string, id: string): Promise<AssetRecord | null> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       const rows = await tx

@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -15,8 +16,12 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
 
+import { todayIso } from '../../common/business-time';
 import { CurrentUser, Roles } from '../../common/decorators';
+import { parseExportFormat } from '../../common/export/export-query.dto';
+import { type ColumnDef, writeCsv, writeXlsx } from '../../common/export/tabular';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { CreateProjectDto } from './dto/create-project.dto';
 import {
@@ -24,6 +29,38 @@ import {
   UpdateProjectStatusDto,
 } from './dto/update-project-status.dto';
 import { ProjectsService } from './projects.service';
+
+export const PROJECTS_EXPORT_COLUMNS: ColumnDef[] = [
+  { key: 'id', header: 'ID' },
+  { key: 'customerId', header: 'Customer ID' },
+  { key: 'name', header: 'Name' },
+  { key: 'code', header: 'Code' },
+  { key: 'status', header: 'Status' },
+  { key: 'siteAddressLine1', header: 'Site Address Line 1' },
+  { key: 'siteAddressLine2', header: 'Site Address Line 2' },
+  { key: 'siteCity', header: 'Site City' },
+  { key: 'siteRegion', header: 'Site Region' },
+  { key: 'siteCountry', header: 'Site Country' },
+  { key: 'buildingName', header: 'Building Name' },
+  { key: 'quotedAmountEtb', header: 'Quoted Amount (ETB)', format: 'money' },
+  {
+    key: 'contractAmountEtb',
+    header: 'Contract Amount (ETB)',
+    format: 'money',
+  },
+  { key: 'salesRepUserId', header: 'Sales Rep User ID' },
+  { key: 'technicalLeadUserId', header: 'Technical Lead User ID' },
+  { key: 'projectManagerUserId', header: 'Project Manager User ID' },
+  { key: 'expectedStartDate', header: 'Expected Start Date', format: 'date' },
+  { key: 'expectedEndDate', header: 'Expected End Date', format: 'date' },
+  { key: 'actualStartDate', header: 'Actual Start Date', format: 'date' },
+  { key: 'actualEndDate', header: 'Actual End Date', format: 'date' },
+  { key: 'statusChangedAt', header: 'Status Changed At', format: 'date' },
+  { key: 'wonAt', header: 'Won At', format: 'date' },
+  { key: 'notes', header: 'Notes' },
+  { key: 'createdAt', header: 'Created At', format: 'date' },
+  { key: 'updatedAt', header: 'Updated At', format: 'date' },
+];
 
 @ApiTags('projects')
 @ApiBearerAuth('access-token')
@@ -33,14 +70,19 @@ export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List projects (status filter + pagination)' })
+  @ApiOperation({
+    summary:
+      'List projects (status filter + pagination), or stream a CSV/XLSX export with ?format=',
+  })
   @ApiOkResponse({ description: 'Paginated project list' })
-  list(
+  async list(
     @CurrentUser() user: AuthenticatedUser,
+    @Res({ passthrough: false }) res: Response,
     @Query('status') status?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
-  ) {
+    @Query('format') formatRaw?: string,
+  ): Promise<void> {
     if (
       status !== undefined &&
       !(PROJECT_STATUSES as readonly string[]).includes(status)
@@ -49,11 +91,26 @@ export class ProjectsController {
         `status must be one of: ${PROJECT_STATUSES.join(', ')}`,
       );
     }
-    return this.projectsService.list(user, {
-      status: status as (typeof PROJECT_STATUSES)[number] | undefined,
-      page,
-      pageSize,
+    const parsedStatus = status as (typeof PROJECT_STATUSES)[number] | undefined;
+    const format = parseExportFormat(formatRaw);
+    if (!format) {
+      const result = await this.projectsService.list(user, {
+        status: parsedStatus,
+        page,
+        pageSize,
+      });
+      res.json(result);
+      return;
+    }
+    const rows = this.projectsService.streamAll(user, {
+      status: parsedStatus,
     });
+    const filename = `projects-${todayIso()}`;
+    if (format === 'csv') {
+      await writeCsv(res, filename, PROJECTS_EXPORT_COLUMNS, rows);
+    } else {
+      await writeXlsx(res, filename, PROJECTS_EXPORT_COLUMNS, rows);
+    }
   }
 
   @Get(':id')

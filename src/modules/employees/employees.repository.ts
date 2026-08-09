@@ -78,6 +78,60 @@ export class EmployeesRepository {
     });
   }
 
+  /**
+   * Streams every employee matching the same filters `list()` honors, for
+   * bulk export, in batches of BATCH_SIZE. Uses the same explicit column
+   * projection as `list()` — never `passwordHash`/`refreshTokenHash`.
+   *
+   * ponytail: offset pagination — fine at current row counts; move to
+   * keyset (fullName, id) if exports start timing out on large tenants.
+   *
+   * Tenant-scoping subtlety: `app.tenant_id` is a transaction-local GUC
+   * (set by `withTenant`), so each batch opens its own `withTenant`
+   * transaction rather than reusing one `tx` across the whole generator.
+   */
+  async *streamAll(
+    tenantId: string,
+    options: { q?: string },
+  ): AsyncGenerator<EmployeePublic> {
+    const BATCH_SIZE = 500;
+    let offset = 0;
+    for (;;) {
+      const batch = await this.tenantDb.withTenant(tenantId, (tx) => {
+        const filters = [isNull(users.deletedAt), ne(users.role, 'CUSTOMER')];
+        if (options.q && options.q.trim().length > 0) {
+          const pattern = `%${options.q.trim().toLowerCase()}%`;
+          filters.push(
+            sql`(lower(${users.fullName}) like ${pattern} or lower(${users.email}) like ${pattern})`,
+          );
+        }
+        return tx
+          .select({
+            id: users.id,
+            email: users.email,
+            fullName: users.fullName,
+            phone: users.phone,
+            role: users.role,
+            isActive: users.isActive,
+            lastLoginAt: users.lastLoginAt,
+            createdAt: users.createdAt,
+          })
+          .from(users)
+          .where(and(...filters))
+          .orderBy(asc(users.fullName))
+          .limit(BATCH_SIZE)
+          .offset(offset);
+      });
+      for (const row of batch) {
+        yield row;
+      }
+      if (batch.length < BATCH_SIZE) {
+        return;
+      }
+      offset += BATCH_SIZE;
+    }
+  }
+
   async create(
     tenantId: string,
     input: {

@@ -25,6 +25,13 @@ export class AssetsService {
     return this.assetsRepository.list(user.tenantId, options);
   }
 
+  streamAll(
+    user: AuthenticatedUser,
+    options: { search?: string; category?: AssetCategory; customerId?: string },
+  ) {
+    return this.assetsRepository.streamAll(user.tenantId, options);
+  }
+
   async getById(user: AuthenticatedUser, id: string) {
     const asset = await this.assetsRepository.findById(user.tenantId, id);
     if (!asset) {

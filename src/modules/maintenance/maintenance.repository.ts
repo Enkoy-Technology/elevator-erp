@@ -76,6 +76,47 @@ export class MaintenanceRepository {
     });
   }
 
+  /**
+   * Streams every contract matching the same filters `listContracts()`
+   * honors, for bulk export, in batches of BATCH_SIZE.
+   *
+   * ponytail: offset pagination — fine at current row counts; move to
+   * keyset (nextServiceAt, id) if exports start timing out on large tenants.
+   *
+   * Tenant-scoping subtlety: `app.tenant_id` is a transaction-local GUC
+   * (set by `withTenant`), so each batch opens its own `withTenant`
+   * transaction rather than reusing one `tx` across the whole generator.
+   */
+  async *streamAllContracts(
+    tenantId: string,
+    options: { status?: MaintenanceContractStatus },
+  ): AsyncGenerator<MaintenanceContractRecord> {
+    const BATCH_SIZE = 500;
+    let offset = 0;
+    for (;;) {
+      const batch = await this.tenantDb.withTenant(tenantId, (tx) => {
+        const filters = [isNull(maintenanceContracts.deletedAt)];
+        if (options.status) {
+          filters.push(eq(maintenanceContracts.status, options.status));
+        }
+        return tx
+          .select()
+          .from(maintenanceContracts)
+          .where(and(...filters))
+          .orderBy(maintenanceContracts.nextServiceAt)
+          .limit(BATCH_SIZE)
+          .offset(offset);
+      });
+      for (const row of batch) {
+        yield row;
+      }
+      if (batch.length < BATCH_SIZE) {
+        return;
+      }
+      offset += BATCH_SIZE;
+    }
+  }
+
   async createContract(
     tenantId: string,
     createdByUserId: string,
@@ -290,6 +331,47 @@ export class MaintenanceRepository {
         pageSize,
       );
     });
+  }
+
+  /**
+   * Streams every breakdown matching the same filters `listBreakdowns()`
+   * honors, for bulk export, in batches of BATCH_SIZE.
+   *
+   * ponytail: offset pagination — fine at current row counts; move to
+   * keyset (createdAt, id) if exports start timing out on large tenants.
+   *
+   * Tenant-scoping subtlety: `app.tenant_id` is a transaction-local GUC
+   * (set by `withTenant`), so each batch opens its own `withTenant`
+   * transaction rather than reusing one `tx` across the whole generator.
+   */
+  async *streamAllBreakdowns(
+    tenantId: string,
+    options: { status?: BreakdownStatus },
+  ): AsyncGenerator<BreakdownRecord> {
+    const BATCH_SIZE = 500;
+    let offset = 0;
+    for (;;) {
+      const batch = await this.tenantDb.withTenant(tenantId, (tx) => {
+        const filters = [isNull(breakdowns.deletedAt)];
+        if (options.status) {
+          filters.push(eq(breakdowns.status, options.status));
+        }
+        return tx
+          .select()
+          .from(breakdowns)
+          .where(and(...filters))
+          .orderBy(desc(breakdowns.createdAt))
+          .limit(BATCH_SIZE)
+          .offset(offset);
+      });
+      for (const row of batch) {
+        yield row;
+      }
+      if (batch.length < BATCH_SIZE) {
+        return;
+      }
+      offset += BATCH_SIZE;
+    }
   }
 
   async createBreakdown(
