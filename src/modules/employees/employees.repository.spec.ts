@@ -1,6 +1,24 @@
 import { LastAdminError } from '../../common/exceptions';
 import { EmployeesRepository } from './employees.repository';
 
+// Pulls the column name out of a drizzle asc()/desc() SQL wrapper — see the
+// identical helper in customers.repository.spec.ts for the general
+// queryChunks-walking technique this is a narrower version of.
+const extractOrderByColumnNames = (arg: unknown): string[] => {
+  const out: string[] = [];
+  const walk = (x: unknown): void => {
+    if (!x || typeof x !== 'object') return;
+    if ('name' in x && typeof (x as { name?: unknown }).name === 'string' && 'table' in x) {
+      out.push((x as { name: string }).name);
+    }
+    if ('queryChunks' in x) {
+      for (const chunk of (x as { queryChunks: unknown[] }).queryChunks) walk(chunk);
+    }
+  };
+  walk(arg);
+  return out;
+};
+
 // The last-admin guard and the password-reset DB write both live in
 // EmployeesRepository.update() because the guard's count-then-update must
 // run inside the same tenant transaction as the read it depends on (see
@@ -139,5 +157,29 @@ describe('EmployeesRepository.update — password reset', () => {
     const setArgs = updateChain.set!.mock.calls[0]?.[0] as Row;
     expect(setArgs).not.toHaveProperty('passwordHash');
     expect(setArgs).not.toHaveProperty('refreshTokenHash');
+  });
+});
+
+describe('EmployeesRepository.streamAll — orderBy tiebreaker', () => {
+  it('breaks ties on id, so rows sharing a fullName cannot be duplicated/skipped across batches', async () => {
+    const chain: Record<string, jest.Mock> = {};
+    chain.from = jest.fn(() => chain);
+    chain.where = jest.fn(() => chain);
+    chain.orderBy = jest.fn(() => chain);
+    chain.limit = jest.fn(() => chain);
+    chain.offset = jest.fn(() => Promise.resolve([]));
+    const select = jest.fn(() => chain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new EmployeesRepository({ withTenant } as never);
+
+    const gen = repo.streamAll(TENANT_ID, {});
+    await gen.next();
+
+    const orderByArgs = chain.orderBy.mock.calls[0] as unknown[];
+    expect(orderByArgs).toHaveLength(2);
+    expect(extractOrderByColumnNames(orderByArgs[1])).toContain('id');
   });
 });
