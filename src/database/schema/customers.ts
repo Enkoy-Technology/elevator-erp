@@ -23,6 +23,16 @@ export const customers = pgTable(
       .notNull()
       .default(sql`gen_random_uuid()`),
     name: text('name').notNull(),
+    /**
+     * Ethiopic-homophone-folded, lowercased shadow of `name` (see
+     * src/common/text/ethiopic-normalize.ts). Nullable at the schema level —
+     * populated on every write from now on; the migration backfills history.
+     * Not intended for display (JSON list/get responses currently return
+     * the raw row, so it is technically present there — just not meant to
+     * be read); search/duplicate-check filter on this column
+     * instead of `name` so ሀ/ሐ/ኀ-style spelling differences still match.
+     */
+    nameNormalized: text('name_normalized'),
     legalName: text('legal_name'),
     email: text('email'),
     phone: text('phone'),

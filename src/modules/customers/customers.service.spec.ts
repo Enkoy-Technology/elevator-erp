@@ -16,6 +16,7 @@ describe('CustomersService', () => {
     tenantId: user.tenantId,
     id: '33333333-3333-3333-3333-333333333333',
     name: 'Addis Heights PLC',
+    nameNormalized: 'addis heights plc',
     legalName: null,
     email: 'ops@addisheights.et',
     phone: '+251911000000',
