@@ -22,6 +22,13 @@ export class CustomersService {
     return this.customersRepository.list(user.tenantId, options);
   }
 
+  streamAll(
+    user: AuthenticatedUser,
+    options: { search?: string },
+  ): AsyncGenerator<CustomerRecord> {
+    return this.customersRepository.streamAll(user.tenantId, options);
+  }
+
   async getById(
     user: AuthenticatedUser,
     id: string,

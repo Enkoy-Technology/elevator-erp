@@ -27,6 +27,13 @@ export class ProjectsService {
     return this.projectsRepository.list(user.tenantId, options);
   }
 
+  streamAll(
+    user: AuthenticatedUser,
+    options: { status?: ProjectStatus },
+  ): AsyncGenerator<ProjectRecord> {
+    return this.projectsRepository.streamAll(user.tenantId, options);
+  }
+
   async getById(
     user: AuthenticatedUser,
     id: string,

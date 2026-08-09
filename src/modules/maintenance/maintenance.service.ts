@@ -29,6 +29,16 @@ export class MaintenanceService {
     return this.maintenanceRepository.listContracts(user.tenantId, options);
   }
 
+  streamAllContracts(
+    user: AuthenticatedUser,
+    options: { status?: MaintenanceContractStatus },
+  ) {
+    return this.maintenanceRepository.streamAllContracts(
+      user.tenantId,
+      options,
+    );
+  }
+
   createContract(user: AuthenticatedUser, dto: CreateMaintenanceContractDto) {
     return this.maintenanceRepository.createContract(
       user.tenantId,
@@ -79,6 +89,16 @@ export class MaintenanceService {
     },
   ) {
     return this.maintenanceRepository.listBreakdowns(user.tenantId, options);
+  }
+
+  streamAllBreakdowns(
+    user: AuthenticatedUser,
+    options: { status?: BreakdownStatus },
+  ) {
+    return this.maintenanceRepository.streamAllBreakdowns(
+      user.tenantId,
+      options,
+    );
   }
 
   createBreakdown(user: AuthenticatedUser, dto: CreateBreakdownDto) {

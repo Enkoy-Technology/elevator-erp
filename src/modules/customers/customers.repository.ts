@@ -67,6 +67,52 @@ export class CustomersRepository {
   }
 
   /**
+   * Streams every customer matching the same filters `list()` honors, for
+   * bulk export. Pages through in batches rather than loading the full
+   * table at once.
+   *
+   * ponytail: offset pagination — fine at current row counts; move to
+   * keyset (createdAt, id) if exports start timing out on large tenants.
+   *
+   * Tenant-scoping subtlety: `app.tenant_id` is a transaction-local GUC
+   * (set by `withTenant`), so it does NOT survive across awaits/batches on
+   * its own — each batch must open its own `withTenant` transaction rather
+   * than reusing one `tx` across the whole generator.
+   */
+  async *streamAll(
+    tenantId: string,
+    options: { search?: string },
+  ): AsyncGenerator<CustomerRecord> {
+    const BATCH_SIZE = 500;
+    let offset = 0;
+    for (;;) {
+      const batch = await this.tenantDb.withTenant(tenantId, (tx) => {
+        const filters = [isNull(customers.deletedAt)];
+        if (options.search && options.search.trim().length > 0) {
+          const pattern = `%${options.search.trim().toLowerCase()}%`;
+          filters.push(
+            sql`(lower(${customers.name}) like ${pattern} or lower(coalesce(${customers.email}, '')) like ${pattern} or coalesce(${customers.phone}, '') like ${pattern})`,
+          );
+        }
+        return tx
+          .select()
+          .from(customers)
+          .where(and(...filters))
+          .orderBy(desc(customers.createdAt))
+          .limit(BATCH_SIZE)
+          .offset(offset);
+      });
+      for (const row of batch) {
+        yield row;
+      }
+      if (batch.length < BATCH_SIZE) {
+        return;
+      }
+      offset += BATCH_SIZE;
+    }
+  }
+
+  /**
    * Look-alike check for the create form. Warns, never blocks: name contains
    * in either direction (so "Addis Heights" matches "Addis Heights PLC" and
    * vice versa), or the same trailing 9 phone digits on either phone column

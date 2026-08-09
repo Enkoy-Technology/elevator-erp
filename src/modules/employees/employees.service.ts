@@ -17,6 +17,10 @@ export class EmployeesService {
     return this.employeesRepository.list(user.tenantId, options);
   }
 
+  streamAll(user: AuthenticatedUser, options: { q?: string }) {
+    return this.employeesRepository.streamAll(user.tenantId, options);
+  }
+
   create(user: AuthenticatedUser, dto: CreateEmployeeDto) {
     return this.employeesRepository.create(user.tenantId, {
       email: dto.email,
