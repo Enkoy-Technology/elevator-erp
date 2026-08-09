@@ -1,16 +1,8 @@
 import type { TenantBranding } from '../document-pdf.service';
 import { esc, renderLayout } from './layout';
+import { formatEtb } from './money-format';
 
-const etbFormatter = new Intl.NumberFormat('en-US', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-/** Format a decimal money string (e.g. "1234.5") as "1,234.50 ETB". */
-export const formatEtb = (value: string | null | undefined): string => {
-  const n = Number(value ?? 0);
-  return `${etbFormatter.format(Number.isFinite(n) ? n : 0)} ETB`;
-};
+export { formatEtb };
 
 /** Exported for reuse by other renderers of the same template (e.g. the docx renderer). */
 export const fmtDate = (d: Date | string | null | undefined): string => {
@@ -85,7 +77,7 @@ export const buildQuotationHtml = (data: object, branding: TenantBranding | null
   const techRows = TECH_ROWS.filter((r) => tech[r.key] != null)
     .map(
       (r) =>
-        `<tr><td>${r.label}</td><td class="num">${esc(String(tech[r.key]))}${r.unit ? ` ${r.unit}` : ''}</td></tr>`,
+        `<tr><td>${r.label}</td><td class="num">${esc(tech[r.key])}${r.unit ? ` ${r.unit}` : ''}</td></tr>`,
     )
     .join('');
 

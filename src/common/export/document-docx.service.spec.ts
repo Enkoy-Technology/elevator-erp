@@ -115,10 +115,13 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
     expect(buf.length).toBeGreaterThan(1024);
 
     const documentXml = extractZipEntry(buf, 'word/document.xml').toString('utf8');
-    // The Amharic customer name and the verbatim total money string both
-    // made it into the actual OOXML document part, not just the in-memory
-    // Document object Packer.toBuffer() consumed.
+    // The Amharic customer name and the total money string both made it
+    // into the actual OOXML document part, not just the in-memory Document
+    // object Packer.toBuffer() consumed. Grouped with a thousands separator
+    // (not the bare "143750.00") — REC 3: the Word renderer now shares
+    // money-format.ts's formatEtb with the PDF renderer, so the two
+    // document formats show identical figures for the same quote.
     expect(documentXml).toContain('ኤሌቬተር ማንሻ');
-    expect(documentXml).toContain('143750.00');
+    expect(documentXml).toContain('143,750.00 ETB');
   });
 });
