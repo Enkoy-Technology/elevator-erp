@@ -80,8 +80,10 @@ export class MaintenanceRepository {
    * Streams every contract matching the same filters `listContracts()`
    * honors, for bulk export, in batches of BATCH_SIZE.
    *
-   * ponytail: offset pagination — fine at current row counts; move to
-   * keyset (nextServiceAt, id) if exports start timing out on large tenants.
+   * ponytail: offset batching — concurrent writes during export can
+   * skip/duplicate rows across batch boundaries; acceptable for ad-hoc
+   * admin downloads, switch to keyset cursor before this feeds accounting
+   * reconciliation. Perf ceiling: keyset if large-tenant exports time out.
    *
    * Tenant-scoping subtlety: `app.tenant_id` is a transaction-local GUC
    * (set by `withTenant`), so each batch opens its own `withTenant`
@@ -337,8 +339,10 @@ export class MaintenanceRepository {
    * Streams every breakdown matching the same filters `listBreakdowns()`
    * honors, for bulk export, in batches of BATCH_SIZE.
    *
-   * ponytail: offset pagination — fine at current row counts; move to
-   * keyset (createdAt, id) if exports start timing out on large tenants.
+   * ponytail: offset batching — concurrent writes during export can
+   * skip/duplicate rows across batch boundaries; acceptable for ad-hoc
+   * admin downloads, switch to keyset cursor before this feeds accounting
+   * reconciliation. Perf ceiling: keyset if large-tenant exports time out.
    *
    * Tenant-scoping subtlety: `app.tenant_id` is a transaction-local GUC
    * (set by `withTenant`), so each batch opens its own `withTenant`

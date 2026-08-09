@@ -56,8 +56,10 @@ export class ProjectsRepository {
    * Streams every project matching the same filters `list()` honors, for
    * bulk export, in batches of BATCH_SIZE.
    *
-   * ponytail: offset pagination — fine at current row counts; move to
-   * keyset (createdAt, id) if exports start timing out on large tenants.
+   * ponytail: offset batching — concurrent writes during export can
+   * skip/duplicate rows across batch boundaries; acceptable for ad-hoc
+   * admin downloads, switch to keyset cursor before this feeds accounting
+   * reconciliation. Perf ceiling: keyset if large-tenant exports time out.
    *
    * Tenant-scoping subtlety: `app.tenant_id` is a transaction-local GUC
    * (set by `withTenant`), so each batch opens its own `withTenant`
