@@ -276,3 +276,46 @@ describe('CustomersRepository — Ethiopic-normalized write and search', () => {
     expect(literals.some((l) => l.includes('ኀይሉ'))).toBe(false);
   });
 });
+
+// Pulls the column name out of a drizzle asc()/desc() SQL wrapper (same
+// queryChunks shape extractSqlLiterals above walks for `sql` fragments) —
+// used to assert the PK tiebreaker is actually present in orderBy() without
+// needing a real column/table object.
+const extractOrderByColumnNames = (arg: unknown): string[] => {
+  const out: string[] = [];
+  const walk = (x: unknown): void => {
+    if (!x || typeof x !== 'object') return;
+    if ('name' in x && typeof (x as { name?: unknown }).name === 'string' && 'table' in x) {
+      out.push((x as { name: string }).name);
+    }
+    if ('queryChunks' in x) {
+      for (const chunk of (x as { queryChunks: unknown[] }).queryChunks) walk(chunk);
+    }
+  };
+  walk(arg);
+  return out;
+};
+
+describe('CustomersRepository.streamAll — orderBy tiebreaker', () => {
+  it('breaks ties on id, so rows sharing a createdAt cannot be duplicated/skipped across batches', async () => {
+    const itemsChain: Record<string, jest.Mock> = {};
+    itemsChain.from = jest.fn(() => itemsChain);
+    itemsChain.where = jest.fn(() => itemsChain);
+    itemsChain.orderBy = jest.fn(() => itemsChain);
+    itemsChain.limit = jest.fn(() => itemsChain);
+    itemsChain.offset = jest.fn(() => Promise.resolve([]));
+    const select = jest.fn(() => itemsChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new CustomersRepository({ withTenant } as never);
+
+    const gen = repo.streamAll(TENANT_ID, {});
+    await gen.next();
+
+    const orderByArgs = itemsChain.orderBy.mock.calls[0] as unknown[];
+    expect(orderByArgs).toHaveLength(2);
+    expect(extractOrderByColumnNames(orderByArgs[1])).toContain('id');
+  });
+});

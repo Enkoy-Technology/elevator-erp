@@ -83,10 +83,12 @@ export class EmployeesRepository {
    * bulk export, in batches of BATCH_SIZE. Uses the same explicit column
    * projection as `list()` — never `passwordHash`/`refreshTokenHash`.
    *
-   * ponytail: offset batching — concurrent writes during export can
-   * skip/duplicate rows across batch boundaries; acceptable for ad-hoc
-   * admin downloads, switch to keyset cursor before this feeds accounting
-   * reconciliation. Perf ceiling: keyset if large-tenant exports time out.
+   * ponytail: offset batching, ties broken by the `id` tiebreaker below so
+   * equal `fullName` values (e.g. two "Abebe Kebede"s) no longer duplicate
+   * or skip rows across batch boundaries — concurrent inserts/deletes can
+   * still shift the offset window; acceptable for ad-hoc admin downloads,
+   * switch to keyset cursor before this feeds accounting reconciliation.
+   * Perf ceiling: keyset if large-tenant exports time out.
    *
    * Tenant-scoping subtlety: `app.tenant_id` is a transaction-local GUC
    * (set by `withTenant`), so each batch opens its own `withTenant`
@@ -120,7 +122,7 @@ export class EmployeesRepository {
           })
           .from(users)
           .where(and(...filters))
-          .orderBy(asc(users.fullName))
+          .orderBy(asc(users.fullName), asc(users.id))
           .limit(BATCH_SIZE)
           .offset(offset);
       });

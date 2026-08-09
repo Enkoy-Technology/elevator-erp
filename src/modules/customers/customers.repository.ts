@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, count, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNull, or, sql } from 'drizzle-orm';
 
 import { CustomerInUseError } from '../../common/exceptions';
 import {
@@ -77,10 +77,12 @@ export class CustomersRepository {
    * bulk export. Pages through in batches rather than loading the full
    * table at once.
    *
-   * ponytail: offset batching — concurrent writes during export can
-   * skip/duplicate rows across batch boundaries; acceptable for ad-hoc
-   * admin downloads, switch to keyset cursor before this feeds accounting
-   * reconciliation. Perf ceiling: keyset if large-tenant exports time out.
+   * ponytail: offset batching, ties broken by the `id` tiebreaker below so
+   * equal `createdAt` values (bulk import, seed data) no longer duplicate
+   * or skip rows across batch boundaries — concurrent inserts/deletes can
+   * still shift the offset window; acceptable for ad-hoc admin downloads,
+   * switch to keyset cursor before this feeds accounting reconciliation.
+   * Perf ceiling: keyset if large-tenant exports time out.
    *
    * Tenant-scoping subtlety: `app.tenant_id` is a transaction-local GUC
    * (set by `withTenant`), so it does NOT survive across awaits/batches on
@@ -107,7 +109,7 @@ export class CustomersRepository {
           .select()
           .from(customers)
           .where(and(...filters))
-          .orderBy(desc(customers.createdAt))
+          .orderBy(desc(customers.createdAt), asc(customers.id))
           .limit(BATCH_SIZE)
           .offset(offset);
       });
