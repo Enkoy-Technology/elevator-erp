@@ -16,6 +16,7 @@ import { EmployeesModule } from './modules/employees/employees.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { QuotationsModule } from './modules/quotations/quotations.module';
 import { RatesModule } from './modules/rates/rates.module';
 import { SettingsModule } from './modules/settings/settings.module';
 
@@ -33,6 +34,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     ElevatorCalcModule,
     CustomersModule,
     ProjectsModule,
+    QuotationsModule,
     EmployeesModule,
     AssetsModule,
     NotificationsModule,
