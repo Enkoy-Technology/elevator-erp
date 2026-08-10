@@ -49,13 +49,9 @@ describe('ProformasController.document — format routing and filenames', () => 
     customerName: 'Acme',
     projectName: 'Bole Tower',
     technicalSpec: null,
-    pricingBreakdown: null,
-    marginPercent: null,
-    marginAmountEtb: null,
-    taxPercent: null,
     subtotalEtb: '100000.00',
-    vatEtb: '18750.00',
-    totalEtb: '143750.00',
+    vatEtb: '15000.00',
+    totalEtb: '115000.00',
   };
 
   const proformasService = {

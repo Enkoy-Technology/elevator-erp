@@ -20,15 +20,12 @@ describe('buildProformaHtml', () => {
     status: 'ISSUED',
     issuedAt: new Date('2026-08-01T00:00:00.000Z'),
     validUntil: new Date('2026-09-30T00:00:00.000Z'),
-    marginPercent: '25.00',
     taxPercent: '15.00',
     subtotalEtb: '100000.00',
-    marginAmountEtb: '25000.00',
-    vatEtb: '18750.00',
-    totalEtb: '143750.00',
+    vatEtb: '15000.00',
+    totalEtb: '115000.00',
     notes: 'Bank transfer only',
     technicalSpec: { capacityPersons: 13, motorPowerKw: '11.00' },
-    pricingBreakdown: { baseCost: '80000.00', installationCost: '20000.00' },
     projectName: 'Bole Twin Towers — Lift A',
     customerName: 'Acme Real Estate PLC',
   };
@@ -39,7 +36,7 @@ describe('buildProformaHtml', () => {
     expect(html).toContain('PF-FY2026-27-0001');
     expect(html).toContain('Acme Real Estate PLC');
     expect(html).toContain('Bole Twin Towers');
-    expect(html).toContain('143,750.00 ETB');
+    expect(html).toContain('115,000.00 ETB');
   });
 
   it('renders the branding letterhead', () => {
@@ -48,10 +45,18 @@ describe('buildProformaHtml', () => {
     expect(html).toContain('Bole Road, Addis Ababa');
   });
 
-  it('reuses the quotation template pricing/technical rows', () => {
+  it('reuses the quotation template technical spec rows', () => {
     const html = buildProformaHtml(data, branding);
-    expect(html).toContain('Base equipment');
     expect(html).toContain('Rated capacity');
+  });
+
+  it('shows the taxable base as a single "Supply and installation" line — no margin row, no cost itemization', () => {
+    const html = buildProformaHtml(data, branding);
+    expect(html).toContain('Supply and installation');
+    expect(html).toContain('100,000.00 ETB');
+    expect(html).toContain('VAT (15.00%)');
+    expect(html).not.toContain('Margin');
+    expect(html).not.toContain('Base equipment');
   });
 
   it('escapes HTML in the customer name', () => {

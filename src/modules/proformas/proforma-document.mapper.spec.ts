@@ -12,17 +12,13 @@ const row: ProformaDocumentRow = {
   customerName: 'Acme Real Estate PLC',
   projectName: 'Bole Twin Towers — Lift A',
   technicalSpec: { capacityPersons: 13 },
-  pricingBreakdown: { baseCost: '80000.00' },
-  marginPercent: '25.00',
-  marginAmountEtb: '25000.00',
-  taxPercent: '15.00',
   subtotalEtb: '100000.00',
-  vatEtb: '18750.00',
-  totalEtb: '143750.00',
+  vatEtb: '15000.00',
+  totalEtb: '115000.00',
 };
 
 describe('proformaDocumentData', () => {
-  it('maps the proforma own field names (vatEtb/totalEtb) and the joined quotation line data', () => {
+  it('maps the proforma own field names (vatEtb/totalEtb) and its own snapshot line data, deriving taxPercent from subtotal/vat', () => {
     expect(proformaDocumentData(row)).toEqual({
       proformaNumber: 'PF-FY2026-27-0001',
       status: 'ISSUED',
@@ -31,20 +27,17 @@ describe('proformaDocumentData', () => {
       customerName: 'Acme Real Estate PLC',
       projectName: 'Bole Twin Towers — Lift A',
       technicalSpec: { capacityPersons: 13 },
-      pricingBreakdown: { baseCost: '80000.00' },
       subtotalEtb: '100000.00',
-      marginPercent: '25.00',
-      marginAmountEtb: '25000.00',
       taxPercent: '15.00',
-      vatEtb: '18750.00',
-      totalEtb: '143750.00',
+      vatEtb: '15000.00',
+      totalEtb: '115000.00',
       notes: null,
     });
   });
 
   it('passes money fields through as raw decimal strings, not pre-formatted', () => {
     const data = proformaDocumentData(row);
-    expect(data.totalEtb).toBe('143750.00');
+    expect(data.totalEtb).toBe('115000.00');
     expect(data.totalEtb).not.toContain('ETB');
   });
 

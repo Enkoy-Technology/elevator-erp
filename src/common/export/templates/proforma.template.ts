@@ -1,21 +1,25 @@
 import type { TenantBranding } from '../document-pdf.service';
 import { esc, renderLayout } from './layout';
 import { formatEtb } from './money-format';
-import { fmtDate, PRICING_ROWS, TECH_ROWS } from './quotation.template';
+import { fmtDate, TECH_ROWS } from './quotation.template';
 
 export { formatEtb, fmtDate };
 
 /**
  * Shape `DocumentPdfService.renderDocumentPdf('proforma', data, branding)`
- * expects. Thin reuse of QuotationTemplateData's field set (same
- * PRICING_ROWS/TECH_ROWS/layout as quotation.template.ts) with the
- * proforma's own identifier (proformaNumber, issuedAt — no submit/approve
- * trail) and its own money column names (vatEtb/totalEtb, not the
- * quotation's taxAmountEtb/totalPriceEtb — see proformas schema / the
- * task-2 report). "the quotation's line data" (technicalSpec,
- * pricingBreakdown, marginPercent/marginAmountEtb, taxPercent) is carried
- * over from the quotation that was converted, since proformas do not
- * duplicate that jsonb snapshot — see proforma-document.mapper.ts.
+ * expects. Thin reuse of QuotationTemplateData's field set (same TECH_ROWS/
+ * layout as quotation.template.ts) with the proforma's own identifier
+ * (proformaNumber, issuedAt — no submit/approve trail) and its own money
+ * column names (vatEtb/totalEtb, not the quotation's taxAmountEtb/
+ * totalPriceEtb — see proformas schema / the task-2 report).
+ *
+ * Deliberately does NOT reuse quotation.template.ts's PRICING_ROWS/margin
+ * fields: this document goes to the customer, and the quotation's
+ * pre-margin cost itemization and margin amount are the client's markup —
+ * never disclosed here (decision (a), finance-exports-sms phase-3 report).
+ * The quotation template (internal artifact) keeps that breakdown; this one
+ * shows only the taxable base, VAT, and total. taxPercent is not a stored
+ * field — proforma-document.mapper.ts derives it from subtotalEtb/vatEtb.
  */
 export interface ProformaTemplateData {
   proformaNumber: string;
@@ -25,10 +29,7 @@ export interface ProformaTemplateData {
   customerName: string;
   projectName: string;
   technicalSpec?: Record<string, unknown> | null;
-  pricingBreakdown?: Record<string, string> | null;
   subtotalEtb?: string | null;
-  marginPercent?: string | null;
-  marginAmountEtb?: string | null;
   taxPercent?: string | null;
   vatEtb?: string | null;
   totalEtb?: string | null;
@@ -38,16 +39,12 @@ export interface ProformaTemplateData {
 /**
  * Build the branded proforma-invoice HTML document. Pure — no I/O — mirrors
  * buildQuotationHtml's body shape; only the title, the meta-grid's leading
- * field, and the totals block's field names differ.
+ * field, and the pricing block (taxable base / VAT / total only — no
+ * margin, no cost itemization, see the interface doc comment) differ.
  */
 export const buildProformaHtml = (data: object, branding: TenantBranding | null): string => {
   const d = data as ProformaTemplateData;
-  const pricing = d.pricingBreakdown ?? {};
   const tech = d.technicalSpec ?? {};
-
-  const pricingRows = PRICING_ROWS.filter((r) => pricing[r.key] != null)
-    .map((r) => `<tr><td>${r.label}</td><td class="num">${formatEtb(pricing[r.key])}</td></tr>`)
-    .join('');
 
   const techRows = TECH_ROWS.filter((r) => tech[r.key] != null)
     .map(
@@ -71,11 +68,8 @@ export const buildProformaHtml = (data: object, branding: TenantBranding | null)
   <table>${techRows || '<tr><td>See attached specification</td><td></td></tr>'}</table>
 
   <h2>Pricing</h2>
-  <table>${pricingRows}</table>
-
   <table class="totals">
-    <tr><td>Subtotal</td><td class="num">${formatEtb(d.subtotalEtb)}</td></tr>
-    <tr><td>Margin (${esc(d.marginPercent ?? '0')}%)</td><td class="num">${formatEtb(d.marginAmountEtb)}</td></tr>
+    <tr><td>Supply and installation</td><td class="num">${formatEtb(d.subtotalEtb)}</td></tr>
     <tr><td>VAT (${esc(d.taxPercent ?? '0')}%)</td><td class="num">${formatEtb(d.vatEtb)}</td></tr>
     <tr class="grand"><td>Total</td><td class="num">${formatEtb(d.totalEtb)}</td></tr>
   </table>

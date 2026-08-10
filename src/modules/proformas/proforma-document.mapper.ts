@@ -1,12 +1,22 @@
 import type { ColumnDef } from '../../common/export/tabular';
+import { vatPercentLabel } from '../../common/export/templates/money-format';
 import type { ProformaTemplateData } from '../../common/export/templates/proforma.template';
 
 /**
  * The fields proformaDocumentData/PROFORMA_DOCUMENT_COLUMNS actually read —
  * narrower than ProformaRecord (which ProformasRepository.
  * findByIdForDocument's joined row structurally satisfies, plus
- * customerName/projectName and the linked quotation's line data). Kept
- * narrow so this type doubles as the minimal fixture shape a test needs.
+ * customerName/projectName). Kept narrow so this type doubles as the
+ * minimal fixture shape a test needs.
+ *
+ * No marginPercent/marginAmountEtb/taxPercent here: the customer-facing
+ * document does not disclose the client's markup (decision (a)) and the VAT
+ * rate is derived from subtotalEtb/vatEtb instead of stored (see
+ * vatPercentLabel) — technicalSpec/pricingBreakdown are still carried
+ * (proforma's own snapshot columns, not a quotation join — see
+ * ProformasRepository.findByIdForDocument) even though the template only
+ * renders technicalSpec; pricingBreakdown stays available as an internal
+ * audit trail for Phase 4.
  */
 export interface ProformaDocumentRow {
   proformaNumber: string;
@@ -16,10 +26,6 @@ export interface ProformaDocumentRow {
   customerName: string | null;
   projectName: string | null;
   technicalSpec: unknown;
-  pricingBreakdown: unknown;
-  marginPercent: string | null;
-  marginAmountEtb: string | null;
-  taxPercent: string | null;
   subtotalEtb: string;
   vatEtb: string;
   totalEtb: string;
@@ -39,11 +45,8 @@ export const proformaDocumentData = (p: ProformaDocumentRow): ProformaTemplateDa
   customerName: p.customerName ?? '',
   projectName: p.projectName ?? '',
   technicalSpec: p.technicalSpec as Record<string, unknown> | null,
-  pricingBreakdown: p.pricingBreakdown as Record<string, string> | null,
   subtotalEtb: p.subtotalEtb,
-  marginPercent: p.marginPercent,
-  marginAmountEtb: p.marginAmountEtb,
-  taxPercent: p.taxPercent,
+  taxPercent: vatPercentLabel(p.subtotalEtb, p.vatEtb),
   vatEtb: p.vatEtb,
   totalEtb: p.totalEtb,
   // proformas has no notes column of its own (see database/schema/proformas.ts).
