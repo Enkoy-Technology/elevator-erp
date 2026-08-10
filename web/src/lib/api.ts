@@ -881,6 +881,212 @@ export interface DashboardSummary {
 export const getDashboardSummary = (): Promise<DashboardSummary> =>
   apiFetch<DashboardSummary>('/dashboard/summary');
 
+export type DocumentFormat = 'pdf' | 'docx' | 'xlsx';
+
+/**
+ * Fetch a binary document (PDF/Word/Excel) and trigger a browser download.
+ * apiFetch can't be used here — it assumes a JSON body. The filename is
+ * reconstructed client-side from the same `<prefix>-<number>.<ext>` scheme
+ * the server uses (QuotationsController/ProformasController#document),
+ * rather than parsing Content-Disposition — smaller, and the two are
+ * guaranteed to agree since both come from the same source data.
+ */
+const downloadDocument = async (
+  path: string,
+  filename: string,
+  retryOn401 = true,
+): Promise<void> => {
+  const token = getAccessToken();
+  const response = await fetch(`${API_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (response.status === 401 && retryOn401 && (await refreshTokens())) {
+    return downloadDocument(path, filename, false);
+  }
+  if (!response.ok) {
+    throw new ApiError(await parseProblem(response));
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+};
+
+export type QuoteStatus =
+  | 'DRAFT'
+  | 'PENDING_APPROVAL'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'EXPIRED'
+  | 'CONVERTED_TO_PROFORMA';
+
+export interface Quotation {
+  id: string;
+  projectId: string;
+  customerId: string;
+  quoteNumber: string;
+  status: QuoteStatus;
+  marginPercent: string;
+  taxPercent: string;
+  subtotalEtb: string;
+  marginAmountEtb: string;
+  taxAmountEtb: string;
+  totalPriceEtb: string;
+  validUntil: string | null;
+  notes: string | null;
+  approvedByUserId: string | null;
+  approvedAt: string | null;
+  rejectedReason: string | null;
+  createdAt: string;
+}
+
+/** Same shape the calc engine takes, minus taxPercent — VAT is resolved
+ *  server-side from the statutory rates table, never client-supplied. */
+export interface CreateQuotationPayload extends Omit<CalcInputPayload, 'taxPercent'> {
+  validUntil?: string;
+  notes?: string;
+}
+
+export const listQuotations = (options?: {
+  projectId?: string;
+  status?: QuoteStatus;
+  page?: number;
+  pageSize?: number;
+}): Promise<Paginated<Quotation>> => {
+  const params = new URLSearchParams();
+  if (options?.projectId) {
+    params.set('projectId', options.projectId);
+  }
+  if (options?.status) {
+    params.set('status', options.status);
+  }
+  if (options?.page) {
+    params.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set('pageSize', String(options.pageSize));
+  }
+  const query = params.toString();
+  return apiFetch<Paginated<Quotation>>(
+    `/quotations${query ? `?${query}` : ''}`,
+  );
+};
+
+export const createQuotationFromCalc = (
+  projectId: string,
+  payload: CreateQuotationPayload,
+): Promise<Quotation> =>
+  apiFetch<Quotation>(`/projects/${projectId}/quotations`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const submitQuotation = (id: string): Promise<Quotation> =>
+  apiFetch<Quotation>(`/quotations/${id}/submit`, { method: 'POST' });
+
+export const approveQuotation = (id: string): Promise<Quotation> =>
+  apiFetch<Quotation>(`/quotations/${id}/approve`, { method: 'POST' });
+
+export const rejectQuotation = (
+  id: string,
+  reason: string,
+): Promise<Quotation> =>
+  apiFetch<Quotation>(`/quotations/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+
+export const expireQuotation = (id: string): Promise<Quotation> =>
+  apiFetch<Quotation>(`/quotations/${id}/expire`, { method: 'POST' });
+
+export const downloadQuotationDocument = (
+  id: string,
+  quoteNumber: string,
+  format: DocumentFormat,
+): Promise<void> =>
+  downloadDocument(
+    `/quotations/${id}/document?format=${format}`,
+    `quotation-${quoteNumber}.${format}`,
+  );
+
+export type ProformaStatus = 'ISSUED' | 'CANCELLED';
+
+export interface Proforma {
+  id: string;
+  quotationId: string;
+  projectId: string;
+  customerId: string;
+  proformaNumber: string;
+  fiscalYearLabel: string;
+  subtotalEtb: string;
+  vatEtb: string;
+  totalEtb: string;
+  issuedAt: string;
+  issuedByUserId: string | null;
+  validUntil: string | null;
+  status: ProformaStatus;
+  cancelReason: string | null;
+  createdAt: string;
+}
+
+export const listProformas = (options?: {
+  projectId?: string;
+  status?: ProformaStatus;
+  page?: number;
+  pageSize?: number;
+}): Promise<Paginated<Proforma>> => {
+  const params = new URLSearchParams();
+  if (options?.projectId) {
+    params.set('projectId', options.projectId);
+  }
+  if (options?.status) {
+    params.set('status', options.status);
+  }
+  if (options?.page) {
+    params.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set('pageSize', String(options.pageSize));
+  }
+  const query = params.toString();
+  return apiFetch<Paginated<Proforma>>(
+    `/proformas${query ? `?${query}` : ''}`,
+  );
+};
+
+export const convertQuotationToProforma = (
+  quotationId: string,
+  validUntil?: string,
+): Promise<Proforma> =>
+  apiFetch<Proforma>(`/quotations/${quotationId}/convert-to-proforma`, {
+    method: 'POST',
+    body: JSON.stringify(validUntil ? { validUntil } : {}),
+  });
+
+export const cancelProforma = (
+  id: string,
+  reason: string,
+): Promise<Proforma> =>
+  apiFetch<Proforma>(`/proformas/${id}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+
+export const downloadProformaDocument = (
+  id: string,
+  proformaNumber: string,
+  format: DocumentFormat,
+): Promise<void> =>
+  downloadDocument(
+    `/proformas/${id}/document?format=${format}`,
+    `proforma-${proformaNumber}.${format}`,
+  );
+
 export const updateSettings = (payload: {
   primaryColorHex?: string;
   secondaryColorHex?: string;
