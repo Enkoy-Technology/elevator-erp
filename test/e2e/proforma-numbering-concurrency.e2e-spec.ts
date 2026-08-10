@@ -52,6 +52,7 @@ describe('Proforma numbering under concurrency', () => {
   let projectAId: string;
   let projectBId: string;
   let rateVersionId: string;
+  let insertedRateVersion = false;
   let quoteAId: string;
   let quoteBId: string;
 
@@ -110,20 +111,29 @@ describe('Proforma numbering under concurrency', () => {
     );
     projectBId = projectB.rows[0]!.id;
 
-    // Global table (no tenant_id) — see RatesRepository's own doc comment.
-    // rate_versions.kind has no DB-level CHECK constraint (Drizzle's
-    // text(..., { enum }) is TS-only) and 'kind' has a partial unique index
-    // on (kind) WHERE valid_to IS NULL, so a real 'VAT' insert here would
-    // collide with the real open VAT row seeded elsewhere. A synthetic
-    // test-only kind avoids that entirely (mirrors
-    // rates-rotation-concurrency.e2e-spec.ts).
-    const kind = `E2E_TEST_KIND_${randomUUID().slice(0, 8)}`;
-    const rateVersion = await adminPool.query<{ id: string }>(
-      `insert into rate_versions (kind, valid_from, payload, source)
-       values ($1, '2020-01-01', '{"percent": "15"}'::jsonb, 'e2e-setup') returning id`,
-      [kind],
+    // ProformasRepository.issue() rejects conversion unless the quotation's
+    // rateVersionId IS the currently open 'VAT' version (VAT-staleness
+    // guard) — so, unlike the old synthetic-kind approach, this must
+    // reference the real open VAT row, not a same-shaped stand-in. Global
+    // table (no tenant_id) — see RatesRepository's own doc comment.
+    // 'kind' has a partial unique index on (kind) WHERE valid_to IS NULL, so
+    // inserting a second open 'VAT' row would collide if one is already
+    // seeded (db:seed:rates) — reuse it via SELECT instead of inserting;
+    // only insert (and only then clean up) when this environment truly has
+    // none open yet.
+    const existingVat = await adminPool.query<{ id: string }>(
+      `select id from rate_versions where kind = 'VAT' and valid_to is null limit 1`,
     );
-    rateVersionId = rateVersion.rows[0]!.id;
+    if (existingVat.rows[0]) {
+      rateVersionId = existingVat.rows[0].id;
+    } else {
+      const rateVersion = await adminPool.query<{ id: string }>(
+        `insert into rate_versions (kind, valid_from, payload, source)
+         values ('VAT', '2020-01-01', '{"percent": "15"}'::jsonb, 'e2e-setup') returning id`,
+      );
+      rateVersionId = rateVersion.rows[0]!.id;
+      insertedRateVersion = true;
+    }
 
     const insertApprovedQuote = async (
       projectId: string,
@@ -164,9 +174,14 @@ describe('Proforma numbering under concurrency', () => {
     await adminPool.query(`delete from customers where tenant_id = $1`, [
       tenantId,
     ]);
-    await adminPool.query(`delete from rate_versions where id = $1`, [
-      rateVersionId,
-    ]);
+    // Only clean up the rate_versions row if this run inserted it — a
+    // pre-existing open VAT row (db:seed:rates or another suite) is shared
+    // state, not this test's to delete.
+    if (insertedRateVersion) {
+      await adminPool.query(`delete from rate_versions where id = $1`, [
+        rateVersionId,
+      ]);
+    }
     await adminPool.query(`delete from users where tenant_id = $1`, [
       tenantId,
     ]);

@@ -16,6 +16,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
+import { Decimal } from 'decimal.js';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 
@@ -57,6 +58,7 @@ describe('Quotation -> proforma -> project DAG happy path', () => {
   let customerId: string;
   let projectId: string;
   let rateVersionId: string;
+  let insertedRateVersion = false;
   let quoteId: string;
   let user: AuthenticatedUser;
 
@@ -109,16 +111,28 @@ describe('Quotation -> proforma -> project DAG happy path', () => {
     );
     projectId = projectResult.rows[0]!.id;
 
-    // Synthetic kind — see the identical rationale in
-    // proforma-numbering-concurrency.e2e-spec.ts (avoids colliding with the
-    // real open VAT row on rate_versions' partial unique index).
-    const kind = `E2E_TEST_KIND_${randomUUID().slice(0, 8)}`;
-    const rateVersion = await adminPool.query<{ id: string }>(
-      `insert into rate_versions (kind, valid_from, payload, source)
-       values ($1, '2020-01-01', '{"percent": "15"}'::jsonb, 'e2e-setup') returning id`,
-      [kind],
+    // ProformasRepository.issue() rejects conversion unless the quotation's
+    // rateVersionId IS the currently open 'VAT' version (VAT-staleness
+    // guard) — so this must reference the real open VAT row, not a
+    // same-shaped stand-in kind. See the identical rationale in
+    // proforma-numbering-concurrency.e2e-spec.ts: reuse the existing open
+    // row via SELECT (rate_versions' partial unique index on (kind) WHERE
+    // valid_to IS NULL means a second open 'VAT' insert would collide with
+    // one seeded elsewhere); only insert — and only then clean up — when
+    // this environment truly has none open yet.
+    const existingVat = await adminPool.query<{ id: string }>(
+      `select id from rate_versions where kind = 'VAT' and valid_to is null limit 1`,
     );
-    rateVersionId = rateVersion.rows[0]!.id;
+    if (existingVat.rows[0]) {
+      rateVersionId = existingVat.rows[0].id;
+    } else {
+      const rateVersion = await adminPool.query<{ id: string }>(
+        `insert into rate_versions (kind, valid_from, payload, source)
+         values ('VAT', '2020-01-01', '{"percent": "15"}'::jsonb, 'e2e-setup') returning id`,
+      );
+      rateVersionId = rateVersion.rows[0]!.id;
+      insertedRateVersion = true;
+    }
 
     // Quotation seeded directly at PENDING_APPROVAL (its own creation flow —
     // calc + VAT resolution — is out of scope for this suite).
@@ -154,9 +168,14 @@ describe('Quotation -> proforma -> project DAG happy path', () => {
     await adminPool.query(`delete from customers where tenant_id = $1`, [
       tenantId,
     ]);
-    await adminPool.query(`delete from rate_versions where id = $1`, [
-      rateVersionId,
-    ]);
+    // Only clean up the rate_versions row if this run inserted it — a
+    // pre-existing open VAT row (db:seed:rates or another suite) is shared
+    // state, not this test's to delete.
+    if (insertedRateVersion) {
+      await adminPool.query(`delete from rate_versions where id = $1`, [
+        rateVersionId,
+      ]);
+    }
     await adminPool.query(`delete from users where tenant_id = $1`, [
       tenantId,
     ]);
@@ -212,5 +231,55 @@ describe('Quotation -> proforma -> project DAG happy path', () => {
       'PROFORMA',
     );
     expect(project.status).toBe('PROFORMA');
+  });
+
+  it('a non-zero-margin quotation converts with subtotalEtb (taxable base) + vatEtb = totalEtb exactly', async () => {
+    if (!available) {
+      return;
+    }
+
+    // The suite's other quotation has margin_amount_etb = '0.00', which
+    // can't distinguish "copies the taxable base" from "copies the
+    // pre-margin subtotal" (CRITICAL 1) — both give the same number when
+    // margin is zero. This one has a real margin, so subtotalEtb must be
+    // subtotal + margin (120.00), not the quotation's own pre-margin
+    // subtotalEtb (100.00), for the invariant to hold.
+    const marginProject = await adminPool.query<{ id: string }>(
+      `insert into projects (tenant_id, customer_id, name, status)
+       values ($1, $2, $3, 'QUOTATION') returning id`,
+      [tenantId, customerId, 'PF Happy Path Margin Test Project'],
+    );
+    const marginProjectId = marginProject.rows[0]!.id;
+
+    // subtotal 100.00 + margin 20.00 = taxable base 120.00; VAT at 15% of
+    // 120.00 = 18.00; total = 138.00.
+    const marginQuote = await adminPool.query<{ id: string }>(
+      `insert into quotations (
+         tenant_id, project_id, customer_id, quote_number, status,
+         calc_input, technical_spec, pricing_breakdown, rate_version_id,
+         subtotal_etb, margin_amount_etb, tax_amount_etb, total_price_etb
+       ) values ($1, $2, $3, $4, 'APPROVED', '{}'::jsonb, '{}'::jsonb,
+         '{}'::jsonb, $5, '100.00', '20.00', '18.00', '138.00')
+       returning id`,
+      [tenantId, marginProjectId, customerId, `QTN-HAPPY-MARGIN-${slug}`, rateVersionId],
+    );
+    const marginQuoteId = marginQuote.rows[0]!.id;
+
+    const db = drizzle(appPool, { schema });
+    const tenantDb = new TenantDbService(db);
+    const proformasRepo = new ProformasRepository(tenantDb);
+
+    const proforma = await proformasRepo.issue(tenantId, userId, marginQuoteId, null);
+
+    expect(proforma.subtotalEtb).toBe('120.00');
+    expect(proforma.vatEtb).toBe('18.00');
+    expect(proforma.totalEtb).toBe('138.00');
+    expect(new Decimal(proforma.subtotalEtb).plus(proforma.vatEtb).toFixed(2)).toBe(
+      proforma.totalEtb,
+    );
+
+    await adminPool.query(`delete from proformas where id = $1`, [proforma.id]);
+    await adminPool.query(`delete from quotations where id = $1`, [marginQuoteId]);
+    await adminPool.query(`delete from projects where id = $1`, [marginProjectId]);
   });
 });
