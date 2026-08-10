@@ -29,6 +29,7 @@ const QUOTE_STATUSES = quoteStatusEnum.enumValues;
 @ApiTags('quotations')
 @ApiBearerAuth('access-token')
 @Controller()
+@Roles('SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
 export class QuotationsController {
   constructor(private readonly quotationsService: QuotationsService) {}
 
