@@ -51,12 +51,16 @@ describe('ProjectsService', () => {
     findById: jest.fn(),
     create: jest.fn(),
     updateStatus: jest.fn(),
+    hasIssuedProforma: jest.fn(),
   };
 
   const service = new ProjectsService(repo as never);
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Only exercised by the PROFORMA-bound tests below; harmless default for
+    // every other transition target.
+    repo.hasIssuedProforma.mockResolvedValue(true);
   });
 
   it('creates a project at LEAD', async () => {
@@ -92,12 +96,17 @@ describe('ProjectsService', () => {
     expect(repo.updateStatus).not.toHaveBeenCalled();
   });
 
-  it('advances QUOTATION -> PROFORMA by hand now that quotes are gone', async () => {
+  it('advances QUOTATION -> PROFORMA once an issued proforma exists for the project', async () => {
     repo.findById.mockResolvedValue({ ...sample, status: 'QUOTATION' });
+    repo.hasIssuedProforma.mockResolvedValue(true);
     repo.updateStatus.mockResolvedValue({ ...sample, status: 'PROFORMA' });
     await expect(
       service.updateStatus(user, sample.id, 'PROFORMA'),
     ).resolves.toMatchObject({ status: 'PROFORMA' });
+    expect(repo.hasIssuedProforma).toHaveBeenCalledWith(
+      user.tenantId,
+      sample.id,
+    );
     expect(repo.updateStatus).toHaveBeenCalledWith(
       user.tenantId,
       sample.id,
@@ -105,6 +114,15 @@ describe('ProjectsService', () => {
       'PROFORMA',
       {},
     );
+  });
+
+  it('blocks QUOTATION -> PROFORMA when no issued proforma exists for the project (DAG gate)', async () => {
+    repo.findById.mockResolvedValue({ ...sample, status: 'QUOTATION' });
+    repo.hasIssuedProforma.mockResolvedValue(false);
+    await expect(
+      service.updateStatus(user, sample.id, 'PROFORMA'),
+    ).rejects.toBeInstanceOf(WorkflowTransitionError);
+    expect(repo.updateStatus).not.toHaveBeenCalled();
   });
 
   it('records the deal value alongside the status change', async () => {
