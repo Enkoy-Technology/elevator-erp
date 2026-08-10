@@ -59,6 +59,14 @@ export const quoteStatusEnum = pgEnum('quote_status', [
   'CONVERTED_TO_PROFORMA',
 ]);
 
+// ISSUED/CANCELLED only: proformas are an append-only book (no delete);
+// cancelling an issued proforma does not revert the source quotation — see
+// ProformasRepository.cancel.
+export const proformaStatusEnum = pgEnum('proforma_status', [
+  'ISSUED',
+  'CANCELLED',
+]);
+
 export const assetCategoryEnum = pgEnum('asset_category', [
   'ELEVATOR',
   'ESCALATOR',
