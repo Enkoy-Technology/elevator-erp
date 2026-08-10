@@ -10,3 +10,7 @@ export * from './rate-tables';
 export * from './quotations';
 export * from './document-sequences';
 export * from './proformas';
+export * from './invoices';
+export * from './banks';
+export * from './payments';
+export * from './expenses';

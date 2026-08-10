@@ -115,3 +115,55 @@ export const breakdownStatusEnum = pgEnum('breakdown_status', [
   'ASSIGNED',
   'DONE',
 ]);
+
+// Invoices are the ERP's own internal AR document, never the legal tax
+// document (see docs/planning/DECISIONS-platform-and-ethiopian-compliance.md
+// §4). VOID is a status, never a row deletion — see invoices.ts.
+export const invoiceStatusEnum = pgEnum('invoice_status', [
+  'ISSUED',
+  'PARTIALLY_PAID',
+  'PAID',
+  'VOID',
+]);
+
+// Shared by payments.receivedVia and expenses.paidVia — the same six
+// settlement rails apply to money coming in and going out.
+export const paymentMethodEnum = pgEnum('payment_method', [
+  'CASH',
+  'BANK_TRANSFER',
+  'CHEQUE',
+  'CBE_BIRR',
+  'TELEBIRR',
+  'OTHER',
+]);
+
+// Client-specific categories are pending real data — chosen generically
+// from common Ethiopian SME expense lines, with OTHER as the catch-all.
+export const expenseCategoryEnum = pgEnum('expense_category', [
+  'MATERIALS',
+  'TRANSPORT',
+  'SALARY_ADVANCE',
+  'RENT',
+  'UTILITIES',
+  'FUEL',
+  'PER_DIEM',
+  'OFFICE',
+  'TAX',
+  'OTHER',
+]);
+
+// REVERSED is not a state a row transitions into: REVERSED here labels a row
+// as itself being a reversing entry (see expenses.ts's doc comment) — the
+// original row keeps RECORDED forever, even once reversed.
+export const expenseStatusEnum = pgEnum('expense_status', [
+  'RECORDED',
+  'REVERSED',
+]);
+
+export const bankTxKindEnum = pgEnum('bank_tx_kind', [
+  'DEPOSIT',
+  'WITHDRAWAL',
+  'CHARGE',
+  'TRANSFER_IN',
+  'TRANSFER_OUT',
+]);
