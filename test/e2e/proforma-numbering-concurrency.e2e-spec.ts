@@ -139,13 +139,17 @@ describe('Proforma numbering under concurrency', () => {
       projectId: string,
       quoteNumber: string,
     ): Promise<string> => {
+      // pricing_breakdown carries subtotalWithMargin — the value
+      // ProformasRepository.issue() copies subtotalEtb from (see its own
+      // doc comment) — required, or issue() throws before the numbering
+      // claim this suite is actually testing.
       const result = await adminPool.query<{ id: string }>(
         `insert into quotations (
            tenant_id, project_id, customer_id, quote_number, status,
            calc_input, technical_spec, pricing_breakdown, rate_version_id,
            subtotal_etb, margin_amount_etb, tax_amount_etb, total_price_etb
          ) values ($1, $2, $3, $4, 'APPROVED', '{}'::jsonb, '{}'::jsonb,
-           '{}'::jsonb, $5, '100.00', '0.00', '15.00', '115.00')
+           '{"subtotalWithMargin": "100.00"}'::jsonb, $5, '100.00', '0.00', '15.00', '115.00')
          returning id`,
         [tenantId, projectId, customerId, quoteNumber, rateVersionId],
       );

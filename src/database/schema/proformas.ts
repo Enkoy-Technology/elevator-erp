@@ -43,11 +43,17 @@ export const proformas = pgTable(
     // convention (vatEtb/totalEtb) rather than the quotation's
     // (taxAmountEtb/totalPriceEtb) — same precision, numeric(14,2).
     //
-    // subtotalEtb is the TAXABLE BASE (quotation subtotal + margin amount),
-    // not the quotation's pre-margin subtotalEtb — so subtotalEtb + vatEtb =
-    // totalEtb holds by construction (VAT was computed on subtotal+margin at
-    // quote time; margin itself is not a proforma column, see decision (a)
-    // in the finance-exports-sms phase-3 report).
+    // subtotalEtb is the TAXABLE BASE — not the quotation's pre-margin
+    // subtotalEtb, and NOT quote.subtotalEtb + quote.marginAmountEtb either
+    // (those are two independently-rounded 2dp columns; summing them can be
+    // a cent off from the real taxable base). It is copied verbatim from
+    // quote.pricingBreakdown.subtotalWithMargin — the single full-precision
+    // value VAT was actually computed from (see ElevatorCalcService.
+    // calculateSpecs / QuotationsService.createForProject) — so
+    // subtotalEtb + vatEtb = totalEtb holds because both sides trace back
+    // to the same source number, never re-derived from already-rounded
+    // parts. Margin itself is not a proforma column (decision (a) in the
+    // finance-exports-sms phase-3 report).
     subtotalEtb: numeric('subtotal_etb', { precision: 14, scale: 2 }).notNull(),
     vatEtb: numeric('vat_etb', { precision: 14, scale: 2 }).notNull(),
     totalEtb: numeric('total_etb', { precision: 14, scale: 2 }).notNull(),

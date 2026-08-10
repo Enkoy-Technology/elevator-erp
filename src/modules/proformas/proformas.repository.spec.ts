@@ -1,4 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
+import { Decimal } from 'decimal.js';
 
 import { WorkflowTransitionError } from '../../common/exceptions';
 import { computeFiscalYear } from '../../common/fiscal-year';
@@ -22,7 +23,12 @@ const quoteRow = {
   totalPriceEtb: '115.00',
   rateVersionId: RATE_VERSION_ID,
   technicalSpec: { capacityPersons: 13 },
-  pricingBreakdown: { baseCost: '80.00' },
+  // subtotalWithMargin is the value subtotalEtb is actually copied from
+  // (see issue()'s doc comment) — deliberately equal to
+  // subtotalEtb + marginAmountEtb here (100.00 + 20.00) so this fixture
+  // can't hide a regression to the old "sum two rounded columns" logic;
+  // the fractional-remainder test below is what actually distinguishes them.
+  pricingBreakdown: { baseCost: '80.00', subtotalWithMargin: '120.00' },
 };
 
 /** Wires a fake `update().set().where().returning()` chain. */
@@ -95,10 +101,11 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
 
     await repo.issue(TENANT_ID, USER_ID, QUOTE_ID, null);
 
-    // Money snapshot: subtotalEtb is the TAXABLE BASE (quotation subtotal +
-    // margin, decision (a)), not the quotation's own (pre-margin) subtotalEtb.
-    // vatEtb/totalEtb map straight from the quotation's own names
-    // (taxAmountEtb/totalPriceEtb).
+    // Money snapshot: subtotalEtb is the TAXABLE BASE, copied from
+    // pricingBreakdown.subtotalWithMargin (not summed from
+    // subtotalEtb + marginAmountEtb — see the fractional-remainder test
+    // below for why that distinction matters). vatEtb/totalEtb map
+    // straight from the quotation's own names (taxAmountEtb/totalPriceEtb).
     expect(insertedProforma.subtotalEtb).toBe('120.00');
     expect(insertedProforma.vatEtb).toBe('15.00');
     expect(insertedProforma.totalEtb).toBe('115.00');
@@ -177,6 +184,97 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
     await expect(
       repo.issue(TENANT_ID, USER_ID, QUOTE_ID, null),
     ).rejects.toBeInstanceOf(WorkflowTransitionError);
+  });
+
+  it('copies subtotalEtb from pricingBreakdown.subtotalWithMargin, not from summing subtotalEtb+marginAmountEtb — reviewer counterexample: 100.00 + 26.00 = 126.00, but the real taxable base VAT was computed on is 126.01', async () => {
+    // subtotalEtb (100.00) + marginAmountEtb (26.00) — two independently
+    // rounded 2dp columns — sum to 126.00, a cent short of the real,
+    // full-precision taxable base (126.01) VAT was actually computed from.
+    // If subtotalEtb were re-derived by summing those two columns instead
+    // of copied from subtotalWithMargin, 126.00 + 18.90 (vatEtb) would
+    // equal 144.90, not the quotation's own totalPriceEtb of 144.91.
+    const fractionalQuoteRow = {
+      ...quoteRow,
+      subtotalEtb: '100.00',
+      marginAmountEtb: '26.00',
+      taxAmountEtb: '18.90',
+      totalPriceEtb: '144.91',
+      pricingBreakdown: { subtotalWithMargin: '126.01' },
+    };
+    const update = jest.fn(() => makeUpdateChain([fractionalQuoteRow]));
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ id: RATE_VERSION_ID }]))
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+    let insertedProforma: Record<string, unknown> = {};
+    const insert = jest
+      .fn()
+      .mockReturnValueOnce(makeSeqInsertChain([{ nextValue: 1 }]))
+      .mockReturnValueOnce(
+        makeProformaInsertChain((v) => (insertedProforma = v), [{ id: 'pf-1' }]),
+      );
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ update, select, insert }),
+    );
+    const repo = new ProformasRepository({ withTenant } as never);
+
+    await repo.issue(TENANT_ID, USER_ID, QUOTE_ID, null);
+
+    expect(insertedProforma.subtotalEtb).toBe('126.01');
+    expect(insertedProforma.vatEtb).toBe('18.90');
+    expect(insertedProforma.totalEtb).toBe('144.91');
+    expect(
+      new Decimal(insertedProforma.subtotalEtb as string)
+        .plus(insertedProforma.vatEtb as string)
+        .toFixed(2),
+    ).toBe(insertedProforma.totalEtb);
+  });
+
+  it('throws when the quotation has no pricingBreakdown.subtotalWithMargin at all', async () => {
+    const update = jest.fn(() =>
+      makeUpdateChain([{ ...quoteRow, pricingBreakdown: { baseCost: '80.00' } }]),
+    );
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ id: RATE_VERSION_ID }]))
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+    // The documentSequences claim (step 3) runs before the subtotalEtb
+    // derivation (step 4) that's actually under test here, so it still
+    // needs a working insert chain — only the proforma insert (step 4)
+    // never gets reached.
+    const insert = jest.fn(() => makeSeqInsertChain([{ nextValue: 1 }]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ update, select, insert }),
+    );
+    const repo = new ProformasRepository({ withTenant } as never);
+
+    await expect(repo.issue(TENANT_ID, USER_ID, QUOTE_ID, null)).rejects.toThrow(
+      /subtotalWithMargin/,
+    );
+  });
+
+  it('throws when pricingBreakdown.subtotalWithMargin is not a valid decimal', async () => {
+    const update = jest.fn(() =>
+      makeUpdateChain([
+        { ...quoteRow, pricingBreakdown: { subtotalWithMargin: 'not-a-number' } },
+      ]),
+    );
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ id: RATE_VERSION_ID }]))
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+    const insert = jest.fn(() => makeSeqInsertChain([{ nextValue: 1 }]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ update, select, insert }),
+    );
+    const repo = new ProformasRepository({ withTenant } as never);
+
+    await expect(repo.issue(TENANT_ID, USER_ID, QUOTE_ID, null)).rejects.toThrow(
+      /not a valid decimal/,
+    );
   });
 });
 
