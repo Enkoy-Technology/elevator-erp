@@ -260,6 +260,13 @@
       "when": 1786358670200,
       "tag": "0036_rename_document_sequences_last_value",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1786358707505,
+      "tag": "0037_revoke_quotations_delete",
+      "breakpoints": true
     }
   ]
 }
