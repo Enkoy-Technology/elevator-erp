@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { RateNotFoundError } from '../../common/exceptions';
+import { computeFiscalYear, type FiscalYear } from '../../common/fiscal-year';
 import type { RateKind } from '../../database/schema';
 import { parseRatePayload } from './rate-payloads';
 import { RatesRepository, type RateVersionRecord } from './rates.repository';
@@ -17,19 +18,7 @@ export type RateVersion = Pick<
 // can extend DomainError and map to 404 without a controller try/catch.
 export { RateNotFoundError };
 
-export interface FiscalYear {
-  start: string;
-  end: string;
-  label: string;
-}
-
-function pad2(n: number): string {
-  return String(n).padStart(2, '0');
-}
-
-function formatDate(d: Date): string {
-  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
-}
+export type { FiscalYear };
 
 @Injectable()
 export class RatesService {
@@ -60,22 +49,6 @@ export class RatesService {
    * Pure date arithmetic — no external date library.
    */
   fiscalYearFor(dateStr: string, boundary: string): FiscalYear {
-    const [monthStr, dayStr] = boundary.split('-');
-    const boundaryMonth = Number(monthStr);
-    const boundaryDay = Number(dayStr);
-    const year = Number(dateStr.slice(0, 4));
-    const dateMonthDay = dateStr.slice(5);
-    const startYear = dateMonthDay >= boundary ? year : year - 1;
-
-    const endExclusive = new Date(
-      Date.UTC(startYear + 1, boundaryMonth - 1, boundaryDay),
-    );
-    endExclusive.setUTCDate(endExclusive.getUTCDate() - 1);
-
-    return {
-      start: `${startYear}-${boundary}`,
-      end: formatDate(endExclusive),
-      label: `FY${startYear}/${pad2((startYear + 1) % 100)}`,
-    };
+    return computeFiscalYear(dateStr, boundary);
   }
 }
