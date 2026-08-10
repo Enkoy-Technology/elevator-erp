@@ -13,6 +13,16 @@
  */
 import { PDFParse } from 'pdf-parse';
 
+// Deliberate exception to /common not depending on /modules: this test-only
+// import lets the second `it` below exercise the real endpoint-level
+// pipeline (a repository-shaped row -> quotationDocumentData -> the
+// template), not just the template layer directly — reusing the one
+// Chromium launch this suite already pays for, rather than adding a second
+// smoke spec elsewhere.
+import {
+  quotationDocumentData,
+  type QuotationDocumentRow,
+} from '../../modules/quotations/quotation-document.mapper';
 import { DocumentPdfService } from './document-pdf.service';
 import type { TenantBranding } from './document-pdf.service';
 import type { QuotationTemplateData } from './templates/quotation.template';
@@ -68,6 +78,51 @@ describe('DocumentPdfService PDF smoke test (real Chromium)', () => {
 
     expect(pdf.length).toBeGreaterThan(1000);
     expect(pdf.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+
+    const parser = new PDFParse({ data: pdf });
+    try {
+      const { text } = await parser.getText();
+      expect(text).toContain('ኤሌቬተር ማንሻ');
+      expect(text).toContain('143,750.00 ETB');
+    } finally {
+      await parser.destroy();
+    }
+  });
+
+  it('renders via the endpoint-level path (repository row -> quotationDocumentData -> pdf) with an Amharic customer name', async () => {
+    const branding: TenantBranding = {
+      name: 'Enkoy Elevators PLC',
+      slogan: 'Lifting Ethiopia',
+      logoUrl: null,
+      address: 'Bole Road, Addis Ababa',
+      phones: ['+251 11 123 4567'],
+      primaryColor: '#1B2A4A',
+    };
+    // Shaped like QuotationsRepository.findByIdForDocument's actual return
+    // value — the real mapper input, not a hand-built QuotationTemplateData.
+    const row: QuotationDocumentRow = {
+      quoteNumber: 'QTN-2026-SMOKE2',
+      status: 'APPROVED',
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+      validUntil: new Date('2026-09-30T00:00:00.000Z'),
+      customerName: 'ኤሌቬተር ማንሻ',
+      projectName: 'Smoke Test Tower',
+      technicalSpec: null,
+      pricingBreakdown: null,
+      subtotalEtb: '100000.00',
+      marginPercent: '25.00',
+      marginAmountEtb: '25000.00',
+      taxPercent: '15.00',
+      taxAmountEtb: '18750.00',
+      totalPriceEtb: '143750.00',
+      notes: null,
+    };
+
+    const pdf = await service.renderDocumentPdf(
+      'quotation',
+      quotationDocumentData(row),
+      branding,
+    );
 
     const parser = new PDFParse({ data: pdf });
     try {

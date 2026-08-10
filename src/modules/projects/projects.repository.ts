@@ -271,12 +271,12 @@ export class ProjectsRepository {
         )
         .returning();
       if (!row) {
-        const exists = await tx
+        const existingRow = await tx
           .select({ id: projects.id })
           .from(projects)
           .where(and(eq(projects.id, id), isNull(projects.deletedAt)))
           .limit(1);
-        if (exists[0]) {
+        if (existingRow[0]) {
           throw new WorkflowTransitionError(
             'Project status changed concurrently — reload and retry',
           );

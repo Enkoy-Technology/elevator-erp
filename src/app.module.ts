@@ -3,6 +3,7 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { AppController } from './app.controller';
+import { ExportModule } from './common/export/export.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { JwtAuthGuard, RolesGuard, TenantGuard } from './common/guards';
 import { AppConfigModule } from './config';
@@ -33,6 +34,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     ]),
     AuthModule,
     ElevatorCalcModule,
+    ExportModule,
     CustomersModule,
     ProjectsModule,
     QuotationsModule,

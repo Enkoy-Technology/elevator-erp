@@ -124,4 +124,15 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
     expect(documentXml).toContain('ኤሌቬተር ማንሻ');
     expect(documentXml).toContain('143,750.00 ETB');
   });
+
+  it('has a registered builder for "proforma" (Phase 3) — renders a real docx Buffer', async () => {
+    const service = new DocumentDocxService();
+    const buf = await service.renderDocumentDocx(
+      'proforma',
+      { proformaNumber: 'PF-FY2026-27-0001', status: 'ISSUED', customerName: 'Test', projectName: 'Test' },
+      branding,
+    );
+    expect(Buffer.isBuffer(buf)).toBe(true);
+    expect(buf.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+  });
 });

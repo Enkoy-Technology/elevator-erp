@@ -3,6 +3,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { PaginatedResult } from '../../common/pagination';
 import type { ProformaStatus } from '../../database/schema';
 import type { AuthenticatedUser } from '../../types/auth.types';
+import type { ProformaDocumentRow } from './proforma-document.mapper';
 import {
   ProformasRepository,
   type ProformaRecord,
@@ -33,6 +34,26 @@ export class ProformasService {
 
   async getById(user: AuthenticatedUser, id: string): Promise<ProformaRecord> {
     const row = await this.proformasRepository.findById(user.tenantId, id);
+    if (!row) {
+      throw new NotFoundException('Proforma not found');
+    }
+    return row;
+  }
+
+  /**
+   * Row + customer/project display names + the source quotation's line
+   * data, for document rendering (pdf/docx/xlsx). Always allowed — proformas
+   * are an append-only book, so there is no status to gate on (cancelled
+   * proformas still download, same as an issued one).
+   */
+  async getDocumentData(
+    user: AuthenticatedUser,
+    id: string,
+  ): Promise<ProformaDocumentRow> {
+    const row = await this.proformasRepository.findByIdForDocument(
+      user.tenantId,
+      id,
+    );
     if (!row) {
       throw new NotFoundException('Proforma not found');
     }

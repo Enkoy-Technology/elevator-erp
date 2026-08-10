@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { DocumentDocxService } from './document-docx.service';
 import { DocumentPdfService } from './document-pdf.service';
+import { TenantBrandingProvider } from './tenant-branding.provider';
 
 /**
  * /common has no shared module today (its other pieces — pagination,
@@ -14,9 +15,13 @@ import { DocumentPdfService } from './document-pdf.service';
  * down) but is registered alongside it for the same reason: it's the other
  * renderer over the same document-template contract. Phases 3/4 import this
  * module to get either service.
+ *
+ * TenantBrandingProvider lives here too (not in a feature module): it's the
+ * one place tenant_branding + tenants.name become the TenantBranding shape
+ * both renderers consume, shared by every module that generates a document.
  */
 @Module({
-  providers: [DocumentPdfService, DocumentDocxService],
-  exports: [DocumentPdfService, DocumentDocxService],
+  providers: [DocumentPdfService, DocumentDocxService, TenantBrandingProvider],
+  exports: [DocumentPdfService, DocumentDocxService, TenantBrandingProvider],
 })
 export class ExportModule {}

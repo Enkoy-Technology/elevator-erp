@@ -39,4 +39,14 @@ describe('quote status DAG', () => {
     expect(QUOTE_STATUS_TRANSITIONS.EXPIRED).toEqual([]);
     expect(QUOTE_STATUS_TRANSITIONS.CONVERTED_TO_PROFORMA).toEqual([]);
   });
+
+  // Drift guard: ProformasRepository.issue() hardcodes the literal
+  // 'APPROVED' -> 'CONVERTED_TO_PROFORMA' transition (deliberately, to avoid
+  // a proformas -> quotations module import — see task-2-report.md) instead
+  // of referencing this DAG. If a second APPROVED transition is ever added
+  // here, that literal silently stops matching this table — this test fails
+  // first instead of the drift going unnoticed.
+  it('keeps APPROVED a single-edge transition, matching the hardcoded CAS in proformas.repository.ts', () => {
+    expect(QUOTE_STATUS_TRANSITIONS.APPROVED).toEqual(['CONVERTED_TO_PROFORMA']);
+  });
 });

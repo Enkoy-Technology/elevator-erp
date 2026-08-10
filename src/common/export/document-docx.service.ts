@@ -3,18 +3,20 @@ import { Document, Packer } from 'docx';
 
 import { TemplateNotImplementedError } from '../exceptions';
 import type { DocumentTemplate, TenantBranding } from './document-pdf.service';
+import { buildProformaDocx } from './templates/proforma.docx-template';
 import { buildQuotationDocx } from './templates/quotation.docx-template';
 
 type DocxTemplateBuilder = (data: object, branding: TenantBranding | null) => Document;
 
 /**
- * Only 'quotation' is wired up (Phase 2 slice), mirroring
+ * 'quotation' (Phase 2) and 'proforma' (Phase 3) are wired up, mirroring
  * DocumentPdfService's TEMPLATE_BUILDERS — same reasoning: the rest of
  * DocumentTemplate exists so later phases can type against it, but nothing
  * stubs a template ahead of the data that would fill it.
  */
 const TEMPLATE_BUILDERS: Partial<Record<DocumentTemplate, DocxTemplateBuilder>> = {
   quotation: buildQuotationDocx,
+  proforma: buildProformaDocx,
 };
 
 /**
