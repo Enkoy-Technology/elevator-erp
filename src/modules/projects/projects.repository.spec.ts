@@ -203,3 +203,113 @@ describe('ProjectsRepository — Ethiopic-normalized name search (q)', () => {
     expect(literals).toContain('%ሃይሉ%');
   });
 });
+
+// DAG gate (finance-exports-sms task 2, restoring b00ccf4's spirit against
+// the current module boundary): QUOTATION -> PROFORMA requires an issued,
+// non-cancelled proforma. The check queries the proformas table directly
+// from projects.repository — a repository-level EXISTS query against a
+// shared /database/schema table, not a cross-module import (projects does
+// NOT import the quotations or proformas module).
+describe('ProjectsRepository.hasIssuedProforma', () => {
+  const PROJECT_ID = '44444444-4444-4444-4444-444444444444';
+
+  it('queries proformas filtered by projectId AND status = ISSUED', async () => {
+    let where: unknown;
+    const chain: Record<string, jest.Mock> = {};
+    chain.from = jest.fn(() => chain);
+    chain.where = jest.fn((w: unknown) => {
+      where = w;
+      return chain;
+    });
+    chain.limit = jest.fn(() => Promise.resolve([{ id: 'pf-1' }]));
+    const select = jest.fn(() => chain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new ProjectsRepository({ withTenant } as never);
+
+    await expect(
+      repo.hasIssuedProforma(TENANT_ID, PROJECT_ID),
+    ).resolves.toBe(true);
+
+    // eq()'s left side (a Column) appears directly in queryChunks, so the
+    // same column-name walker used for orderBy() elsewhere in this file
+    // doubles as proof the WHERE touches project_id and status.
+    const columnNames = extractOrderByColumnNames(where);
+    expect(columnNames).toContain('project_id');
+    expect(columnNames).toContain('status');
+  });
+
+  it('returns false when no ISSUED proforma exists for the project', async () => {
+    const chain: Record<string, jest.Mock> = {};
+    chain.from = jest.fn(() => chain);
+    chain.where = jest.fn(() => chain);
+    chain.limit = jest.fn(() => Promise.resolve([]));
+    const select = jest.fn(() => chain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new ProjectsRepository({ withTenant } as never);
+
+    await expect(
+      repo.hasIssuedProforma(TENANT_ID, PROJECT_ID),
+    ).resolves.toBe(false);
+  });
+});
+
+// Security-review fix: the QUOTATION -> PROFORMA CAS re-verifies the issued
+// proforma atomically inside its own UPDATE ... WHERE clause (an EXISTS
+// subquery), not just via the separate, earlier hasIssuedProforma() check —
+// closing the TOCTOU window between that check and this write. Proven
+// end-to-end against real Postgres in
+// test/e2e/quotation-to-proforma-happy-path.e2e-spec.ts; this unit test only
+// proves the EXISTS subquery is actually wired into the PROFORMA path (and
+// absent otherwise).
+describe('ProjectsRepository.updateStatus — atomic EXISTS guard for PROFORMA', () => {
+  const PROJECT_ID = '44444444-4444-4444-4444-444444444444';
+
+  it('builds an EXISTS subquery against proformas when the target status is PROFORMA', async () => {
+    const updateChain: Record<string, jest.Mock> = {};
+    updateChain.set = jest.fn(() => updateChain);
+    updateChain.where = jest.fn(() => updateChain);
+    updateChain.returning = jest.fn(() =>
+      Promise.resolve([{ id: PROJECT_ID, status: 'PROFORMA' }]),
+    );
+    const update = jest.fn(() => updateChain);
+    const selectChain: Record<string, jest.Mock> = {};
+    selectChain.from = jest.fn(() => selectChain);
+    selectChain.where = jest.fn(() => selectChain);
+    const select = jest.fn(() => selectChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ update, select }),
+    );
+    const repo = new ProjectsRepository({ withTenant } as never);
+
+    await repo.updateStatus(TENANT_ID, PROJECT_ID, 'QUOTATION', 'PROFORMA');
+
+    expect(select).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not build the EXISTS subquery for a non-PROFORMA transition', async () => {
+    const updateChain: Record<string, jest.Mock> = {};
+    updateChain.set = jest.fn(() => updateChain);
+    updateChain.where = jest.fn(() => updateChain);
+    updateChain.returning = jest.fn(() =>
+      Promise.resolve([{ id: PROJECT_ID, status: 'SITE_SURVEY' }]),
+    );
+    const update = jest.fn(() => updateChain);
+    const select = jest.fn();
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ update, select }),
+    );
+    const repo = new ProjectsRepository({ withTenant } as never);
+
+    await repo.updateStatus(TENANT_ID, PROJECT_ID, 'LEAD', 'SITE_SURVEY');
+
+    expect(select).not.toHaveBeenCalled();
+  });
+});
