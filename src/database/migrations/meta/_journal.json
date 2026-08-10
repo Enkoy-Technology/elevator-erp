@@ -211,6 +211,20 @@
       "when": 1786302253115,
       "tag": "0029_lying_marten_broadcloak",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1786343256021,
+      "tag": "0030_open_lilandra",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1786343266389,
+      "tag": "0031_quotations_rls",
+      "breakpoints": true
     }
   ]
 }

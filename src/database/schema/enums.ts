@@ -44,6 +44,21 @@ export const projectStatusEnum = pgEnum('project_status', [
   'CANCELLED',
 ]);
 
+// Restored from the pre-lean-MVP quotations module (git show f0fea5c^) with
+// the lifecycle re-shaped: PENDING_APPROVAL is a new explicit submit step
+// (old: DRAFT -> APPROVED directly), EXPIRED is new, PROFORMA is renamed
+// CONVERTED_TO_PROFORMA (conversion itself is Task 2), and the old CONTRACT/
+// CANCELLED terminal statuses are dropped — contract lifecycle lives on
+// projects.status now, and nothing in this restore needs a cancel path.
+export const quoteStatusEnum = pgEnum('quote_status', [
+  'DRAFT',
+  'PENDING_APPROVAL',
+  'APPROVED',
+  'REJECTED',
+  'EXPIRED',
+  'CONVERTED_TO_PROFORMA',
+]);
+
 export const assetCategoryEnum = pgEnum('asset_category', [
   'ELEVATOR',
   'ESCALATOR',
