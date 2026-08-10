@@ -297,17 +297,39 @@ export class ProformasRepository {
         claimed.nextValue,
       );
 
-      // 4. Insert the immutable snapshot. subtotalEtb is the TAXABLE BASE
-      // (quotation subtotal + margin), not the quotation's pre-margin
-      // subtotalEtb — see the schema's own doc comment — computed here with
-      // decimal.js off the quotation's stored money strings so
-      // subtotalEtb + vatEtb = totalEtb holds by construction (vatEtb/
-      // totalEtb are carried over unchanged: the quotation already computed
-      // VAT on subtotal+margin, see QuotationsService.createForProject).
-      const subtotalEtb = new Decimal(quote.subtotalEtb)
-        .plus(quote.marginAmountEtb)
-        .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
-        .toFixed(2);
+      // 4. Insert the immutable snapshot. subtotalEtb is the TAXABLE BASE —
+      // NOT the quotation's pre-margin subtotalEtb, and NOT
+      // quote.subtotalEtb + quote.marginAmountEtb either: those are two
+      // INDEPENDENTLY-ROUNDED 2dp columns, and summing them can be off by a
+      // cent from the full-precision figure VAT was actually computed on
+      // (e.g. a true subtotal-with-margin of 126.014 rounds subtotal
+      // 100.00 + margin 26.01 = 126.01, while 100.00 + 26.01 itself can
+      // land a cent either side of that once each addend was independently
+      // rounded first). The one value guaranteed to match what VAT was
+      // computed from is quote.pricingBreakdown.subtotalWithMargin itself
+      // — see ElevatorCalcService.calculateSpecs (money(subtotalWithMargin),
+      // the single rounding point) and QuotationsService.createForProject
+      // (taxAmount = D(pricing.subtotalWithMargin).mul(vatPercent).div(100))
+      // — so subtotalEtb is copied from there, not re-derived. That's what
+      // makes subtotalEtb + vatEtb = totalEtb hold: same source value,
+      // never re-summed from already-rounded parts.
+      const subtotalWithMargin = (quote.pricingBreakdown as Record<string, unknown> | null)
+        ?.subtotalWithMargin;
+      if (typeof subtotalWithMargin !== 'string') {
+        throw new Error(
+          `Quotation ${quote.id} has no pricingBreakdown.subtotalWithMargin — cannot issue a proforma without the value VAT was computed from`,
+        );
+      }
+      let subtotalEtb: string;
+      try {
+        subtotalEtb = new Decimal(subtotalWithMargin)
+          .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+          .toFixed(2);
+      } catch {
+        throw new Error(
+          `Quotation ${quote.id}'s pricingBreakdown.subtotalWithMargin is not a valid decimal: ${JSON.stringify(subtotalWithMargin)}`,
+        );
+      }
 
       const [row] = await tx
         .insert(proformas)

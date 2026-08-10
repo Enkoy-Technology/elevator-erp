@@ -135,14 +135,17 @@ describe('Quotation -> proforma -> project DAG happy path', () => {
     }
 
     // Quotation seeded directly at PENDING_APPROVAL (its own creation flow —
-    // calc + VAT resolution — is out of scope for this suite).
+    // calc + VAT resolution — is out of scope for this suite). pricing_breakdown
+    // carries subtotalWithMargin — the value ProformasRepository.issue()
+    // actually copies subtotalEtb from (see its own doc comment) — equal to
+    // subtotal + margin here since margin is zero.
     const quoteResult = await adminPool.query<{ id: string }>(
       `insert into quotations (
          tenant_id, project_id, customer_id, quote_number, status,
          calc_input, technical_spec, pricing_breakdown, rate_version_id,
          subtotal_etb, margin_amount_etb, tax_amount_etb, total_price_etb
        ) values ($1, $2, $3, $4, 'PENDING_APPROVAL', '{}'::jsonb, '{}'::jsonb,
-         '{}'::jsonb, $5, '100.00', '0.00', '15.00', '115.00')
+         '{"subtotalWithMargin": "100.00"}'::jsonb, $5, '100.00', '0.00', '15.00', '115.00')
        returning id`,
       [tenantId, projectId, customerId, `QTN-HAPPY-${slug}`, rateVersionId],
     );
@@ -233,17 +236,18 @@ describe('Quotation -> proforma -> project DAG happy path', () => {
     expect(project.status).toBe('PROFORMA');
   });
 
-  it('a non-zero-margin quotation converts with subtotalEtb (taxable base) + vatEtb = totalEtb exactly', async () => {
+  it('a non-zero-margin quotation converts with subtotalEtb (taxable base) + vatEtb = totalEtb exactly, even when subtotalEtb+marginAmountEtb would be a cent short', async () => {
     if (!available) {
       return;
     }
 
-    // The suite's other quotation has margin_amount_etb = '0.00', which
-    // can't distinguish "copies the taxable base" from "copies the
-    // pre-margin subtotal" (CRITICAL 1) — both give the same number when
-    // margin is zero. This one has a real margin, so subtotalEtb must be
-    // subtotal + margin (120.00), not the quotation's own pre-margin
-    // subtotalEtb (100.00), for the invariant to hold.
+    // Reviewer counterexample (round-2 fix): subtotal_etb (100.00) and
+    // margin_amount_etb (26.00) are independently-rounded 2dp columns —
+    // summed, they give 126.00, a cent short of the real, full-precision
+    // taxable base (126.01) VAT was actually computed from. subtotalEtb
+    // MUST come from pricing_breakdown.subtotalWithMargin, not from summing
+    // those two columns, or 126.00 + vatEtb (18.90) would land on 144.90,
+    // not the quotation's own total_price_etb of 144.91.
     const marginProject = await adminPool.query<{ id: string }>(
       `insert into projects (tenant_id, customer_id, name, status)
        values ($1, $2, $3, 'QUOTATION') returning id`,
@@ -251,15 +255,13 @@ describe('Quotation -> proforma -> project DAG happy path', () => {
     );
     const marginProjectId = marginProject.rows[0]!.id;
 
-    // subtotal 100.00 + margin 20.00 = taxable base 120.00; VAT at 15% of
-    // 120.00 = 18.00; total = 138.00.
     const marginQuote = await adminPool.query<{ id: string }>(
       `insert into quotations (
          tenant_id, project_id, customer_id, quote_number, status,
          calc_input, technical_spec, pricing_breakdown, rate_version_id,
          subtotal_etb, margin_amount_etb, tax_amount_etb, total_price_etb
        ) values ($1, $2, $3, $4, 'APPROVED', '{}'::jsonb, '{}'::jsonb,
-         '{}'::jsonb, $5, '100.00', '20.00', '18.00', '138.00')
+         '{"subtotalWithMargin": "126.01"}'::jsonb, $5, '100.00', '26.00', '18.90', '144.91')
        returning id`,
       [tenantId, marginProjectId, customerId, `QTN-HAPPY-MARGIN-${slug}`, rateVersionId],
     );
@@ -271,9 +273,9 @@ describe('Quotation -> proforma -> project DAG happy path', () => {
 
     const proforma = await proformasRepo.issue(tenantId, userId, marginQuoteId, null);
 
-    expect(proforma.subtotalEtb).toBe('120.00');
-    expect(proforma.vatEtb).toBe('18.00');
-    expect(proforma.totalEtb).toBe('138.00');
+    expect(proforma.subtotalEtb).toBe('126.01');
+    expect(proforma.vatEtb).toBe('18.90');
+    expect(proforma.totalEtb).toBe('144.91');
     expect(new Decimal(proforma.subtotalEtb).plus(proforma.vatEtb).toFixed(2)).toBe(
       proforma.totalEtb,
     );
