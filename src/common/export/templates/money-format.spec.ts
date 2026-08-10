@@ -1,6 +1,6 @@
 import { formatEtb as docxFormatEtb } from './quotation.docx-template';
 import { formatEtb as pdfFormatEtb } from './quotation.template';
-import { formatEtb } from './money-format';
+import { formatEtb, vatPercentLabel } from './money-format';
 
 describe('formatEtb', () => {
   it('groups a decimal money string into thousands with a 2dp ETB suffix', () => {
@@ -36,6 +36,25 @@ describe('formatEtb', () => {
     // would misstate money rather than surface the bug.
     expect(() => formatEtb('not-a-number')).toThrow();
     expect(() => formatEtb('12.34.56')).toThrow();
+  });
+});
+
+describe('vatPercentLabel', () => {
+  it('derives the rate implied by a subtotal/vat pair', () => {
+    expect(vatPercentLabel('100000.00', '15000.00')).toBe('15.00');
+  });
+
+  it('returns 0.00 when subtotal is zero (avoids dividing by zero)', () => {
+    expect(vatPercentLabel('0.00', '0.00')).toBe('0.00');
+  });
+
+  it('returns 0.00 when subtotal is null/undefined', () => {
+    expect(vatPercentLabel(null, '15000.00')).toBe('0.00');
+    expect(vatPercentLabel(undefined, '15000.00')).toBe('0.00');
+  });
+
+  it('treats a missing vat as 0', () => {
+    expect(vatPercentLabel('100000.00', null)).toBe('0.00');
   });
 });
 

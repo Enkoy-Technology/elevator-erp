@@ -37,3 +37,27 @@ export const formatEtb = (value: string | null | undefined): string => {
   // toNumber() loses no precision before Intl formats the thousands groups.
   return `${etbFormatter.format(amount.toNumber())} ETB`;
 };
+
+/**
+ * The VAT rate implied by a subtotal/vat pair, as a "15.00" style percent
+ * string. Used for the proforma customer document's "VAT (rate %)" line
+ * (proforma-document.mapper.ts) — the proforma no longer stores/joins a raw
+ * taxPercent field (see decision (a) in the finance-exports-sms phase-3
+ * report), so the rate is derived from the two money columns it does own
+ * instead. '0.00' when subtotal is zero/absent (can't divide by zero).
+ */
+export const vatPercentLabel = (
+  subtotalEtb: string | null | undefined,
+  vatEtb: string | null | undefined,
+): string => {
+  const subtotal = new Decimal(subtotalEtb?.trim() || '0');
+  if (subtotal.isZero()) {
+    return '0.00';
+  }
+  const vat = new Decimal(vatEtb?.trim() || '0');
+  return vat
+    .div(subtotal)
+    .mul(100)
+    .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+    .toFixed(2);
+};

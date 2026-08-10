@@ -5,30 +5,26 @@ import { sanitizeHex } from './layout';
 import { formatEtb } from './money-format';
 import type { ProformaTemplateData } from './proforma.template';
 import { fullWidthTable, heading, row } from './quotation.docx-template';
-import { fmtDate, PRICING_ROWS, TECH_ROWS } from './quotation.template';
+import { fmtDate, TECH_ROWS } from './quotation.template';
 
 export { formatEtb };
 
 /**
  * Builds the proforma invoice as a native docx `Document` — mirrors
  * buildQuotationDocx's section shell (letterhead, meta, technical spec,
- * pricing, totals, notes, footer) via the same row/table/heading helpers;
- * only the title, the identifying number, and the totals block's field
- * names (vatEtb/totalEtb vs the quotation's taxAmountEtb/totalPriceEtb)
- * differ. Logo-omission reasoning is the same as buildQuotationDocx's own
- * doc comment.
+ * pricing, notes, footer) via the same row/table/heading helpers; only the
+ * title, the identifying number, and the pricing block (taxable base / VAT
+ * / total only — no margin, no cost itemization, see ProformaTemplateData's
+ * own doc comment) differ. Logo-omission reasoning is the same as
+ * buildQuotationDocx's own doc comment.
  */
 export const buildProformaDocx = (data: object, branding: TenantBranding | null): Document => {
   const d = data as ProformaTemplateData;
-  const pricing = d.pricingBreakdown ?? {};
   const tech = d.technicalSpec ?? {};
   const primary = sanitizeHex(branding?.primaryColor);
 
   const techRows = TECH_ROWS.filter((r) => tech[r.key] != null).map((r) =>
     row(r.label, `${String(tech[r.key])}${r.unit ? ` ${r.unit}` : ''}`),
-  );
-  const pricingRows = PRICING_ROWS.filter((r) => pricing[r.key] != null).map((r) =>
-    row(r.label, formatEtb(pricing[r.key])),
   );
 
   const phones = (branding?.phones ?? []).filter(Boolean).join(' · ');
@@ -71,11 +67,8 @@ export const buildProformaDocx = (data: object, branding: TenantBranding | null)
     heading('Technical Specification', primary),
     fullWidthTable(techRows.length ? techRows : [row('See attached specification', '')]),
     heading('Pricing', primary),
-    fullWidthTable(pricingRows.length ? pricingRows : [row('See pricing breakdown', '')]),
-    heading('Totals', primary),
     fullWidthTable([
-      row('Subtotal', formatEtb(d.subtotalEtb)),
-      row(`Margin (${d.marginPercent ?? '0'}%)`, formatEtb(d.marginAmountEtb)),
+      row('Supply and installation', formatEtb(d.subtotalEtb)),
       row(`VAT (${d.taxPercent ?? '0'}%)`, formatEtb(d.vatEtb)),
       row('Total', formatEtb(d.totalEtb)),
     ]),
