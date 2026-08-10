@@ -267,6 +267,13 @@
       "when": 1786358707505,
       "tag": "0037_revoke_quotations_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1786359522989,
+      "tag": "0038_revoke_delete_document_sequences_proformas",
+      "breakpoints": true
     }
   ]
 }
