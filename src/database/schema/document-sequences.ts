@@ -12,14 +12,13 @@ import { tenants } from './tenants';
  * its own; no advisory lock needed, unlike RatesRepository.rotate()'s
  * read-then-write race.
  *
- * Claim protocol: increment-then-return — the RETURNED `nextValue` IS the
- * issued number, not "the value to use next time." Never read `nextValue`
+ * Claim protocol: increment-then-return — the RETURNED `lastValue` IS the
+ * issued number, not "the value to use next time." Never read `lastValue`
  * with a plain SELECT and use it directly as the number to issue; only the
  * value that comes back from the same claiming INSERT is safe to use.
- * `nextValue` is a misleading name for that returned value (it names the
- * column's role between claims, not what the RETURNING clause hands back) —
- * renaming it to `last_value` is deferred to a Phase 4 migration so this
- * doesn't churn a schema Phase 3 already depends on.
+ * (Renamed from `next_value` in the Phase 4 finance migration — the old
+ * name was misleading: it named the column's role between claims, not what
+ * the RETURNING clause hands back.)
  */
 export const documentSequences = pgTable(
   'document_sequences',
@@ -29,7 +28,7 @@ export const documentSequences = pgTable(
       .references(() => tenants.id),
     kind: text('kind').notNull(),
     fiscalYearLabel: text('fiscal_year_label').notNull(),
-    nextValue: integer('next_value').notNull().default(1),
+    lastValue: integer('last_value').notNull().default(1),
   },
   (table) => [
     primaryKey({

@@ -278,7 +278,7 @@ export class ProformasRepository {
           tenantId,
           kind: PROFORMA_SEQUENCE_KIND,
           fiscalYearLabel: fiscalYear.label,
-          nextValue: 1,
+          lastValue: 1,
         })
         .onConflictDoUpdate({
           target: [
@@ -286,15 +286,15 @@ export class ProformasRepository {
             documentSequences.kind,
             documentSequences.fiscalYearLabel,
           ],
-          set: { nextValue: sql`${documentSequences.nextValue} + 1` },
+          set: { lastValue: sql`${documentSequences.lastValue} + 1` },
         })
-        .returning({ nextValue: documentSequences.nextValue });
+        .returning({ lastValue: documentSequences.lastValue });
       if (!claimed) {
         throw new Error('Failed to claim proforma number');
       }
       const proformaNumber = buildProformaNumber(
         fiscalYear.label,
-        claimed.nextValue,
+        claimed.lastValue,
       );
 
       // 4. Insert the immutable snapshot. subtotalEtb is the TAXABLE BASE —

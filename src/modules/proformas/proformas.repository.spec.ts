@@ -84,7 +84,7 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
       .mockReturnValueOnce(makeSelectChain([{ id: RATE_VERSION_ID }]))
       .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
     let insertedProforma: Record<string, unknown> = {};
-    const seqChain = makeSeqInsertChain([{ nextValue: 1 }]);
+    const seqChain = makeSeqInsertChain([{ lastValue: 1 }]);
     const proformaChain = makeProformaInsertChain(
       (v) => (insertedProforma = v),
       [{ id: 'pf-1' }],
@@ -209,7 +209,7 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
     let insertedProforma: Record<string, unknown> = {};
     const insert = jest
       .fn()
-      .mockReturnValueOnce(makeSeqInsertChain([{ nextValue: 1 }]))
+      .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
       .mockReturnValueOnce(
         makeProformaInsertChain((v) => (insertedProforma = v), [{ id: 'pf-1' }]),
       );
@@ -243,7 +243,7 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
     // derivation (step 4) that's actually under test here, so it still
     // needs a working insert chain — only the proforma insert (step 4)
     // never gets reached.
-    const insert = jest.fn(() => makeSeqInsertChain([{ nextValue: 1 }]));
+    const insert = jest.fn(() => makeSeqInsertChain([{ lastValue: 1 }]));
     const withTenant = jest.fn(
       async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
         fn({ update, select, insert }),
@@ -265,7 +265,7 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
       .fn()
       .mockReturnValueOnce(makeSelectChain([{ id: RATE_VERSION_ID }]))
       .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
-    const insert = jest.fn(() => makeSeqInsertChain([{ nextValue: 1 }]));
+    const insert = jest.fn(() => makeSeqInsertChain([{ lastValue: 1 }]));
     const withTenant = jest.fn(
       async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
         fn({ update, select, insert }),

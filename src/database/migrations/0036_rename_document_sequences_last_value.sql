@@ -1,0 +1,14 @@
+-- Hand-authored (not drizzle-kit generated): a single-column rename on a
+-- single table is unambiguous by inspection, and `drizzle-kit generate`'s
+-- rename-vs-drop/create disambiguation is an interactive TTY prompt with no
+-- non-interactive flag — so this migration, its journal entry, and its
+-- meta/0036_snapshot.json were written by hand instead, mirroring exactly
+-- what `generate` would have produced for this diff.
+--
+-- next_value -> last_value: see document-sequences.ts's doc comment. The
+-- RETURNED value from the claiming INSERT ... ON CONFLICT DO UPDATE
+-- RETURNING is the issued number itself, not "the value to use next time" —
+-- next_value was a misleading name for that. Deferred from Phase 3 (where
+-- this table was introduced) to this Phase 4 migration so that schema
+-- didn't churn while Phase 3 code still depended on it.
+ALTER TABLE "document_sequences" RENAME COLUMN "next_value" TO "last_value";
