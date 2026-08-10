@@ -195,3 +195,62 @@ describe('ProformasRepository.cancel — CAS ISSUED -> CANCELLED', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
+
+describe('ProformasRepository.findByIdForDocument — joined names + source quotation line data', () => {
+  const PROFORMA_ID = '88888888-8888-8888-8888-888888888888';
+
+  it('joins customers, projects, and quotations and returns the joined row', async () => {
+    const joinedRow = {
+      id: PROFORMA_ID,
+      proformaNumber: 'PF-FY2026-27-0001',
+      customerName: 'Acme',
+      projectName: 'Bole Tower',
+      technicalSpec: { capacityPersons: 13 },
+      pricingBreakdown: { baseCost: '80000.00' },
+    };
+    const leftJoins: Array<{ table: unknown; condition: unknown }> = [];
+    const chain: Record<string, jest.Mock> = {};
+    chain.from = jest.fn(() => chain);
+    chain.leftJoin = jest.fn((table: unknown, condition: unknown) => {
+      leftJoins.push({ table, condition });
+      return chain;
+    });
+    chain.where = jest.fn(() => chain);
+    chain.limit = jest.fn(() => Promise.resolve([joinedRow]));
+    const select = jest.fn(() => chain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new ProformasRepository({ withTenant } as never);
+
+    const result = await repo.findByIdForDocument(TENANT_ID, PROFORMA_ID);
+
+    expect(result).toEqual(joinedRow);
+    // Three leftJoins: customers, projects, quotations — each with a real
+    // ON condition passed (not an implicit/missing join predicate, which
+    // drizzle would otherwise happily accept as a cross join).
+    expect(leftJoins).toHaveLength(3);
+    for (const { condition } of leftJoins) {
+      expect(condition).toBeDefined();
+    }
+  });
+
+  it('returns null when no matching row exists', async () => {
+    const chain: Record<string, jest.Mock> = {};
+    chain.from = jest.fn(() => chain);
+    chain.leftJoin = jest.fn(() => chain);
+    chain.where = jest.fn(() => chain);
+    chain.limit = jest.fn(() => Promise.resolve([]));
+    const select = jest.fn(() => chain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new ProformasRepository({ withTenant } as never);
+
+    await expect(
+      repo.findByIdForDocument(TENANT_ID, PROFORMA_ID),
+    ).resolves.toBeNull();
+  });
+});

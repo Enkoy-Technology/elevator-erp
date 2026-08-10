@@ -14,6 +14,7 @@ import { ProjectsService } from '../projects/projects.service';
 import { ratePayloadSchemaFor } from '../rates/rate-payloads';
 import { RatesService } from '../rates/rates.service';
 import type { CreateQuotationDto } from './dto/create-quotation.dto';
+import type { QuotationDocumentRow } from './quotation-document.mapper';
 import { canTransitionQuoteStatus } from './quote-status';
 import {
   QuotationsRepository,
@@ -116,6 +117,25 @@ export class QuotationsService {
       createdByUserId: user.userId,
       statusChangedAt: new Date(),
     });
+  }
+
+  /**
+   * Row + customer/project display names for document rendering (pdf/docx/
+   * xlsx). Allowed regardless of status — including DRAFT — per the task-3
+   * brief: no watermark, no gate; flagged there as a product follow-up.
+   */
+  async getDocumentData(
+    user: AuthenticatedUser,
+    id: string,
+  ): Promise<QuotationDocumentRow> {
+    const row = await this.quotationsRepository.findByIdForDocument(
+      user.tenantId,
+      id,
+    );
+    if (!row) {
+      throw new NotFoundException('Quotation not found');
+    }
+    return row;
   }
 
   submit(user: AuthenticatedUser, id: string): Promise<QuotationRecord> {

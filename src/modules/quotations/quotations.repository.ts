@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, count, desc, eq, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, getTableColumns, isNull } from 'drizzle-orm';
 
 import { WorkflowTransitionError } from '../../common/exceptions';
 import {
@@ -7,8 +7,9 @@ import {
   toPaginatedResult,
   type PaginatedResult,
 } from '../../common/pagination';
-import { quotations, type QuoteStatus } from '../../database/schema';
+import { customers, projects, quotations, type QuoteStatus } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
+import type { QuotationDocumentRow } from './quotation-document.mapper';
 
 export type QuotationRecord = typeof quotations.$inferSelect;
 export type QuotationInsert = typeof quotations.$inferInsert;
@@ -63,6 +64,40 @@ export class QuotationsRepository {
       const rows = await tx
         .select()
         .from(quotations)
+        .where(and(eq(quotations.id, id), isNull(quotations.deletedAt)))
+        .limit(1);
+      return rows[0] ?? null;
+    });
+  }
+
+  /**
+   * Same row as findById, plus the customer/project display names the
+   * document templates need (QuotationRecord only has customerId/projectId
+   * — see quotation-document.mapper.ts). Joined here rather than fetched via
+   * ProjectsService/CustomersService: one query, and it keeps the document
+   * endpoint from adding a new cross-module service dependency for two
+   * display strings.
+   */
+  async findByIdForDocument(
+    tenantId: string,
+    id: string,
+  ): Promise<QuotationDocumentRow | null> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const rows = await tx
+        .select({
+          ...getTableColumns(quotations),
+          customerName: customers.name,
+          projectName: projects.name,
+        })
+        .from(quotations)
+        .leftJoin(
+          customers,
+          and(eq(quotations.tenantId, customers.tenantId), eq(quotations.customerId, customers.id)),
+        )
+        .leftJoin(
+          projects,
+          and(eq(quotations.tenantId, projects.tenantId), eq(quotations.projectId, projects.id)),
+        )
         .where(and(eq(quotations.id, id), isNull(quotations.deletedAt)))
         .limit(1);
       return rows[0] ?? null;

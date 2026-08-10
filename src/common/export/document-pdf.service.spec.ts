@@ -3,6 +3,8 @@
 // The real render path is covered by document-pdf.pdf-smoke.spec.ts.
 jest.mock('puppeteer', () => ({ __esModule: true, default: { launch: jest.fn() } }));
 
+import { Test } from '@nestjs/testing';
+
 import { TemplateNotImplementedError } from '../exceptions';
 import { DocumentPdfService, isAllowedAssetUrl, type TenantBranding } from './document-pdf.service';
 
@@ -59,6 +61,28 @@ describe('isAllowedAssetUrl (SSRF guard)', () => {
   });
 });
 
+/** Wires a minimal mocked Puppeteer browser/page pair through the launch mock above. */
+const mockLaunch = () => {
+  const page = {
+    setJavaScriptEnabled: jest.fn(),
+    setRequestInterception: jest.fn(),
+    on: jest.fn(),
+    setContent: jest.fn().mockResolvedValue(undefined),
+    pdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-1.4')),
+    close: jest.fn().mockResolvedValue(undefined),
+  };
+  const browser = {
+    connected: true,
+    newPage: jest.fn().mockResolvedValue(page),
+    once: jest.fn(),
+    close: jest.fn().mockResolvedValue(undefined),
+  };
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const puppeteer = require('puppeteer').default as { launch: jest.Mock };
+  puppeteer.launch.mockResolvedValue(browser);
+  return { launch: puppeteer.launch, browser };
+};
+
 describe('DocumentPdfService.renderDocumentPdf', () => {
   const branding: TenantBranding = {
     name: 'Enkoy Elevators PLC',
@@ -85,5 +109,71 @@ describe('DocumentPdfService.renderDocumentPdf', () => {
     await expect(service.renderDocumentPdf('receipt', {}, branding)).rejects.toThrow(
       /receipt/,
     );
+  });
+
+  it('has a registered builder for "proforma" (Phase 3) — does not throw TemplateNotImplementedError', async () => {
+    mockLaunch();
+    const service = new DocumentPdfService();
+    await expect(
+      service.renderDocumentPdf('proforma', {}, branding),
+    ).resolves.toBeInstanceOf(Buffer);
+  });
+});
+
+describe('DocumentPdfService — single-flight browser launch', () => {
+  const branding: TenantBranding = {
+    name: 'Enkoy Elevators PLC',
+    slogan: '',
+    logoUrl: null,
+    address: 'Bole Road, Addis Ababa',
+    phones: [],
+    primaryColor: '#123456',
+  };
+
+  it('memoizes concurrent cold-start renders into a single Chromium launch', async () => {
+    const { launch, browser } = mockLaunch();
+    const service = new DocumentPdfService();
+
+    await Promise.all([
+      service.renderDocumentPdf('quotation', {}, branding),
+      service.renderDocumentPdf('quotation', {}, branding),
+    ]);
+
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect(browser.newPage).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('DocumentPdfService — onModuleDestroy actually registers via Nest', () => {
+  // Regression: ExportModule existed but was never imported into AppModule
+  // (or any feature module) before this task, so Nest's shutdown lifecycle
+  // never reached DocumentPdfService.onModuleDestroy — a leaked Chromium
+  // process on every app.close()/SIGTERM. Wiring QuotationsModule/
+  // ProformasModule (and AppModule) to import ExportModule fixes that; this
+  // proves the fix by actually closing a TestingModule and checking the
+  // browser got closed, not by asserting on the wiring's source code.
+  it('closes the launched browser when the Nest module is closed', async () => {
+    const { browser } = mockLaunch();
+    const moduleRef = await Test.createTestingModule({
+      providers: [DocumentPdfService],
+    }).compile();
+    const app = moduleRef.createNestApplication();
+    await app.init();
+
+    const service = app.get(DocumentPdfService);
+    const branding: TenantBranding = {
+      name: 'Enkoy Elevators PLC',
+      slogan: '',
+      logoUrl: null,
+      address: '',
+      phones: [],
+      primaryColor: '#123456',
+    };
+    await service.renderDocumentPdf('quotation', {}, branding);
+    expect(browser.close).not.toHaveBeenCalled();
+
+    await app.close();
+
+    expect(browser.close).toHaveBeenCalledTimes(1);
   });
 });

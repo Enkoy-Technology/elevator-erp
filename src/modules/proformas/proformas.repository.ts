@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, count, desc, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
 
 import { todayIso } from '../../common/business-time';
 import { WorkflowTransitionError } from '../../common/exceptions';
@@ -10,13 +10,16 @@ import {
   type PaginatedResult,
 } from '../../common/pagination';
 import {
+  customers,
   documentSequences,
   proformas,
+  projects,
   quotations,
   tenants,
   type ProformaStatus,
 } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
+import type { ProformaDocumentRow } from './proforma-document.mapper';
 import { buildProformaNumber } from './proforma-number';
 
 export type ProformaRecord = typeof proformas.$inferSelect;
@@ -109,6 +112,48 @@ export class ProformasRepository {
       const rows = await tx
         .select()
         .from(proformas)
+        .where(eq(proformas.id, id))
+        .limit(1);
+      return rows[0] ?? null;
+    });
+  }
+
+  /**
+   * Same row as findById, plus the customer/project display names and the
+   * originating quotation's line data (technicalSpec, pricingBreakdown,
+   * marginPercent, marginAmountEtb, taxPercent) — proformas don't duplicate
+   * that jsonb snapshot, so the document template pulls it from the linked
+   * quotation. See proforma-document.mapper.ts.
+   */
+  async findByIdForDocument(
+    tenantId: string,
+    id: string,
+  ): Promise<ProformaDocumentRow | null> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const rows = await tx
+        .select({
+          ...getTableColumns(proformas),
+          customerName: customers.name,
+          projectName: projects.name,
+          technicalSpec: quotations.technicalSpec,
+          pricingBreakdown: quotations.pricingBreakdown,
+          marginPercent: quotations.marginPercent,
+          marginAmountEtb: quotations.marginAmountEtb,
+          taxPercent: quotations.taxPercent,
+        })
+        .from(proformas)
+        .leftJoin(
+          customers,
+          and(eq(proformas.tenantId, customers.tenantId), eq(proformas.customerId, customers.id)),
+        )
+        .leftJoin(
+          projects,
+          and(eq(proformas.tenantId, projects.tenantId), eq(proformas.projectId, projects.id)),
+        )
+        .leftJoin(
+          quotations,
+          and(eq(proformas.tenantId, quotations.tenantId), eq(proformas.quotationId, quotations.id)),
+        )
         .where(eq(proformas.id, id))
         .limit(1);
       return rows[0] ?? null;

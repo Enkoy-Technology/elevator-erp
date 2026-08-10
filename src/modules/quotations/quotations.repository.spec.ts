@@ -82,3 +82,58 @@ describe('QuotationsRepository.updateStatus — compare-and-swap', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
+
+describe('QuotationsRepository.findByIdForDocument — joined customer/project names', () => {
+  it('joins customers and projects and returns the joined row', async () => {
+    const joinedRow = {
+      id: QUOTE_ID,
+      quoteNumber: 'QTN-2026-ABCD1234',
+      customerName: 'Acme',
+      projectName: 'Bole Tower',
+    };
+    const leftJoins: Array<{ table: unknown; condition: unknown }> = [];
+    const chain: Record<string, jest.Mock> = {};
+    chain.from = jest.fn(() => chain);
+    chain.leftJoin = jest.fn((table: unknown, condition: unknown) => {
+      leftJoins.push({ table, condition });
+      return chain;
+    });
+    chain.where = jest.fn(() => chain);
+    chain.limit = jest.fn(() => Promise.resolve([joinedRow]));
+    const select = jest.fn(() => chain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new QuotationsRepository({ withTenant } as never);
+
+    const result = await repo.findByIdForDocument(TENANT_ID, QUOTE_ID);
+
+    expect(result).toEqual(joinedRow);
+    // Two leftJoins: customers, then projects — each with a real ON
+    // condition passed (not a bare table with an implicit/missing join
+    // predicate, which drizzle would otherwise happily accept as a cross join).
+    expect(leftJoins).toHaveLength(2);
+    for (const { condition } of leftJoins) {
+      expect(condition).toBeDefined();
+    }
+  });
+
+  it('returns null when no matching row exists', async () => {
+    const chain: Record<string, jest.Mock> = {};
+    chain.from = jest.fn(() => chain);
+    chain.leftJoin = jest.fn(() => chain);
+    chain.where = jest.fn(() => chain);
+    chain.limit = jest.fn(() => Promise.resolve([]));
+    const select = jest.fn(() => chain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new QuotationsRepository({ withTenant } as never);
+
+    await expect(
+      repo.findByIdForDocument(TENANT_ID, QUOTE_ID),
+    ).resolves.toBeNull();
+  });
+});

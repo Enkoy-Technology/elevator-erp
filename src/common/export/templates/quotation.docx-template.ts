@@ -17,6 +17,9 @@ import { fmtDate, PRICING_ROWS, TECH_ROWS, type QuotationTemplateData } from './
 
 export { formatEtb };
 
+// cell/row/fullWidthTable/heading are exported so proforma.docx-template.ts
+// (a thin reuse of this same layout — different title/number/totals fields
+// only) shares them instead of redefining the same four docx primitives.
 const cell = (
   text: string,
   { width, align }: { width: number; align?: (typeof AlignmentType)[keyof typeof AlignmentType] },
@@ -27,15 +30,15 @@ const cell = (
   });
 
 /** Two-column label/value row, value right-aligned (mirrors the PDF's `td.num`). */
-const row = (label: string, value: string): TableRow =>
+export const row = (label: string, value: string): TableRow =>
   new TableRow({
     children: [cell(label, { width: 65 }), cell(value, { width: 35, align: AlignmentType.RIGHT })],
   });
 
-const fullWidthTable = (rows: readonly TableRow[]): Table =>
+export const fullWidthTable = (rows: readonly TableRow[]): Table =>
   new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows });
 
-const heading = (text: string, color: string): Paragraph =>
+export const heading = (text: string, color: string): Paragraph =>
   new Paragraph({
     heading: HeadingLevel.HEADING_2,
     spacing: { before: 240, after: 80 },

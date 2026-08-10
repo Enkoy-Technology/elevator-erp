@@ -21,12 +21,23 @@ import { isUUID } from 'class-validator';
 
 import { todayIso } from '../../common/business-time';
 import { CurrentUser, Roles } from '../../common/decorators';
+import { parseDocumentFormat } from '../../common/export/document-format';
+import { DocumentDocxService } from '../../common/export/document-docx.service';
+import { DocumentPdfService } from '../../common/export/document-pdf.service';
 import { parseExportFormat } from '../../common/export/export-query.dto';
-import { type ColumnDef, writeCsv, writeXlsx } from '../../common/export/tabular';
+import {
+  type ColumnDef,
+  setDownloadHeaders,
+  singleRow,
+  writeCsv,
+  writeXlsx,
+} from '../../common/export/tabular';
+import { TenantBrandingProvider } from '../../common/export/tenant-branding.provider';
 import { proformaStatusEnum, type ProformaStatus } from '../../database/schema';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { CancelProformaDto } from './dto/cancel-proforma.dto';
 import { ConvertToProformaDto } from './dto/convert-to-proforma.dto';
+import { PROFORMA_DOCUMENT_COLUMNS, proformaDocumentData } from './proforma-document.mapper';
 import { ProformasService } from './proformas.service';
 
 const PROFORMA_STATUSES = proformaStatusEnum.enumValues;
@@ -54,7 +65,12 @@ export const PROFORMAS_EXPORT_COLUMNS: ColumnDef[] = [
 @Controller()
 @Roles('SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
 export class ProformasController {
-  constructor(private readonly proformasService: ProformasService) {}
+  constructor(
+    private readonly proformasService: ProformasService,
+    private readonly pdfService: DocumentPdfService,
+    private readonly docxService: DocumentDocxService,
+    private readonly tenantBranding: TenantBrandingProvider,
+  ) {}
 
   @Post('quotations/:id/convert-to-proforma')
   @HttpCode(201)
@@ -128,6 +144,52 @@ export class ProformasController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.proformasService.getById(user, id);
+  }
+
+  @Get('proformas/:id/document')
+  @ApiOperation({
+    summary:
+      'Download a proforma as PDF, Word, or Excel (?format=pdf|docx|xlsx). Always allowed — append-only book.',
+  })
+  async document(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('format') formatRaw: string | undefined,
+    @Res({ passthrough: false }) res: Response,
+  ): Promise<void> {
+    const format = parseDocumentFormat(formatRaw);
+    const row = await this.proformasService.getDocumentData(user, id);
+    const filename = `proforma-${row.proformaNumber}`;
+
+    if (format === 'xlsx') {
+      // writeXlsx reads row[col.key] at runtime — row has every field
+      // PROFORMA_DOCUMENT_COLUMNS references; the cast is only needed
+      // because ProformaDocumentRow has no index signature of its own.
+      await writeXlsx(
+        res,
+        filename,
+        PROFORMA_DOCUMENT_COLUMNS,
+        singleRow(row as unknown as Record<string, unknown>),
+      );
+      return;
+    }
+
+    const branding = await this.tenantBranding.get(user.tenantId);
+    const data = proformaDocumentData(row);
+    if (format === 'pdf') {
+      const buf = await this.pdfService.renderDocumentPdf('proforma', data, branding);
+      setDownloadHeaders(res, filename, 'pdf', 'application/pdf');
+      res.end(buf);
+      return;
+    }
+    const buf = await this.docxService.renderDocumentDocx('proforma', data, branding);
+    setDownloadHeaders(
+      res,
+      filename,
+      'docx',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    res.end(buf);
   }
 
   @Post('proformas/:id/cancel')

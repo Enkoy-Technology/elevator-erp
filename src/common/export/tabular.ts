@@ -10,10 +10,16 @@ export interface ColumnDef {
 const UTF8_BOM = Buffer.from([0xef, 0xbb, 0xbf]);
 
 /** Strips everything but `[A-Za-z0-9._-]` so a filename can't escape its directory or break the header. */
-const sanitizeFilename = (filename: string): string =>
+export const sanitizeFilename = (filename: string): string =>
   filename.replace(/[^A-Za-z0-9._-]/g, '');
 
-const setDownloadHeaders = (
+/**
+ * Sets Content-Type + a sanitized Content-Disposition attachment filename.
+ * Shared by the streamed csv/xlsx list exports below and by the single-
+ * document pdf/docx/xlsx downloads (quotations/proformas `:id/document`),
+ * which write a whole Buffer directly instead of streaming rows.
+ */
+export const setDownloadHeaders = (
   res: Response,
   filename: string,
   extension: string,
@@ -205,6 +211,14 @@ export async function writeCsv(
   } catch (err) {
     destroyOnError(res, err);
   }
+}
+
+/** Wraps a single row as the one-element AsyncIterable writeXlsx expects — for the single-document xlsx download, not a list export. */
+// eslint-disable-next-line @typescript-eslint/require-await -- must be an async generator to satisfy AsyncIterable; yield is the point, there is nothing to await.
+export async function* singleRow(
+  row: Record<string, unknown>,
+): AsyncGenerator<Record<string, unknown>> {
+  yield row;
 }
 
 export async function writeXlsx(

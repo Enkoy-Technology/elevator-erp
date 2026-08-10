@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -15,13 +16,20 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { isUUID } from 'class-validator';
 
 import { CurrentUser, Roles } from '../../common/decorators';
+import { parseDocumentFormat } from '../../common/export/document-format';
+import { DocumentDocxService } from '../../common/export/document-docx.service';
+import { DocumentPdfService } from '../../common/export/document-pdf.service';
+import { setDownloadHeaders, singleRow, writeXlsx } from '../../common/export/tabular';
+import { TenantBrandingProvider } from '../../common/export/tenant-branding.provider';
 import { quoteStatusEnum, type QuoteStatus } from '../../database/schema';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { CreateQuotationDto } from './dto/create-quotation.dto';
 import { RejectQuotationDto } from './dto/reject-quotation.dto';
+import { QUOTATION_DOCUMENT_COLUMNS, quotationDocumentData } from './quotation-document.mapper';
 import { QuotationsService } from './quotations.service';
 
 const QUOTE_STATUSES = quoteStatusEnum.enumValues;
@@ -31,7 +39,12 @@ const QUOTE_STATUSES = quoteStatusEnum.enumValues;
 @Controller()
 @Roles('SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
 export class QuotationsController {
-  constructor(private readonly quotationsService: QuotationsService) {}
+  constructor(
+    private readonly quotationsService: QuotationsService,
+    private readonly pdfService: DocumentPdfService,
+    private readonly docxService: DocumentDocxService,
+    private readonly tenantBranding: TenantBrandingProvider,
+  ) {}
 
   @Get('quotations')
   @ApiOperation({ summary: 'List quotations (project/status filter + paging)' })
@@ -69,6 +82,52 @@ export class QuotationsController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.quotationsService.getById(user, id);
+  }
+
+  @Get('quotations/:id/document')
+  @ApiOperation({
+    summary:
+      'Download a quotation as PDF, Word, or Excel (?format=pdf|docx|xlsx). Allowed at any status, including DRAFT.',
+  })
+  async document(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('format') formatRaw: string | undefined,
+    @Res({ passthrough: false }) res: Response,
+  ): Promise<void> {
+    const format = parseDocumentFormat(formatRaw);
+    const row = await this.quotationsService.getDocumentData(user, id);
+    const filename = `quotation-${row.quoteNumber}`;
+
+    if (format === 'xlsx') {
+      // writeXlsx reads row[col.key] at runtime — row has every field
+      // QUOTATION_DOCUMENT_COLUMNS references; the cast is only needed
+      // because QuotationDocumentRow has no index signature of its own.
+      await writeXlsx(
+        res,
+        filename,
+        QUOTATION_DOCUMENT_COLUMNS,
+        singleRow(row as unknown as Record<string, unknown>),
+      );
+      return;
+    }
+
+    const branding = await this.tenantBranding.get(user.tenantId);
+    const data = quotationDocumentData(row);
+    if (format === 'pdf') {
+      const buf = await this.pdfService.renderDocumentPdf('quotation', data, branding);
+      setDownloadHeaders(res, filename, 'pdf', 'application/pdf');
+      res.end(buf);
+      return;
+    }
+    const buf = await this.docxService.renderDocumentDocx('quotation', data, branding);
+    setDownloadHeaders(
+      res,
+      filename,
+      'docx',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    res.end(buf);
   }
 
   @Post('projects/:projectId/quotations')
