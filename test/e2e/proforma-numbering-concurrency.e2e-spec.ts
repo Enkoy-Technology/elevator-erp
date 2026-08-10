@@ -225,13 +225,13 @@ describe('Proforma numbering under concurrency', () => {
 
     // document_sequences ends exactly at 2 — one row per (tenant, kind, FY),
     // claimed exactly twice, no lost update.
-    const seqRows = await adminPool.query<{ next_value: number }>(
-      `select next_value from document_sequences
+    const seqRows = await adminPool.query<{ last_value: number }>(
+      `select last_value from document_sequences
        where tenant_id = $1 and kind = 'PROFORMA'`,
       [tenantId],
     );
     expect(seqRows.rows).toHaveLength(1);
-    expect(seqRows.rows[0]!.next_value).toBe(2);
+    expect(seqRows.rows[0]!.last_value).toBe(2);
 
     // Both quotations actually landed on CONVERTED_TO_PROFORMA — the CAS
     // half of the same transaction committed alongside the claim+insert.
