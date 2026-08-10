@@ -22,6 +22,7 @@ import { Pool } from 'pg';
 
 import * as schema from '../../src/database/schema';
 import { TenantDbService } from '../../src/database/tenant-db.service';
+import { InvoicesRepository } from '../../src/modules/invoices/invoices.repository';
 import { ProformasRepository } from '../../src/modules/proformas/proformas.repository';
 import { ProjectsRepository } from '../../src/modules/projects/projects.repository';
 import { ProjectsService } from '../../src/modules/projects/projects.service';
@@ -156,6 +157,14 @@ describe('Quotation -> proforma -> project DAG happy path', () => {
     if (!available) {
       return;
     }
+    // invoice_lines/invoices reference proformas (invoices_proforma_fk) —
+    // must be deleted first or the proformas delete below violates the FK.
+    await adminPool.query(`delete from invoice_lines where tenant_id = $1`, [
+      tenantId,
+    ]);
+    await adminPool.query(`delete from invoices where tenant_id = $1`, [
+      tenantId,
+    ]);
     await adminPool.query(`delete from proformas where tenant_id = $1`, [
       tenantId,
     ]);
@@ -226,6 +235,35 @@ describe('Quotation -> proforma -> project DAG happy path', () => {
 
     const convertedQuote = await quotationsRepo.findById(tenantId, quoteId);
     expect(convertedQuote?.status).toBe('CONVERTED_TO_PROFORMA');
+
+    // Task 2 (2.1): proforma -> invoice, same one-transaction shape (VAT
+    // guard + gapless numbering), extended off this already-issued
+    // proforma. Money is copied verbatim — same taxable-base semantics by
+    // construction (see InvoicesRepository.issueFromProforma's doc comment).
+    const invoicesRepo = new InvoicesRepository(tenantDb);
+    const invoice = await invoicesRepo.issueFromProforma(
+      tenantId,
+      userId,
+      proforma.id,
+      null,
+    );
+    expect(invoice.status).toBe('ISSUED');
+    expect(invoice.invoiceNumber).toMatch(/^INV-FY\d{4}-\d{2}-0001$/);
+    expect(invoice.proformaId).toBe(proforma.id);
+    expect(invoice.customerId).toBe(proforma.customerId);
+    expect(invoice.projectId).toBe(proforma.projectId);
+    expect(invoice.subtotalEtb).toBe(proforma.subtotalEtb);
+    expect(invoice.vatEtb).toBe(proforma.vatEtb);
+    expect(invoice.totalEtb).toBe(proforma.totalEtb);
+    expect(invoice.lines).toHaveLength(1);
+    expect(invoice.lines[0]?.lineTotalEtb).toBe(proforma.subtotalEtb);
+
+    // Converting the same proforma a second time hits the
+    // invoices_proforma_uk partial unique index and surfaces as a 409, not
+    // a raw unhandled 500 (0039_invoices_proforma_unique_partial_index.sql).
+    await expect(
+      invoicesRepo.issueFromProforma(tenantId, userId, proforma.id, null),
+    ).rejects.toMatchObject({ status: 409 });
 
     // project transitions QUOTATION -> PROFORMA now that an issued proforma exists
     const project = await projectsService.updateStatus(

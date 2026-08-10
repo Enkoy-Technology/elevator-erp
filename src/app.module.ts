@@ -14,6 +14,7 @@ import { CustomersModule } from './modules/customers/customers.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ElevatorCalcModule } from './modules/elevator-calc/elevator-calc.module';
 import { EmployeesModule } from './modules/employees/employees.module';
+import { InvoicesModule } from './modules/invoices/invoices.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ProformasModule } from './modules/proformas/proformas.module';
@@ -39,6 +40,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     ProjectsModule,
     QuotationsModule,
     ProformasModule,
+    InvoicesModule,
     EmployeesModule,
     AssetsModule,
     NotificationsModule,
