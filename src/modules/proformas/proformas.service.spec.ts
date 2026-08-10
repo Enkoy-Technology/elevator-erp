@@ -23,6 +23,8 @@ describe('ProformasService', () => {
     vatEtb: '15.00',
     totalEtb: '115.00',
     rateVersionId: '77777777-7777-7777-7777-777777777777',
+    technicalSpec: { capacityPersons: 13 },
+    pricingBreakdown: { baseCost: '80.00' },
     issuedAt: new Date('2026-08-08T00:00:00.000Z'),
     issuedByUserId: user.userId,
     validUntil: null,

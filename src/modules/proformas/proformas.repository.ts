@@ -1,5 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, count, desc, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
+import { Decimal } from 'decimal.js';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  gte,
+  isNull,
+  lte,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import { todayIso } from '../../common/business-time';
 import { WorkflowTransitionError } from '../../common/exceptions';
@@ -15,6 +28,7 @@ import {
   proformas,
   projects,
   quotations,
+  rateVersions,
   tenants,
   type ProformaStatus,
 } from '../../database/schema';
@@ -70,6 +84,17 @@ export class ProformasRepository {
     });
   }
 
+  /**
+   * Streams every proforma matching the same filters `list()` honors, for
+   * bulk export, in batches of BATCH_SIZE.
+   *
+   * ponytail: offset batching, ties broken by the `id` tiebreaker below so
+   * equal `createdAt` values (bulk import, seed data) no longer duplicate
+   * or skip rows across batch boundaries — concurrent inserts/deletes can
+   * still shift the offset window; acceptable for ad-hoc admin downloads,
+   * switch to keyset cursor before this feeds accounting reconciliation.
+   * Perf ceiling: keyset if large-tenant exports time out.
+   */
   async *streamAll(
     tenantId: string,
     options: { projectId?: string; status?: ProformaStatus },
@@ -90,7 +115,7 @@ export class ProformasRepository {
           .select()
           .from(proformas)
           .where(where)
-          .orderBy(desc(proformas.createdAt))
+          .orderBy(desc(proformas.createdAt), asc(proformas.id))
           .limit(BATCH_SIZE)
           .offset(offset);
       });
@@ -119,11 +144,13 @@ export class ProformasRepository {
   }
 
   /**
-   * Same row as findById, plus the customer/project display names and the
-   * originating quotation's line data (technicalSpec, pricingBreakdown,
-   * marginPercent, marginAmountEtb, taxPercent) — proformas don't duplicate
-   * that jsonb snapshot, so the document template pulls it from the linked
-   * quotation. See proforma-document.mapper.ts.
+   * Same row as findById, plus the customer/project display names — the
+   * technicalSpec/pricingBreakdown line data comes straight off this row's
+   * own columns (a snapshot copied at issue time, see issue() below), NOT a
+   * join back to the live quotation: that quotation can keep changing
+   * status after conversion, so a join would render whatever the quotation
+   * looks like today instead of what was actually issued. See
+   * proforma-document.mapper.ts.
    */
   async findByIdForDocument(
     tenantId: string,
@@ -135,11 +162,6 @@ export class ProformasRepository {
           ...getTableColumns(proformas),
           customerName: customers.name,
           projectName: projects.name,
-          technicalSpec: quotations.technicalSpec,
-          pricingBreakdown: quotations.pricingBreakdown,
-          marginPercent: quotations.marginPercent,
-          marginAmountEtb: quotations.marginAmountEtb,
-          taxPercent: quotations.taxPercent,
         })
         .from(proformas)
         .leftJoin(
@@ -150,10 +172,6 @@ export class ProformasRepository {
           projects,
           and(eq(proformas.tenantId, projects.tenantId), eq(proformas.projectId, projects.id)),
         )
-        .leftJoin(
-          quotations,
-          and(eq(proformas.tenantId, quotations.tenantId), eq(proformas.quotationId, quotations.id)),
-        )
         .where(eq(proformas.id, id))
         .limit(1);
       return rows[0] ?? null;
@@ -162,16 +180,17 @@ export class ProformasRepository {
 
   /**
    * Issues a proforma from an APPROVED quotation, in ONE tenant transaction:
-   * CAS the quotation APPROVED -> CONVERTED_TO_PROFORMA, claim the next
-   * gapless number for (tenant, PROFORMA, fiscal year), insert the immutable
-   * money snapshot. Any failure (CAS miss, missing tenant, insert error)
-   * rolls back all three writes together.
+   * CAS the quotation APPROVED -> CONVERTED_TO_PROFORMA, reject if VAT has
+   * rotated since the quotation was priced, claim the next gapless number
+   * for (tenant, PROFORMA, fiscal year), insert the immutable money +
+   * technicalSpec/pricingBreakdown snapshot. Any failure (CAS miss, stale
+   * VAT, missing tenant, insert error) rolls back every write together.
    *
    * Deliberately reads/writes the `quotations` table directly (a shared
    * /database/schema table) instead of composing QuotationsRepository's own
    * (separately-transacted) updateStatus() — that would open a second
-   * transaction and break the "all three or none" guarantee the brief
-   * requires. See task-2-report.md for the transaction-boundary reasoning.
+   * transaction and break the "all or none" guarantee the brief requires.
+   * See task-2-report.md for the transaction-boundary reasoning.
    */
   async issue(
     tenantId: string,
@@ -181,6 +200,7 @@ export class ProformasRepository {
   ): Promise<ProformaRecord> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       const now = new Date();
+      const today = todayIso(now);
 
       // 1. CAS the quotation APPROVED -> CONVERTED_TO_PROFORMA.
       const [quote] = await tx
@@ -214,6 +234,30 @@ export class ProformasRepository {
         throw new NotFoundException('Quotation not found');
       }
 
+      // 1b. VAT staleness guard: reject conversion if the open VAT version
+      // has rotated since this quotation was priced (quote.rateVersionId
+      // was resolved at quote-creation time — see QuotationsService.
+      // createForProject — and never re-resolved). Mirrors RatesRepository.
+      // findActive's query shape; read inside this same transaction so the
+      // check is consistent with the CAS above.
+      const [openVat] = await tx
+        .select({ id: rateVersions.id })
+        .from(rateVersions)
+        .where(
+          and(
+            eq(rateVersions.kind, 'VAT'),
+            lte(rateVersions.validFrom, today),
+            or(isNull(rateVersions.validTo), gte(rateVersions.validTo, today)),
+          ),
+        )
+        .orderBy(desc(rateVersions.validFrom))
+        .limit(1);
+      if (!openVat || openVat.id !== quote.rateVersionId) {
+        throw new WorkflowTransitionError(
+          'VAT rate has changed since this quotation was priced — re-quote before converting.',
+        );
+      }
+
       // 2. Fiscal year for today, from this tenant's configured boundary.
       const [tenant] = await tx
         .select({ fiscalYearStart: tenants.fiscalYearStart })
@@ -223,7 +267,7 @@ export class ProformasRepository {
       if (!tenant) {
         throw new NotFoundException('Tenant not found');
       }
-      const fiscalYear = computeFiscalYear(todayIso(now), tenant.fiscalYearStart);
+      const fiscalYear = computeFiscalYear(today, tenant.fiscalYearStart);
 
       // 3. Claim the next gapless number: a single upsert statement is
       // atomic under Postgres's row-level locking on its own — no advisory
@@ -253,7 +297,18 @@ export class ProformasRepository {
         claimed.nextValue,
       );
 
-      // 4. Insert the immutable snapshot.
+      // 4. Insert the immutable snapshot. subtotalEtb is the TAXABLE BASE
+      // (quotation subtotal + margin), not the quotation's pre-margin
+      // subtotalEtb — see the schema's own doc comment — computed here with
+      // decimal.js off the quotation's stored money strings so
+      // subtotalEtb + vatEtb = totalEtb holds by construction (vatEtb/
+      // totalEtb are carried over unchanged: the quotation already computed
+      // VAT on subtotal+margin, see QuotationsService.createForProject).
+      const subtotalEtb = new Decimal(quote.subtotalEtb)
+        .plus(quote.marginAmountEtb)
+        .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+        .toFixed(2);
+
       const [row] = await tx
         .insert(proformas)
         .values({
@@ -263,10 +318,12 @@ export class ProformasRepository {
           customerId: quote.customerId,
           proformaNumber,
           fiscalYearLabel: fiscalYear.label,
-          subtotalEtb: quote.subtotalEtb,
+          subtotalEtb,
           vatEtb: quote.taxAmountEtb,
           totalEtb: quote.totalPriceEtb,
           rateVersionId: quote.rateVersionId,
+          technicalSpec: quote.technicalSpec,
+          pricingBreakdown: quote.pricingBreakdown,
           issuedByUserId: userId,
           validUntil,
           status: 'ISSUED',

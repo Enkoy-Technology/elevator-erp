@@ -17,9 +17,12 @@ const quoteRow = {
   projectId: PROJECT_ID,
   customerId: CUSTOMER_ID,
   subtotalEtb: '100.00',
+  marginAmountEtb: '20.00',
   taxAmountEtb: '15.00',
   totalPriceEtb: '115.00',
   rateVersionId: RATE_VERSION_ID,
+  technicalSpec: { capacityPersons: 13 },
+  pricingBreakdown: { baseCost: '80.00' },
 };
 
 /** Wires a fake `update().set().where().returning()` chain. */
@@ -31,11 +34,12 @@ const makeUpdateChain = (returning: unknown[]) => {
   return chain;
 };
 
-/** Wires a fake `select().from().where().limit()` chain. */
+/** Wires a fake `select().from().where().orderBy().limit()` chain (orderBy is optional in the real call chain, but always chainable here). */
 const makeSelectChain = (rows: unknown[]) => {
   const chain: Record<string, jest.Mock> = {};
   chain.from = jest.fn(() => chain);
   chain.where = jest.fn(() => chain);
+  chain.orderBy = jest.fn(() => chain);
   chain.limit = jest.fn(() => Promise.resolve(rows));
   return chain;
 };
@@ -64,11 +68,15 @@ const makeProformaInsertChain = (
 };
 
 describe('ProformasRepository.issue — one-transaction CAS + claim + insert', () => {
-  it('CASes the quotation, claims a gapless number, and inserts the immutable money snapshot', async () => {
+  it('CASes the quotation, claims a gapless number, and inserts the immutable money + spec snapshot', async () => {
     const update = jest.fn(() => makeUpdateChain([quoteRow]));
-    const select = jest.fn(() =>
-      makeSelectChain([{ fiscalYearStart: '07-08' }]),
-    );
+    // Two distinct select calls in issue(): the VAT-staleness check (returns
+    // the open version matching the quote's rateVersionId), then the
+    // tenant's fiscalYearStart lookup.
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ id: RATE_VERSION_ID }]))
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
     let insertedProforma: Record<string, unknown> = {};
     const seqChain = makeSeqInsertChain([{ nextValue: 1 }]);
     const proformaChain = makeProformaInsertChain(
@@ -87,9 +95,11 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
 
     await repo.issue(TENANT_ID, USER_ID, QUOTE_ID, null);
 
-    // Money snapshot: proforma column names (subtotalEtb/vatEtb/totalEtb) map
-    // from the quotation's own names (subtotalEtb/taxAmountEtb/totalPriceEtb).
-    expect(insertedProforma.subtotalEtb).toBe('100.00');
+    // Money snapshot: subtotalEtb is the TAXABLE BASE (quotation subtotal +
+    // margin, decision (a)), not the quotation's own (pre-margin) subtotalEtb.
+    // vatEtb/totalEtb map straight from the quotation's own names
+    // (taxAmountEtb/totalPriceEtb).
+    expect(insertedProforma.subtotalEtb).toBe('120.00');
     expect(insertedProforma.vatEtb).toBe('15.00');
     expect(insertedProforma.totalEtb).toBe('115.00');
     expect(insertedProforma.rateVersionId).toBe(RATE_VERSION_ID);
@@ -98,6 +108,10 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
     expect(insertedProforma.quotationId).toBe(QUOTE_ID);
     expect(insertedProforma.issuedByUserId).toBe(USER_ID);
     expect(insertedProforma.status).toBe('ISSUED');
+    // technicalSpec/pricingBreakdown are copied onto the proforma's own
+    // snapshot columns at issue time (see the 0034 migration).
+    expect(insertedProforma.technicalSpec).toEqual(quoteRow.technicalSpec);
+    expect(insertedProforma.pricingBreakdown).toEqual(quoteRow.pricingBreakdown);
 
     const fy = computeFiscalYear(todayIso(), '07-08');
     expect(insertedProforma.fiscalYearLabel).toBe(fy.label);
@@ -132,6 +146,37 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
     await expect(
       repo.issue(TENANT_ID, USER_ID, QUOTE_ID, null),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('throws WorkflowTransitionError (409) when the open VAT version does not match the quotation\'s rateVersionId (VAT has rotated since pricing)', async () => {
+    const update = jest.fn(() => makeUpdateChain([quoteRow]));
+    // Open VAT version id differs from quoteRow.rateVersionId.
+    const select = jest.fn(() =>
+      makeSelectChain([{ id: 'ffffffff-ffff-ffff-ffff-ffffffffffff' }]),
+    );
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ update, select }),
+    );
+    const repo = new ProformasRepository({ withTenant } as never);
+
+    await expect(
+      repo.issue(TENANT_ID, USER_ID, QUOTE_ID, null),
+    ).rejects.toBeInstanceOf(WorkflowTransitionError);
+  });
+
+  it('throws WorkflowTransitionError (409) when there is no open VAT version at all', async () => {
+    const update = jest.fn(() => makeUpdateChain([quoteRow]));
+    const select = jest.fn(() => makeSelectChain([]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ update, select }),
+    );
+    const repo = new ProformasRepository({ withTenant } as never);
+
+    await expect(
+      repo.issue(TENANT_ID, USER_ID, QUOTE_ID, null),
+    ).rejects.toBeInstanceOf(WorkflowTransitionError);
   });
 });
 
@@ -196,10 +241,10 @@ describe('ProformasRepository.cancel — CAS ISSUED -> CANCELLED', () => {
   });
 });
 
-describe('ProformasRepository.findByIdForDocument — joined names + source quotation line data', () => {
+describe('ProformasRepository.findByIdForDocument — joined display names + the proforma\'s own snapshot columns', () => {
   const PROFORMA_ID = '88888888-8888-8888-8888-888888888888';
 
-  it('joins customers, projects, and quotations and returns the joined row', async () => {
+  it('joins customers and projects (for display names only) and returns the row — technicalSpec/pricingBreakdown come from the proforma\'s own columns, no quotations join', async () => {
     const joinedRow = {
       id: PROFORMA_ID,
       proformaNumber: 'PF-FY2026-27-0001',
@@ -227,10 +272,13 @@ describe('ProformasRepository.findByIdForDocument — joined names + source quot
     const result = await repo.findByIdForDocument(TENANT_ID, PROFORMA_ID);
 
     expect(result).toEqual(joinedRow);
-    // Three leftJoins: customers, projects, quotations — each with a real
-    // ON condition passed (not an implicit/missing join predicate, which
-    // drizzle would otherwise happily accept as a cross join).
-    expect(leftJoins).toHaveLength(3);
+    // Two leftJoins: customers, projects — each with a real ON condition
+    // passed (not an implicit/missing join predicate, which drizzle would
+    // otherwise happily accept as a cross join). No quotations join: that
+    // table can keep changing after conversion, so technicalSpec/
+    // pricingBreakdown come from the proforma's own snapshot columns
+    // instead (getTableColumns(proformas), see issue()'s doc comment).
+    expect(leftJoins).toHaveLength(2);
     for (const { condition } of leftJoins) {
       expect(condition).toBeDefined();
     }

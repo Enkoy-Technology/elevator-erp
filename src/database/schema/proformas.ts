@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   date,
   foreignKey,
+  jsonb,
   numeric,
   pgTable,
   primaryKey,
@@ -41,12 +42,28 @@ export const proformas = pgTable(
     // ProformasRepository.issue). Column names follow this table's own
     // convention (vatEtb/totalEtb) rather than the quotation's
     // (taxAmountEtb/totalPriceEtb) — same precision, numeric(14,2).
+    //
+    // subtotalEtb is the TAXABLE BASE (quotation subtotal + margin amount),
+    // not the quotation's pre-margin subtotalEtb — so subtotalEtb + vatEtb =
+    // totalEtb holds by construction (VAT was computed on subtotal+margin at
+    // quote time; margin itself is not a proforma column, see decision (a)
+    // in the finance-exports-sms phase-3 report).
     subtotalEtb: numeric('subtotal_etb', { precision: 14, scale: 2 }).notNull(),
     vatEtb: numeric('vat_etb', { precision: 14, scale: 2 }).notNull(),
     totalEtb: numeric('total_etb', { precision: 14, scale: 2 }).notNull(),
     rateVersionId: uuid('rate_version_id')
       .notNull()
       .references(() => rateVersions.id),
+
+    // Immutable snapshot of the quotation's calc output at issue time — NOT
+    // a live join back to quotations (that table can still change status
+    // etc. after conversion). Copied once in ProformasRepository.issue() and
+    // never updated. The customer-facing document renders technicalSpec but
+    // deliberately does NOT render pricingBreakdown's cost itemization or
+    // margin (see decision (a)) — pricingBreakdown is kept anyway as an
+    // internal audit trail for Phase 4, not for customer display.
+    technicalSpec: jsonb('technical_spec').notNull(),
+    pricingBreakdown: jsonb('pricing_breakdown').notNull(),
 
     issuedAt: timestamp('issued_at', { withTimezone: true })
       .notNull()
