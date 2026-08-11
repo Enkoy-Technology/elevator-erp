@@ -25,7 +25,7 @@ import { CurrentUser, Roles } from '../../common/decorators';
 import { DocumentDocxService } from '../../common/export/document-docx.service';
 import { DocumentPdfService } from '../../common/export/document-pdf.service';
 import { parseDocumentFormat } from '../../common/export/document-format';
-import { parseExportFormat } from '../../common/export/export-query.dto';
+import { parseExportFormat, parseReportFormat } from '../../common/export/export-query.dto';
 import {
   arrayToAsyncIterable,
   type ColumnDef,
@@ -179,7 +179,7 @@ export class InvoicesController {
   @Get('invoices/aging')
   @ApiOperation({
     summary:
-      'AR aging per customer with any outstanding balance (current/1-30/31-60/61-90/90+), or a CSV/XLSX export with ?format=',
+      'AR aging per customer with any outstanding balance (current/1-30/31-60/61-90/90+), or a CSV/XLSX/PDF export with ?format=',
   })
   @ApiOkResponse({ description: 'Per-customer aging buckets' })
   async aging(
@@ -187,13 +187,24 @@ export class InvoicesController {
     @Res({ passthrough: false }) res: Response,
     @Query('format') formatRaw?: string,
   ): Promise<void> {
-    const format = parseExportFormat(formatRaw);
+    const format = parseReportFormat(formatRaw);
     const rows = await this.invoicesService.agingReport(user);
     if (!format) {
       res.json(rows);
       return;
     }
     const filename = `aging-${todayIso()}`;
+    if (format === 'pdf') {
+      const branding = await this.tenantBranding.get(user.tenantId);
+      const buf = await this.pdfService.renderDocumentPdf(
+        'aging-report',
+        { asOfDate: todayIso(), rows },
+        branding,
+      );
+      setDownloadHeaders(res, filename, 'pdf', 'application/pdf');
+      res.end(buf);
+      return;
+    }
     const exportRows = arrayToAsyncIterable(
       rows as unknown as Record<string, unknown>[],
     );
