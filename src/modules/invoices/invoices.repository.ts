@@ -49,6 +49,15 @@ export type InvoiceRecord = typeof invoices.$inferSelect;
 export type InvoiceLineRecord = typeof invoiceLines.$inferSelect;
 export type InvoiceWithLines = InvoiceRecord & { lines: InvoiceLineRecord[] };
 export type InvoiceExportRow = InvoiceRecord & { customerName: string | null };
+/**
+ * List row + Σ payment_allocations (allocatedEtb) and the derived
+ * outstandingEtb — see `list()`'s own doc comment for the exact formula and
+ * why it must never be computed any other way in this codebase.
+ */
+export type InvoiceListRow = InvoiceRecord & {
+  allocatedEtb: string;
+  outstandingEtb: string;
+};
 
 export interface AgingRow {
   customerId: string;
@@ -121,7 +130,7 @@ export class InvoicesRepository {
       page?: string;
       pageSize?: string;
     },
-  ): Promise<PaginatedResult<InvoiceRecord>> {
+  ): Promise<PaginatedResult<InvoiceListRow>> {
     const { page, pageSize, offset } = normalizePageQuery(
       options.page,
       options.pageSize,
@@ -140,7 +149,64 @@ export class InvoicesRepository {
         .orderBy(desc(invoices.createdAt))
         .limit(pageSize)
         .offset(offset);
-      return toPaginatedResult(items, total, page, pageSize);
+      const withOutstanding = await this.withOutstanding(tx, items);
+      return toPaginatedResult(withOutstanding, total, page, pageSize);
+    });
+  }
+
+  /**
+   * Attaches Σ payment_allocations (`allocatedEtb`) and the derived
+   * `outstandingEtb` to a page of invoices — ONE aggregate query batched by
+   * id (same "two queries, not N+1" shape as `agingReport`'s own
+   * allocationSums join below), never a query per row.
+   *
+   * outstandingEtb = totalEtb − whtEtb − allocatedEtb for every non-VOID
+   * invoice — the EXACT SAME formula `agingReport` and
+   * `recomputeCustomerBalance` (common/customer-balance.ts) already use, so
+   * this list, the aging report, and the customer's stored balance can never
+   * silently disagree on what one invoice's own contribution is. VOID is
+   * special-cased to '0.00' rather than the literal formula: both of those
+   * two call sites EXCLUDE VOID invoices from this sum entirely (they never
+   * compute a value for one), and a VOID invoice's allocations/whtEtb are
+   * always zero by construction (voidInvoice's own guards reject voiding an
+   * invoice with either) — so the literal formula would show a VOID
+   * invoice's full totalEtb as "owed", which is wrong on its face. Treating
+   * "excluded from the sum" as "contributes zero" here is the same
+   * semantics those two call sites already have, not a fourth formula.
+   */
+  private async withOutstanding(
+    tx: TenantTransaction,
+    rows: InvoiceRecord[],
+  ): Promise<InvoiceListRow[]> {
+    if (rows.length === 0) {
+      return [];
+    }
+    const sums = await tx
+      .select({
+        invoiceId: paymentAllocations.invoiceId,
+        total: sum(paymentAllocations.amountEtb),
+      })
+      .from(paymentAllocations)
+      .where(
+        inArray(
+          paymentAllocations.invoiceId,
+          rows.map((row) => row.id),
+        ),
+      )
+      .groupBy(paymentAllocations.invoiceId);
+    const allocatedById = new Map(sums.map((row) => [row.invoiceId, row.total ?? '0']));
+
+    return rows.map((row) => {
+      const allocatedEtb = allocatedById.get(row.id) ?? '0';
+      const outstandingEtb =
+        row.status === 'VOID'
+          ? '0.00'
+          : new Decimal(row.totalEtb).minus(row.whtEtb).minus(allocatedEtb).toFixed(2);
+      return {
+        ...row,
+        allocatedEtb: new Decimal(allocatedEtb).toFixed(2),
+        outstandingEtb,
+      };
     });
   }
 

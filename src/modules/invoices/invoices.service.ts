@@ -16,6 +16,7 @@ import {
   InvoicesRepository,
   type AgingRow,
   type InvoiceExportRow,
+  type InvoiceListRow,
   type InvoiceRecord,
   type InvoiceWithLines,
 } from './invoices.repository';
@@ -36,7 +37,7 @@ export class InvoicesService {
       page?: string;
       pageSize?: string;
     },
-  ): Promise<PaginatedResult<InvoiceRecord>> {
+  ): Promise<PaginatedResult<InvoiceListRow>> {
     return this.invoicesRepository.list(user.tenantId, options);
   }
 
