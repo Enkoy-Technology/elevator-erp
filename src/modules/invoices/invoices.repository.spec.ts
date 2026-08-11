@@ -812,6 +812,80 @@ describe('InvoicesRepository.recordWithholding — Task 3 (3.4)', () => {
   });
 });
 
+describe('InvoicesRepository.list — allocatedEtb/outstandingEtb aggregate (never per-row)', () => {
+  it('computes outstandingEtb = totalEtb - whtEtb - allocatedEtb via ONE aggregate query for the whole page', async () => {
+    const select = jest
+      .fn()
+      // count()
+      .mockReturnValueOnce(makeSelectChain([{ value: 1 }]))
+      // page of invoices
+      .mockReturnValueOnce(
+        makeSelectChain([
+          { id: 'inv-1', status: 'PARTIALLY_PAID', totalEtb: '115.07', whtEtb: '0.00' },
+        ]),
+      )
+      // ONE aggregate query for the page's allocated sums — never a query per invoice.
+      .mockReturnValueOnce(makeSelectChain([{ invoiceId: 'inv-1', total: '60.03' }]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    const result = await repo.list(TENANT_ID, {});
+
+    // Same worked example as common/customer-balance.spec.ts's "pins the
+    // reviewer's exact worked example" test (115.07 - 0.00 - 60.03 = 55.04,
+    // its own per-invoice term before the unapplied-cash adjustment) and as
+    // agingReport's identical formula below — all three call sites must
+    // land on the same cents figure, see InvoicesRepository.withOutstanding's
+    // own doc comment for why.
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        id: 'inv-1',
+        allocatedEtb: '60.03',
+        outstandingEtb: '55.04',
+      }),
+    ]);
+    expect(select).toHaveBeenCalledTimes(3);
+  });
+
+  it('forces outstandingEtb to 0.00 for a VOID invoice instead of the literal formula (VOID invoices always have zero allocations/wht by construction — voidInvoice\'s own guards — so a literal application would wrongly show the full totalEtb as owed)', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ value: 1 }]))
+      .mockReturnValueOnce(
+        makeSelectChain([{ id: 'inv-2', status: 'VOID', totalEtb: '200.00', whtEtb: '0.00' }]),
+      )
+      .mockReturnValueOnce(makeSelectChain([])); // no allocations
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    const result = await repo.list(TENANT_ID, {});
+
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({ allocatedEtb: '0.00', outstandingEtb: '0.00' }),
+    );
+  });
+
+  it('skips the allocation aggregate query entirely when the page is empty', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ value: 0 }]))
+      .mockReturnValueOnce(makeSelectChain([]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    const result = await repo.list(TENANT_ID, {});
+
+    expect(result.items).toEqual([]);
+    expect(select).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('InvoicesRepository.agingReport — Task 3 (3.6)', () => {
   const TODAY = todayIso();
 
