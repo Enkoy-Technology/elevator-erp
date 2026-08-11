@@ -1,17 +1,17 @@
 import { Module } from '@nestjs/common';
 
+import { ExportModule } from '../../common/export/export.module';
 import { RatesModule } from '../rates/rates.module';
 import { InvoicesController } from './invoices.controller';
 import { InvoicesRepository } from './invoices.repository';
 import { InvoicesService } from './invoices.service';
 
 @Module({
-  // No ExportModule import: unlike ProformasController (which injects
-  // DocumentPdfService/DocumentDocxService/TenantBrandingProvider for
-  // pdf/docx document downloads), InvoicesController only calls tabular.ts's
-  // plain writeCsv/writeXlsx functions and parseExportFormat — none of
-  // those are Nest providers, so there's nothing here to inject.
-  imports: [RatesModule],
+  // ExportModule for DocumentPdfService/DocumentDocxService/
+  // TenantBrandingProvider — the invoice document download (task 5.1) and
+  // the aging report's pdf branch (task 5.3) both need them, same reasoning
+  // as ProformasModule's own import.
+  imports: [RatesModule, ExportModule],
   controllers: [InvoicesController],
   providers: [InvoicesService, InvoicesRepository],
   // InvoicesRepository (not just the Service) is exported so PaymentsRepository

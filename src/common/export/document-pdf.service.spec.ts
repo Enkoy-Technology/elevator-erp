@@ -96,7 +96,7 @@ describe('DocumentPdfService.renderDocumentPdf', () => {
   it('throws TemplateNotImplementedError for a template with no registered builder yet', async () => {
     const service = new DocumentPdfService();
     await expect(
-      service.renderDocumentPdf('invoice', {}, branding),
+      service.renderDocumentPdf('contract', {}, branding),
     ).rejects.toBeInstanceOf(TemplateNotImplementedError);
     // Rejecting before touching Chromium: no browser launch attempted.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -106,9 +106,9 @@ describe('DocumentPdfService.renderDocumentPdf', () => {
 
   it('names the rejected template in the error message', async () => {
     const service = new DocumentPdfService();
-    await expect(service.renderDocumentPdf('receipt', {}, branding)).rejects.toThrow(
-      /receipt/,
-    );
+    await expect(
+      service.renderDocumentPdf('installation-certificate', {}, branding),
+    ).rejects.toThrow(/installation-certificate/);
   });
 
   it('has a registered builder for "proforma" (Phase 3) — does not throw TemplateNotImplementedError', async () => {
@@ -116,6 +116,49 @@ describe('DocumentPdfService.renderDocumentPdf', () => {
     const service = new DocumentPdfService();
     await expect(
       service.renderDocumentPdf('proforma', {}, branding),
+    ).resolves.toBeInstanceOf(Buffer);
+  });
+
+  it('has a registered builder for "invoice" (Phase 4) — does not throw TemplateNotImplementedError', async () => {
+    mockLaunch();
+    const service = new DocumentPdfService();
+    await expect(
+      service.renderDocumentPdf(
+        'invoice',
+        {
+          invoiceNumber: 'INV-1',
+          status: 'ISSUED',
+          customerName: 'Test',
+          lines: [],
+          subtotalEtb: '0.00',
+          vatEtb: '0.00',
+          totalEtb: '0.00',
+          hasWithholding: false,
+          whtDeductionEtb: '0.00',
+          netCashDueEtb: '0.00',
+        },
+        branding,
+      ),
+    ).resolves.toBeInstanceOf(Buffer);
+  });
+
+  it('has a registered builder for "receipt" (Phase 4) — does not throw TemplateNotImplementedError', async () => {
+    mockLaunch();
+    const service = new DocumentPdfService();
+    await expect(
+      service.renderDocumentPdf(
+        'receipt',
+        {
+          receiptNumber: 'RCT-1',
+          customerName: 'Test',
+          amountEtb: '0.00',
+          method: 'CASH',
+          allocations: [],
+          hasOnAccount: false,
+          onAccountEtb: '0.00',
+        },
+        branding,
+      ),
     ).resolves.toBeInstanceOf(Buffer);
   });
 });

@@ -6,8 +6,10 @@ import { BlockList, isIP } from 'node:net';
 import type { Browser } from 'puppeteer';
 
 import { TemplateNotImplementedError } from '../exceptions';
+import { buildInvoiceHtml } from './templates/invoice.template';
 import { buildProformaHtml } from './templates/proforma.template';
 import { buildQuotationHtml } from './templates/quotation.template';
+import { buildReceiptHtml } from './templates/receipt.template';
 
 export type DocumentTemplate =
   | 'quotation'
@@ -35,14 +37,17 @@ export interface TenantBranding {
 type TemplateBuilder = (data: object, branding: TenantBranding | null) => string;
 
 /**
- * 'quotation' (Phase 2) and 'proforma' (Phase 3) are wired up. The rest of
- * DocumentTemplate exists so Phase 4 can already type against it; requesting
- * one of those throws TemplateNotImplementedError until its phase lands — do
- * not stub the remaining templates ahead of the data that would fill them.
+ * 'quotation' (Phase 2), 'proforma' (Phase 3), and 'invoice'/'receipt'
+ * (Phase 4, task 5) are wired up. The rest of DocumentTemplate exists so
+ * later phases can already type against it; requesting one of those throws
+ * TemplateNotImplementedError until its phase lands — do not stub the
+ * remaining templates ahead of the data that would fill them.
  */
 const TEMPLATE_BUILDERS: Partial<Record<DocumentTemplate, TemplateBuilder>> = {
   quotation: buildQuotationHtml,
   proforma: buildProformaHtml,
+  invoice: buildInvoiceHtml,
+  receipt: buildReceiptHtml,
 };
 
 // Private/loopback/link-local IP ranges a tenant-controlled branding image

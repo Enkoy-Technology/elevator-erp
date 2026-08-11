@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type { AllocatePaymentDto } from './dto/allocate-payment.dto';
@@ -8,6 +8,7 @@ import {
   type PaymentAllocationRecord,
   type PaymentWithAllocations,
 } from './payments.repository';
+import type { PaymentDocumentRow } from './receipt-document.mapper';
 
 @Injectable()
 export class PaymentsService {
@@ -45,5 +46,13 @@ export class PaymentsService {
     reason: string,
   ): Promise<PaymentWithAllocations> {
     return this.paymentsRepository.reverse(user.tenantId, paymentId, user.userId, reason);
+  }
+
+  async getDocumentData(user: AuthenticatedUser, id: string): Promise<PaymentDocumentRow> {
+    const row = await this.paymentsRepository.findByIdForDocument(user.tenantId, id);
+    if (!row) {
+      throw new NotFoundException('Payment not found');
+    }
+    return row;
   }
 }

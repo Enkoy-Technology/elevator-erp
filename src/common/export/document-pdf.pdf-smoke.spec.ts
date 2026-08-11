@@ -18,13 +18,15 @@ import { PDFParse } from 'pdf-parse';
 // pipeline (a repository-shaped row -> quotationDocumentData -> the
 // template), not just the template layer directly — reusing the one
 // Chromium launch this suite already pays for, rather than adding a second
-// smoke spec elsewhere.
+// smoke spec elsewhere. The invoice tests below (task 5.4) reuse the same
+// launch for the same reason — one real Chromium spec file, not two.
 import {
   quotationDocumentData,
   type QuotationDocumentRow,
 } from '../../modules/quotations/quotation-document.mapper';
 import { DocumentPdfService } from './document-pdf.service';
 import type { TenantBranding } from './document-pdf.service';
+import type { InvoiceTemplateData } from './templates/invoice.template';
 import type { QuotationTemplateData } from './templates/quotation.template';
 
 // Timeout for this suite (Puppeteer launch + render is slow) is set via
@@ -129,6 +131,84 @@ describe('DocumentPdfService PDF smoke test (real Chromium)', () => {
       const { text } = await parser.getText();
       expect(text).toContain('ኤሌቬተር ማንሻ');
       expect(text).toContain('143,750.00 ETB');
+    } finally {
+      await parser.destroy();
+    }
+  });
+
+  const invoiceBranding: TenantBranding = {
+    name: 'Enkoy Elevators PLC',
+    slogan: 'Lifting Ethiopia',
+    logoUrl: null,
+    address: 'Bole Road, Addis Ababa',
+    phones: ['+251 11 123 4567'],
+    primaryColor: '#1B2A4A',
+  };
+
+  /** Shared base for the two invoice notice/mirror smoke cases below — only fiscal* fields differ. */
+  const baseInvoiceData: InvoiceTemplateData = {
+    invoiceNumber: 'INV-2026-SMOKE',
+    status: 'ISSUED',
+    issuedAt: new Date('2026-08-01T00:00:00.000Z'),
+    dueDate: '2026-09-30',
+    customerName: 'ኤሌቬተር ደንበኛ', // "elevator customer" in Amharic — task 5.4's required payload
+    projectName: 'Smoke Test Tower',
+    lines: [
+      {
+        description: 'Elevator unit',
+        quantity: '1',
+        unitPriceEtb: '1073537.30',
+        lineTotalEtb: '1073537.30',
+      },
+    ],
+    subtotalEtb: '1073537.30',
+    taxPercent: '15.00',
+    vatEtb: '161030.59',
+    totalEtb: '1234567.89',
+    hasWithholding: false,
+    whtVoucherRef: null,
+    whtDeductionEtb: '0.00',
+    netCashDueEtb: '1234567.89',
+    fiscalReceiptNumber: null,
+  };
+
+  it('renders the invoice template with an Amharic customer name and a large total, and shows NOT A FISCAL RECEIPT when the fiscal columns are null', async () => {
+    const pdf = await service.renderDocumentPdf('invoice', baseInvoiceData, invoiceBranding);
+
+    expect(pdf.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+
+    const parser = new PDFParse({ data: pdf });
+    try {
+      const { text } = await parser.getText();
+      expect(text).toContain('ኤሌቬተር ደንበኛ');
+      expect(text).toContain('1,234,567.89 ETB');
+      expect(text).toContain('NOT A FISCAL RECEIPT');
+      expect(text).not.toContain('mirrored from the certified device');
+    } finally {
+      await parser.destroy();
+    }
+  });
+
+  it('replaces the notice with the fiscal mirror block once the fiscal columns are populated', async () => {
+    const pdf = await service.renderDocumentPdf(
+      'invoice',
+      {
+        ...baseInvoiceData,
+        fiscalReceiptNumber: 'ETR-000123456',
+        fiscalIssuedAt: new Date('2026-08-01T10:00:00.000Z'),
+        fiscalDeviceSerial: 'SN-9988776655',
+      },
+      invoiceBranding,
+    );
+
+    const parser = new PDFParse({ data: pdf });
+    try {
+      const { text } = await parser.getText();
+      expect(text).toContain('ኤሌቬተር ደንበኛ');
+      expect(text).toContain('1,234,567.89 ETB');
+      expect(text).not.toContain('NOT A FISCAL RECEIPT');
+      expect(text).toContain('mirrored from the certified device');
+      expect(text).toContain('ETR-000123456');
     } finally {
       await parser.destroy();
     }

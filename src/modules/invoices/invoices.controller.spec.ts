@@ -2,7 +2,13 @@ import { BadRequestException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
 import { ROLES_KEY } from '../../common/decorators';
-import { arrayToAsyncIterable, writeCsv, writeXlsx } from '../../common/export/tabular';
+import {
+  arrayToAsyncIterable,
+  setDownloadHeaders,
+  singleRow,
+  writeCsv,
+  writeXlsx,
+} from '../../common/export/tabular';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { InvoicesController } from './invoices.controller';
 import type { InvoicesService } from './invoices.service';
@@ -10,6 +16,8 @@ import type { InvoicesService } from './invoices.service';
 jest.mock('../../common/export/tabular');
 const mockWriteCsv = jest.mocked(writeCsv);
 const mockWriteXlsx = jest.mocked(writeXlsx);
+const mockSetDownloadHeaders = jest.mocked(setDownloadHeaders);
+const mockSingleRow = jest.mocked(singleRow);
 const mockArrayToAsyncIterable = jest.mocked(arrayToAsyncIterable);
 // Auto-mocked like writeCsv/writeXlsx above — give it a real (if trivial)
 // AsyncGenerator back so `expect.anything()` on the 4th writeCsv/writeXlsx
@@ -32,6 +40,7 @@ describe('InvoicesController — role gating', () => {
       InvoicesController.prototype.list,
       InvoicesController.prototype.aging,
       InvoicesController.prototype.get,
+      InvoicesController.prototype.document,
       InvoicesController.prototype.voidInvoice,
       InvoicesController.prototype.patchFiscal,
       InvoicesController.prototype.recordWithholding,
@@ -53,7 +62,15 @@ describe('InvoicesController.list — status validation and format routing', () 
     streamAll: jest.fn(),
     agingReport: jest.fn(),
   };
-  const controller = new InvoicesController(invoicesService as unknown as InvoicesService);
+  const pdfService = { renderDocumentPdf: jest.fn() };
+  const docxService = { renderDocumentDocx: jest.fn() };
+  const tenantBranding = { get: jest.fn() };
+  const controller = new InvoicesController(
+    invoicesService as unknown as InvoicesService,
+    pdfService as never,
+    docxService,
+    tenantBranding as never,
+  );
   const res = { json: jest.fn() };
 
   beforeEach(() => {
@@ -131,7 +148,15 @@ describe('InvoicesController.aging — format routing', () => {
   };
 
   const invoicesService = { agingReport: jest.fn() };
-  const controller = new InvoicesController(invoicesService as unknown as InvoicesService);
+  const pdfService = { renderDocumentPdf: jest.fn() };
+  const docxService = { renderDocumentDocx: jest.fn() };
+  const tenantBranding = { get: jest.fn() };
+  const controller = new InvoicesController(
+    invoicesService as unknown as InvoicesService,
+    pdfService as never,
+    docxService,
+    tenantBranding as never,
+  );
   const res = { json: jest.fn() };
   const agingRows = [
     {
@@ -187,5 +212,116 @@ describe('InvoicesController.aging — format routing', () => {
       /format must be one of/,
     );
     expect(invoicesService.agingReport).not.toHaveBeenCalled();
+  });
+});
+
+describe('InvoicesController.document — format routing and filenames', () => {
+  const user: AuthenticatedUser = {
+    userId: '11111111-1111-1111-1111-111111111111',
+    tenantId: '22222222-2222-2222-2222-222222222222',
+    role: 'FINANCE',
+  };
+
+  const row = {
+    invoiceNumber: 'INV-FY2026-27-0001',
+    status: 'ISSUED',
+    issuedAt: new Date('2026-08-01T00:00:00.000Z'),
+    dueDate: null,
+    customerName: 'Acme',
+    projectName: 'Bole Tower',
+    lines: [],
+    subtotalEtb: '100000.00',
+    vatEtb: '15000.00',
+    totalEtb: '115000.00',
+    whtEtb: '0.00',
+    whtVoucherRef: null,
+    fiscalReceiptNumber: null,
+    fiscalDeviceSerial: null,
+    fiscalIssuedAt: null,
+    fiscalKind: null,
+    fiscalNote: null,
+  };
+
+  const invoicesService = { getDocumentData: jest.fn() };
+  const pdfService = { renderDocumentPdf: jest.fn() };
+  const docxService = { renderDocumentDocx: jest.fn() };
+  const tenantBranding = { get: jest.fn() };
+  const branding = { name: 'Enkoy', slogan: '', logoUrl: null, address: '', phones: [], primaryColor: '#123456' };
+  const res = { end: jest.fn() };
+
+  const controller = new InvoicesController(
+    invoicesService as unknown as InvoicesService,
+    pdfService as never,
+    docxService,
+    tenantBranding as never,
+  );
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    invoicesService.getDocumentData.mockResolvedValue(row);
+    tenantBranding.get.mockResolvedValue(branding);
+    mockSingleRow.mockImplementation((async function* (r: Record<string, unknown>) {
+      yield r;
+    }) as typeof singleRow);
+  });
+
+  it('rejects an unknown format with a 400 before touching the service', async () => {
+    await expect(controller.document(user, 'id', 'csv-not-real', res as never)).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(invoicesService.getDocumentData).not.toHaveBeenCalled();
+  });
+
+  it('format=pdf: renders via DocumentPdfService and writes invoice-<invoiceNumber>.pdf headers', async () => {
+    pdfService.renderDocumentPdf.mockResolvedValue(Buffer.from('%PDF'));
+
+    await controller.document(user, 'id', 'pdf', res as never);
+
+    expect(invoicesService.getDocumentData).toHaveBeenCalledWith(user, 'id');
+    expect(pdfService.renderDocumentPdf).toHaveBeenCalledWith(
+      'invoice',
+      expect.objectContaining({ invoiceNumber: 'INV-FY2026-27-0001' }),
+      branding,
+    );
+    expect(mockSetDownloadHeaders).toHaveBeenCalledWith(
+      res,
+      'invoice-INV-FY2026-27-0001',
+      'pdf',
+      'application/pdf',
+    );
+    expect(res.end).toHaveBeenCalledWith(Buffer.from('%PDF'));
+  });
+
+  it('format=docx: renders via DocumentDocxService and writes the Word content type', async () => {
+    docxService.renderDocumentDocx.mockResolvedValue(Buffer.from('PK'));
+
+    await controller.document(user, 'id', 'docx', res as never);
+
+    expect(docxService.renderDocumentDocx).toHaveBeenCalledWith(
+      'invoice',
+      expect.objectContaining({ invoiceNumber: 'INV-FY2026-27-0001' }),
+      branding,
+    );
+    expect(mockSetDownloadHeaders).toHaveBeenCalledWith(
+      res,
+      'invoice-INV-FY2026-27-0001',
+      'docx',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    expect(res.end).toHaveBeenCalledWith(Buffer.from('PK'));
+  });
+
+  it('format=xlsx: streams via writeXlsx and never touches branding/pdf/docx', async () => {
+    await controller.document(user, 'id', 'xlsx', res as never);
+
+    expect(mockWriteXlsx).toHaveBeenCalledWith(
+      res,
+      'invoice-INV-FY2026-27-0001',
+      expect.arrayContaining([expect.objectContaining({ key: 'invoiceNumber' })]),
+      expect.anything(),
+    );
+    expect(tenantBranding.get).not.toHaveBeenCalled();
+    expect(pdfService.renderDocumentPdf).not.toHaveBeenCalled();
+    expect(docxService.renderDocumentDocx).not.toHaveBeenCalled();
   });
 });

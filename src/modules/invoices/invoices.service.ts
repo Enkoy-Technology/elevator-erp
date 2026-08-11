@@ -10,6 +10,7 @@ import type { AuthenticatedUser } from '../../types/auth.types';
 import type { CreateInvoiceDto } from './dto/create-invoice.dto';
 import type { FiscalMirrorDto } from './dto/fiscal-mirror.dto';
 import type { WithholdingDto } from './dto/withholding.dto';
+import type { InvoiceDocumentRow } from './invoice-document.mapper';
 import { computeLineTotal, sumLineTotals } from './invoice-money';
 import {
   InvoicesRepository,
@@ -48,6 +49,14 @@ export class InvoicesService {
 
   async getById(user: AuthenticatedUser, id: string): Promise<InvoiceWithLines> {
     const row = await this.invoicesRepository.findByIdWithLines(user.tenantId, id);
+    if (!row) {
+      throw new NotFoundException('Invoice not found');
+    }
+    return row;
+  }
+
+  async getDocumentData(user: AuthenticatedUser, id: string): Promise<InvoiceDocumentRow> {
+    const row = await this.invoicesRepository.findByIdForDocument(user.tenantId, id);
     if (!row) {
       throw new NotFoundException('Invoice not found');
     }
