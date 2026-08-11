@@ -69,15 +69,23 @@ describe('InvoicesController.list — status validation and format routing', () 
     expect(invoicesService.list).not.toHaveBeenCalled();
   });
 
+  it('rejects a malformed customerId with a 400 before touching the service', async () => {
+    await expect(
+      controller.list(user, res as never, undefined, 'not-a-uuid'),
+    ).rejects.toThrow(BadRequestException);
+    expect(invoicesService.list).not.toHaveBeenCalled();
+  });
+
   it('no ?format=: calls service.list() and writes the paginated JSON result', async () => {
     const page = { items: [], page: 1, pageSize: 20, total: 0, totalPages: 0 };
     invoicesService.list.mockResolvedValue(page);
+    const customerId = '33333333-3333-4333-8333-333333333333';
 
-    await controller.list(user, res as never, undefined, 'cust-1', 'INV-1');
+    await controller.list(user, res as never, undefined, customerId, 'INV-1');
 
     expect(invoicesService.list).toHaveBeenCalledWith(user, {
       status: undefined,
-      customerId: 'cust-1',
+      customerId,
       q: 'INV-1',
       page: undefined,
       pageSize: undefined,
