@@ -853,7 +853,12 @@ export class InvoicesRepository {
    * paymentTermsDays at issue time (see resolveDueDate's own doc comment),
    * so a null dueDate here means the customer had no resolvable terms —
    * treating that as "not yet due" is the only choice that doesn't invent a
-   * date this report has no basis for.
+   * date this report has no basis for. Every invoice written BEFORE this
+   * fix landed also had a null dueDate, for the unrelated, mundane reason
+   * that the caller simply omitted it — 0045_backfill_null_due_dates.sql
+   * backfilled every such row the same way resolveDueDate computes it
+   * (issuedAt's calendar date + the customer's paymentTermsDays), so this
+   * comment's claim holds for every row, not just ones written after R4.
    *
    * IMPORTANT — deliberately PER-INVOICE, unlike `customers.outstandingBalanceEtb`
    * (see `recomputeCustomerBalance`'s doc comment): this report has no
