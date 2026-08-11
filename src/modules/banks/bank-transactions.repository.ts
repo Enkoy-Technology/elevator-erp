@@ -206,14 +206,18 @@ export class BankTransactionsRepository {
    * the lock, same "cheap, uncontended work first" shape the other
    * modules' claim-then-lock order exists to preserve.
    *
-   * Both guards below run under the advisory lock on the ORIGINAL row's id
-   * (same `pg_advisory_xact_lock(hashtext(id)::bigint)` idiom as
+   * All THREE guards below run under the advisory lock on the ORIGINAL
+   * row's id (same `pg_advisory_xact_lock(hashtext(id)::bigint)` idiom as
    * PaymentsRepository/ExpensesRepository/InvoicesRepository's own copies —
    * 4th+ occurrence, reused verbatim per this codebase's convention):
    *  - target is itself a reversal (`reversalOfTransactionId !== null`):
    *    reversing a reversal would un-reverse the original and double-count
    *    it — same reasoning as PaymentsRepository.reverse's B1a guard (wave
    *    A). Checked FIRST, same order as PaymentsRepository.reverse.
+   *  - target is LINKED (paymentId/expenseId set): refused outright, see
+   *    this guard's own inline comment below for why — this is NOT the
+   *    (b)-shaped fix a scoped re-review asked to prefer; (a) was chosen
+   *    instead for a concrete reason documented there.
    *  - already reversed: another row's `reversalOfTransactionId` already
    *    points at this one.
    *
@@ -249,6 +253,35 @@ export class BankTransactionsRepository {
 
       if (original.reversalOfTransactionId !== null) {
         throw new WorkflowTransitionError('Cannot reverse a reversal bank transaction');
+      }
+
+      // Fix-wave-c #1 (BLOCKER): reversing a LINKED original was a dead
+      // end, not a correction path. The mirror row above nulls out
+      // paymentId/expenseId, so the ORIGINAL keeps its slot in
+      // bank_transactions_payment_uk/_expense_uk forever (the partial
+      // unique index's WHERE predicate can only see this ROW's own
+      // columns — a "was I reversed" check needs to see OTHER rows, and
+      // Postgres flatly rejects a subquery in an index predicate: `create
+      // unique index ... where payment_id is not null and not exists
+      // (select 1 from bank_transactions r where ...)` fails with "cannot
+      // use subquery in index predicate", verified against a live
+      // instance). Freeing the slot without that would mean mutating the
+      // ORIGINAL row (a denormalized "reversed" flag, maintained by a
+      // trigger since the repository itself grants no UPDATE) — trading
+      // the one invariant this whole table exists to guarantee
+      // (insert-only, original NEVER touched, see banks.ts's own doc
+      // comment) for the ability to reverse a link. That trade is out of
+      // scope for this fix. So: refuse up front, loudly (409), rather than
+      // let reverse() "succeed" into a row that can never be relinked and
+      // a payment/expense that silently vanishes from findUnreconciled
+      // forever — the failure mode a scoped re-review flagged as worse
+      // than not having a correction path at all. Reverse the linked
+      // payment/expense itself instead (PaymentsRepository.reverse /
+      // ExpensesRepository.reverse already exist for that).
+      if (original.paymentId !== null || original.expenseId !== null) {
+        throw new WorkflowTransitionError(
+          'This bank transaction is linked to a payment or expense and cannot be reversed directly — reverse the linked payment or expense instead',
+        );
       }
 
       const [existingReversal] = await tx

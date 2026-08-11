@@ -300,6 +300,32 @@ describe('BankTransactionsRepository.reverse — R9: the only correction path th
     expect(insert).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['a linked payment', { paymentId: PAYMENT_ID, expenseId: null }],
+    ['a linked expense', { paymentId: null, expenseId: 'expense-1' }],
+  ])(
+    'fix-wave-c #1: refuses to reverse a transaction linked to %s (409, WorkflowTransitionError) — a dead end otherwise (see this repo\'s own doc comment on reverse())',
+    async (_label, link) => {
+      const select = jest
+        .fn()
+        .mockReturnValueOnce(makeSelectChain([{ id: ACCOUNT_ID }]))
+        .mockReturnValueOnce(makeSelectChain([{ ...originalRow, ...link }]));
+      const execute = makeExecute();
+      const insert = jest.fn();
+      const withTenant = jest.fn(
+        async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+          fn({ select, insert, execute }),
+      );
+      const repo = new BankTransactionsRepository({ withTenant } as never);
+
+      await expect(
+        repo.reverse(TENANT_ID, ACCOUNT_ID, TX_ID, USER_ID, 'mis-keyed, but linked'),
+      ).rejects.toThrow(WorkflowTransitionError);
+      // Refused before the existing-reversal lookup, and never inserts.
+      expect(insert).not.toHaveBeenCalled();
+    },
+  );
+
   it('reversing a reversal itself 409s (WorkflowTransitionError) — never chases back to the original', async () => {
     const select = jest
       .fn()

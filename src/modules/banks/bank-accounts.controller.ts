@@ -125,7 +125,7 @@ export class BankAccountsController {
   @HttpCode(201)
   @ApiOperation({
     summary:
-      'Reverse a bank transaction: inserts a new mirroring row with the negated amount (the original is never edited) — the only correction path this insert-only ledger has',
+      'Reverse an UNLINKED bank transaction: inserts a new mirroring row with the negated amount (the original is never edited). Refuses (409) a transaction linked to a payment or expense — reverse that payment/expense instead',
   })
   reverseTransaction(
     @CurrentUser() user: AuthenticatedUser,
