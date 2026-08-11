@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Decimal } from 'decimal.js';
 import {
   and,
   asc,
@@ -7,6 +8,7 @@ import {
   eq,
   getTableColumns,
   gte,
+  inArray,
   isNull,
   lte,
   ne,
@@ -16,6 +18,7 @@ import {
   sum,
 } from 'drizzle-orm';
 
+import { recomputeCustomerBalance } from '../../common/customer-balance';
 import { WorkflowTransitionError } from '../../common/exceptions';
 import { computeFiscalYear } from '../../common/fiscal-year';
 import {
@@ -38,6 +41,7 @@ import {
 } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import { todayIso } from '../../common/business-time';
+import { bucketForDaysOverdue, daysOverdue } from './invoice-aging';
 import { derivePaymentStatus } from './invoice-payment-status';
 import { buildInvoiceNumber } from './invoice-number';
 
@@ -45,6 +49,17 @@ export type InvoiceRecord = typeof invoices.$inferSelect;
 export type InvoiceLineRecord = typeof invoiceLines.$inferSelect;
 export type InvoiceWithLines = InvoiceRecord & { lines: InvoiceLineRecord[] };
 export type InvoiceExportRow = InvoiceRecord & { customerName: string | null };
+
+export interface AgingRow {
+  customerId: string;
+  customerName: string | null;
+  current: string;
+  d1_30: string;
+  d31_60: string;
+  d61_90: string;
+  d90_plus: string;
+  total: string;
+}
 
 /** `document_sequences.kind` for this document type — see the table's own doc comment. */
 const INVOICE_SEQUENCE_KIND = 'INVOICE';
@@ -353,6 +368,11 @@ export class InvoicesRepository {
         throw new Error('Failed to insert invoice line');
       }
 
+      // Task 3 (3.5): a fresh invoice adds its full totalEtb to what the
+      // customer owes — recompute in the same transaction the invoice itself
+      // commits in, so the stored balance is never observably stale.
+      await recomputeCustomerBalance(tx, tenantId, invoiceRow.customerId);
+
       return { ...invoiceRow, lines: [line] };
     });
   }
@@ -407,6 +427,9 @@ export class InvoicesRepository {
         )
         .returning();
 
+      // Task 3 (3.5): same reasoning as issueFromProforma's own call below.
+      await recomputeCustomerBalance(tx, tenantId, invoiceRow.customerId);
+
       return { ...invoiceRow, lines };
     });
   }
@@ -444,6 +467,10 @@ export class InvoicesRepository {
         )
         .returning();
       if (row) {
+        // Task 3 (3.5): voiding removes this invoice's totalEtb from what
+        // the customer owes — recompute in the same transaction the void
+        // itself commits in.
+        await recomputeCustomerBalance(tx, tenantId, row.customerId);
         return row;
       }
       const exists = await tx
@@ -513,6 +540,194 @@ export class InvoicesRepository {
       throw new WorkflowTransitionError(
         'Cannot set the fiscal mirror on a VOID invoice',
       );
+    });
+  }
+
+  /**
+   * Records the withholding credit the customer retained when settling this
+   * invoice (see the task brief's Ethiopian domestic-withholding
+   * background). Guarded under the same per-invoice advisory lock as
+   * allocation inserts (PaymentsRepository's guardAllocation) — both write
+   * paths race the same invariant (Σ allocations + whtEtb <= totalEtb) and
+   * must serialize against each other, not just against themselves.
+   *
+   * `whtEtb`/`whtVoucherRef`/`whtRecordedAt` are an ABSOLUTE SET, not an
+   * increment: re-posting this endpoint corrects the value (the voucher the
+   * customer handed over is the source of truth, and a data-entry mistake
+   * needs fixing, not adding to). This is safe specifically because these
+   * three columns are a *property of the invoice's settlement* evidenced by
+   * one external document, not an append-only ledger entry the way
+   * `payments`/`payment_allocations` are — there is exactly one correct
+   * current value, unlike a running total of many rows.
+   */
+  async recordWithholding(
+    tenantId: string,
+    id: string,
+    input: { amountEtb: string; voucherRef?: string; recordedAt?: string },
+  ): Promise<InvoiceRecord> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${id}::text)::bigint)`,
+      );
+
+      const [invoice] = await tx
+        .select()
+        .from(invoices)
+        .where(eq(invoices.id, id))
+        .limit(1);
+      if (!invoice) {
+        throw new NotFoundException('Invoice not found');
+      }
+      if (invoice.status === 'VOID') {
+        throw new WorkflowTransitionError(
+          'Cannot record a withholding credit on a VOID invoice',
+        );
+      }
+
+      const [allocated] = await tx
+        .select({ total: sum(paymentAllocations.amountEtb) })
+        .from(paymentAllocations)
+        .where(eq(paymentAllocations.invoiceId, id));
+      const allocatedEtb = allocated?.total ?? '0';
+      const settled = new Decimal(allocatedEtb).plus(input.amountEtb);
+      if (settled.gt(invoice.totalEtb)) {
+        throw new ConflictException(
+          `Withholding of ${input.amountEtb} plus the ${allocatedEtb} already allocated would exceed the invoice total of ${invoice.totalEtb}`,
+        );
+      }
+
+      const [row] = await tx
+        .update(invoices)
+        .set({
+          whtEtb: input.amountEtb,
+          whtVoucherRef: input.voucherRef ?? null,
+          whtRecordedAt: input.recordedAt ? new Date(input.recordedAt) : new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(invoices.id, id))
+        .returning();
+      if (!row) {
+        throw new Error(`Failed to record withholding on invoice ${id}`);
+      }
+
+      await this.recomputePaymentStatus(tx, id);
+      await recomputeCustomerBalance(tx, tenantId, invoice.customerId);
+
+      return row;
+    });
+  }
+
+  /**
+   * Per-customer AR aging as of business-time "today": buckets every
+   * non-VOID invoice's outstanding amount (totalEtb - whtEtb - Σ
+   * allocations, invoices with <= 0 outstanding excluded) by how many days
+   * past its dueDate (or issuedAt's business-calendar date, when no dueDate
+   * is set) it is. Two plain queries (invoices, then allocation sums) +
+   * TS-side bucketing — same "avoid GROUP BY/join subtleties, keep it
+   * testable" reasoning as recomputeCustomerBalance.
+   */
+  async agingReport(tenantId: string): Promise<AgingRow[]> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const today = todayIso();
+
+      const rows = await tx
+        .select({
+          invoiceId: invoices.id,
+          customerId: invoices.customerId,
+          customerName: customers.name,
+          totalEtb: invoices.totalEtb,
+          whtEtb: invoices.whtEtb,
+          dueDate: invoices.dueDate,
+          issuedAt: invoices.issuedAt,
+        })
+        .from(invoices)
+        .leftJoin(
+          customers,
+          and(
+            eq(invoices.tenantId, customers.tenantId),
+            eq(invoices.customerId, customers.id),
+          ),
+        )
+        .where(ne(invoices.status, 'VOID'));
+      if (rows.length === 0) {
+        return [];
+      }
+
+      const allocationSums = await tx
+        .select({
+          invoiceId: paymentAllocations.invoiceId,
+          total: sum(paymentAllocations.amountEtb),
+        })
+        .from(paymentAllocations)
+        .where(
+          inArray(
+            paymentAllocations.invoiceId,
+            rows.map((row) => row.invoiceId),
+          ),
+        )
+        .groupBy(paymentAllocations.invoiceId);
+      const allocatedByInvoice = new Map(
+        allocationSums.map((row) => [row.invoiceId, row.total ?? '0']),
+      );
+
+      const buckets = new Map<
+        string,
+        {
+          customerName: string | null;
+          current: Decimal;
+          d1_30: Decimal;
+          d31_60: Decimal;
+          d61_90: Decimal;
+          d90_plus: Decimal;
+        }
+      >();
+
+      for (const row of rows) {
+        const allocated = allocatedByInvoice.get(row.invoiceId) ?? '0';
+        const outstanding = new Decimal(row.totalEtb).minus(row.whtEtb).minus(allocated);
+        if (outstanding.lte(0)) {
+          continue;
+        }
+
+        // Reference date for aging: dueDate when set, else the invoice's
+        // own issue date — both read as business-calendar 'YYYY-MM-DD'
+        // strings (todayIso() applied to issuedAt, the same business-time
+        // convention "today" itself uses — see business-time.ts) rather
+        // than a raw UTC date slice, so an invoice issued just after local
+        // midnight but before UTC midnight doesn't age a day early.
+        const referenceDate = row.dueDate ?? todayIso(row.issuedAt);
+        const bucket = bucketForDaysOverdue(daysOverdue(referenceDate, today));
+
+        let entry = buckets.get(row.customerId);
+        if (!entry) {
+          entry = {
+            customerName: row.customerName,
+            current: new Decimal(0),
+            d1_30: new Decimal(0),
+            d31_60: new Decimal(0),
+            d61_90: new Decimal(0),
+            d90_plus: new Decimal(0),
+          };
+          buckets.set(row.customerId, entry);
+        }
+        entry[bucket] = entry[bucket].plus(outstanding);
+      }
+
+      return Array.from(buckets.entries()).map(([customerId, entry]) => ({
+        customerId,
+        customerName: entry.customerName,
+        current: entry.current.toFixed(2),
+        d1_30: entry.d1_30.toFixed(2),
+        d31_60: entry.d31_60.toFixed(2),
+        d61_90: entry.d61_90.toFixed(2),
+        d90_plus: entry.d90_plus.toFixed(2),
+        total: entry.current
+          .plus(entry.d1_30)
+          .plus(entry.d31_60)
+          .plus(entry.d61_90)
+          .plus(entry.d90_plus)
+          .toFixed(2),
+      }));
     });
   }
 

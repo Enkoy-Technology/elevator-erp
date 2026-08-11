@@ -9,9 +9,11 @@ import { RatesService } from '../rates/rates.service';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type { CreateInvoiceDto } from './dto/create-invoice.dto';
 import type { FiscalMirrorDto } from './dto/fiscal-mirror.dto';
+import type { WithholdingDto } from './dto/withholding.dto';
 import { computeLineTotal, sumLineTotals } from './invoice-money';
 import {
   InvoicesRepository,
+  type AgingRow,
   type InvoiceExportRow,
   type InvoiceRecord,
   type InvoiceWithLines,
@@ -125,5 +127,17 @@ export class InvoicesService {
     dto: FiscalMirrorDto,
   ): Promise<InvoiceRecord> {
     return this.invoicesRepository.patchFiscal(user.tenantId, id, dto);
+  }
+
+  recordWithholding(
+    user: AuthenticatedUser,
+    id: string,
+    dto: WithholdingDto,
+  ): Promise<InvoiceRecord> {
+    return this.invoicesRepository.recordWithholding(user.tenantId, id, dto);
+  }
+
+  agingReport(user: AuthenticatedUser): Promise<AgingRow[]> {
+    return this.invoicesRepository.agingReport(user.tenantId);
   }
 }
