@@ -15,6 +15,7 @@ import {
   type ValidatorConstraintInterface,
 } from 'class-validator';
 
+import { NotFarFutureConstraint } from '../../../common/dto/date';
 import { MONEY_RE } from '../../../common/dto/money';
 import {
   expenseCategoryEnum,
@@ -138,6 +139,12 @@ export class CreateExpenseDto {
   })
   @Matches(DATE_ONLY_RE)
   @IsDateString({ strict: true })
+  // Fix-wave-c #2: same R3 gap CreatePaymentDto.receivedAt/WithholdingDto.recordedAt
+  // already closed — a year typo here doesn't just hide the expense from
+  // date-windowed views, it drives rate resolution (VAT/WHT resolved AT
+  // THIS DATE, per the description above). NotFarFutureConstraint already
+  // tolerates date-only strings (see its own doc comment).
+  @Validate(NotFarFutureConstraint)
   expenseDate!: string;
 
   @ApiProperty({ enum: paymentMethodEnum.enumValues })
