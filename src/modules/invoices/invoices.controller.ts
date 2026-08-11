@@ -34,6 +34,7 @@ import { ConvertToInvoiceDto } from './dto/convert-to-invoice.dto';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { FiscalMirrorDto } from './dto/fiscal-mirror.dto';
 import { VoidInvoiceDto } from './dto/void-invoice.dto';
+import { WithholdingDto } from './dto/withholding.dto';
 import { InvoicesService } from './invoices.service';
 
 const INVOICE_STATUSES = invoiceStatusEnum.enumValues;
@@ -66,7 +67,11 @@ export const AGING_EXPORT_COLUMNS: ColumnDef[] = [
   { key: 'd31_60', header: '31-60 Days (ETB)', format: 'money' },
   { key: 'd61_90', header: '61-90 Days (ETB)', format: 'money' },
   { key: 'd90_plus', header: '90+ Days (ETB)', format: 'money' },
-  { key: 'total', header: 'Total Outstanding (ETB)', format: 'money' },
+  // Per-invoice total — deliberately excludes unapplied cash (see
+  // InvoicesRepository.agingReport's doc comment). Do not rename this to
+  // "Outstanding Balance" — that label is customers.outstandingBalanceEtb's
+  // NET position and the two numbers legitimately disagree.
+  { key: 'total', header: 'Aged Outstanding Total (ETB)', format: 'money' },
 ];
 
 @ApiTags('invoices')
@@ -216,5 +221,19 @@ export class InvoicesController {
     @Body() dto: FiscalMirrorDto,
   ) {
     return this.invoicesService.patchFiscal(user, id, dto);
+  }
+
+  @Post('invoices/:id/withholding')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      "Record the withholding credit the customer retained when settling this invoice (absolute set, not cumulative — see WithholdingDto)",
+  })
+  recordWithholding(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: WithholdingDto,
+  ) {
+    return this.invoicesService.recordWithholding(user, id, dto);
   }
 }
