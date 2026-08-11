@@ -18,6 +18,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { isUUID } from 'class-validator';
 
 import { todayIso } from '../../common/business-time';
 import { CurrentUser, Roles } from '../../common/decorators';
@@ -130,6 +131,9 @@ export class InvoicesController {
       throw new BadRequestException(
         `status must be one of: ${INVOICE_STATUSES.join(', ')}`,
       );
+    }
+    if (customerId !== undefined && !isUUID(customerId)) {
+      throw new BadRequestException('customerId must be a UUID');
     }
     const parsedStatus = status as InvoiceStatus | undefined;
     const format = parseExportFormat(formatRaw);
