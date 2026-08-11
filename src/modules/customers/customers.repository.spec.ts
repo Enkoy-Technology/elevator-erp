@@ -296,6 +296,83 @@ const extractOrderByColumnNames = (arg: unknown): string[] => {
   return out;
 };
 
+describe('CustomersRepository.statement — Task 3 (3.7)', () => {
+  /** A fake select chain that is also "thenable" at any step (same idiom as InvoicesRepository's own spec). */
+  interface SelectChain {
+    from: jest.Mock;
+    where: jest.Mock;
+    limit: jest.Mock;
+    then: (resolve: (v: unknown) => void, reject: (e: unknown) => void) => void;
+  }
+  const makeSelectChain = (rows: unknown[]): SelectChain => {
+    const chain = {} as SelectChain;
+    chain.from = jest.fn(() => chain);
+    chain.where = jest.fn(() => chain);
+    chain.limit = jest.fn(() => chain);
+    chain.then = (resolve, reject) => {
+      Promise.resolve(rows).then(resolve, reject);
+    };
+    return chain;
+  };
+
+  it('404s when the customer does not exist, without querying invoices or payments', async () => {
+    const select = jest.fn().mockReturnValueOnce(makeSelectChain([]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new CustomersRepository({ withTenant } as never);
+
+    await expect(
+      repo.statement(TENANT_ID, CUSTOMER_ID, '2026-08-01', '2026-08-31'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(select).toHaveBeenCalledTimes(1);
+  });
+
+  it('merges the invoice, payment and withholding legs into one settled statement (mirrors the full-settlement e2e: 115 invoice, 112 cash, 3 WHT nets to zero)', async () => {
+    const midDayUtc = new Date('2026-08-08T09:00:00Z'); // 12:00 Addis (UTC+3) — same business day either way
+
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ id: CUSTOMER_ID, name: 'Acme' }])) // customer lookup
+      .mockReturnValueOnce(
+        makeSelectChain([
+          {
+            id: 'inv-1',
+            invoiceNumber: 'INV-0001',
+            totalEtb: '115.00',
+            whtEtb: '3.00',
+            whtVoucherRef: 'WHT-0001',
+            whtRecordedAt: midDayUtc,
+            issuedAt: midDayUtc,
+          },
+        ]),
+      ) // invoices leg
+      .mockReturnValueOnce(
+        makeSelectChain([
+          {
+            id: 'pay-1',
+            receiptNumber: 'RCT-0001',
+            amountEtb: '112.00',
+            receivedAt: midDayUtc,
+          },
+        ]),
+      ); // payments leg
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new CustomersRepository({ withTenant } as never);
+
+    const result = await repo.statement(TENANT_ID, CUSTOMER_ID, '2026-08-01', '2026-08-31');
+
+    expect(result.customerId).toBe(CUSTOMER_ID);
+    expect(result.customerName).toBe('Acme');
+    expect(result.openingBalance).toBe('0.00');
+    expect(result.closingBalance).toBe('0.00');
+    expect(result.rows.map((r) => r.kind)).toEqual(['invoice', 'payment', 'withholding']);
+    expect(result.rows.map((r) => r.reference)).toEqual(['INV-0001', 'RCT-0001', 'WHT-0001']);
+  });
+});
+
 describe('CustomersRepository.streamAll — orderBy tiebreaker', () => {
   it('breaks ties on id, so rows sharing a createdAt cannot be duplicated/skipped across batches', async () => {
     const itemsChain: Record<string, jest.Mock> = {};

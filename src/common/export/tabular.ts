@@ -221,6 +221,21 @@ export async function* singleRow(
   yield row;
 }
 
+/**
+ * Adapts an already-in-memory array to the AsyncIterable writeCsv/writeXlsx
+ * expect — for bounded aggregate reports (aging, customer statement)
+ * computed as one result set rather than paged from the DB via a
+ * repository's own `streamAll` generator.
+ */
+// eslint-disable-next-line @typescript-eslint/require-await -- must be an async generator to satisfy AsyncIterable; yield is the point, there is nothing to await.
+export async function* arrayToAsyncIterable<T extends Record<string, unknown>>(
+  rows: T[],
+): AsyncGenerator<T> {
+  for (const row of rows) {
+    yield row;
+  }
+}
+
 export async function writeXlsx(
   res: Response,
   filename: string,
