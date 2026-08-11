@@ -143,6 +143,12 @@ export default function QuotationsPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Proformas has no "converted" flag of its own (issueFromProforma never
+  // touches proformas.status), so without this the → Invoice button would
+  // stay live indefinitely and every second click would be a guaranteed 409
+  // ("already been converted to an invoice"). Session-local only, same
+  // limitation as invoices/page.tsx's reversedIds — a reload forgets it.
+  const [convertedIds, setConvertedIds] = useState<Set<string>>(new Set());
 
   const refresh = useCallback(
     async (
@@ -363,7 +369,7 @@ export default function QuotationsPage() {
 
   // ponytail: window.prompt for the optional due date, matching the
   // established reason-prompt convention on this page (see onConvert above).
-  const onConvertToInvoice = (proforma: Proforma) => {
+  const onConvertToInvoice = async (proforma: Proforma) => {
     const entered = window.prompt(
       `Convert ${proforma.proformaNumber} to an invoice. Due date (YYYY-MM-DD, optional)?`,
       '',
@@ -376,10 +382,17 @@ export default function QuotationsPage() {
       setError('Due date must be in YYYY-MM-DD format');
       return;
     }
-    void runProformaAction(
-      () => convertProformaToInvoice(proforma.id, trimmed || undefined),
-      proforma.id,
-    );
+    setBusyId(proforma.id);
+    setError(null);
+    try {
+      await convertProformaToInvoice(proforma.id, trimmed || undefined);
+      setConvertedIds((prev) => new Set(prev).add(proforma.id));
+      await refresh('proformas', page, quoteStatusFilter, proformaStatusFilter);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Action failed');
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const onDownloadQuote = async (quote: Quotation, format: DocumentFormat) => {
@@ -488,11 +501,11 @@ export default function QuotationsPage() {
     const busy = busyId === proforma.id;
     return (
       <div className="flex flex-wrap items-center gap-2">
-        {canInvoice && proforma.status === 'ISSUED' ? (
+        {canInvoice && proforma.status === 'ISSUED' && !convertedIds.has(proforma.id) ? (
           <button
             type="button"
             disabled={busy}
-            onClick={() => onConvertToInvoice(proforma)}
+            onClick={() => void onConvertToInvoice(proforma)}
             className={`${btnPrimary} px-2.5 py-1 text-xs`}
           >
             → Invoice

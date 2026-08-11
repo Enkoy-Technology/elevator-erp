@@ -38,7 +38,6 @@ import {
   type DocumentFormat,
   type Invoice,
   type InvoiceStatus,
-  type PaymentAllocation,
   type PaymentMethod,
   type PaymentWithAllocations,
   type Project,
@@ -98,10 +97,22 @@ const canManageFinance = (role: UserRole | null): boolean =>
   role === 'FINANCE' || role === 'CEO' || role === 'ADMIN';
 
 /**
+ * What's left to collect on an ISSUED invoice: total - wht. Allocations are
+ * provably zero here — derivePaymentStatus (invoice-payment-status.ts) only
+ * advances a status past ISSUED once an allocation lands — so this is exact,
+ * not an estimate. The one place this figure is computed: outstandingDisplay,
+ * toAllocationDrafts's per-row cap, and the record-payment prefill all call
+ * this instead of re-deriving it, so a future change to the rule can't land
+ * in one call site and miss the others.
+ */
+function issuedRemainingEtb(invoice: Invoice): string {
+  return subtractEtb(invoice.totalEtb, invoice.whtEtb);
+}
+
+/**
  * Best-effort "outstanding" for the list column. Exact where the list
- * payload makes it derivable without another round trip: ISSUED has zero
- * allocations by construction (derivePaymentStatus only advances a status
- * past ISSUED once an allocation lands), PAID/VOID are zero by definition.
+ * payload makes it derivable without another round trip: ISSUED via
+ * issuedRemainingEtb above, PAID/VOID are zero by definition.
  * PARTIALLY_PAID is '—' — GET /invoices doesn't return the allocated total,
  * and guessing at one risks exactly the "a displayed total that disagrees
  * with the server's by a cent" bug this phase exists to avoid.
@@ -111,7 +122,7 @@ function outstandingDisplay(invoice: Invoice): string {
     return formatEtb('0.00');
   }
   if (invoice.status === 'ISSUED') {
-    return formatEtb(subtractEtb(invoice.totalEtb, invoice.whtEtb));
+    return formatEtb(issuedRemainingEtb(invoice));
   }
   return '—';
 }
@@ -139,7 +150,7 @@ function toAllocationDrafts(
   return invoices.map((invoice) => ({
     invoiceId: invoice.id,
     invoiceNumber: invoice.invoiceNumber,
-    maxEtb: invoice.status === 'ISSUED' ? subtractEtb(invoice.totalEtb, invoice.whtEtb) : '',
+    maxEtb: invoice.status === 'ISSUED' ? issuedRemainingEtb(invoice) : '',
     amountEtb: prefill && prefill.invoiceId === invoice.id ? prefill.amountEtb : '',
   }));
 }
@@ -210,6 +221,7 @@ export default function InvoicesPage() {
   const [allocateDrafts, setAllocateDrafts] = useState<AllocationDraft[]>([]);
   const [allocateError, setAllocateError] = useState<string | null>(null);
   const [allocateSubmitting, setAllocateSubmitting] = useState(false);
+  const allocateTargetRef = useRef<PaymentWithAllocations | null>(null);
 
   const refresh = useCallback(
     async (
@@ -418,8 +430,12 @@ export default function InvoicesPage() {
 
   const openWithhold = (invoice: Invoice) => {
     setWithholdTarget(invoice);
-    setWithholdAmount('');
-    setWithholdVoucher('');
+    // WithholdingDto is an ABSOLUTE SET, not cumulative (recordWithholding's
+    // own doc comment) — re-posting replaces whatever's already recorded.
+    // Prefill from the invoice's current values so correcting an existing
+    // withholding is a deliberate edit, not a blind overwrite.
+    setWithholdAmount(isZeroEtb(invoice.whtEtb) ? '' : invoice.whtEtb);
+    setWithholdVoucher(invoice.whtVoucherRef ?? '');
     setWithholdError(null);
   };
 
@@ -474,10 +490,12 @@ export default function InvoicesPage() {
   const openPaymentForInvoice = (invoice: Invoice) => {
     resetPaymentForm();
     setPaymentCustomerId(invoice.customerId);
-    paymentPrefillRef.current = {
-      invoiceId: invoice.id,
-      amountEtb: invoice.status === 'ISSUED' ? subtractEtb(invoice.totalEtb, invoice.whtEtb) : '',
-    };
+    // Prefill both the payment amount and its allocation for the common
+    // "pay this invoice in full" case — the user can still lower either one
+    // (e.g. a partial payment) before submitting.
+    const remaining = invoice.status === 'ISSUED' ? issuedRemainingEtb(invoice) : '';
+    setPaymentAmount(remaining);
+    paymentPrefillRef.current = { invoiceId: invoice.id, amountEtb: remaining };
     setPaymentOpen(true);
   };
 
@@ -540,11 +558,18 @@ export default function InvoicesPage() {
 
   const openAllocate = (payment: PaymentWithAllocations) => {
     setAllocateTarget(payment);
+    allocateTargetRef.current = payment;
     setAllocateError(null);
     void (async () => {
       const result = await optional(
         listInvoices({ customerId: payment.customerId, pageSize: 100 }),
       );
+      // Guard against a stale response: if the user closed this drawer or
+      // opened it for a different payment before this fetch resolved, drop
+      // it rather than overwrite whatever's showing now.
+      if (allocateTargetRef.current?.id !== payment.id) {
+        return;
+      }
       const already = new Set(payment.allocations.map((a) => a.invoiceId));
       const open = result.items.filter(
         (i) => OPEN_STATUSES.has(i.status) && !already.has(i.id),
@@ -555,6 +580,7 @@ export default function InvoicesPage() {
 
   const closeAllocate = () => {
     setAllocateTarget(null);
+    allocateTargetRef.current = null;
     setAllocateDrafts([]);
     setAllocateError(null);
   };
@@ -587,25 +613,34 @@ export default function InvoicesPage() {
     }
     setAllocateSubmitting(true);
     try {
-      const newAllocations: PaymentAllocation[] = [];
       // Sequential, not Promise.all: each call is its own transaction, and
       // stopping on the first failure (rather than firing all and sorting
-      // out partial success) keeps the error message attributable to one row.
+      // out partial success) keeps the error message attributable to one
+      // row. Each success is applied to state immediately (not batched
+      // after the loop) so a failure partway through leaves allocateDrafts/
+      // sessionPayments in sync with what the server actually committed —
+      // a retry then only resubmits what's still pending instead of
+      // re-hitting the unique (paymentId, invoiceId) constraint on a row
+      // that already succeeded.
       for (const draft of entered) {
-        newAllocations.push(
-          await allocatePayment(allocateTarget.id, {
-            invoiceId: draft.invoiceId,
-            amountEtb: draft.amountEtb,
-          }),
+        const allocation = await allocatePayment(allocateTarget.id, {
+          invoiceId: draft.invoiceId,
+          amountEtb: draft.amountEtb,
+        });
+        setSessionPayments((prev) =>
+          prev.map((p) =>
+            p.id === allocateTarget.id
+              ? { ...p, allocations: [...p.allocations, allocation] }
+              : p,
+          ),
+        );
+        setAllocateTarget((prev) =>
+          prev ? { ...prev, allocations: [...prev.allocations, allocation] } : prev,
+        );
+        setAllocateDrafts((prev) =>
+          prev.map((a) => (a.invoiceId === draft.invoiceId ? { ...a, amountEtb: '' } : a)),
         );
       }
-      setSessionPayments((prev) =>
-        prev.map((p) =>
-          p.id === allocateTarget.id
-            ? { ...p, allocations: [...p.allocations, ...newAllocations] }
-            : p,
-        ),
-      );
       closeAllocate();
       await refresh(page, statusFilter, customerFilter, q);
     } catch (err) {
@@ -725,8 +760,16 @@ export default function InvoicesPage() {
     const busy = busyId === payment.id;
     const allocated = sumEtb(payment.allocations.map((a) => a.amountEtb));
     const unallocated = subtractEtb(payment.amountEtb, allocated);
+    // reversedIds also gates Allocate, not just Reverse: reversing doesn't
+    // touch the original's cached `allocations` (the reversal is a new row),
+    // so `unallocated` above stays at its pre-reversal value — without this
+    // check the button would still show room that reversal was meant to
+    // take back, and the server has no reversal-aware guard of its own to
+    // catch it (guardAndInsertAllocation only checks the sum invariants).
     const canAllocate =
-      isPositiveEtb(payment.amountEtb) && isPositiveEtb(unallocated);
+      isPositiveEtb(payment.amountEtb) &&
+      isPositiveEtb(unallocated) &&
+      !reversedIds.has(payment.id);
     const canReverse = !payment.reversalOfPaymentId && !reversedIds.has(payment.id);
     return (
       <div className="flex flex-wrap items-center gap-2">
