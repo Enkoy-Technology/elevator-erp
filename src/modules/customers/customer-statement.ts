@@ -96,13 +96,22 @@ export function buildStatement(params: {
   const rows: StatementRow[] = inRange.map((row) => {
     balance = balance.plus(signedContribution(row));
     const amount = new Decimal(row.amountEtb);
+    // A payment reversal is a 'payment' row with a negative amountEtb (see
+    // StatementSourceRow's doc comment) — it re-raises what the customer
+    // owes, so it belongs in DEBIT by its positive magnitude, not as a
+    // negative number under CREDIT (which reads as a data error to an
+    // accountant reconciling the exported CSV/XLSX). This only changes
+    // presentation: signedContribution above still drives the running
+    // balance and is untouched by it.
+    const isDebit = row.kind === 'invoice' || amount.isNegative();
+    const magnitude = amount.abs().toFixed(2);
     return {
       id: row.id,
       kind: row.kind,
       date: row.date,
       reference: row.reference,
-      debit: row.kind === 'invoice' ? amount.toFixed(2) : '0.00',
-      credit: row.kind !== 'invoice' ? amount.toFixed(2) : '0.00',
+      debit: isDebit ? magnitude : '0.00',
+      credit: isDebit ? '0.00' : magnitude,
       balance: balance.toFixed(2),
     };
   });

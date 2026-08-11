@@ -59,6 +59,14 @@ describe('buildStatement — Task 3 (3.7)', () => {
 
     expect(result.rows.map((r) => r.balance)).toEqual(['100.00', '0.00', '100.00']);
     expect(result.closingBalance).toBe('100.00');
+
+    // Finding 3 regression: the reversal's positive magnitude belongs in
+    // DEBIT (it re-raises what the customer owes), never as a negative
+    // number under CREDIT — the running balance above is unaffected either
+    // way, so this pins presentation specifically, not the arithmetic.
+    expect(result.rows[0]).toMatchObject({ debit: '100.00', credit: '0.00' });
+    expect(result.rows[1]).toMatchObject({ debit: '0.00', credit: '100.00' });
+    expect(result.rows[2]).toMatchObject({ debit: '100.00', credit: '0.00' });
   });
 
   it('rows strictly before `from` roll into openingBalance and are excluded from `rows`', () => {
