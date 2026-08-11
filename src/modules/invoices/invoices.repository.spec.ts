@@ -125,7 +125,9 @@ describe('InvoicesRepository.issueFromProforma — one-transaction CAS + claim +
       .mockReturnValueOnce(makeSelectChain([{ id: RATE_VERSION_ID }]))
       // 3. tenant fiscalYearStart
       .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
-      // 4. project name for the presentational line
+      // 4. R4: resolveDueDate's customer lookup (dueDate was omitted -> null)
+      .mockReturnValueOnce(makeSelectChain([{ paymentTermsDays: '30' }]))
+      // 5. project name for the presentational line
       .mockReturnValueOnce(makeSelectChain([{ name: 'Bole Tower' }]));
 
     let insertedInvoice: Record<string, unknown> = {};
@@ -170,6 +172,9 @@ describe('InvoicesRepository.issueFromProforma — one-transaction CAS + claim +
     expect(insertedInvoice.totalEtb).toBe('115.00');
     expect(insertedInvoice.rateVersionId).toBe(RATE_VERSION_ID);
     expect(insertedInvoice.issuedByUserId).toBe(USER_ID);
+    // R4: dueDate was omitted (null) -> defaulted to issue date + the
+    // customer's paymentTermsDays (30).
+    expect(insertedInvoice.dueDate).toBe(daysAfterIso(30));
     expect(insertedLine.description).toBe('Supply and installation — Bole Tower');
     expect(insertedLine.lineTotalEtb).toBe('100.00');
     expect(result.lines).toHaveLength(1);
@@ -242,6 +247,8 @@ describe('InvoicesRepository.issueFromProforma — one-transaction CAS + claim +
       .mockReturnValueOnce(makeSelectChain([proformaRow]))
       .mockReturnValueOnce(makeSelectChain([{ id: RATE_VERSION_ID }]))
       .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      // R4: resolveDueDate's customer lookup (dueDate omitted -> null)
+      .mockReturnValueOnce(makeSelectChain([{ paymentTermsDays: '30' }]))
       .mockReturnValueOnce(makeSelectChain([{ name: 'Bole Tower' }]));
 
     const failingInsertChain: Record<string, jest.Mock> = {
@@ -280,7 +287,11 @@ describe('InvoicesRepository.issueFromProforma — one-transaction CAS + claim +
 
 describe('InvoicesRepository.createStandalone — claim + insert invoice + lines', () => {
   it('claims a gapless INV number and inserts the invoice with the pre-computed lines', async () => {
-    const select = jest.fn().mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      // R4: resolveDueDate's customer lookup (dueDate omitted -> null)
+      .mockReturnValueOnce(makeSelectChain([{ paymentTermsDays: '45' }]));
     let insertedInvoice: Record<string, unknown> = {};
     let insertedLines: unknown;
     const insert = jest
@@ -330,6 +341,9 @@ describe('InvoicesRepository.createStandalone — claim + insert invoice + lines
     expect(insertedInvoice.customerId).toBe(CUSTOMER_ID);
     expect(insertedInvoice.subtotalEtb).toBe('33.33');
     expect(insertedInvoice.totalEtb).toBe('38.33');
+    // R4: dueDate was omitted (null) -> defaulted to issue date + the
+    // customer's paymentTermsDays (45).
+    expect(insertedInvoice.dueDate).toBe(daysAfterIso(45));
     expect(Array.isArray(insertedLines)).toBe(true);
     expect((insertedLines as Record<string, unknown>[])[0]?.description).toBe(
       'Maintenance visit',
@@ -343,7 +357,13 @@ describe('InvoicesRepository.createStandalone — claim + insert invoice + lines
   });
 
   it('reclassifies a foreign-key violation (customerId/projectId that does not resolve in this tenant) as NotFoundException (404) instead of an unhandled 500', async () => {
-    const select = jest.fn().mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      // R4: resolveDueDate's customer lookup finds no row for a
+      // non-existent customerId — degrades to a null dueDate rather than
+      // throwing; the insert below still 404s the same way it always did.
+      .mockReturnValueOnce(makeSelectChain([]));
     const failingInsertChain: Record<string, jest.Mock> = {
       values: jest.fn(() => failingInsertChain),
       returning: jest.fn(() => {
@@ -378,6 +398,79 @@ describe('InvoicesRepository.createStandalone — claim + insert invoice + lines
         lines: [],
       }),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('R4: passes a caller-supplied dueDate through unchanged, with no customer lookup at all', async () => {
+    const select = jest.fn().mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+    let insertedInvoice: Record<string, unknown> = {};
+    const insert = jest
+      .fn()
+      .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
+      .mockReturnValueOnce(
+        makeInsertChain(
+          [{ id: INVOICE_ID, invoiceNumber: 'x', customerId: CUSTOMER_ID }],
+          (v) => (insertedInvoice = v as Record<string, unknown>),
+        ),
+      )
+      .mockReturnValueOnce(makeInsertChain([]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    await repo.createStandalone(TENANT_ID, USER_ID, {
+      customerId: CUSTOMER_ID,
+      projectId: null,
+      dueDate: '2026-09-30',
+      subtotalEtb: '100.00',
+      vatEtb: '15.00',
+      totalEtb: '115.00',
+      rateVersionId: RATE_VERSION_ID,
+      lines: [],
+    });
+
+    expect(insertedInvoice.dueDate).toBe('2026-09-30');
+    // Only the fiscalYearForToday select — resolveDueDate never runs a
+    // customer lookup when the caller already supplied a due date.
+    expect(select).toHaveBeenCalledTimes(1);
+  });
+
+  it('R4: never fabricates a due date when the customer cannot be resolved — leaves dueDate null rather than aging from issue', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      // resolveDueDate's customer lookup finds no row.
+      .mockReturnValueOnce(makeSelectChain([]));
+    let insertedInvoice: Record<string, unknown> = {};
+    const insert = jest
+      .fn()
+      .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
+      .mockReturnValueOnce(
+        makeInsertChain(
+          [{ id: INVOICE_ID, invoiceNumber: 'x', customerId: CUSTOMER_ID }],
+          (v) => (insertedInvoice = v as Record<string, unknown>),
+        ),
+      )
+      .mockReturnValueOnce(makeInsertChain([]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    await repo.createStandalone(TENANT_ID, USER_ID, {
+      customerId: CUSTOMER_ID,
+      projectId: null,
+      dueDate: null,
+      subtotalEtb: '100.00',
+      vatEtb: '15.00',
+      totalEtb: '115.00',
+      rateVersionId: RATE_VERSION_ID,
+      lines: [],
+    });
+
+    expect(insertedInvoice.dueDate).toBeNull();
   });
 });
 
@@ -1053,6 +1146,71 @@ describe('InvoicesRepository.agingReport — Task 3 (3.6)', () => {
     await expect(repo.agingReport(TENANT_ID)).resolves.toEqual([]);
     expect(select).toHaveBeenCalledTimes(1);
   });
+
+  it('R4: a null dueDate (no-terms customer) buckets as current, NEVER aged from the invoice\'s own issue date — the regression this fixes: an invoice issued long ago with no dueDate used to fall into d31_60/etc. here', async () => {
+    const rows = [
+      {
+        invoiceId: 'inv-no-terms',
+        customerId: CUSTOMER_ID,
+        customerName: 'Acme',
+        totalEtb: '60.00',
+        whtEtb: '0.00',
+        dueDate: null,
+        // Issued 40 days ago — the OLD (buggy) fallback would have aged
+        // this into d31_60. Kept in the fixture to prove it is never read.
+        issuedAt: new Date(daysAgoIso(40)),
+      },
+    ];
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain(rows))
+      .mockReturnValueOnce(makeSelectChain([]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    const result = await repo.agingReport(TENANT_ID);
+
+    expect(result).toEqual([
+      {
+        customerId: CUSTOMER_ID,
+        customerName: 'Acme',
+        current: '60.00',
+        d1_30: '0.00',
+        d31_60: '0.00',
+        d61_90: '0.00',
+        d90_plus: '0.00',
+        total: '60.00',
+      },
+    ]);
+  });
+
+  it('R4: an invoice issued today for a 30-day-terms customer is current the day after issue (default dueDate = issue + 30 days is nowhere near overdue)', async () => {
+    const rows = [
+      {
+        invoiceId: 'inv-fresh',
+        customerId: CUSTOMER_ID,
+        customerName: 'Acme',
+        totalEtb: '100.00',
+        whtEtb: '0.00',
+        dueDate: daysAfterIso(29), // issued yesterday with 30-day terms
+        issuedAt: new Date(daysAgoIso(1)),
+      },
+    ];
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain(rows))
+      .mockReturnValueOnce(makeSelectChain([]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    const result = await repo.agingReport(TENANT_ID);
+
+    expect(result[0]).toEqual(expect.objectContaining({ current: '100.00', d1_30: '0.00' }));
+  });
 });
 
 /** ISO date string N days before business-time "today", for aging fixtures. */
@@ -1060,4 +1218,9 @@ function daysAgoIso(days: number): string {
   const d = new Date(`${todayIso()}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() - days);
   return d.toISOString().slice(0, 10);
+}
+
+/** ISO date string N days after business-time "today" — R4's resolveDueDate uses this same UTC-midnight math. */
+function daysAfterIso(days: number): string {
+  return daysAgoIso(-days);
 }

@@ -54,7 +54,8 @@ export class CreateInvoiceDto {
 
   @ApiPropertyOptional({
     example: '2026-09-30',
-    description: 'Payment due date (ISO date).',
+    description:
+      'Payment due date (ISO date). Omit to default to the issue date plus the customer\'s paymentTermsDays (R4).',
   })
   @IsOptional()
   @IsISO8601({ strict: true })
