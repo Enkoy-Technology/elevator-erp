@@ -69,6 +69,37 @@ export const MODULES: ModuleNavItem[] = [
     roles: ['SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
   },
   {
+    nameKey: 'nav.invoices',
+    description: 'Issue → collect',
+    phase: null,
+    href: '/invoices',
+    icon: 'M12 6v12m3-8.5c0-1.38-1.343-2.5-3-2.5s-3 1.12-3 2.5c0 1.38 1.343 2 3 2s3 .62 3 2-1.343 2.5-3 2.5-3-1.12-3-2.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+    // Mirrors InvoicesController's class-level @Roles('FINANCE') (no
+    // per-route override) — CEO/ADMIN reach it via modulesForRole's
+    // SUPER_ROLES check.
+    roles: ['FINANCE'],
+  },
+  {
+    nameKey: 'nav.payments',
+    description: 'Receipts & allocations',
+    phase: null,
+    href: '/invoices?tab=payments',
+    icon: 'M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3M4.5 19.5h15a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5h-15A1.5 1.5 0 003 6v12a1.5 1.5 0 001.5 1.5zM15 12a3 3 0 11-6 0 3 3 0 016 0z',
+    // Mirrors PaymentsController's class-level @Roles('FINANCE').
+    roles: ['FINANCE'],
+  },
+  {
+    nameKey: 'nav.receivables',
+    description: 'Aging & statements',
+    phase: null,
+    href: '/receivables',
+    icon: 'M3 13h4v8H3v-8zM10 8h4v13h-4V8zM17 3h4v18h-4V3z',
+    // Mirrors GET /invoices/aging (class-level @Roles('FINANCE')) and
+    // GET /customers/:id/statement (route-level @Roles('FINANCE'),
+    // narrower than CustomersController's own class-level roles).
+    roles: ['FINANCE'],
+  },
+  {
     nameKey: 'nav.employees',
     description: 'Staff & roles',
     phase: null,
