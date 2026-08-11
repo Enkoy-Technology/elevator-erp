@@ -41,6 +41,7 @@ import {
 import { TenantDbService } from '../../database/tenant-db.service';
 import { todayIso } from '../../common/business-time';
 import { bucketForDaysOverdue, daysOverdue } from './invoice-aging';
+import type { InvoiceDocumentRow } from './invoice-document.mapper';
 import { derivePaymentStatus } from './invoice-payment-status';
 import { buildInvoiceNumber } from './invoice-number';
 
@@ -220,6 +221,50 @@ export class InvoicesRepository {
         .from(invoices)
         .where(eq(invoices.id, id))
         .limit(1);
+      if (!invoice) {
+        return null;
+      }
+      const lines = await tx
+        .select()
+        .from(invoiceLines)
+        .where(eq(invoiceLines.invoiceId, id))
+        .orderBy(asc(invoiceLines.lineNo));
+      return { ...invoice, lines };
+    });
+  }
+
+  /**
+   * Invoice + lines + joined customer/project display names, for the
+   * invoice document download (`invoice` PDF/docx/xlsx template) — same
+   * "joined display names + the document's own snapshot columns" shape as
+   * ProformasRepository.findByIdForDocument. Two queries (the joined invoice
+   * row, then its lines ordered by lineNo) rather than one, mirroring
+   * findByIdWithLines above — a single query joining invoice_lines too would
+   * duplicate the invoice/customer/project columns once per line.
+   */
+  async findByIdForDocument(
+    tenantId: string,
+    id: string,
+  ): Promise<InvoiceDocumentRow | null> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const rows = await tx
+        .select({
+          ...getTableColumns(invoices),
+          customerName: customers.name,
+          projectName: projects.name,
+        })
+        .from(invoices)
+        .leftJoin(
+          customers,
+          and(eq(invoices.tenantId, customers.tenantId), eq(invoices.customerId, customers.id)),
+        )
+        .leftJoin(
+          projects,
+          and(eq(invoices.tenantId, projects.tenantId), eq(invoices.projectId, projects.id)),
+        )
+        .where(eq(invoices.id, id))
+        .limit(1);
+      const invoice = rows[0];
       if (!invoice) {
         return null;
       }

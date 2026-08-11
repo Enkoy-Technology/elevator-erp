@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
-import { eq, sql, sum } from 'drizzle-orm';
+import { and, eq, getTableColumns, sql, sum } from 'drizzle-orm';
 
 import { recomputeCustomerBalance } from '../../common/customer-balance';
 import { WorkflowTransitionError } from '../../common/exceptions';
@@ -8,6 +8,7 @@ import { computeFiscalYear } from '../../common/fiscal-year';
 import { todayIso } from '../../common/business-time';
 import type { TenantTransaction } from '../../database/database.types';
 import {
+  customers,
   documentSequences,
   invoices,
   payments,
@@ -17,6 +18,7 @@ import {
 } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import { InvoicesRepository } from '../invoices/invoices.repository';
+import type { PaymentDocumentRow } from './receipt-document.mapper';
 import { buildReceiptNumber } from './receipt-number';
 
 export type PaymentRecord = typeof payments.$inferSelect;
@@ -118,6 +120,74 @@ export class PaymentsRepository {
       await recomputeCustomerBalance(tx, tenantId, input.customerId);
 
       return { ...payment, allocations };
+    });
+  }
+
+  /**
+   * Payment + joined customer display name + allocations (each joined to
+   * its invoice's display number) + the original receipt number when this
+   * IS a reversal, for the receipt document download (`receipt` PDF/docx
+   * template). Three small queries scoped to one payment — same "small,
+   * bounded result sets" reasoning as ProformasRepository/
+   * InvoicesRepository's own findByIdForDocument, rather than one wide join.
+   */
+  async findByIdForDocument(
+    tenantId: string,
+    id: string,
+  ): Promise<PaymentDocumentRow | null> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const rows = await tx
+        .select({
+          ...getTableColumns(payments),
+          customerName: customers.name,
+        })
+        .from(payments)
+        .leftJoin(
+          customers,
+          and(eq(payments.tenantId, customers.tenantId), eq(payments.customerId, customers.id)),
+        )
+        .where(eq(payments.id, id))
+        .limit(1);
+      const payment = rows[0];
+      if (!payment) {
+        return null;
+      }
+
+      const allocationRows = await tx
+        .select({
+          amountEtb: paymentAllocations.amountEtb,
+          invoiceNumber: invoices.invoiceNumber,
+        })
+        .from(paymentAllocations)
+        .leftJoin(
+          invoices,
+          and(
+            eq(paymentAllocations.tenantId, invoices.tenantId),
+            eq(paymentAllocations.invoiceId, invoices.id),
+          ),
+        )
+        .where(eq(paymentAllocations.paymentId, id));
+
+      let originalReceiptNumber: string | null = null;
+      if (payment.reversalOfPaymentId) {
+        const [original] = await tx
+          .select({ receiptNumber: payments.receiptNumber })
+          .from(payments)
+          .where(eq(payments.id, payment.reversalOfPaymentId))
+          .limit(1);
+        originalReceiptNumber = original?.receiptNumber ?? null;
+      }
+
+      return {
+        receiptNumber: payment.receiptNumber,
+        receivedAt: payment.receivedAt,
+        customerName: payment.customerName,
+        amountEtb: payment.amountEtb,
+        method: payment.method,
+        reference: payment.reference,
+        allocations: allocationRows,
+        originalReceiptNumber,
+      };
     });
   }
 

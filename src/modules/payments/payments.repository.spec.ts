@@ -29,6 +29,7 @@ const INVOICE_B_ID = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 /** A fake select chain that is also "thenable" at any step — see invoices.repository.spec.ts's own copy for why. */
 interface SelectChain {
   from: jest.Mock;
+  leftJoin: jest.Mock;
   where: jest.Mock;
   limit: jest.Mock;
   then: (resolve: (value: unknown) => void, reject: (err: unknown) => void) => void;
@@ -37,6 +38,7 @@ interface SelectChain {
 const makeSelectChain = (rows: unknown[]): SelectChain => {
   const chain = {} as SelectChain;
   chain.from = jest.fn(() => chain);
+  chain.leftJoin = jest.fn(() => chain);
   chain.where = jest.fn(() => chain);
   chain.limit = jest.fn(() => chain);
   chain.then = (resolve, reject) => {
@@ -482,5 +484,76 @@ describe('PaymentsRepository.reverse — immutable ledger, new mirroring row (br
     await repo.reverse(TENANT_ID, PAYMENT_ID, USER_ID, 'reason');
 
     expect(execute.mock.invocationCallOrder[0]!).toBeLessThan(select.mock.invocationCallOrder[1]!);
+  });
+});
+
+describe('PaymentsRepository.findByIdForDocument', () => {
+  const paymentRow = {
+    id: PAYMENT_ID,
+    receiptNumber: 'RCT-FY2026-27-0001',
+    receivedAt: new Date('2026-08-01T00:00:00.000Z'),
+    customerName: 'Acme',
+    amountEtb: '112.00',
+    method: 'BANK_TRANSFER',
+    reference: 'TXN-1',
+    reversalOfPaymentId: null,
+  };
+
+  it('joins the customer display name and each allocation to its invoice number', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([paymentRow]))
+      .mockReturnValueOnce(
+        makeSelectChain([{ amountEtb: '112.00', invoiceNumber: 'INV-FY2026-27-0001' }]),
+      );
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new PaymentsRepository(
+      { withTenant } as never,
+      makeInvoicesRepository() as unknown as InvoicesRepository,
+    );
+
+    const result = await repo.findByIdForDocument(TENANT_ID, PAYMENT_ID);
+
+    expect(result?.receiptNumber).toBe('RCT-FY2026-27-0001');
+    expect(result?.customerName).toBe('Acme');
+    expect(result?.allocations).toEqual([
+      { amountEtb: '112.00', invoiceNumber: 'INV-FY2026-27-0001' },
+    ]);
+    expect(result?.originalReceiptNumber).toBeNull();
+  });
+
+  it('looks up the original receipt number when this payment is a reversal', async () => {
+    const reversalRow = { ...paymentRow, id: 'reversal-1', reversalOfPaymentId: PAYMENT_ID };
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([reversalRow]))
+      .mockReturnValueOnce(makeSelectChain([]))
+      .mockReturnValueOnce(makeSelectChain([{ receiptNumber: 'RCT-FY2026-27-0001' }]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new PaymentsRepository(
+      { withTenant } as never,
+      makeInvoicesRepository() as unknown as InvoicesRepository,
+    );
+
+    const result = await repo.findByIdForDocument(TENANT_ID, 'reversal-1');
+
+    expect(result?.originalReceiptNumber).toBe('RCT-FY2026-27-0001');
+  });
+
+  it('returns null when the payment does not exist', async () => {
+    const select = jest.fn().mockReturnValueOnce(makeSelectChain([]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new PaymentsRepository(
+      { withTenant } as never,
+      makeInvoicesRepository() as unknown as InvoicesRepository,
+    );
+
+    await expect(repo.findByIdForDocument(TENANT_ID, PAYMENT_ID)).resolves.toBeNull();
   });
 });

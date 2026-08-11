@@ -102,12 +102,18 @@ export const renderLayout = (opts: LayoutOptions): string => {
   .meta-grid .value { font-size: 13px; font-weight: bold; }
   h2 { color: var(--primary); font-size: 13px; border-bottom: 1px solid #ddd; padding-bottom: 4px; margin: 22px 0 8px; text-transform: uppercase; letter-spacing: 1px; }
   table { width: 100%; border-collapse: collapse; }
-  td { padding: 6px 4px; border-bottom: 1px solid #eee; }
-  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td, th { padding: 6px 4px; border-bottom: 1px solid #eee; }
+  th { text-align: left; border-bottom: 2px solid var(--primary); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .totals { margin-top: 14px; margin-left: auto; width: 55%; }
   .totals td { border: none; padding: 4px; }
   .totals .grand td { border-top: 2px solid var(--primary); font-size: 15px; font-weight: bold; color: var(--primary); padding-top: 8px; }
   .notes { margin-top: 18px; padding: 10px 12px; background: #f7f7f7; border-left: 3px solid var(--primary); }
+  /* Ethiopian-compliance notice/mirror block — see invoice.template.ts's own
+     doc comment for the rule this renders (decisions doc §4). Prominent and
+     in the layout's accent colour per that rule, not a quiet footnote. */
+  .fiscal-notice { margin: 14px 0; padding: 10px 14px; border: 2px solid var(--primary); color: var(--primary); font-weight: bold; font-size: 12px; text-align: center; text-transform: uppercase; letter-spacing: 0.5px; }
+  .fiscal-mirror { margin: 14px 0; padding: 10px 14px; border-left: 3px solid var(--primary); background: #f7f7f7; font-size: 11px; color: #333; line-height: 1.5; }
   .footer { margin-top: 32px; border-top: 1px solid #ddd; padding-top: 12px; }
   .fineprint { color: #888; font-size: 10px; }
 </style>

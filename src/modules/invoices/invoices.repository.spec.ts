@@ -597,6 +597,46 @@ describe('InvoicesRepository.findByIdWithLines', () => {
   });
 });
 
+describe('InvoicesRepository.findByIdForDocument', () => {
+  it('joins customers and projects (for display names only) and returns the row with its lines', async () => {
+    const joinedRow = {
+      id: INVOICE_ID,
+      invoiceNumber: 'INV-FY2026-27-0001',
+      customerName: 'Acme',
+      projectName: 'Bole Tower',
+      subtotalEtb: '100000.00',
+      vatEtb: '15000.00',
+      totalEtb: '115000.00',
+      whtEtb: '0.00',
+    };
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([joinedRow]))
+      .mockReturnValueOnce(makeSelectChain([{ id: 'l1', lineNo: 1, description: 'Elevator unit' }]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    const result = await repo.findByIdForDocument(TENANT_ID, INVOICE_ID);
+
+    expect(result?.invoiceNumber).toBe('INV-FY2026-27-0001');
+    expect(result?.customerName).toBe('Acme');
+    expect(result?.projectName).toBe('Bole Tower');
+    expect(result?.lines).toEqual([{ id: 'l1', lineNo: 1, description: 'Elevator unit' }]);
+  });
+
+  it('returns null when the invoice does not exist', async () => {
+    const select = jest.fn().mockReturnValueOnce(makeSelectChain([]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    await expect(repo.findByIdForDocument(TENANT_ID, INVOICE_ID)).resolves.toBeNull();
+  });
+});
+
 describe('InvoicesRepository.recordWithholding — Task 3 (3.4)', () => {
   const invoiceRow = {
     id: INVOICE_ID,

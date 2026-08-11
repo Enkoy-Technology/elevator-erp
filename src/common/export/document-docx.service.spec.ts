@@ -90,9 +90,9 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
 
   it('throws TemplateNotImplementedError for a template with no registered builder yet', async () => {
     const service = new DocumentDocxService();
-    await expect(service.renderDocumentDocx('invoice', {}, branding)).rejects.toBeInstanceOf(
-      TemplateNotImplementedError,
-    );
+    await expect(
+      service.renderDocumentDocx('installation-certificate', {}, branding),
+    ).rejects.toBeInstanceOf(TemplateNotImplementedError);
   });
 
   it('names the rejected template in the error message', async () => {
@@ -130,6 +130,47 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
     const buf = await service.renderDocumentDocx(
       'proforma',
       { proformaNumber: 'PF-FY2026-27-0001', status: 'ISSUED', customerName: 'Test', projectName: 'Test' },
+      branding,
+    );
+    expect(Buffer.isBuffer(buf)).toBe(true);
+    expect(buf.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+  });
+
+  it('has a registered builder for "invoice" (Phase 4) — renders a real docx Buffer', async () => {
+    const service = new DocumentDocxService();
+    const buf = await service.renderDocumentDocx(
+      'invoice',
+      {
+        invoiceNumber: 'INV-1',
+        status: 'ISSUED',
+        customerName: 'Test',
+        lines: [],
+        subtotalEtb: '0.00',
+        vatEtb: '0.00',
+        totalEtb: '0.00',
+        hasWithholding: false,
+        whtDeductionEtb: '0.00',
+        netCashDueEtb: '0.00',
+      },
+      branding,
+    );
+    expect(Buffer.isBuffer(buf)).toBe(true);
+    expect(buf.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+  });
+
+  it('has a registered builder for "receipt" (Phase 4) — renders a real docx Buffer', async () => {
+    const service = new DocumentDocxService();
+    const buf = await service.renderDocumentDocx(
+      'receipt',
+      {
+        receiptNumber: 'RCT-1',
+        customerName: 'Test',
+        amountEtb: '0.00',
+        method: 'CASH',
+        allocations: [],
+        hasOnAccount: false,
+        onAccountEtb: '0.00',
+      },
       branding,
     );
     expect(Buffer.isBuffer(buf)).toBe(true);

@@ -22,13 +22,19 @@ import { isUUID } from 'class-validator';
 
 import { todayIso } from '../../common/business-time';
 import { CurrentUser, Roles } from '../../common/decorators';
+import { DocumentDocxService } from '../../common/export/document-docx.service';
+import { DocumentPdfService } from '../../common/export/document-pdf.service';
+import { parseDocumentFormat } from '../../common/export/document-format';
 import { parseExportFormat } from '../../common/export/export-query.dto';
 import {
   arrayToAsyncIterable,
   type ColumnDef,
+  setDownloadHeaders,
+  singleRow,
   writeCsv,
   writeXlsx,
 } from '../../common/export/tabular';
+import { TenantBrandingProvider } from '../../common/export/tenant-branding.provider';
 import { invoiceStatusEnum, type InvoiceStatus } from '../../database/schema';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { ConvertToInvoiceDto } from './dto/convert-to-invoice.dto';
@@ -36,6 +42,7 @@ import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { FiscalMirrorDto } from './dto/fiscal-mirror.dto';
 import { VoidInvoiceDto } from './dto/void-invoice.dto';
 import { WithholdingDto } from './dto/withholding.dto';
+import { INVOICE_DOCUMENT_COLUMNS, invoiceDocumentData } from './invoice-document.mapper';
 import { InvoicesService } from './invoices.service';
 
 const INVOICE_STATUSES = invoiceStatusEnum.enumValues;
@@ -80,7 +87,12 @@ export const AGING_EXPORT_COLUMNS: ColumnDef[] = [
 @Controller()
 @Roles('FINANCE')
 export class InvoicesController {
-  constructor(private readonly invoicesService: InvoicesService) {}
+  constructor(
+    private readonly invoicesService: InvoicesService,
+    private readonly pdfService: DocumentPdfService,
+    private readonly docxService: DocumentDocxService,
+    private readonly tenantBranding: TenantBrandingProvider,
+  ) {}
 
   @Post('proformas/:id/convert-to-invoice')
   @HttpCode(201)
@@ -199,6 +211,53 @@ export class InvoicesController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.invoicesService.getById(user, id);
+  }
+
+  @Get('invoices/:id/document')
+  @ApiOperation({
+    summary:
+      'Download an invoice as PDF, Word, or Excel (?format=pdf|docx|xlsx). Carries the fiscal-status notice/mirror block — see invoice.template.ts.',
+  })
+  async document(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('format') formatRaw: string | undefined,
+    @Res({ passthrough: false }) res: Response,
+  ): Promise<void> {
+    const format = parseDocumentFormat(formatRaw);
+    const row = await this.invoicesService.getDocumentData(user, id);
+    const filename = `invoice-${row.invoiceNumber}`;
+
+    if (format === 'xlsx') {
+      // writeXlsx reads row[col.key] at runtime — row has every field
+      // INVOICE_DOCUMENT_COLUMNS references; the cast is only needed because
+      // InvoiceDocumentRow has no index signature of its own (mirrors
+      // ProformasController.document's own cast).
+      await writeXlsx(
+        res,
+        filename,
+        INVOICE_DOCUMENT_COLUMNS,
+        singleRow(row as unknown as Record<string, unknown>),
+      );
+      return;
+    }
+
+    const branding = await this.tenantBranding.get(user.tenantId);
+    const data = invoiceDocumentData(row);
+    if (format === 'pdf') {
+      const buf = await this.pdfService.renderDocumentPdf('invoice', data, branding);
+      setDownloadHeaders(res, filename, 'pdf', 'application/pdf');
+      res.end(buf);
+      return;
+    }
+    const buf = await this.docxService.renderDocumentDocx('invoice', data, branding);
+    setDownloadHeaders(
+      res,
+      filename,
+      'docx',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    res.end(buf);
   }
 
   @Post('invoices/:id/void')
