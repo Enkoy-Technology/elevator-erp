@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, count, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { Decimal } from 'decimal.js';
+import { and, asc, count, desc, eq, isNull, ne, or, sql } from 'drizzle-orm';
 
+import { todayIso } from '../../common/business-time';
 import { CustomerInUseError } from '../../common/exceptions';
 import {
   normalizePageQuery,
@@ -11,14 +13,25 @@ import { normalizeEthiopic } from '../../common/text/ethiopic-normalize';
 import {
   assets,
   customers,
+  invoices,
   maintenanceContracts,
+  payments,
   projects,
 } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
+import {
+  buildStatement,
+  type StatementResult,
+  type StatementSourceRow,
+} from './customer-statement';
 import type { CreateCustomerDto } from './dto/create-customer.dto';
 import type { UpdateCustomerDto } from './dto/update-customer.dto';
 
 export type CustomerRecord = typeof customers.$inferSelect;
+export type CustomerStatement = StatementResult & {
+  customerId: string;
+  customerName: string;
+};
 
 export interface SimilarCustomer {
   id: string;
@@ -309,6 +322,95 @@ export class CustomersRepository {
       if (!row) {
         throw new NotFoundException('Customer not found');
       }
+    });
+  }
+
+  /**
+   * Chronological AR statement for one customer between `from`/`to`
+   * (business-calendar dates, both inclusive) — invoice debit rows, payment/
+   * reversal credit rows and withholding-credit rows (see
+   * `buildStatement`'s own doc comment for why WHT is folded in), merged and
+   * running-balanced by the pure `buildStatement` helper.
+   *
+   * Exactly two queries — invoices and payments, both scoped to this one
+   * customer (small, bounded result sets) — fetched in full rather than
+   * pre-filtered to [from, to] in SQL: computing openingBalance needs every
+   * row before `from` too, and a business-calendar-date comparison
+   * (`todayIso`, Africa/Addis_Ababa) is simplest done once in TS on values
+   * already in hand rather than duplicated as raw-SQL timezone arithmetic.
+   */
+  async statement(
+    tenantId: string,
+    customerId: string,
+    from: string,
+    to: string,
+  ): Promise<CustomerStatement> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const [customer] = await tx
+        .select({ id: customers.id, name: customers.name })
+        .from(customers)
+        .where(and(eq(customers.id, customerId), isNull(customers.deletedAt)))
+        .limit(1);
+      if (!customer) {
+        throw new NotFoundException('Customer not found');
+      }
+
+      const invoiceRows = await tx
+        .select({
+          id: invoices.id,
+          invoiceNumber: invoices.invoiceNumber,
+          totalEtb: invoices.totalEtb,
+          whtEtb: invoices.whtEtb,
+          whtVoucherRef: invoices.whtVoucherRef,
+          whtRecordedAt: invoices.whtRecordedAt,
+          issuedAt: invoices.issuedAt,
+        })
+        .from(invoices)
+        .where(and(eq(invoices.customerId, customerId), ne(invoices.status, 'VOID')));
+
+      const paymentRows = await tx
+        .select({
+          id: payments.id,
+          receiptNumber: payments.receiptNumber,
+          amountEtb: payments.amountEtb,
+          receivedAt: payments.receivedAt,
+        })
+        .from(payments)
+        .where(eq(payments.customerId, customerId));
+
+      const sourceRows: StatementSourceRow[] = [
+        ...invoiceRows.map((row) => ({
+          id: row.id,
+          kind: 'invoice' as const,
+          date: todayIso(row.issuedAt),
+          reference: row.invoiceNumber,
+          amountEtb: row.totalEtb,
+        })),
+        ...invoiceRows
+          .filter((row) => new Decimal(row.whtEtb).gt(0))
+          .map((row) => ({
+            // Synthetic id (not a real payment_allocations/table row) — the
+            // withholding credit is a derived line sourced from the same
+            // invoices query, not its own DB row (see buildStatement's doc
+            // comment), so it needs an id distinct from the invoice's own
+            // debit row above.
+            id: `${row.id}-wht`,
+            kind: 'withholding' as const,
+            date: todayIso(row.whtRecordedAt ?? row.issuedAt),
+            reference: row.whtVoucherRef ?? row.invoiceNumber,
+            amountEtb: row.whtEtb,
+          })),
+        ...paymentRows.map((row) => ({
+          id: row.id,
+          kind: 'payment' as const,
+          date: todayIso(row.receivedAt),
+          reference: row.receiptNumber,
+          amountEtb: row.amountEtb,
+        })),
+      ];
+
+      const result = buildStatement({ from, to, sourceRows });
+      return { customerId, customerName: customer.name, ...result };
     });
   }
 }

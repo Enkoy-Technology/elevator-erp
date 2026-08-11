@@ -1,14 +1,25 @@
+import { BadRequestException } from '@nestjs/common';
+
 import type { AuthenticatedUser } from '../../types/auth.types';
-import { writeCsv, writeXlsx } from '../../common/export/tabular';
+import { arrayToAsyncIterable, writeCsv, writeXlsx } from '../../common/export/tabular';
 import {
   CUSTOMERS_EXPORT_COLUMNS,
   CustomersController,
+  STATEMENT_EXPORT_COLUMNS,
 } from './customers.controller';
 import type { CustomersService } from './customers.service';
 
 jest.mock('../../common/export/tabular');
 const mockWriteCsv = jest.mocked(writeCsv);
 const mockWriteXlsx = jest.mocked(writeXlsx);
+const mockArrayToAsyncIterable = jest.mocked(arrayToAsyncIterable);
+// Auto-mocked like writeCsv/writeXlsx above — give it a real (if trivial)
+// AsyncGenerator back so `expect.anything()` on the 4th writeCsv/writeXlsx
+// arg has something other than `undefined` to match.
+mockArrayToAsyncIterable.mockImplementation(
+   
+  async function* () {},
+);
 
 describe('CustomersController.list — format wiring', () => {
   const user: AuthenticatedUser = {
@@ -87,5 +98,98 @@ describe('CustomersController.list — format wiring', () => {
     ).rejects.toThrow(/format must be one of/);
     expect(service.list).not.toHaveBeenCalled();
     expect(service.streamAll).not.toHaveBeenCalled();
+  });
+});
+
+describe('CustomersController.statement — date validation and format routing', () => {
+  const user: AuthenticatedUser = {
+    userId: '11111111-1111-1111-1111-111111111111',
+    tenantId: '22222222-2222-2222-2222-222222222222',
+    role: 'FINANCE',
+  };
+  const CUSTOMER_ID = '33333333-3333-3333-3333-333333333333';
+
+  const service = { statement: jest.fn() };
+  const controller = new CustomersController(service as unknown as CustomersService);
+  const res = { json: jest.fn() };
+  const statementResult = {
+    customerId: CUSTOMER_ID,
+    customerName: 'Acme',
+    openingBalance: '0.00',
+    closingBalance: '60.00',
+    rows: [
+      {
+        id: 'inv-1',
+        kind: 'invoice',
+        date: '2026-08-08',
+        reference: 'INV-1',
+        debit: '100.00',
+        credit: '0.00',
+        balance: '100.00',
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service.statement.mockResolvedValue(statementResult);
+  });
+
+  it('missing from/to: 400s before touching the service', async () => {
+    await expect(
+      controller.statement(user, res as never, CUSTOMER_ID, undefined, undefined, undefined),
+    ).rejects.toThrow(BadRequestException);
+    expect(service.statement).not.toHaveBeenCalled();
+  });
+
+  it('an unparseable date shape: 400s', async () => {
+    await expect(
+      controller.statement(user, res as never, CUSTOMER_ID, '08/08/2026', '2026-08-31', undefined),
+    ).rejects.toThrow(/must be an ISO date/);
+  });
+
+  it('a real-looking but invalid calendar date (Feb 30) is rejected, not silently rolled forward', async () => {
+    await expect(
+      controller.statement(user, res as never, CUSTOMER_ID, '2026-02-30', '2026-03-01', undefined),
+    ).rejects.toThrow(/not a valid calendar date/);
+    expect(service.statement).not.toHaveBeenCalled();
+  });
+
+  it('from after to: 400s', async () => {
+    await expect(
+      controller.statement(user, res as never, CUSTOMER_ID, '2026-08-31', '2026-08-01', undefined),
+    ).rejects.toThrow(/from must not be after to/);
+    expect(service.statement).not.toHaveBeenCalled();
+  });
+
+  it('no ?format=: replies with the raw JSON statement', async () => {
+    await controller.statement(user, res as never, CUSTOMER_ID, '2026-08-01', '2026-08-31', undefined);
+
+    expect(service.statement).toHaveBeenCalledWith(user, CUSTOMER_ID, '2026-08-01', '2026-08-31');
+    expect(res.json).toHaveBeenCalledWith(statementResult);
+    expect(mockWriteCsv).not.toHaveBeenCalled();
+  });
+
+  it('?format=csv: streams the statement rows via writeCsv', async () => {
+    await controller.statement(user, res as never, CUSTOMER_ID, '2026-08-01', '2026-08-31', 'csv');
+
+    expect(mockWriteCsv).toHaveBeenCalledWith(
+      res,
+      expect.stringMatching(/^statement-.+-2026-08-01-to-2026-08-31$/),
+      STATEMENT_EXPORT_COLUMNS,
+      expect.anything(),
+    );
+    expect(res.json).not.toHaveBeenCalled();
+  });
+
+  it('?format=xlsx: streams via writeXlsx', async () => {
+    await controller.statement(user, res as never, CUSTOMER_ID, '2026-08-01', '2026-08-31', 'xlsx');
+
+    expect(mockWriteXlsx).toHaveBeenCalledWith(
+      res,
+      expect.stringMatching(/^statement-/),
+      STATEMENT_EXPORT_COLUMNS,
+      expect.anything(),
+    );
   });
 });

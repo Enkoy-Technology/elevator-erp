@@ -8,6 +8,7 @@ import type { UpdateCustomerDto } from './dto/update-customer.dto';
 import {
   CustomersRepository,
   type CustomerRecord,
+  type CustomerStatement,
   type SimilarCustomer,
 } from './customers.repository';
 
@@ -69,5 +70,14 @@ export class CustomersService {
 
   softDelete(user: AuthenticatedUser, id: string): Promise<void> {
     return this.customersRepository.softDelete(user.tenantId, id);
+  }
+
+  statement(
+    user: AuthenticatedUser,
+    id: string,
+    from: string,
+    to: string,
+  ): Promise<CustomerStatement> {
+    return this.customersRepository.statement(user.tenantId, id, from, to);
   }
 }

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -21,13 +22,52 @@ import type { Response } from 'express';
 
 import { CurrentUser, Roles } from '../../common/decorators';
 import { todayIso } from '../../common/business-time';
+import {
+  arrayToAsyncIterable,
+  type ColumnDef,
+  writeCsv,
+  writeXlsx,
+} from '../../common/export/tabular';
 import { parseExportFormat } from '../../common/export/export-query.dto';
-import { type ColumnDef, writeCsv, writeXlsx } from '../../common/export/tabular';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { CustomersService } from './customers.service';
 import { CheckDuplicateCustomerDto } from './dto/check-duplicate-customer.dto';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+
+export const STATEMENT_EXPORT_COLUMNS: ColumnDef[] = [
+  { key: 'date', header: 'Date', format: 'date' },
+  { key: 'kind', header: 'Type' },
+  { key: 'reference', header: 'Reference' },
+  { key: 'debit', header: 'Debit (ETB)', format: 'money' },
+  { key: 'credit', header: 'Credit (ETB)', format: 'money' },
+  { key: 'balance', header: 'Balance (ETB)', format: 'money' },
+];
+
+// Same shape as CreateRateVersionDto's own DATE_ONLY_RE + IsDateString({strict:true})
+// combo (rates.dto.ts) — a regex alone accepts '2026-02-30', so the format
+// check below is paired with a real calendar round-trip check.
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Calendar-strict validation for the `from`/`to` query params — none of the
+ * existing list controllers bind `@Query()` to a class-validator DTO (see
+ * export-query.dto.ts's own comment), so this follows their established
+ * inline-validation-plus-BadRequestException convention instead of adding
+ * the first one just for two fields.
+ */
+function parseCalendarDate(paramName: string, value: string | undefined): string {
+  if (!value || !DATE_ONLY_RE.test(value)) {
+    throw new BadRequestException(
+      `${paramName} is required and must be an ISO date (YYYY-MM-DD)`,
+    );
+  }
+  const roundTrip = new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10);
+  if (roundTrip !== value) {
+    throw new BadRequestException(`${paramName} is not a valid calendar date`);
+  }
+  return value;
+}
 
 export const CUSTOMERS_EXPORT_COLUMNS: ColumnDef[] = [
   { key: 'id', header: 'ID' },
@@ -117,6 +157,44 @@ export class CustomersController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.customersService.getById(user, id);
+  }
+
+  @Get(':id/statement')
+  @Roles('FINANCE')
+  @ApiOperation({
+    summary:
+      'Chronological AR statement between from/to (inclusive) with a running balance, or a CSV/XLSX export with ?format=',
+  })
+  @ApiOkResponse({ description: 'Customer statement' })
+  async statement(
+    @CurrentUser() user: AuthenticatedUser,
+    @Res({ passthrough: false }) res: Response,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('from') fromRaw?: string,
+    @Query('to') toRaw?: string,
+    @Query('format') formatRaw?: string,
+  ): Promise<void> {
+    const from = parseCalendarDate('from', fromRaw);
+    const to = parseCalendarDate('to', toRaw);
+    if (from > to) {
+      throw new BadRequestException('from must not be after to');
+    }
+    const format = parseExportFormat(formatRaw);
+
+    const result = await this.customersService.statement(user, id, from, to);
+    if (!format) {
+      res.json(result);
+      return;
+    }
+    const filename = `statement-${result.customerId}-${from}-to-${to}`;
+    const exportRows = arrayToAsyncIterable(
+      result.rows as unknown as Record<string, unknown>[],
+    );
+    if (format === 'csv') {
+      await writeCsv(res, filename, STATEMENT_EXPORT_COLUMNS, exportRows);
+    } else {
+      await writeXlsx(res, filename, STATEMENT_EXPORT_COLUMNS, exportRows);
+    }
   }
 
   @Post()

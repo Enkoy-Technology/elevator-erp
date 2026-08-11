@@ -23,6 +23,7 @@ import { todayIso } from '../../common/business-time';
 import { CurrentUser, Roles } from '../../common/decorators';
 import { parseExportFormat } from '../../common/export/export-query.dto';
 import {
+  arrayToAsyncIterable,
   type ColumnDef,
   writeCsv,
   writeXlsx,
@@ -55,6 +56,17 @@ export const INVOICES_EXPORT_COLUMNS: ColumnDef[] = [
   { key: 'fiscalReceiptNumber', header: 'Fiscal Receipt Number' },
   { key: 'voidReason', header: 'Void Reason' },
   { key: 'createdAt', header: 'Created At', format: 'date' },
+];
+
+export const AGING_EXPORT_COLUMNS: ColumnDef[] = [
+  { key: 'customerId', header: 'Customer ID' },
+  { key: 'customerName', header: 'Customer Name' },
+  { key: 'current', header: 'Current (ETB)', format: 'money' },
+  { key: 'd1_30', header: '1-30 Days (ETB)', format: 'money' },
+  { key: 'd31_60', header: '31-60 Days (ETB)', format: 'money' },
+  { key: 'd61_90', header: '61-90 Days (ETB)', format: 'money' },
+  { key: 'd90_plus', header: '90+ Days (ETB)', format: 'money' },
+  { key: 'total', header: 'Total Outstanding (ETB)', format: 'money' },
 ];
 
 @ApiTags('invoices')
@@ -137,6 +149,37 @@ export class InvoicesController {
       await writeCsv(res, filename, INVOICES_EXPORT_COLUMNS, rows);
     } else {
       await writeXlsx(res, filename, INVOICES_EXPORT_COLUMNS, rows);
+    }
+  }
+
+  // Registered before 'invoices/:id' — Nest/Express match routes in
+  // registration order, and 'aging' would otherwise be swallowed by :id
+  // (and 400 on ParseUUIDPipe) if that route were declared first.
+  @Get('invoices/aging')
+  @ApiOperation({
+    summary:
+      'AR aging per customer with any outstanding balance (current/1-30/31-60/61-90/90+), or a CSV/XLSX export with ?format=',
+  })
+  @ApiOkResponse({ description: 'Per-customer aging buckets' })
+  async aging(
+    @CurrentUser() user: AuthenticatedUser,
+    @Res({ passthrough: false }) res: Response,
+    @Query('format') formatRaw?: string,
+  ): Promise<void> {
+    const format = parseExportFormat(formatRaw);
+    const rows = await this.invoicesService.agingReport(user);
+    if (!format) {
+      res.json(rows);
+      return;
+    }
+    const filename = `aging-${todayIso()}`;
+    const exportRows = arrayToAsyncIterable(
+      rows as unknown as Record<string, unknown>[],
+    );
+    if (format === 'csv') {
+      await writeCsv(res, filename, AGING_EXPORT_COLUMNS, exportRows);
+    } else {
+      await writeXlsx(res, filename, AGING_EXPORT_COLUMNS, exportRows);
     }
   }
 
