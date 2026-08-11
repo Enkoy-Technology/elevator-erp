@@ -5,7 +5,7 @@ import { WorkflowTransitionError } from '../../common/exceptions';
 import { computeFiscalYear } from '../../common/fiscal-year';
 import { todayIso } from '../../common/business-time';
 import type { InvoicesRepository } from '../invoices/invoices.repository';
-import { PaymentsRepository } from './payments.repository';
+import { PaymentsRepository, businessDayEnd, businessDayStart } from './payments.repository';
 
 // Isolates "does PaymentsRepository WIRE the balance recompute correctly"
 // from "is the balance formula itself correct" (covered by
@@ -31,7 +31,10 @@ interface SelectChain {
   from: jest.Mock;
   leftJoin: jest.Mock;
   where: jest.Mock;
+  orderBy: jest.Mock;
   limit: jest.Mock;
+  offset: jest.Mock;
+  groupBy: jest.Mock;
   then: (resolve: (value: unknown) => void, reject: (err: unknown) => void) => void;
 }
 
@@ -40,7 +43,10 @@ const makeSelectChain = (rows: unknown[]): SelectChain => {
   chain.from = jest.fn(() => chain);
   chain.leftJoin = jest.fn(() => chain);
   chain.where = jest.fn(() => chain);
+  chain.orderBy = jest.fn(() => chain);
   chain.limit = jest.fn(() => chain);
+  chain.offset = jest.fn(() => chain);
+  chain.groupBy = jest.fn(() => chain);
   chain.then = (resolve, reject) => {
     Promise.resolve(rows).then(resolve, reject);
   };
@@ -484,6 +490,130 @@ describe('PaymentsRepository.reverse — immutable ledger, new mirroring row (br
     await repo.reverse(TENANT_ID, PAYMENT_ID, USER_ID, 'reason');
 
     expect(execute.mock.invocationCallOrder[0]!).toBeLessThan(select.mock.invocationCallOrder[1]!);
+  });
+});
+
+describe('PaymentsRepository.list — allocatedEtb aggregate (never per-row)', () => {
+  it('joins the customer display name and attaches allocatedEtb via ONE aggregate query for the page', async () => {
+    const select = jest
+      .fn()
+      // count()
+      .mockReturnValueOnce(makeSelectChain([{ value: 1 }]))
+      // page of payments joined to customers
+      .mockReturnValueOnce(
+        makeSelectChain([
+          {
+            id: PAYMENT_ID,
+            customerId: CUSTOMER_ID,
+            customerName: 'Acme',
+            amountEtb: '112.00',
+            reversalOfPaymentId: null,
+          },
+        ]),
+      )
+      // ONE aggregate query for the page's allocated sums.
+      .mockReturnValueOnce(makeSelectChain([{ paymentId: PAYMENT_ID, total: '70.00' }]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new PaymentsRepository(
+      { withTenant } as never,
+      makeInvoicesRepository() as unknown as InvoicesRepository,
+    );
+
+    const result = await repo.list(TENANT_ID, {});
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        id: PAYMENT_ID,
+        customerName: 'Acme',
+        allocatedEtb: '70.00',
+      }),
+    ]);
+    expect(select).toHaveBeenCalledTimes(3);
+  });
+
+  it('defaults allocatedEtb to 0.00 for a payment with no allocations at all (unallocated advance/on-account cash)', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ value: 1 }]))
+      .mockReturnValueOnce(
+        makeSelectChain([
+          { id: PAYMENT_ID, customerId: CUSTOMER_ID, customerName: 'Acme', amountEtb: '500.00' },
+        ]),
+      )
+      .mockReturnValueOnce(makeSelectChain([])); // no allocations for this payment
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new PaymentsRepository(
+      { withTenant } as never,
+      makeInvoicesRepository() as unknown as InvoicesRepository,
+    );
+
+    const result = await repo.list(TENANT_ID, {});
+
+    expect(result.items[0]).toEqual(expect.objectContaining({ allocatedEtb: '0.00' }));
+  });
+
+  it('skips the allocation aggregate query entirely when the page is empty', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ value: 0 }]))
+      .mockReturnValueOnce(makeSelectChain([]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new PaymentsRepository(
+      { withTenant } as never,
+      makeInvoicesRepository() as unknown as InvoicesRepository,
+    );
+
+    const result = await repo.list(TENANT_ID, {});
+
+    expect(result.items).toEqual([]);
+    expect(select).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('PaymentsRepository.streamAll — batched export with a PK tiebreaker', () => {
+  it('orders by createdAt desc with id asc as the tiebreaker, and stops once a batch comes back short', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(
+        makeSelectChain([
+          { id: PAYMENT_ID, customerId: CUSTOMER_ID, customerName: 'Acme', amountEtb: '10.00' },
+        ]),
+      )
+      .mockReturnValueOnce(makeSelectChain([])); // allocation aggregate for that one row
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new PaymentsRepository(
+      { withTenant } as never,
+      makeInvoicesRepository() as unknown as InvoicesRepository,
+    );
+
+    const rows: unknown[] = [];
+    for await (const row of repo.streamAll(TENANT_ID, {})) {
+      rows.push(row);
+    }
+
+    expect(rows).toEqual([expect.objectContaining({ id: PAYMENT_ID, allocatedEtb: '0.00' })]);
+    const pageChain = select.mock.results[0]!.value as SelectChain;
+    expect(pageChain.orderBy).toHaveBeenCalledWith(expect.anything(), expect.anything());
+  });
+});
+
+describe('businessDayStart / businessDayEnd — receivedAt from/to range filtering', () => {
+  it('converts a calendar date to the UTC instant business-local midnight falls on (Africa/Addis_Ababa, fixed UTC+3, no DST)', () => {
+    expect(businessDayStart('2026-01-15').toISOString()).toBe('2026-01-14T21:00:00.000Z');
+  });
+
+  it('businessDayEnd is exactly the next calendar day\'s businessDayStart — an exclusive upper bound', () => {
+    expect(businessDayEnd('2026-01-15').getTime()).toBe(
+      businessDayStart('2026-01-16').getTime(),
+    );
   });
 });
 
