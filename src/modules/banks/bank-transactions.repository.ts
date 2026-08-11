@@ -4,9 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, count, desc, eq, getTableColumns, gte, lte, notExists } from 'drizzle-orm';
+import { Decimal } from 'decimal.js';
+import { and, asc, count, desc, eq, getTableColumns, gte, lte, notExists, sql } from 'drizzle-orm';
 
+import { todayIso } from '../../common/business-time';
 import { isForeignKeyViolation } from '../../common/db-errors';
+import { WorkflowTransitionError } from '../../common/exceptions';
 import {
   normalizePageQuery,
   toPaginatedResult,
@@ -178,6 +181,108 @@ export class BankTransactionsRepository {
     });
   }
 
+  /**
+   * R9: bank_transactions is insert-only (see the table's own doc comment)
+   * and, until now, had NO correction path at all — the first wrong
+   * amount, kind or date hand-keyed from a bank statement was permanent.
+   * Mirrors PaymentsRepository.reverse's shape: lock the original (also
+   * closes the double-reversal race below), insert a new row with the
+   * amount negated and `reversalOfTransactionId` set; the original is
+   * NEVER touched. `txDate` is set to TODAY on the reversal — same "the
+   * reversal is a new event happening now, not a backdated edit" reasoning
+   * as PaymentsRepository.reverse's `receivedAt: new Date()` /
+   * ExpensesRepository.reverse's `expenseDate: today`.
+   *
+   * paymentId/expenseId are deliberately NOT copied onto the reversal row:
+   * the partial unique indexes (bank_transactions_payment_uk/_expense_uk,
+   * see their own migration) allow at most ONE bank transaction per
+   * payment/expense, and the original already holds that slot — copying it
+   * here would 409 on the very insert this method exists to make succeed.
+   *
+   * No "claim a number before the lock" step: unlike invoices/payments/
+   * expenses, bank_transactions has no document-sequence number at all
+   * (it's a raw statement line, not a numbered document — see banks.ts),
+   * so there is nothing to claim. `assertAccountExists` still runs before
+   * the lock, same "cheap, uncontended work first" shape the other
+   * modules' claim-then-lock order exists to preserve.
+   *
+   * Both guards below run under the advisory lock on the ORIGINAL row's id
+   * (same `pg_advisory_xact_lock(hashtext(id)::bigint)` idiom as
+   * PaymentsRepository/ExpensesRepository/InvoicesRepository's own copies —
+   * 4th+ occurrence, reused verbatim per this codebase's convention):
+   *  - target is itself a reversal (`reversalOfTransactionId !== null`):
+   *    reversing a reversal would un-reverse the original and double-count
+   *    it — same reasoning as PaymentsRepository.reverse's B1a guard (wave
+   *    A). Checked FIRST, same order as PaymentsRepository.reverse.
+   *  - already reversed: another row's `reversalOfTransactionId` already
+   *    points at this one.
+   *
+   * The account's `balanceEtb` (BankAccountsRepository — Σ signed
+   * amountEtb, unconditional) absorbs a reversal for free: no reversal-
+   * aware filter to update, no separate code path to keep in sync.
+   */
+  async reverse(
+    tenantId: string,
+    bankAccountId: string,
+    transactionId: string,
+    userId: string,
+    reason: string,
+  ): Promise<BankTransactionRecord> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      await this.assertAccountExists(tx, bankAccountId);
+
+      await this.lockRow(tx, transactionId);
+
+      const [original] = await tx
+        .select()
+        .from(bankTransactions)
+        .where(
+          and(
+            eq(bankTransactions.id, transactionId),
+            eq(bankTransactions.bankAccountId, bankAccountId),
+          ),
+        )
+        .limit(1);
+      if (!original) {
+        throw new NotFoundException('Bank transaction not found');
+      }
+
+      if (original.reversalOfTransactionId !== null) {
+        throw new WorkflowTransitionError('Cannot reverse a reversal bank transaction');
+      }
+
+      const [existingReversal] = await tx
+        .select({ id: bankTransactions.id })
+        .from(bankTransactions)
+        .where(eq(bankTransactions.reversalOfTransactionId, transactionId))
+        .limit(1);
+      if (existingReversal) {
+        throw new WorkflowTransitionError('This bank transaction has already been reversed');
+      }
+
+      const [reversal] = await tx
+        .insert(bankTransactions)
+        .values({
+          tenantId,
+          bankAccountId: original.bankAccountId,
+          txDate: todayIso(),
+          amountEtb: new Decimal(original.amountEtb).negated().toFixed(2),
+          kind: original.kind,
+          description: original.description,
+          paymentId: null,
+          expenseId: null,
+          recordedByUserId: userId,
+          reversalOfTransactionId: original.id,
+          reverseReason: reason,
+        })
+        .returning();
+      if (!reversal) {
+        throw new Error('Failed to insert reversal bank transaction');
+      }
+      return reversal;
+    });
+  }
+
   async list(
     tenantId: string,
     bankAccountId: string,
@@ -314,5 +419,10 @@ export class BankTransactionsRepository {
     if (!account) {
       throw new NotFoundException('Bank account not found');
     }
+  }
+
+  /** `pg_advisory_xact_lock(hashtext(id)::bigint)` — see PaymentsRepository/ExpensesRepository/InvoicesRepository's own copies of the same idiom (4th+ occurrence, reused verbatim per this codebase's convention). */
+  private async lockRow(tx: TenantTransaction, id: string): Promise<void> {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${id}::text)::bigint)`);
   }
 }

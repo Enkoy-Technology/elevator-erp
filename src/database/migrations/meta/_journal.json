@@ -309,6 +309,13 @@
       "when": 1786438031142,
       "tag": "0043_bank_transactions_link_unique_partial_index",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1786473860084,
+      "tag": "0044_nappy_ultimates",
+      "breakpoints": true
     }
   ]
 }

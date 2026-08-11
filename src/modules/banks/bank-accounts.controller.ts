@@ -23,6 +23,7 @@ import { BankAccountsService } from './bank-accounts.service';
 import { BankTransactionsService } from './bank-transactions.service';
 import { CreateBankAccountDto } from './dto/create-bank-account.dto';
 import { CreateBankTransactionDto } from './dto/create-bank-transaction.dto';
+import { ReverseBankTransactionDto } from './dto/reverse-bank-transaction.dto';
 import { UpdateBankAccountDto } from './dto/update-bank-account.dto';
 
 // Same shape as expenses.controller.ts's own DATE_ONLY_RE + round-trip
@@ -58,6 +59,11 @@ export const BANK_TRANSACTIONS_EXPORT_COLUMNS: ColumnDef[] = [
   { key: 'paymentId', header: 'Payment ID' },
   { key: 'expenseId', header: 'Expense ID' },
   { key: 'recordedByUserId', header: 'Recorded By User ID' },
+  // R9 — same "reversal is visible in the export" convention as
+  // PaymentsController/ExpensesController's own reversalOf*/reverseReason
+  // columns.
+  { key: 'reversalOfTransactionId', header: 'Reversal Of Transaction ID' },
+  { key: 'reverseReason', header: 'Reverse Reason' },
   { key: 'createdAt', header: 'Created At', format: 'date' },
 ];
 
@@ -113,6 +119,21 @@ export class BankAccountsController {
     @Body() dto: CreateBankTransactionDto,
   ) {
     return this.bankTransactionsService.record(user, id, dto);
+  }
+
+  @Post(':id/transactions/:txId/reverse')
+  @HttpCode(201)
+  @ApiOperation({
+    summary:
+      'Reverse a bank transaction: inserts a new mirroring row with the negated amount (the original is never edited) — the only correction path this insert-only ledger has',
+  })
+  reverseTransaction(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('txId', ParseUUIDPipe) txId: string,
+    @Body() dto: ReverseBankTransactionDto,
+  ) {
+    return this.bankTransactionsService.reverse(user, id, txId, dto.reason);
   }
 
   @Get(':id/transactions')

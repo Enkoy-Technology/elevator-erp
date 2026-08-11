@@ -30,6 +30,21 @@ export class BankTransactionsService {
     });
   }
 
+  reverse(
+    user: AuthenticatedUser,
+    bankAccountId: string,
+    transactionId: string,
+    reason: string,
+  ): Promise<BankTransactionRecord> {
+    return this.bankTransactionsRepository.reverse(
+      user.tenantId,
+      bankAccountId,
+      transactionId,
+      user.userId,
+      reason,
+    );
+  }
+
   list(
     user: AuthenticatedUser,
     bankAccountId: string,

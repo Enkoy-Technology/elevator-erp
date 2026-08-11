@@ -17,6 +17,7 @@ describe('BankAccountsController — role gating', () => {
       BankAccountsController.prototype.list,
       BankAccountsController.prototype.update,
       BankAccountsController.prototype.recordTransaction,
+      BankAccountsController.prototype.reverseTransaction,
       BankAccountsController.prototype.listTransactions,
       BankAccountsController.prototype.unreconciled,
     ]) {
