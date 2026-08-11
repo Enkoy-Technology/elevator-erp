@@ -343,10 +343,45 @@ describe('InvoicesRepository.createStandalone — claim + insert invoice + lines
   });
 });
 
-describe('InvoicesRepository.voidInvoice — only from ISSUED with zero allocations', () => {
-  it('voids and stores the reason when the CAS + NOT EXISTS guard succeeds', async () => {
+describe('InvoicesRepository.voidInvoice — only from ISSUED, zero allocations, no recorded withholding', () => {
+  const voidableInvoiceRow = {
+    id: INVOICE_ID,
+    status: 'ISSUED',
+    customerId: CUSTOMER_ID,
+    whtEtb: '0.00',
+  };
+
+  it('takes the per-invoice advisory lock before reading the invoice', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([voidableInvoiceRow]))
+      // No allocations.
+      .mockReturnValueOnce(makeSelectChain([]));
+    const execute = jest.fn(() => Promise.resolve(undefined));
+    const update = jest.fn(() =>
+      makeUpdateChain([{ ...voidableInvoiceRow, status: 'VOID' }]),
+    );
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, execute, update }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    await repo.voidInvoice(TENANT_ID, INVOICE_ID, 'Issued in error');
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    const lockOrder = execute.mock.invocationCallOrder[0]!;
+    const selectOrder = select.mock.invocationCallOrder[0]!;
+    expect(lockOrder).toBeLessThan(selectOrder);
+  });
+
+  it('voids and stores the reason when every guard passes', async () => {
     let setValues: Record<string, unknown> = {};
-    const select = jest.fn(() => makeSelectChain([]));
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([voidableInvoiceRow]))
+      .mockReturnValueOnce(makeSelectChain([]));
+    const execute = jest.fn(() => Promise.resolve(undefined));
     const update = jest.fn(() =>
       makeUpdateChain(
         [{ id: INVOICE_ID, status: 'VOID', customerId: CUSTOMER_ID }],
@@ -355,7 +390,7 @@ describe('InvoicesRepository.voidInvoice — only from ISSUED with zero allocati
     );
     const withTenant = jest.fn(
       async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
-        fn({ select, update }),
+        fn({ select, execute, update }),
     );
     const repo = new InvoicesRepository({ withTenant } as never);
 
@@ -371,12 +406,30 @@ describe('InvoicesRepository.voidInvoice — only from ISSUED with zero allocati
     );
   });
 
-  it('throws WorkflowTransitionError (409) when the invoice is not ISSUED or has an allocation (guard fails)', async () => {
-    const select = jest.fn(() => makeSelectChain([{ id: INVOICE_ID }]));
-    const update = jest.fn(() => makeUpdateChain([]));
+  it('throws NotFoundException when the invoice does not exist', async () => {
+    const select = jest.fn().mockReturnValueOnce(makeSelectChain([]));
+    const execute = jest.fn(() => Promise.resolve(undefined));
     const withTenant = jest.fn(
       async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
-        fn({ select, update }),
+        fn({ select, execute }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    await expect(
+      repo.voidInvoice(TENANT_ID, INVOICE_ID, 'reason'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('throws WorkflowTransitionError (409) when the invoice is not ISSUED (e.g. already PARTIALLY_PAID)', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(
+        makeSelectChain([{ ...voidableInvoiceRow, status: 'PARTIALLY_PAID' }]),
+      );
+    const execute = jest.fn(() => Promise.resolve(undefined));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, execute }),
     );
     const repo = new InvoicesRepository({ withTenant } as never);
 
@@ -385,18 +438,40 @@ describe('InvoicesRepository.voidInvoice — only from ISSUED with zero allocati
     ).rejects.toBeInstanceOf(WorkflowTransitionError);
   });
 
-  it('throws NotFoundException when the invoice does not exist', async () => {
-    const select = jest.fn(() => makeSelectChain([]));
-    const update = jest.fn(() => makeUpdateChain([]));
+  it('throws WorkflowTransitionError (409) when the invoice has a live payment allocation', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([voidableInvoiceRow]))
+      // Allocation exists.
+      .mockReturnValueOnce(makeSelectChain([{ one: 1 }]));
+    const execute = jest.fn(() => Promise.resolve(undefined));
     const withTenant = jest.fn(
       async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
-        fn({ select, update }),
+        fn({ select, execute }),
     );
     const repo = new InvoicesRepository({ withTenant } as never);
 
     await expect(
       repo.voidInvoice(TENANT_ID, INVOICE_ID, 'reason'),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(WorkflowTransitionError);
+  });
+
+  it('throws WorkflowTransitionError (409) when the invoice already has a recorded withholding credit (whtEtb > 0) — never silently discards the voucher', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ ...voidableInvoiceRow, whtEtb: '3.00' }]));
+    const execute = jest.fn(() => Promise.resolve(undefined));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, execute }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    await expect(
+      repo.voidInvoice(TENANT_ID, INVOICE_ID, 'reason'),
+    ).rejects.toBeInstanceOf(WorkflowTransitionError);
+    // Short-circuits before ever checking allocations.
+    expect(select).toHaveBeenCalledTimes(1);
   });
 });
 
