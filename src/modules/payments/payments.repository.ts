@@ -4,6 +4,7 @@ import { and, asc, count, desc, eq, getTableColumns, gte, inArray, lt, sql, sum 
 
 import { BUSINESS_TIMEZONE, todayIso } from '../../common/business-time';
 import { recomputeCustomerBalance } from '../../common/customer-balance';
+import { isForeignKeyViolation } from '../../common/db-errors';
 import { WorkflowTransitionError } from '../../common/exceptions';
 import { computeFiscalYear } from '../../common/fiscal-year';
 import {
@@ -271,24 +272,37 @@ export class PaymentsRepository {
     input: RecordPaymentInput,
   ): Promise<PaymentWithAllocations> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
+      // Lock order (must never drift, see reverse()'s copy of this same
+      // comment): sequence (document_sequences row) -> payment -> invoices,
+      // ascending. Claiming the number before either advisory lock is what
+      // lets a concurrent reverse() against the SAME invoice acquire these
+      // three resources in the same relative order and never deadlock.
       const receiptNumber = await this.claimReceiptNumber(tx, tenantId);
 
-      const [payment] = await tx
-        .insert(payments)
-        .values({
-          tenantId,
-          receiptNumber: receiptNumber.number,
-          fiscalYearLabel: receiptNumber.fiscalYearLabel,
-          customerId: input.customerId,
-          receivedAt: input.receivedAt ? new Date(input.receivedAt) : new Date(),
-          amountEtb: input.amountEtb,
-          method: input.method,
-          bankAccountId: input.bankAccountId ?? null,
-          reference: input.reference ?? null,
-          note: input.note ?? null,
-          receivedByUserId: userId,
-        })
-        .returning();
+      let payment: PaymentRecord | undefined;
+      try {
+        [payment] = await tx
+          .insert(payments)
+          .values({
+            tenantId,
+            receiptNumber: receiptNumber.number,
+            fiscalYearLabel: receiptNumber.fiscalYearLabel,
+            customerId: input.customerId,
+            receivedAt: input.receivedAt ? new Date(input.receivedAt) : new Date(),
+            amountEtb: input.amountEtb,
+            method: input.method,
+            bankAccountId: input.bankAccountId ?? null,
+            reference: input.reference ?? null,
+            note: input.note ?? null,
+            receivedByUserId: userId,
+          })
+          .returning();
+      } catch (err) {
+        if (isForeignKeyViolation(err)) {
+          throw new NotFoundException('Customer or bank account not found');
+        }
+        throw err;
+      }
       if (!payment) {
         throw new Error('Failed to insert payment');
       }
@@ -427,13 +441,38 @@ export class PaymentsRepository {
    * against the finance schema migration), so negative rows need no schema
    * change.
    *
+   * Reversal-of-a-reversal guard (B1a): a reversal is itself never
+   * reversible. `original.reversalOfPaymentId !== null` means the row this
+   * call is being asked to reverse is ALREADY a negated mirror of some
+   * other payment — reversing it would negate it a second time, turning
+   * its negative mirror allocations back to positive and re-adding them on
+   * top of whatever else has been allocated to those invoices since.
+   * Worked exploit this closes: invoice total 500 -> pay P1 400 (allocated)
+   * -> reverse P1 (mirror -400, nets to 0) -> pay P2 500 (allocated, now
+   * PAID) -> reverse the reversal R1 (if allowed): mirror would insert
+   * +400 on top of the existing 500, for Σ 900 against a 500 invoice. This
+   * is also what keeps `customer-balance.ts`'s "live payment" definition
+   * (excludes both sides of a reversed pair, never a three-deep chain)
+   * correct: with reversal chains capped at depth 1, "original" and "its
+   * one reversal" is the only shape that can ever exist.
+   *
    * Double-reversal guard: "check for an existing row referencing it" is a
    * read-then-insert race exactly like the allocation over-allocation guard
    * — two concurrent reverse calls for the same original could both pass
    * the check before either commits. The lock below (same
    * `pg_advisory_xact_lock(hashtext(id)::bigint)` idiom, keyed by the
    * ORIGINAL payment's id) serializes them, same reasoning as the
-   * per-invoice lock in `guardAndInsertAllocation`.
+   * per-invoice lock in `guardAndInsertAllocation`. The reversal-of-a-
+   * reversal guard above is checked under this SAME lock, right after it.
+   *
+   * B1b — the mirror inserts below are the one payment_allocations write
+   * path in this codebase that does NOT go through `guardAndInsertAllocation`,
+   * so after inserting them this method asserts the same "Σ allocations +
+   * whtEtb <= totalEtb" invariant that guard enforces everywhere else, per
+   * affected invoice, before the transaction can commit. The guard above is
+   * what makes every mirror amount negative today (so in practice this
+   * assertion can only ever pass) — this is belt-and-suspenders so that
+   * stays a PROVEN invariant, not a fact this method quietly depends on.
    */
   async reverse(
     tenantId: string,
@@ -442,6 +481,18 @@ export class PaymentsRepository {
     reason: string,
   ): Promise<PaymentWithAllocations> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
+      // Lock order (must never drift, see record()'s copy of this same
+      // comment): sequence (document_sequences row) -> payment -> invoices,
+      // ascending. record() already claims its receipt number before either
+      // advisory lock; claiming it here BEFORE lockRow(paymentId) is what
+      // lets a concurrent record()/reverse() pair touching the same invoice
+      // always acquire these three resources in the same relative order —
+      // acquiring them in the opposite order (as this method used to)
+      // deadlocks Postgres instead. A claim that turns out to be wasted
+      // (any guard below throws) is rolled back with the rest of this
+      // transaction, so it never actually creates a gap.
+      const receiptNumber = await this.claimReceiptNumber(tx, tenantId);
+
       await this.lockRow(tx, paymentId);
 
       const [original] = await tx
@@ -451,6 +502,10 @@ export class PaymentsRepository {
         .limit(1);
       if (!original) {
         throw new NotFoundException('Payment not found');
+      }
+
+      if (original.reversalOfPaymentId !== null) {
+        throw new WorkflowTransitionError('Cannot reverse a reversal payment');
       }
 
       const [existingReversal] = await tx
@@ -485,7 +540,6 @@ export class PaymentsRepository {
         await this.lockRow(tx, invoiceId);
       }
 
-      const receiptNumber = await this.claimReceiptNumber(tx, tenantId);
       const [reversal] = await tx
         .insert(payments)
         .values({
@@ -523,7 +577,29 @@ export class PaymentsRepository {
           throw new Error('Failed to insert reversal allocation mirror');
         }
         mirrorAllocations.push(row);
-        await this.invoicesRepository.recomputePaymentStatus(tx, alloc.invoiceId);
+      }
+
+      // B1b: see this method's own doc comment.
+      for (const invoiceId of invoiceIds) {
+        const [invoice] = await tx
+          .select({ totalEtb: invoices.totalEtb, whtEtb: invoices.whtEtb })
+          .from(invoices)
+          .where(eq(invoices.id, invoiceId))
+          .limit(1);
+        if (!invoice) {
+          throw new NotFoundException('Invoice not found');
+        }
+        const [allocated] = await tx
+          .select({ total: sum(paymentAllocations.amountEtb) })
+          .from(paymentAllocations)
+          .where(eq(paymentAllocations.invoiceId, invoiceId));
+        const allocatedEtb = allocated?.total ?? '0';
+        if (new Decimal(allocatedEtb).plus(invoice.whtEtb).gt(invoice.totalEtb)) {
+          throw new WorkflowTransitionError(
+            `Reversing this payment would bring invoice ${invoiceId}'s allocations to ${allocatedEtb} plus ${invoice.whtEtb} withheld, exceeding its total of ${invoice.totalEtb}`,
+          );
+        }
+        await this.invoicesRepository.recomputePaymentStatus(tx, invoiceId);
       }
 
       await recomputeCustomerBalance(tx, tenantId, original.customerId);

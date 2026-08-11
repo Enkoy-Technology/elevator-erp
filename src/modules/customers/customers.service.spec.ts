@@ -125,7 +125,7 @@ describe('CustomersService', () => {
   });
 
   it('surfaces CustomerInUseError when the customer still has linked records', async () => {
-    repo.softDelete.mockRejectedValue(new CustomerInUseError(1, 0, 0));
+    repo.softDelete.mockRejectedValue(new CustomerInUseError(1, 0, 0, 0, 0));
     await expect(service.softDelete(user, sample.id)).rejects.toBeInstanceOf(
       CustomerInUseError,
     );

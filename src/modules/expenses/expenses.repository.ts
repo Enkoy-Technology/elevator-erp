@@ -3,6 +3,7 @@ import { Decimal } from 'decimal.js';
 import { and, asc, count, desc, eq, getTableColumns, gte, lte, sql } from 'drizzle-orm';
 
 import { todayIso } from '../../common/business-time';
+import { isForeignKeyViolation } from '../../common/db-errors';
 import { WorkflowTransitionError } from '../../common/exceptions';
 import { computeFiscalYear } from '../../common/fiscal-year';
 import {
@@ -78,6 +79,17 @@ export class ExpensesRepository {
    * (expense-money.ts / wht-decision.ts, no DB access needed) — this method
    * only owns the transaction-bound protocol, same division of labour as
    * InvoicesRepository.createStandalone.
+   *
+   * Lock order note (R2): this method claims its number the same way
+   * `record()` does everywhere else in finance (PaymentsRepository.record),
+   * but — unlike payments/invoices — takes NO advisory lock at all, so
+   * there is no "sequence -> ... -> advisory lock" ordering to keep
+   * consistent here. That absence is exactly what makes this method safe
+   * today: nothing else in this codebase locks by expenseId before this
+   * runs, so there is no second lock to acquire in the wrong order against.
+   * If a lock is ever added here (e.g. a future correction workflow), it
+   * MUST be taken AFTER the claim, matching PaymentsRepository.record/
+   * reverse's sequence -> payment -> invoices order.
    */
   async record(
     tenantId: string,
@@ -90,31 +102,39 @@ export class ExpensesRepository {
       const claimed = await this.claimSequence(tx, tenantId, fiscalYear.label);
       const expenseNumber = buildExpenseNumber(fiscalYear.label, claimed);
 
-      const [row] = await tx
-        .insert(expenses)
-        .values({
-          tenantId,
-          expenseNumber,
-          fiscalYearLabel: fiscalYear.label,
-          category: input.category,
-          supplyKind: input.supplyKind,
-          supplierName: input.supplierName,
-          supplierTin: input.supplierTin,
-          supplierLicenceOnFile: input.supplierLicenceOnFile,
-          netAmountEtb: input.netAmountEtb,
-          vatEtb: input.vatEtb,
-          amountEtb: input.amountEtb,
-          whtRatePercent: input.whtRatePercent,
-          whtEtb: input.whtEtb,
-          rateVersionId: input.rateVersionId,
-          paidVia: input.paidVia,
-          bankAccountId: input.bankAccountId,
-          expenseDate: input.expenseDate,
-          description: input.description,
-          reference: input.reference,
-          recordedByUserId: userId,
-        })
-        .returning();
+      let row: ExpenseRecord | undefined;
+      try {
+        [row] = await tx
+          .insert(expenses)
+          .values({
+            tenantId,
+            expenseNumber,
+            fiscalYearLabel: fiscalYear.label,
+            category: input.category,
+            supplyKind: input.supplyKind,
+            supplierName: input.supplierName,
+            supplierTin: input.supplierTin,
+            supplierLicenceOnFile: input.supplierLicenceOnFile,
+            netAmountEtb: input.netAmountEtb,
+            vatEtb: input.vatEtb,
+            amountEtb: input.amountEtb,
+            whtRatePercent: input.whtRatePercent,
+            whtEtb: input.whtEtb,
+            rateVersionId: input.rateVersionId,
+            paidVia: input.paidVia,
+            bankAccountId: input.bankAccountId,
+            expenseDate: input.expenseDate,
+            description: input.description,
+            reference: input.reference,
+            recordedByUserId: userId,
+          })
+          .returning();
+      } catch (err) {
+        if (isForeignKeyViolation(err)) {
+          throw new NotFoundException('Bank account not found');
+        }
+        throw err;
+      }
       if (!row) {
         throw new Error('Failed to insert expense');
       }

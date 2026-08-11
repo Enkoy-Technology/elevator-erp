@@ -21,6 +21,14 @@ const makeCountChain = (value: number) => {
   return chain;
 };
 
+/** Wires a fake `select({id, reversalOfPaymentId}).from(payments).where(...)` resolving to `rows`. */
+const makePaymentsChain = (rows: Row[]) => {
+  const chain: Record<string, jest.Mock> = {};
+  chain.from = jest.fn(() => chain);
+  chain.where = jest.fn(() => Promise.resolve(rows));
+  return chain;
+};
+
 const makeUpdateChain = (rows: Row[]) => {
   const chain: Record<string, jest.Mock> = {};
   chain.set = jest.fn(() => chain);
@@ -29,12 +37,18 @@ const makeUpdateChain = (rows: Row[]) => {
   return chain;
 };
 
-/** Wires a fake tenant transaction: the three `select` calls (projects,
- * assets, maintenance contracts, in that order) resolve to `counts`, and the
- * `update` call resolves to `updateRows`. */
-const repoWithTx = (counts: [number, number, number], updateRows: Row[]) => {
+/** Wires a fake tenant transaction: the four `select` COUNT calls (projects,
+ * assets, maintenance contracts, invoices, in that order) resolve to
+ * `counts`, the fifth `select` (raw payment rows) resolves to `paymentRows`,
+ * and the `update` call resolves to `updateRows`. */
+const repoWithTx = (
+  counts: [number, number, number, number],
+  paymentRows: Row[],
+  updateRows: Row[],
+) => {
   const select = jest.fn();
   counts.forEach((value) => select.mockReturnValueOnce(makeCountChain(value)));
+  select.mockReturnValueOnce(makePaymentsChain(paymentRows));
   const updateChain = makeUpdateChain(updateRows);
   const update = jest.fn(() => updateChain);
   const withTenant = jest.fn(
@@ -47,25 +61,67 @@ const repoWithTx = (counts: [number, number, number], updateRows: Row[]) => {
 
 describe('CustomersRepository.softDelete — dependent-record guard', () => {
   it('refuses to delete a customer with linked projects, assets or contracts', async () => {
-    const { repo, update } = repoWithTx([2, 1, 0], []);
+    const { repo, update } = repoWithTx([2, 1, 0, 0], [], []);
 
     await expect(repo.softDelete(TENANT_ID, CUSTOMER_ID)).rejects.toThrow(
-      'Cannot delete a customer with 2 linked project(s), 1 linked asset(s) and 0 linked maintenance contract(s).',
+      'Cannot delete a customer with 2 linked project(s), 1 linked asset(s), 0 linked maintenance contract(s), 0 linked invoice(s) and 0 linked payment(s).',
     );
     expect(update).not.toHaveBeenCalled();
   });
 
   it('rejects with CustomerInUseError specifically', async () => {
-    const { repo } = repoWithTx([0, 0, 1], []);
+    const { repo } = repoWithTx([0, 0, 1, 0], [], []);
 
     await expect(
       repo.softDelete(TENANT_ID, CUSTOMER_ID),
     ).rejects.toBeInstanceOf(CustomerInUseError);
   });
 
+  // R5: a customer billed only via a standalone invoice has none of the
+  // three prior checks, so it is the invoice count alone that must block
+  // deletion here.
+  it('R5: refuses to delete a customer with one open (non-VOID) invoice, even with no projects/assets/contracts', async () => {
+    const { repo, update } = repoWithTx([0, 0, 0, 1], [], []);
+
+    await expect(repo.softDelete(TENANT_ID, CUSTOMER_ID)).rejects.toThrow(
+      'Cannot delete a customer with 0 linked project(s), 0 linked asset(s), 0 linked maintenance contract(s), 1 linked invoice(s) and 0 linked payment(s).',
+    );
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('R5: refuses to delete a customer with a live (non-reversed) payment — unallocated advance cash has no invoice to be caught by the count above', async () => {
+    const { repo, update } = repoWithTx(
+      [0, 0, 0, 0],
+      [{ id: 'pay-1', reversalOfPaymentId: null }],
+      [],
+    );
+
+    await expect(repo.softDelete(TENANT_ID, CUSTOMER_ID)).rejects.toThrow(
+      'Cannot delete a customer with 0 linked project(s), 0 linked asset(s), 0 linked maintenance contract(s), 0 linked invoice(s) and 1 linked payment(s).',
+    );
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('R5: a fully-reversed payment pair (original + its reversal) nets to zero live payments and does not block deletion', async () => {
+    const { repo, updateChain } = repoWithTx(
+      [0, 0, 0, 0],
+      [
+        { id: 'pay-1', reversalOfPaymentId: null },
+        { id: 'pay-2', reversalOfPaymentId: 'pay-1' },
+      ],
+      [{ id: CUSTOMER_ID }],
+    );
+
+    await expect(repo.softDelete(TENANT_ID, CUSTOMER_ID)).resolves.toBeUndefined();
+    expect(updateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({ deletedAt: expect.any(Date) }),
+    );
+  });
+
   it('deletes a customer with no linked records', async () => {
     const { repo, updateChain } = repoWithTx(
-      [0, 0, 0],
+      [0, 0, 0, 0],
+      [],
       [{ id: CUSTOMER_ID }],
     );
 
@@ -78,7 +134,7 @@ describe('CustomersRepository.softDelete — dependent-record guard', () => {
   });
 
   it('still 404s a customer that does not exist once dependents are clear', async () => {
-    const { repo } = repoWithTx([0, 0, 0], []);
+    const { repo } = repoWithTx([0, 0, 0, 0], [], []);
 
     await expect(
       repo.softDelete(TENANT_ID, CUSTOMER_ID),

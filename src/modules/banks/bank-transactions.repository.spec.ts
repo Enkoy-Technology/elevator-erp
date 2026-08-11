@@ -175,6 +175,34 @@ describe('BankTransactionsRepository.record — link existence + uniqueness (bri
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
+  it('reclassifies a foreign-key violation (a link that stops resolving between the pre-check and the insert) as NotFoundException (404) instead of an unhandled 500', async () => {
+    const select = jest.fn().mockReturnValueOnce(makeSelectChain([{ id: ACCOUNT_ID }]));
+    const failingInsertChain: Record<string, jest.Mock> = {
+      values: jest.fn(() => failingInsertChain),
+      returning: jest.fn(() => {
+        const cause: Error & { code?: string } = new Error(
+          'insert or update on table "bank_transactions" violates foreign key constraint "bank_transactions_bank_account_id_fkey"',
+        );
+        cause.code = '23503';
+        const err: Error & { cause?: unknown } = new Error(
+          'Failed query: insert into "bank_transactions" ...',
+        );
+        err.cause = cause;
+        return Promise.reject(err);
+      }),
+    };
+    const insert = jest.fn().mockReturnValueOnce(failingInsertChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert }),
+    );
+    const repo = new BankTransactionsRepository({ withTenant } as never);
+
+    await expect(repo.record(TENANT_ID, USER_ID, baseInput)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
   it('an unrelated insert failure (not a unique violation) still propagates as-is, not swallowed into a 409', async () => {
     const select = jest.fn().mockReturnValueOnce(makeSelectChain([{ id: ACCOUNT_ID }]));
     const failingInsertChain: Record<string, jest.Mock> = {

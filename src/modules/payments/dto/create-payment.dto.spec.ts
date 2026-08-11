@@ -48,3 +48,27 @@ describe('CreatePaymentDto — bankAccountId required per method (brief 3.1)', (
     ).not.toHaveLength(0);
   });
 });
+
+const validateReceivedAt = async (dto: Record<string, unknown>) => {
+  const instance = plainToInstance(CreatePaymentDto, dto);
+  const errors = await validate(instance);
+  return errors.filter((e) => e.property === 'receivedAt');
+};
+
+describe('CreatePaymentDto.receivedAt — R3: rejects a far-future date (a year typo must not silently hide a receipt)', () => {
+  it('accepts today', async () => {
+    expect(
+      await validateReceivedAt({ ...base, method: 'CASH', receivedAt: new Date().toISOString() }),
+    ).toHaveLength(0);
+  });
+
+  it('accepts tomorrow', async () => {
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    expect(await validateReceivedAt({ ...base, method: 'CASH', receivedAt: tomorrow })).toHaveLength(0);
+  });
+
+  it('rejects next year', async () => {
+    const nextYear = new Date(Date.now() + 366 * 24 * 60 * 60 * 1000).toISOString();
+    expect(await validateReceivedAt({ ...base, method: 'CASH', receivedAt: nextYear })).not.toHaveLength(0);
+  });
+});
