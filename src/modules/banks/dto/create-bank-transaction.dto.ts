@@ -7,8 +7,10 @@ import {
   IsUUID,
   Matches,
   MaxLength,
+  Validate,
 } from 'class-validator';
 
+import { NotFarFutureConstraint } from '../../../common/dto/date';
 import { SIGNED_MONEY_RE } from '../../../common/dto/money';
 import { bankTxKindEnum, type BankTxKind } from '../../../database/schema';
 
@@ -21,6 +23,12 @@ export class CreateBankTransactionDto {
   @ApiProperty({ example: '2026-08-08' })
   @Matches(DATE_ONLY_RE)
   @IsDateString({ strict: true })
+  // Fix-wave-c #2: same R3 gap CreatePaymentDto.receivedAt/WithholdingDto.recordedAt
+  // already closed — a year typo here moves BankAccountsRepository.balanceEtb's
+  // unconditional sum while list()'s date filter hides the row from every
+  // date-windowed view. NotFarFutureConstraint already tolerates date-only
+  // strings (see its own doc comment).
+  @Validate(NotFarFutureConstraint)
   txDate!: string;
 
   @ApiProperty({

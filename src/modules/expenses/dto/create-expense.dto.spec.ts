@@ -105,3 +105,26 @@ describe('CreateExpenseDto — exactly one of {netAmountEtb, vatIncluded:false} 
     expect(propertyErrors(errors, 'grossAmountEtb').length).toBeGreaterThan(0);
   });
 });
+
+const dateOnly = (date: Date): string => date.toISOString().slice(0, 10);
+
+describe('CreateExpenseDto.expenseDate — fix-wave-c #2: rejects a far-future date (a year typo must not silently mis-resolve VAT/WHT rates)', () => {
+  const withExpenseDate = { paidVia: 'CASH', vatIncluded: false, netAmountEtb: '100.00' } as const;
+
+  it('accepts today', async () => {
+    const errors = await errorsFor({ ...base, ...withExpenseDate, expenseDate: dateOnly(new Date()) });
+    expect(propertyErrors(errors, 'expenseDate')).toHaveLength(0);
+  });
+
+  it('accepts tomorrow', async () => {
+    const tomorrow = dateOnly(new Date(Date.now() + 24 * 60 * 60 * 1000));
+    const errors = await errorsFor({ ...base, ...withExpenseDate, expenseDate: tomorrow });
+    expect(propertyErrors(errors, 'expenseDate')).toHaveLength(0);
+  });
+
+  it('rejects next year', async () => {
+    const nextYear = dateOnly(new Date(Date.now() + 366 * 24 * 60 * 60 * 1000));
+    const errors = await errorsFor({ ...base, ...withExpenseDate, expenseDate: nextYear });
+    expect(propertyErrors(errors, 'expenseDate').length).toBeGreaterThan(0);
+  });
+});
