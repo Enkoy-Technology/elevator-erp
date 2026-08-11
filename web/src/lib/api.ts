@@ -1141,6 +1141,189 @@ export const convertProformaToInvoice = (
     body: JSON.stringify(dueDate ? { dueDate } : {}),
   });
 
+export const listInvoices = (options?: {
+  status?: InvoiceStatus;
+  customerId?: string;
+  q?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<Paginated<Invoice>> => {
+  const params = new URLSearchParams();
+  if (options?.status) {
+    params.set('status', options.status);
+  }
+  if (options?.customerId) {
+    params.set('customerId', options.customerId);
+  }
+  if (options?.q) {
+    params.set('q', options.q);
+  }
+  if (options?.page) {
+    params.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set('pageSize', String(options.pageSize));
+  }
+  const query = params.toString();
+  return apiFetch<Paginated<Invoice>>(`/invoices${query ? `?${query}` : ''}`);
+};
+
+export interface CreateInvoiceLinePayload {
+  description: string;
+  quantity: string;
+  unitPriceEtb: string;
+}
+
+export interface CreateInvoicePayload {
+  customerId: string;
+  projectId?: string;
+  lines: CreateInvoiceLinePayload[];
+  dueDate?: string;
+}
+
+export const createInvoice = (
+  payload: CreateInvoicePayload,
+): Promise<InvoiceWithLines> =>
+  apiFetch<InvoiceWithLines>('/invoices', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const voidInvoice = (id: string, reason: string): Promise<Invoice> =>
+  apiFetch<Invoice>(`/invoices/${id}/void`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+
+export const recordInvoiceWithholding = (
+  id: string,
+  payload: { amountEtb: string; voucherRef?: string },
+): Promise<Invoice> =>
+  apiFetch<Invoice>(`/invoices/${id}/withholding`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const downloadInvoiceDocument = (
+  id: string,
+  invoiceNumber: string,
+  format: DocumentFormat,
+): Promise<void> =>
+  downloadDocument(
+    `/invoices/${id}/document?format=${format}`,
+    `invoice-${invoiceNumber}.${format}`,
+  );
+
+export type PaymentMethod =
+  | 'CASH'
+  | 'BANK_TRANSFER'
+  | 'CHEQUE'
+  | 'CBE_BIRR'
+  | 'TELEBIRR'
+  | 'OTHER';
+
+export interface PaymentAllocation {
+  id: string;
+  paymentId: string;
+  invoiceId: string;
+  amountEtb: string;
+  createdAt: string;
+}
+
+export interface Payment {
+  id: string;
+  receiptNumber: string;
+  fiscalYearLabel: string;
+  customerId: string;
+  receivedAt: string;
+  amountEtb: string;
+  method: PaymentMethod;
+  bankAccountId: string | null;
+  reference: string | null;
+  note: string | null;
+  reversalOfPaymentId: string | null;
+  reverseReason: string | null;
+  createdAt: string;
+}
+
+export interface PaymentWithAllocations extends Payment {
+  allocations: PaymentAllocation[];
+}
+
+export interface RecordPaymentPayload {
+  customerId: string;
+  amountEtb: string;
+  method: PaymentMethod;
+  receivedAt?: string;
+  bankAccountId?: string;
+  reference?: string;
+  note?: string;
+  allocations?: { invoiceId: string; amountEtb: string }[];
+}
+
+export const recordPayment = (
+  payload: RecordPaymentPayload,
+): Promise<PaymentWithAllocations> =>
+  apiFetch<PaymentWithAllocations>('/payments', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const allocatePayment = (
+  paymentId: string,
+  payload: { invoiceId: string; amountEtb: string },
+): Promise<PaymentAllocation> =>
+  apiFetch<PaymentAllocation>(`/payments/${paymentId}/allocations`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const reversePayment = (
+  paymentId: string,
+  reason: string,
+): Promise<PaymentWithAllocations> =>
+  apiFetch<PaymentWithAllocations>(`/payments/${paymentId}/reverse`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+
+/** No xlsx — PaymentsController#document rejects it (a receipt isn't a table). */
+export const downloadReceiptDocument = (
+  id: string,
+  receiptNumber: string,
+  format: 'pdf' | 'docx',
+): Promise<void> =>
+  downloadDocument(
+    `/payments/${id}/document?format=${format}`,
+    `receipt-${receiptNumber}.${format}`,
+  );
+
+export interface BankAccount {
+  id: string;
+  name: string;
+  bankName: string;
+  accountNumber: string;
+  isActive: boolean;
+  balanceEtb: string;
+}
+
+export const listBankAccounts = (options?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<Paginated<BankAccount>> => {
+  const params = new URLSearchParams();
+  if (options?.page) {
+    params.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set('pageSize', String(options.pageSize));
+  }
+  const query = params.toString();
+  return apiFetch<Paginated<BankAccount>>(
+    `/bank-accounts${query ? `?${query}` : ''}`,
+  );
+};
+
 export const updateSettings = (payload: {
   primaryColorHex?: string;
   secondaryColorHex?: string;
