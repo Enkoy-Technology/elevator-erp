@@ -10,6 +10,7 @@ import { AppConfigModule } from './config';
 import { DatabaseModule } from './database/database.module';
 import { AssetsModule } from './modules/assets/assets.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { BanksModule } from './modules/banks/banks.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ElevatorCalcModule } from './modules/elevator-calc/elevator-calc.module';
@@ -45,6 +46,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     InvoicesModule,
     PaymentsModule,
     ExpensesModule,
+    BanksModule,
     EmployeesModule,
     AssetsModule,
     NotificationsModule,

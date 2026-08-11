@@ -19,6 +19,15 @@ import { Decimal } from 'decimal.js';
 export const MONEY_RE = /^\d{1,12}(\.\d{1,2})?$/;
 
 /**
+ * Signed counterpart of MONEY_RE — same bound, optional leading '-'. Only
+ * for money columns that are legitimately negative by design (e.g.
+ * bank_transactions.amountEtb: positive = money in, negative = money out —
+ * see banks.ts's own doc comment), never as a substitute for MONEY_RE on an
+ * ordinary always-positive amount.
+ */
+export const SIGNED_MONEY_RE = /^-?\d{1,12}(\.\d{1,2})?$/;
+
+/**
  * Quantity string: non-negative, up to 3 decimal places, capped at 9 integer
  * digits — matches this codebase's `numeric(12, 3)` quantity columns (12
  * total digits = 9 integer + 3 fraction). Same overflow story as MONEY_RE
