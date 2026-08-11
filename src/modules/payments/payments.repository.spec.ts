@@ -183,6 +183,45 @@ describe('PaymentsRepository.record — one-transaction claim + insert + allocat
     expect(invoicesRepository.recomputePaymentStatus).not.toHaveBeenCalled();
     expect(mockCustomerBalance).toHaveBeenCalledWith(expect.anything(), TENANT_ID, CUSTOMER_ID);
   });
+
+  it('reclassifies a foreign-key violation (customerId/bankAccountId that does not resolve in this tenant) as NotFoundException (404) instead of an unhandled 500', async () => {
+    const select = jest.fn().mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+    const failingInsertChain: Record<string, jest.Mock> = {
+      values: jest.fn(() => failingInsertChain),
+      returning: jest.fn(() => {
+        // Real drizzle-orm/node-postgres shape — code lives on err.cause,
+        // not err itself. See invoices.repository.spec.ts's own copy of
+        // this shape for the unique-violation counterpart.
+        const cause: Error & { code?: string } = new Error(
+          'insert or update on table "payments" violates foreign key constraint "payments_customer_id_fkey"',
+        );
+        cause.code = '23503';
+        const err: Error & { cause?: unknown } = new Error('Failed query: insert into "payments" ...');
+        err.cause = cause;
+        return Promise.reject(err);
+      }),
+    };
+    const insert = jest
+      .fn()
+      .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
+      .mockReturnValueOnce(failingInsertChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert }),
+    );
+    const repo = new PaymentsRepository(
+      { withTenant } as never,
+      makeInvoicesRepository() as unknown as InvoicesRepository,
+    );
+
+    await expect(
+      repo.record(TENANT_ID, USER_ID, {
+        customerId: 'does-not-exist',
+        amountEtb: '100.00',
+        method: 'CASH',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
 });
 
 describe('PaymentsRepository.allocate — guards shared with record() via guardAndInsertAllocation (brief 3.2)', () => {
@@ -362,10 +401,16 @@ describe('PaymentsRepository.reverse — immutable ledger, new mirroring row (br
   it('inserts a negated mirror payment with its own receipt number, mirrors every allocation negated, and recomputes affected invoices + the customer balance', async () => {
     const select = jest
       .fn()
+      // claimReceiptNumber (now first, before either advisory lock — R2)
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
       .mockReturnValueOnce(makeSelectChain([originalPayment]))
       .mockReturnValueOnce(makeSelectChain([])) // no existing reversal
       .mockReturnValueOnce(makeSelectChain(originalAllocations))
-      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+      // B1b post-mirror-insert assertion loop, invoiceIds sorted ascending: A then B
+      .mockReturnValueOnce(makeSelectChain([{ totalEtb: '500.00', whtEtb: '0.00' }]))
+      .mockReturnValueOnce(makeSelectChain([{ total: '100.00' }]))
+      .mockReturnValueOnce(makeSelectChain([{ totalEtb: '500.00', whtEtb: '0.00' }]))
+      .mockReturnValueOnce(makeSelectChain([{ total: '50.00' }]));
 
     let insertedReversal: Record<string, unknown> = {};
     const insertedMirrors: Record<string, unknown>[] = [];
@@ -425,12 +470,113 @@ describe('PaymentsRepository.reverse — immutable ledger, new mirroring row (br
     expect(mockCustomerBalance).toHaveBeenCalledWith(expect.anything(), TENANT_ID, CUSTOMER_ID);
   });
 
+  it('R2: claims the receipt number before locking the payment — every path acquires sequence -> payment -> invoices', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      .mockReturnValueOnce(makeSelectChain([originalPayment]))
+      .mockReturnValueOnce(makeSelectChain([]))
+      .mockReturnValueOnce(makeSelectChain([]));
+    const insert = jest
+      .fn()
+      .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
+      .mockReturnValueOnce(
+        makeInsertChain([{ ...originalPayment, id: 'reversal-1', amountEtb: '-150.00' }]),
+      );
+    const execute = makeExecute();
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert, execute }),
+    );
+    const repo = new PaymentsRepository(
+      { withTenant } as never,
+      makeInvoicesRepository() as unknown as InvoicesRepository,
+    );
+
+    await repo.reverse(TENANT_ID, PAYMENT_ID, USER_ID, 'reason');
+
+    // insert[0] is the document_sequences claim; execute[0] is the payment
+    // advisory lock. A concurrent record() already claims its number before
+    // taking any advisory lock — this must acquire the two in the same
+    // relative order, or Postgres can deadlock one of the two requests.
+    expect(insert.mock.invocationCallOrder[0]!).toBeLessThan(execute.mock.invocationCallOrder[0]!);
+  });
+
+  it('B1a: rejects reversing a reversal (409) — a reversal payment can never itself be reversed', async () => {
+    const alreadyAReversal = { ...originalPayment, id: 'reversal-1', reversalOfPaymentId: PAYMENT_ID };
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      .mockReturnValueOnce(makeSelectChain([alreadyAReversal]));
+    const insert = jest.fn().mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]));
+    const execute = makeExecute();
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert, execute }),
+    );
+    const repo = new PaymentsRepository(
+      { withTenant } as never,
+      makeInvoicesRepository() as unknown as InvoicesRepository,
+    );
+
+    await expect(
+      repo.reverse(TENANT_ID, 'reversal-1', USER_ID, 'oops'),
+    ).rejects.toBeInstanceOf(WorkflowTransitionError);
+    // Only the receipt-number claim happened — never a second-order reversal insert.
+    expect(insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('B1b: asserts Σ allocations + whtEtb <= totalEtb per invoice after the mirror insert — the mirror path cannot over-allocate even though it bypasses guardAndInsertAllocation', async () => {
+    const singleAllocation = [
+      { id: 'a1', paymentId: PAYMENT_ID, invoiceId: INVOICE_ID, amountEtb: '50.00' },
+    ];
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      .mockReturnValueOnce(makeSelectChain([originalPayment]))
+      .mockReturnValueOnce(makeSelectChain([])) // no existing reversal
+      .mockReturnValueOnce(makeSelectChain(singleAllocation))
+      .mockReturnValueOnce(makeSelectChain([{ totalEtb: '100.00', whtEtb: '0.00' }]))
+      // Post-insert Σ allocations — deliberately already over the invoice's
+      // own total, standing in for whatever bug (today: none — B1a closes
+      // the only known path) might one day feed this method a positive
+      // mirror amount. The assertion must catch it regardless of cause.
+      .mockReturnValueOnce(makeSelectChain([{ total: '150.00' }]));
+    const insert = jest
+      .fn()
+      .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
+      .mockReturnValueOnce(
+        makeInsertChain([{ ...originalPayment, id: 'reversal-1', amountEtb: '-150.00' }]),
+      )
+      .mockReturnValueOnce(
+        makeInsertChain([
+          { id: 'mirror-1', paymentId: 'reversal-1', invoiceId: INVOICE_ID, amountEtb: '-50.00' },
+        ]),
+      );
+    const execute = makeExecute();
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert, execute }),
+    );
+    const invoicesRepository = makeInvoicesRepository();
+    const repo = new PaymentsRepository(
+      { withTenant } as never,
+      invoicesRepository as unknown as InvoicesRepository,
+    );
+
+    await expect(
+      repo.reverse(TENANT_ID, PAYMENT_ID, USER_ID, 'reason'),
+    ).rejects.toBeInstanceOf(WorkflowTransitionError);
+    expect(invoicesRepository.recomputePaymentStatus).not.toHaveBeenCalled();
+  });
+
   it('blocks a double reversal (409) — a payment may be reversed at most once', async () => {
     const select = jest
       .fn()
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
       .mockReturnValueOnce(makeSelectChain([originalPayment]))
       .mockReturnValueOnce(makeSelectChain([{ id: 'existing-reversal' }]));
-    const insert = jest.fn();
+    const insert = jest.fn().mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]));
     const execute = makeExecute();
 
     const withTenant = jest.fn(
@@ -446,15 +592,20 @@ describe('PaymentsRepository.reverse — immutable ledger, new mirroring row (br
     await expect(
       repo.reverse(TENANT_ID, PAYMENT_ID, USER_ID, 'Second attempt'),
     ).rejects.toBeInstanceOf(WorkflowTransitionError);
-    expect(insert).not.toHaveBeenCalled();
+    // Only the receipt-number claim happened — never the reversal payment insert.
+    expect(insert).toHaveBeenCalledTimes(1);
   });
 
   it('404s when the payment does not exist', async () => {
-    const select = jest.fn().mockReturnValueOnce(makeSelectChain([]));
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      .mockReturnValueOnce(makeSelectChain([]));
+    const insert = jest.fn().mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]));
     const execute = makeExecute();
     const withTenant = jest.fn(
       async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
-        fn({ select, execute }),
+        fn({ select, insert, execute }),
     );
     const repo = new PaymentsRepository(
       { withTenant } as never,
@@ -469,10 +620,10 @@ describe('PaymentsRepository.reverse — immutable ledger, new mirroring row (br
   it('locks the original payment before checking whether it was already reversed', async () => {
     const select = jest
       .fn()
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
       .mockReturnValueOnce(makeSelectChain([originalPayment]))
       .mockReturnValueOnce(makeSelectChain([]))
-      .mockReturnValueOnce(makeSelectChain([]))
-      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+      .mockReturnValueOnce(makeSelectChain([]));
     const insert = jest
       .fn()
       .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
@@ -489,7 +640,10 @@ describe('PaymentsRepository.reverse — immutable ledger, new mirroring row (br
 
     await repo.reverse(TENANT_ID, PAYMENT_ID, USER_ID, 'reason');
 
-    expect(execute.mock.invocationCallOrder[0]!).toBeLessThan(select.mock.invocationCallOrder[1]!);
+    // select[0] is the claimReceiptNumber tenant lookup (before the lock);
+    // select[2] is the already-reversed check. The lock (execute[0]) must
+    // fall after the claim but before that check.
+    expect(execute.mock.invocationCallOrder[0]!).toBeLessThan(select.mock.invocationCallOrder[2]!);
   });
 });
 

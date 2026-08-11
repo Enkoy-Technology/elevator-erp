@@ -17,6 +17,7 @@ import {
   type ValidatorConstraintInterface,
 } from 'class-validator';
 
+import { NotFarFutureConstraint } from '../../../common/dto/date';
 import { MONEY_RE, PositiveMoneyConstraint } from '../../../common/dto/money';
 import { paymentMethodEnum, type PaymentMethod } from '../../../database/schema';
 import { PaymentAllocationInputDto } from './payment-allocation-input.dto';
@@ -79,6 +80,7 @@ export class CreatePaymentDto {
   })
   @IsOptional()
   @IsISO8601()
+  @Validate(NotFarFutureConstraint)
   receivedAt?: string;
 
   @ApiPropertyOptional({ format: 'uuid' })

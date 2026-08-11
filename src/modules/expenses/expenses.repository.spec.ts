@@ -111,6 +111,35 @@ describe('ExpensesRepository.record — one-transaction claim + insert (brief 4.
     expect(result.netPayableEtb).toBe('22400.00');
     expect((inserted as { netPayableEtb?: unknown }).netPayableEtb).toBeUndefined();
   });
+
+  it('reclassifies a foreign-key violation (bankAccountId that does not resolve in this tenant) as NotFoundException (404) instead of an unhandled 500', async () => {
+    const select = jest.fn().mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+    const failingInsertChain: Record<string, jest.Mock> = {
+      values: jest.fn(() => failingInsertChain),
+      returning: jest.fn(() => {
+        const cause: Error & { code?: string } = new Error(
+          'insert or update on table "expenses" violates foreign key constraint "expenses_bank_account_id_fkey"',
+        );
+        cause.code = '23503';
+        const err: Error & { cause?: unknown } = new Error('Failed query: insert into "expenses" ...');
+        err.cause = cause;
+        return Promise.reject(err);
+      }),
+    };
+    const insert = jest
+      .fn()
+      .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
+      .mockReturnValueOnce(failingInsertChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert }),
+    );
+    const repo = new ExpensesRepository({ withTenant } as never);
+
+    await expect(
+      repo.record(TENANT_ID, USER_ID, { ...baseInput, bankAccountId: 'does-not-exist' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
 });
 
 describe('ExpensesRepository.reverse — insert-only mirror + double-reversal 409 (brief 4.2)', () => {

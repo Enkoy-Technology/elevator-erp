@@ -274,7 +274,8 @@ export class InvoicesController {
   @Post('invoices/:id/void')
   @HttpCode(200)
   @ApiOperation({
-    summary: 'Void an ISSUED invoice with a reason (only when it has zero payment allocations)',
+    summary:
+      'Void an ISSUED invoice with a reason (only when its payment allocations net to zero)',
   })
   voidInvoice(
     @CurrentUser() user: AuthenticatedUser,

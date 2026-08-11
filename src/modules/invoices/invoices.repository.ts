@@ -18,6 +18,7 @@ import {
 } from 'drizzle-orm';
 
 import { recomputeCustomerBalance } from '../../common/customer-balance';
+import { isForeignKeyViolation } from '../../common/db-errors';
 import { WorkflowTransitionError } from '../../common/exceptions';
 import { computeFiscalYear } from '../../common/fiscal-year';
 import {
@@ -505,23 +506,35 @@ export class InvoicesRepository {
       const claimed = await this.claimSequence(tx, tenantId, fiscalYear.label);
       const invoiceNumber = buildInvoiceNumber(fiscalYear.label, claimed);
 
-      const [invoiceRow] = await tx
-        .insert(invoices)
-        .values({
-          tenantId,
-          invoiceNumber,
-          fiscalYearLabel: fiscalYear.label,
-          proformaId: null,
-          customerId: input.customerId,
-          projectId: input.projectId,
-          subtotalEtb: input.subtotalEtb,
-          vatEtb: input.vatEtb,
-          totalEtb: input.totalEtb,
-          rateVersionId: input.rateVersionId,
-          issuedByUserId: userId,
-          dueDate: input.dueDate,
-        })
-        .returning();
+      let invoiceRow: InvoiceRecord | undefined;
+      try {
+        [invoiceRow] = await tx
+          .insert(invoices)
+          .values({
+            tenantId,
+            invoiceNumber,
+            fiscalYearLabel: fiscalYear.label,
+            proformaId: null,
+            customerId: input.customerId,
+            projectId: input.projectId,
+            subtotalEtb: input.subtotalEtb,
+            vatEtb: input.vatEtb,
+            totalEtb: input.totalEtb,
+            rateVersionId: input.rateVersionId,
+            issuedByUserId: userId,
+            dueDate: input.dueDate,
+          })
+          .returning();
+      } catch (err) {
+        // customerId/projectId are client-supplied (CreateInvoiceDto) and
+        // never pre-validated with a SELECT the way issueFromProforma's own
+        // proforma-derived values are — a well-formed but non-existent (or
+        // wrong-tenant, or soft-deleted) id would otherwise 500 here.
+        if (isForeignKeyViolation(err)) {
+          throw new NotFoundException('Customer or project not found');
+        }
+        throw err;
+      }
       if (!invoiceRow) {
         throw new Error('Failed to insert invoice');
       }
@@ -545,8 +558,9 @@ export class InvoicesRepository {
   }
 
   /**
-   * VOID guard: only from ISSUED, with zero payment allocations and no
-   * recorded withholding credit. Locked under the SAME per-invoice advisory
+   * VOID guard: only from ISSUED, with a net-zero payment allocation
+   * balance and no recorded withholding credit. Locked under the SAME
+   * per-invoice advisory
    * lock as `recordWithholding` and `PaymentsRepository.guardAndInsertAllocation`
    * — all three race the same invariant (what this invoice's allocations/
    * withholding currently are, and whether it is still safe to write) and
@@ -571,7 +585,22 @@ export class InvoicesRepository {
    * Also rejects voiding an invoice that already carries a recorded
    * withholding credit (whtEtb > 0) — voiding would silently discard the
    * voucher reference (whtVoucherRef/whtRecordedAt) with no path to
-   * reconcile it afterward.
+   * reconcile it afterward. `whtEtb` can legitimately be corrected back to
+   * '0.00' (see `recordWithholding`'s own doc comment), so this check is
+   * already "reject only when the EFFECTIVE (current) withholding is
+   * non-zero", not "reject once withholding was ever recorded".
+   *
+   * The allocation guard below (R1) is a NET-ZERO check on Σ amountEtb, not
+   * an EXISTENCE check on whether any payment_allocations rows exist. A
+   * bounced cheque — the single most common reversal in this market — is
+   * reversed via PaymentsRepository.reverse, which mirrors the allocation
+   * with a negated row rather than deleting it (immutable ledger). After
+   * that, the invoice carries both `+X` and `-X` rows, netting to zero, but
+   * still has rows. An existence check would keep such an invoice stuck
+   * outstanding forever with no live money attached to it at all; the sum
+   * check below is the exact same aggregate `recomputePaymentStatus`
+   * already computes a few lines away, so "net-zero" here can never
+   * disagree with "fully unpaid" there.
    */
   async voidInvoice(
     tenantId: string,
@@ -591,7 +620,7 @@ export class InvoicesRepository {
       }
       if (invoice.status !== 'ISSUED') {
         throw new WorkflowTransitionError(
-          'Invoice can only be voided from ISSUED with zero payment allocations',
+          'Invoice can only be voided from ISSUED with a net-zero payment allocation balance',
         );
       }
       if (new Decimal(invoice.whtEtb).gt(0)) {
@@ -599,14 +628,14 @@ export class InvoicesRepository {
           'Cannot void an invoice that already has a recorded withholding credit — voiding would silently discard the voucher reference',
         );
       }
-      const [allocation] = await tx
-        .select({ one: sql`1` })
+      const [allocated] = await tx
+        .select({ total: sum(paymentAllocations.amountEtb) })
         .from(paymentAllocations)
-        .where(eq(paymentAllocations.invoiceId, id))
-        .limit(1);
-      if (allocation) {
+        .where(eq(paymentAllocations.invoiceId, id));
+      const allocatedEtb = allocated?.total ?? '0';
+      if (!new Decimal(allocatedEtb).isZero()) {
         throw new WorkflowTransitionError(
-          'Invoice can only be voided from ISSUED with zero payment allocations',
+          'Invoice can only be voided from ISSUED with a net-zero payment allocation balance',
         );
       }
 
@@ -699,6 +728,15 @@ export class InvoicesRepository {
    * one external document, not an append-only ledger entry the way
    * `payments`/`payment_allocations` are — there is exactly one correct
    * current value, unlike a running total of many rows.
+   *
+   * B2 — `amountEtb: '0.00'` is a legal, and the ONLY, way to correct a
+   * mis-keyed withholding credit away entirely (WithholdingDto allows it —
+   * see its own doc comment for why rejecting zero made the mistake
+   * permanent AND made the invoice permanently unvoidable). A zero-set also
+   * clears `whtVoucherRef`/`whtRecordedAt` to null: once the credit itself
+   * is corrected to nothing, a stale voucher reference pointing at a
+   * document that no longer applies to this invoice would be actively
+   * misleading, not merely unused.
    */
   async recordWithholding(
     tenantId: string,
@@ -734,12 +772,17 @@ export class InvoicesRepository {
         );
       }
 
+      const isZeroSet = new Decimal(input.amountEtb).isZero();
       const [row] = await tx
         .update(invoices)
         .set({
           whtEtb: input.amountEtb,
-          whtVoucherRef: input.voucherRef ?? null,
-          whtRecordedAt: input.recordedAt ? new Date(input.recordedAt) : new Date(),
+          whtVoucherRef: isZeroSet ? null : input.voucherRef ?? null,
+          whtRecordedAt: isZeroSet
+            ? null
+            : input.recordedAt
+              ? new Date(input.recordedAt)
+              : new Date(),
           updatedAt: new Date(),
         })
         .where(eq(invoices.id, id))

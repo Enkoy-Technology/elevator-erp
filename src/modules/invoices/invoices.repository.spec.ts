@@ -341,6 +341,44 @@ describe('InvoicesRepository.createStandalone — claim + insert invoice + lines
       CUSTOMER_ID,
     );
   });
+
+  it('reclassifies a foreign-key violation (customerId/projectId that does not resolve in this tenant) as NotFoundException (404) instead of an unhandled 500', async () => {
+    const select = jest.fn().mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+    const failingInsertChain: Record<string, jest.Mock> = {
+      values: jest.fn(() => failingInsertChain),
+      returning: jest.fn(() => {
+        const cause: Error & { code?: string } = new Error(
+          'insert or update on table "invoices" violates foreign key constraint "invoices_customer_id_fkey"',
+        );
+        cause.code = '23503';
+        const err: Error & { cause?: unknown } = new Error('Failed query: insert into "invoices" ...');
+        err.cause = cause;
+        return Promise.reject(err);
+      }),
+    };
+    const insert = jest
+      .fn()
+      .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
+      .mockReturnValueOnce(failingInsertChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    await expect(
+      repo.createStandalone(TENANT_ID, USER_ID, {
+        customerId: 'does-not-exist',
+        projectId: null,
+        dueDate: null,
+        subtotalEtb: '100.00',
+        vatEtb: '15.00',
+        totalEtb: '115.00',
+        rateVersionId: RATE_VERSION_ID,
+        lines: [],
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
 });
 
 describe('InvoicesRepository.voidInvoice — only from ISSUED, zero allocations, no recorded withholding', () => {
@@ -355,8 +393,8 @@ describe('InvoicesRepository.voidInvoice — only from ISSUED, zero allocations,
     const select = jest
       .fn()
       .mockReturnValueOnce(makeSelectChain([voidableInvoiceRow]))
-      // No allocations.
-      .mockReturnValueOnce(makeSelectChain([]));
+      // No allocations — aggregate query, one row, sum null/0.
+      .mockReturnValueOnce(makeSelectChain([{ total: '0.00' }]));
     const execute = jest.fn(() => Promise.resolve(undefined));
     const update = jest.fn(() =>
       makeUpdateChain([{ ...voidableInvoiceRow, status: 'VOID' }]),
@@ -380,7 +418,7 @@ describe('InvoicesRepository.voidInvoice — only from ISSUED, zero allocations,
     const select = jest
       .fn()
       .mockReturnValueOnce(makeSelectChain([voidableInvoiceRow]))
-      .mockReturnValueOnce(makeSelectChain([]));
+      .mockReturnValueOnce(makeSelectChain([{ total: '0.00' }]));
     const execute = jest.fn(() => Promise.resolve(undefined));
     const update = jest.fn(() =>
       makeUpdateChain(
@@ -438,12 +476,12 @@ describe('InvoicesRepository.voidInvoice — only from ISSUED, zero allocations,
     ).rejects.toBeInstanceOf(WorkflowTransitionError);
   });
 
-  it('throws WorkflowTransitionError (409) when the invoice has a live payment allocation', async () => {
+  it('throws WorkflowTransitionError (409) when the invoice has a non-zero net payment allocation balance', async () => {
     const select = jest
       .fn()
       .mockReturnValueOnce(makeSelectChain([voidableInvoiceRow]))
-      // Allocation exists.
-      .mockReturnValueOnce(makeSelectChain([{ one: 1 }]));
+      // Σ allocations is non-zero.
+      .mockReturnValueOnce(makeSelectChain([{ total: '150.00' }]));
     const execute = jest.fn(() => Promise.resolve(undefined));
     const withTenant = jest.fn(
       async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
@@ -454,6 +492,38 @@ describe('InvoicesRepository.voidInvoice — only from ISSUED, zero allocations,
     await expect(
       repo.voidInvoice(TENANT_ID, INVOICE_ID, 'reason'),
     ).rejects.toBeInstanceOf(WorkflowTransitionError);
+  });
+
+  it('R1: nets a fully-reversed allocation pair (+X and -X) to zero — voidable even though allocation ROWS still exist (bounced cheque, the most common reversal in this market)', async () => {
+    let setValues: Record<string, unknown> = {};
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([voidableInvoiceRow]))
+      // +500.00 (the original allocation) and -500.00 (its reversal mirror)
+      // net to zero — an EXISTENCE check would still see rows here and
+      // wrongly block voiding forever.
+      .mockReturnValueOnce(makeSelectChain([{ total: '0.00' }]));
+    const execute = jest.fn(() => Promise.resolve(undefined));
+    const update = jest.fn(() =>
+      makeUpdateChain(
+        [{ id: INVOICE_ID, status: 'VOID', customerId: CUSTOMER_ID }],
+        (v) => (setValues = v),
+      ),
+    );
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, execute, update }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    const result = await repo.voidInvoice(
+      TENANT_ID,
+      INVOICE_ID,
+      'Bounced cheque, invoice cleared',
+    );
+
+    expect(result.status).toBe('VOID');
+    expect(setValues.status).toBe('VOID');
   });
 
   it('throws WorkflowTransitionError (409) when the invoice already has a recorded withholding credit (whtEtb > 0) — never silently discards the voucher', async () => {
@@ -713,6 +783,40 @@ describe('InvoicesRepository.recordWithholding — Task 3 (3.4)', () => {
     // withholding credit that just completed settlement must come back PAID
     // in the SAME response, not one call behind.
     expect(result.status).toBe('PAID');
+  });
+
+  it('B2: a zero-set (amountEtb "0.00") clears whtVoucherRef/whtRecordedAt to null alongside whtEtb — the correction for a mis-keyed voucher', async () => {
+    let setValues: Record<string, unknown> = {};
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ ...invoiceRow, whtEtb: '3.00' }]))
+      .mockReturnValueOnce(makeSelectChain([{ total: '112.00' }]));
+    const execute = jest.fn(() => Promise.resolve(undefined));
+    const update = jest.fn(() =>
+      makeUpdateChain(
+        [{ ...invoiceRow, whtEtb: '0.00', whtVoucherRef: null, whtRecordedAt: null }],
+        (v) => (setValues = v),
+      ),
+    );
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, execute, update }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+    stubRecomputePaymentStatus(repo);
+
+    await repo.recordWithholding(TENANT_ID, INVOICE_ID, {
+      amountEtb: '0.00',
+      // Even if a stale voucherRef/recordedAt were passed alongside the
+      // zero-set, the zero-set wins — there is no correct voucher for a
+      // credit that no longer exists.
+      voucherRef: 'WHT-STALE',
+      recordedAt: '2026-01-01T00:00:00Z',
+    });
+
+    expect(setValues.whtEtb).toBe('0.00');
+    expect(setValues.whtVoucherRef).toBeNull();
+    expect(setValues.whtRecordedAt).toBeNull();
   });
 
   it('voucherRef omitted -> stored as null; recordedAt omitted -> defaults to now', async () => {

@@ -307,11 +307,52 @@ export class CustomersRepository {
             isNull(maintenanceContracts.deletedAt),
           ),
         );
+      // R5: invoices have no deletedAt column at all (see invoices.ts —
+      // VOID is the terminal state, not a soft-delete), so any non-VOID
+      // invoice is live customer history. Without this, a customer billed
+      // ONLY via a standalone invoice (none of the three checks above) can
+      // be deleted while still owing money — it then stays visible on the
+      // aging report (that join has no deletedAt filter) while its own
+      // statement 404s (`statement()` above filters on isNull(deletedAt))
+      // and there is no UI path left to record the payment against it.
+      const [invoiceRow] = await tx
+        .select({ value: count() })
+        .from(invoices)
+        .where(and(eq(invoices.customerId, id), ne(invoices.status, 'VOID')));
+
+      // Non-reversed ("live") payments — same definition as
+      // recomputeCustomerBalance (common/customer-balance.ts): excludes a
+      // reversal row itself AND any payment something else points at as
+      // reversalOfPaymentId. A fully-reversed pair nets to zero and leaves
+      // no live money behind, so it does not block deletion; anything else
+      // does — including unallocated advance cash, which has no invoice to
+      // be caught by the count above.
+      const customerPayments = await tx
+        .select({ id: payments.id, reversalOfPaymentId: payments.reversalOfPaymentId })
+        .from(payments)
+        .where(eq(payments.customerId, id));
+      const reversedPaymentIds = new Set(
+        customerPayments
+          .map((payment) => payment.reversalOfPaymentId)
+          .filter((paymentId): paymentId is string => paymentId !== null),
+      );
+      const paymentCount = customerPayments.filter(
+        (payment) =>
+          payment.reversalOfPaymentId === null && !reversedPaymentIds.has(payment.id),
+      ).length;
+
       const projectCount = Number(projectRow?.value ?? 0);
       const assetCount = Number(assetRow?.value ?? 0);
       const contractCount = Number(contractRow?.value ?? 0);
-      if (projectCount + assetCount + contractCount > 0) {
-        throw new CustomerInUseError(projectCount, assetCount, contractCount);
+      const invoiceCount = Number(invoiceRow?.value ?? 0);
+      if (projectCount + assetCount + contractCount + invoiceCount + paymentCount > 0) {
+        throw new CustomerInUseError(
+          projectCount,
+          assetCount,
+          contractCount,
+          invoiceCount,
+          paymentCount,
+        );
       }
 
       const [row] = await tx

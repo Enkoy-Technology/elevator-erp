@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { and, asc, count, desc, eq, getTableColumns, gte, lte, notExists } from 'drizzle-orm';
 
+import { isForeignKeyViolation } from '../../common/db-errors';
 import {
   normalizePageQuery,
   toPaginatedResult,
@@ -158,6 +159,15 @@ export class BankTransactionsRepository {
           throw new ConflictException(
             'This payment or expense is already linked to another bank transaction',
           );
+        }
+        // Defense in depth: bankAccountId/paymentId/expenseId are all
+        // pre-checked above with explicit SELECTs, but a well-formed id
+        // that stops resolving between that check and this insert (a
+        // concurrent soft-delete, for instance) would otherwise 500 here
+        // instead of reclassifying the same way every other finance write
+        // path with FK inputs now does.
+        if (isForeignKeyViolation(err)) {
+          throw new NotFoundException('Bank account, payment or expense not found');
         }
         throw err;
       }
