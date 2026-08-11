@@ -62,3 +62,24 @@ describe('computeWithholding — full decision matrix (brief Tests section)', ()
     ).toEqual({ ratePercent: '3.00', whtEtb: '300.00' });
   });
 });
+
+describe('computeWithholding — R7: WHT_NO_TIN reads thresholdEtb from the payload like every other kind', () => {
+  it('a 200 ETB no-TIN receipt still gets 30% withheld when the seeded payload carries no threshold — unchanged day-one behaviour, decisions doc §8.5 is still an open question', () => {
+    expect(computeWithholding('WHT_NO_TIN', '200.00', { percent: '30' })).toEqual({
+      ratePercent: '30.00',
+      whtEtb: '60.00',
+    });
+  });
+
+  it('a payload WITH a threshold suppresses withholding below it', () => {
+    expect(
+      computeWithholding('WHT_NO_TIN', '499.99', { percent: '30', thresholdEtb: '500' }),
+    ).toEqual({ ratePercent: '0.00', whtEtb: '0.00' });
+  });
+
+  it('the same threshold applies withholding at/above it (inclusive)', () => {
+    expect(
+      computeWithholding('WHT_NO_TIN', '500.00', { percent: '30', thresholdEtb: '500' }),
+    ).toEqual({ ratePercent: '30.00', whtEtb: '150.00' });
+  });
+});
