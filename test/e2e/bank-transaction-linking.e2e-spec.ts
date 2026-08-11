@@ -294,4 +294,82 @@ describe('Bank accounts + transactions: link uniqueness against real Postgres', 
       )?.balanceEtb,
     ).toBe('0.00');
   });
+
+  /**
+   * Fix-wave-c #1 (BLOCKER): reversing a LINKED transaction used to
+   * "succeed" into a dead end — the mirror nulls paymentId, so the
+   * ORIGINAL kept its slot in bank_transactions_payment_uk forever, and the
+   * payment vanished from findUnreconciled with no way back. Chose (a):
+   * refuse up front with a clean 409, rather than (b)'s partial-index
+   * redefinition, which Postgres rejects outright (subqueries are not
+   * allowed in an index predicate — see BankTransactionsRepository.reverse's
+   * own doc comment). Proves the refusal is clean: no reversal row is
+   * created, the original is untouched, the account balance is unaffected,
+   * and the payment is (correctly) still absent from the unreconciled view
+   * because it is still actively linked — not because it fell into the bug
+   * this test guards against.
+   */
+  it('refuses to reverse a bank transaction linked to a payment (409) — no dead-end reversal, original untouched', async () => {
+    if (!available) {
+      return;
+    }
+
+    const server = app.getHttpServer() as Server;
+
+    const account = await request(server)
+      .post('/bank-accounts')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ name: 'Linked Reversal Test', bankName: 'CBE', accountNumber: '1000234567892' })
+      .expect(201);
+    const accountId = account.body.id as string;
+
+    const payment = await request(server)
+      .post('/payments')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ customerId, amountEtb: '5100.00', method: 'CASH' })
+      .expect(201);
+    const paymentId = payment.body.id as string;
+
+    const linked = await request(server)
+      .post(`/bank-accounts/${accountId}/transactions`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        txDate: '2026-08-08',
+        amountEtb: '5100.00',
+        kind: 'DEPOSIT',
+        description: 'Mis-keyed amount — should have been 1500.00',
+        paymentId,
+      })
+      .expect(201);
+    const linkedId = linked.body.id as string;
+
+    await request(server)
+      .post(`/bank-accounts/${accountId}/transactions/${linkedId}/reverse`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ reason: 'Mis-keyed amount — statement says 1,500.00 not 5,100.00' })
+      .expect(409);
+
+    // Clean refusal: balance still reflects the untouched original, not a
+    // half-applied reversal.
+    const afterRefusal = await request(server)
+      .get('/bank-accounts')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(
+      (afterRefusal.body.items as { id: string; balanceEtb: string }[]).find(
+        (row) => row.id === accountId,
+      )?.balanceEtb,
+    ).toBe('5100.00');
+
+    // The payment is still absent from findUnreconciled — correctly, since
+    // it is still actively linked to the (untouched) original, not because
+    // of the bug this fix closes.
+    const unreconciled = await request(server)
+      .get(`/bank-accounts/${accountId}/unreconciled`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(
+      (unreconciled.body.payments.items as { id: string }[]).some((row) => row.id === paymentId),
+    ).toBe(false);
+  });
 });
