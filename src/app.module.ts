@@ -17,6 +17,7 @@ import { EmployeesModule } from './modules/employees/employees.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 import { ProformasModule } from './modules/proformas/proformas.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { QuotationsModule } from './modules/quotations/quotations.module';
@@ -41,6 +42,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     QuotationsModule,
     ProformasModule,
     InvoicesModule,
+    PaymentsModule,
     EmployeesModule,
     AssetsModule,
     NotificationsModule,
