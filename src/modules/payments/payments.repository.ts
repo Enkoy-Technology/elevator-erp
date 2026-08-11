@@ -1,11 +1,16 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
-import { and, eq, getTableColumns, sql, sum } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getTableColumns, gte, inArray, lt, sql, sum } from 'drizzle-orm';
 
+import { BUSINESS_TIMEZONE, todayIso } from '../../common/business-time';
 import { recomputeCustomerBalance } from '../../common/customer-balance';
 import { WorkflowTransitionError } from '../../common/exceptions';
 import { computeFiscalYear } from '../../common/fiscal-year';
-import { todayIso } from '../../common/business-time';
+import {
+  normalizePageQuery,
+  toPaginatedResult,
+  type PaginatedResult,
+} from '../../common/pagination';
 import type { TenantTransaction } from '../../database/database.types';
 import {
   customers,
@@ -26,6 +31,57 @@ export type PaymentAllocationRecord = typeof paymentAllocations.$inferSelect;
 export type PaymentWithAllocations = PaymentRecord & {
   allocations: PaymentAllocationRecord[];
 };
+/**
+ * List/export row: the payment + its customer's display name (one
+ * tenant-matched join, same shape as InvoicesRepository.streamAll's own
+ * customerName join) + Σ payment_allocations (`allocatedEtb`, one aggregate
+ * query for the whole page — see `withAllocatedTotals` — never a query per
+ * row) so the UI can show unallocated cash without a second round trip.
+ * `reversalOfPaymentId` is already part of PaymentRecord (getTableColumns),
+ * so a reversal row is identifiable from this same shape with no extra
+ * column.
+ */
+export type PaymentListRow = PaymentRecord & {
+  customerName: string | null;
+  allocatedEtb: string;
+};
+
+export interface PaymentListFilter {
+  customerId?: string;
+  method?: PaymentMethod;
+  /** Calendar date (YYYY-MM-DD, business-timezone) — inclusive lower bound on receivedAt. */
+  from?: string;
+  /** Calendar date (YYYY-MM-DD, business-timezone) — inclusive upper bound on receivedAt. */
+  to?: string;
+  /** Matched against receiptNumber, case-insensitive substring. */
+  q?: string;
+}
+
+/**
+ * The instant a business-local calendar day begins, for filtering
+ * `receivedAt` (timestamptz) by a `from`/`to` calendar-date query param —
+ * same idiom as DashboardRepository's own private `businessDayStart`
+ * (`wonAt` date-range filtering), duplicated rather than imported per
+ * CLAUDE.md ("never import one feature module into another") and this
+ * codebase's own "2nd occurrence, duplicate; 3rd+, extract" convention (see
+ * this file's own `isUniqueViolation` doc comment for the same rule applied
+ * elsewhere).
+ */
+export const businessDayStart = (isoDate: string): Date => {
+  // Probe at midday so a DST transition (never observed in Ethiopia, fixed
+  // UTC+3 year-round) can't land on the sample.
+  const probe = new Date(`${isoDate}T12:00:00Z`);
+  const offsetMs =
+    new Date(probe.toLocaleString('en-US', { timeZone: BUSINESS_TIMEZONE })).getTime() -
+    new Date(probe.toLocaleString('en-US', { timeZone: 'UTC' })).getTime();
+  return new Date(new Date(`${isoDate}T00:00:00Z`).getTime() - offsetMs);
+};
+
+const MS_PER_DAY = 86_400_000;
+
+/** Exclusive upper bound for a `to` filter — the instant the NEXT business day begins. */
+export const businessDayEnd = (isoDate: string): Date =>
+  new Date(businessDayStart(isoDate).getTime() + MS_PER_DAY);
 
 /** `document_sequences.kind` for this document type — see the table's own doc comment. */
 const RECEIPT_SEQUENCE_KIND = 'RECEIPT';
@@ -67,6 +123,139 @@ export class PaymentsRepository {
     private readonly tenantDb: TenantDbService,
     private readonly invoicesRepository: InvoicesRepository,
   ) {}
+
+  /**
+   * Paginated receipts list — same shape as InvoicesRepository.list:
+   * count + a page joined to the customer's display name, then one
+   * aggregate query for the page's allocated totals (`withAllocatedTotals`).
+   */
+  async list(
+    tenantId: string,
+    options: PaymentListFilter & { page?: string; pageSize?: string },
+  ): Promise<PaginatedResult<PaymentListRow>> {
+    const { page, pageSize, offset } = normalizePageQuery(options.page, options.pageSize);
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const where = this.buildListFilter(options);
+      const [totalRow] = await tx.select({ value: count() }).from(payments).where(where);
+      const total = Number(totalRow?.value ?? 0);
+      const items = await tx
+        .select({
+          ...getTableColumns(payments),
+          customerName: customers.name,
+        })
+        .from(payments)
+        .leftJoin(
+          customers,
+          and(eq(payments.tenantId, customers.tenantId), eq(payments.customerId, customers.id)),
+        )
+        .where(where)
+        .orderBy(desc(payments.createdAt))
+        .limit(pageSize)
+        .offset(offset);
+      const withAllocated = await this.withAllocatedTotals(tx, items);
+      return toPaginatedResult(withAllocated, total, page, pageSize);
+    });
+  }
+
+  /**
+   * Streams every payment matching the same filters `list()` honors, for
+   * bulk export, in batches of BATCH_SIZE with a PK tiebreaker — same
+   * offset-batching shape as InvoicesRepository.streamAll.
+   *
+   * ponytail: offset batching, same ceiling as InvoicesRepository.streamAll
+   * — switch to keyset cursor before this feeds real tenant-scale
+   * reconciliation.
+   */
+  async *streamAll(
+    tenantId: string,
+    options: PaymentListFilter,
+  ): AsyncGenerator<PaymentListRow> {
+    const BATCH_SIZE = 500;
+    let offset = 0;
+    for (;;) {
+      const batch = await this.tenantDb.withTenant(tenantId, async (tx) => {
+        const where = this.buildListFilter(options);
+        const rows = await tx
+          .select({
+            ...getTableColumns(payments),
+            customerName: customers.name,
+          })
+          .from(payments)
+          .leftJoin(
+            customers,
+            and(eq(payments.tenantId, customers.tenantId), eq(payments.customerId, customers.id)),
+          )
+          .where(where)
+          .orderBy(desc(payments.createdAt), asc(payments.id))
+          .limit(BATCH_SIZE)
+          .offset(offset);
+        return this.withAllocatedTotals(tx, rows);
+      });
+      for (const row of batch) {
+        yield row;
+      }
+      if (batch.length < BATCH_SIZE) {
+        return;
+      }
+      offset += BATCH_SIZE;
+    }
+  }
+
+  /**
+   * Attaches Σ payment_allocations (`allocatedEtb`) to a page/batch of
+   * payments — ONE aggregate query grouped by paymentId (same "two queries,
+   * not N+1" shape as InvoicesRepository.withOutstanding /
+   * InvoicesRepository.agingReport's own allocationSums), never a query per
+   * row.
+   */
+  private async withAllocatedTotals(
+    tx: TenantTransaction,
+    rows: (PaymentRecord & { customerName: string | null })[],
+  ): Promise<PaymentListRow[]> {
+    if (rows.length === 0) {
+      return [];
+    }
+    const sums = await tx
+      .select({
+        paymentId: paymentAllocations.paymentId,
+        total: sum(paymentAllocations.amountEtb),
+      })
+      .from(paymentAllocations)
+      .where(
+        inArray(
+          paymentAllocations.paymentId,
+          rows.map((row) => row.id),
+        ),
+      )
+      .groupBy(paymentAllocations.paymentId);
+    const allocatedById = new Map(sums.map((row) => [row.paymentId, row.total ?? '0']));
+
+    return rows.map((row) => ({
+      ...row,
+      allocatedEtb: new Decimal(allocatedById.get(row.id) ?? '0').toFixed(2),
+    }));
+  }
+
+  private buildListFilter(options: PaymentListFilter) {
+    const filters = [];
+    if (options.customerId) {
+      filters.push(eq(payments.customerId, options.customerId));
+    }
+    if (options.method) {
+      filters.push(eq(payments.method, options.method));
+    }
+    if (options.from) {
+      filters.push(gte(payments.receivedAt, businessDayStart(options.from)));
+    }
+    if (options.to) {
+      filters.push(lt(payments.receivedAt, businessDayEnd(options.to)));
+    }
+    if (options.q && options.q.trim().length > 0) {
+      const pattern = `%${options.q.trim().toLowerCase()}%`;
+      filters.push(sql`lower(${payments.receiptNumber}) like ${pattern}`);
+    }
+    return filters.length > 0 ? and(...filters) : undefined;
+  }
 
   /**
    * Records a receipt and (optionally) allocates it against one or more

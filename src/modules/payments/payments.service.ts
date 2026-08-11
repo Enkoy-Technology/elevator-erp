@@ -1,11 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
+import type { PaginatedResult } from '../../common/pagination';
+import type { PaymentMethod } from '../../database/schema';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type { AllocatePaymentDto } from './dto/allocate-payment.dto';
 import type { CreatePaymentDto } from './dto/create-payment.dto';
 import {
   PaymentsRepository,
   type PaymentAllocationRecord,
+  type PaymentListRow,
   type PaymentWithAllocations,
 } from './payments.repository';
 import type { PaymentDocumentRow } from './receipt-document.mapper';
@@ -13,6 +16,28 @@ import type { PaymentDocumentRow } from './receipt-document.mapper';
 @Injectable()
 export class PaymentsService {
   constructor(private readonly paymentsRepository: PaymentsRepository) {}
+
+  list(
+    user: AuthenticatedUser,
+    options: {
+      customerId?: string;
+      method?: PaymentMethod;
+      from?: string;
+      to?: string;
+      q?: string;
+      page?: string;
+      pageSize?: string;
+    },
+  ): Promise<PaginatedResult<PaymentListRow>> {
+    return this.paymentsRepository.list(user.tenantId, options);
+  }
+
+  streamAll(
+    user: AuthenticatedUser,
+    options: { customerId?: string; method?: PaymentMethod; from?: string; to?: string; q?: string },
+  ): AsyncGenerator<PaymentListRow> {
+    return this.paymentsRepository.streamAll(user.tenantId, options);
+  }
 
   record(user: AuthenticatedUser, dto: CreatePaymentDto): Promise<PaymentWithAllocations> {
     return this.paymentsRepository.record(user.tenantId, user.userId, {
