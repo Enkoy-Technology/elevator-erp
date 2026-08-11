@@ -1324,6 +1324,79 @@ export const listBankAccounts = (options?: {
   );
 };
 
+export interface AgingRow {
+  customerId: string;
+  customerName: string | null;
+  current: string;
+  d1_30: string;
+  d31_60: string;
+  d61_90: string;
+  d90_plus: string;
+  /** Per-invoice aged total — deliberately excludes unapplied cash; see
+   *  Customer.outstandingBalanceEtb's own doc comment for why the two
+   *  legitimately disagree. */
+  total: string;
+}
+
+/** GET /invoices/aging — a bounded aggregate report (one row per customer
+ *  with an outstanding balance), not a list endpoint: the API returns a
+ *  flat array with no page/pageSize params to page through, so this has no
+ *  client-side pagination either. */
+export const getAgingReport = (): Promise<AgingRow[]> =>
+  apiFetch<AgingRow[]>('/invoices/aging');
+
+export type ReportFormat = 'csv' | 'xlsx' | 'pdf';
+
+export const downloadAgingReport = (format: ReportFormat): Promise<void> =>
+  downloadDocument(`/invoices/aging?format=${format}`, `aging-report.${format}`);
+
+export type StatementRowKind = 'invoice' | 'payment' | 'withholding';
+
+export interface StatementRow {
+  id: string;
+  kind: StatementRowKind;
+  date: string;
+  reference: string;
+  debit: string;
+  credit: string;
+  balance: string;
+}
+
+export interface CustomerStatement {
+  customerId: string;
+  customerName: string;
+  openingBalance: string;
+  closingBalance: string;
+  rows: StatementRow[];
+}
+
+/** GET /customers/:id/statement — narrowed to @Roles('FINANCE') at the
+ *  route level, overriding CustomersController's wider class-level roles.
+ *  customerId is encoded into the path and from/to go through
+ *  URLSearchParams (not raw template interpolation) — both values only ever
+ *  come from a <select>/<input type="date"> today, but this keeps the same
+ *  safe-by-construction shape as listInvoices/listBankAccounts rather than
+ *  relying on that staying true. */
+export const getCustomerStatement = (
+  customerId: string,
+  from: string,
+  to: string,
+): Promise<CustomerStatement> =>
+  apiFetch<CustomerStatement>(
+    `/customers/${encodeURIComponent(customerId)}/statement?${new URLSearchParams({ from, to })}`,
+  );
+
+export const downloadCustomerStatement = (
+  customerId: string,
+  from: string,
+  to: string,
+  format: ReportFormat,
+): Promise<void> =>
+  downloadDocument(
+    `/customers/${encodeURIComponent(customerId)}/statement?${new URLSearchParams({ from, to, format })}`,
+    `statement-${customerId}-${from}-to-${to}.${format}`,
+  );
+
 export const updateSettings = (payload: {
   primaryColorHex?: string;
   secondaryColorHex?: string;
