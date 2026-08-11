@@ -161,16 +161,29 @@ export class ExpensesRepository {
    * Reverses an expense: immutable ledger, so the original row is NEVER
    * touched (see expenses.ts's own doc comment — `status` labels a row as
    * itself being a reversal, it is never flipped on the original). Instead,
-   * in one transaction: lock the original (also closes the double-reversal
-   * race below), insert a new expense row with every money column negated,
-   * its own claimed number, `status: 'REVERSED'` and `reversalOfExpenseId`
-   * set. Non-money fields (supplier*, category, supplyKind, paidVia,
-   * bankAccountId, rateVersionId, whtRatePercent, description, reference)
-   * are copied verbatim from the original — same as
+   * in one transaction: claim the reversal's own number, lock the original
+   * (also closes the double-reversal race below), insert a new expense row
+   * with every money column negated, `status: 'REVERSED'` and
+   * `reversalOfExpenseId` set. Non-money fields (supplier*, category,
+   * supplyKind, paidVia, bankAccountId, rateVersionId, whtRatePercent,
+   * description, reference) are copied verbatim from the original — same as
    * PaymentsRepository.reverse copying method/bankAccountId/reference/note.
    * `expenseDate` is set to TODAY on the reversal (mirrors
    * PaymentsRepository.reverse's `receivedAt: new Date()`) — the reversal is
    * a new event happening now, not a backdated edit of the original's date.
+   *
+   * Lock order (consistency fix): claim the number BEFORE the advisory lock
+   * — same "sequence -> row" order as PaymentsRepository.record/reverse,
+   * and the inverse of what this method used to do (lock first, claim
+   * last). `record()` above takes no advisory lock at all today, so this
+   * ordering is not YET load-bearing here the way it is in
+   * PaymentsRepository (two reverse() calls can't deadlock against a
+   * record() that never locks anything) — see `record()`'s own "Lock order
+   * note (R2)" doc comment for why that absence is itself the safety
+   * argument today, and why a future lock in `record()` MUST land after its
+   * own claim. This method still follows the shared order regardless, so
+   * the whole finance module has ONE lock-order rule, not one that only
+   * some methods honour.
    *
    * Double-reversal guard: same read-then-insert race as
    * PaymentsRepository.reverse — the advisory lock on the ORIGINAL row's id
@@ -184,6 +197,11 @@ export class ExpensesRepository {
     reason: string,
   ): Promise<ExpenseWithNetPayable> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const today = todayIso();
+      const fiscalYear = await this.fiscalYearForToday(tx, tenantId, today);
+      const claimed = await this.claimSequence(tx, tenantId, fiscalYear.label);
+      const expenseNumber = buildExpenseNumber(fiscalYear.label, claimed);
+
       await this.lockRow(tx, expenseId);
 
       const [original] = await tx
@@ -203,11 +221,6 @@ export class ExpensesRepository {
       if (existingReversal) {
         throw new WorkflowTransitionError('This expense has already been reversed');
       }
-
-      const today = todayIso();
-      const fiscalYear = await this.fiscalYearForToday(tx, tenantId, today);
-      const claimed = await this.claimSequence(tx, tenantId, fiscalYear.label);
-      const expenseNumber = buildExpenseNumber(fiscalYear.label, claimed);
 
       const [reversal] = await tx
         .insert(expenses)

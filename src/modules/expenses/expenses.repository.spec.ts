@@ -165,12 +165,13 @@ describe('ExpensesRepository.reverse — insert-only mirror + double-reversal 40
   it('inserts a mirroring row with every money column negated, never touching the original', async () => {
     const select = jest
       .fn()
-      // 1. load original
+      // 1. fiscalYearForToday — claimed BEFORE the advisory lock (lock-order
+      // consistency fix: see reverse()'s own doc comment)
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      // 2. load original
       .mockReturnValueOnce(makeSelectChain([originalRow]))
-      // 2. existing-reversal check: none found
-      .mockReturnValueOnce(makeSelectChain([]))
-      // 3. fiscalYearForToday
-      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+      // 3. existing-reversal check: none found
+      .mockReturnValueOnce(makeSelectChain([]));
 
     let insertedReversal: Record<string, unknown> = {};
     const insert = jest
@@ -231,10 +232,15 @@ describe('ExpensesRepository.reverse — insert-only mirror + double-reversal 40
   it('double reversal: a second reverse() on an already-reversed expense 409s', async () => {
     const select = jest
       .fn()
+      // fiscalYearForToday — the number is still claimed even though the
+      // guards below end up rejecting the request (mirrors
+      // PaymentsRepository.reverse's own "a wasted claim rolls back with
+      // the rest of the transaction" behaviour).
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
       .mockReturnValueOnce(makeSelectChain([originalRow]))
       // existing-reversal check finds one this time
       .mockReturnValueOnce(makeSelectChain([{ id: 'already-reversed-id' }]));
-    const insert = jest.fn();
+    const insert = jest.fn().mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 2 }]));
     const execute = makeExecute();
 
     const withTenant = jest.fn(
@@ -246,12 +252,16 @@ describe('ExpensesRepository.reverse — insert-only mirror + double-reversal 40
     await expect(repo.reverse(TENANT_ID, EXPENSE_ID, USER_ID, 'second try')).rejects.toThrow(
       WorkflowTransitionError,
     );
-    expect(insert).not.toHaveBeenCalled();
+    // Only the sequence claim — never a second insert for the reversal row.
+    expect(insert).toHaveBeenCalledTimes(1);
   });
 
   it('reversing a non-existent expense 404s', async () => {
-    const select = jest.fn().mockReturnValueOnce(makeSelectChain([]));
-    const insert = jest.fn();
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      .mockReturnValueOnce(makeSelectChain([]));
+    const insert = jest.fn().mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 2 }]));
     const execute = makeExecute();
 
     const withTenant = jest.fn(
@@ -263,5 +273,30 @@ describe('ExpensesRepository.reverse — insert-only mirror + double-reversal 40
     await expect(repo.reverse(TENANT_ID, EXPENSE_ID, USER_ID, 'oops')).rejects.toThrow(
       NotFoundException,
     );
+  });
+
+  it('consistency fix: claims the reversal number BEFORE taking the advisory lock — same order as PaymentsRepository.record/reverse', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      .mockReturnValueOnce(makeSelectChain([originalRow]))
+      .mockReturnValueOnce(makeSelectChain([]));
+    const insert = jest
+      .fn()
+      .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 2 }]))
+      .mockReturnValueOnce(makeInsertChain([{ ...originalRow, id: 'reversal-id' }]));
+    const execute = makeExecute();
+
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert, execute }),
+    );
+    const repo = new ExpensesRepository({ withTenant } as never);
+
+    await repo.reverse(TENANT_ID, EXPENSE_ID, USER_ID, 'Duplicate entry');
+
+    const claimOrder = insert.mock.invocationCallOrder[0]!;
+    const lockOrder = execute.mock.invocationCallOrder[0]!;
+    expect(claimOrder).toBeLessThan(lockOrder);
   });
 });
