@@ -18,12 +18,24 @@ export { formatEtb, fmtDate };
  * receipt exposes the tenant to the ETB 50,000-per-invoice penalty under
  * VAT Proclamation 1341/2024 Art 52.
  *
- * Rules enforced by buildFiscalStatusHtml/buildInvoiceHtml below — do not
- * "simplify" any of these away:
+ * THREE formats carry this document: PDF, DOCX, and XLSX. All three MUST
+ * show the notice/mirror below — R6 found the xlsx export (invoices
+ * controller's `?format=xlsx` on `:id/document`) shipping with NO fiscal
+ * status at all, the one format most likely to be forwarded to an
+ * accountant or inspector as "the invoice". XLSX has no HTML layout to sit
+ * a `<div>` in, so it carries the PLAIN-TEXT equivalent
+ * (`buildFiscalStatusText` below) in a leading "Document Status" column
+ * instead — same notice/mirror decision, same source of truth
+ * (FISCAL_NOTICE_TEXT), just not HTML. Do not add a fourth format without
+ * giving it this same treatment.
+ *
+ * Rules enforced by buildFiscalStatusHtml/buildFiscalStatusText/
+ * buildInvoiceHtml below — do not "simplify" any of these away:
  *
  *  1. Whenever `fiscalReceiptNumber` is null, this document MUST show the
  *     prominent notice INTERNAL DOCUMENT — NOT A FISCAL RECEIPT
- *     (FISCAL_NOTICE_TEXT), in the layout's accent colour.
+ *     (FISCAL_NOTICE_TEXT), in the layout's accent colour (HTML formats) or
+ *     as the leading column value (xlsx).
  *  2. Once the five fiscal columns are populated (a human has re-keyed the
  *     customer's ETR/certified-device receipt onto invoices.fiscal* — see
  *     that table's own doc comment), the notice is REPLACED by a mirror
@@ -39,7 +51,10 @@ export { formatEtb, fmtDate };
  *  4. receipt.template.ts follows the same notice logic and imports
  *     FISCAL_NOTICE_TEXT/buildFiscalStatusHtml from this file rather than
  *     re-deriving its own copy — payments carry no fiscal columns at all,
- *     so a receipt always renders the plain notice branch.
+ *     so a receipt always renders the plain notice branch. (Payment
+ *     receipts have no xlsx export at all — PaymentsController.document
+ *     rejects ?format=xlsx outright — so buildFiscalStatusText has no
+ *     receipt-side caller.)
  * ============================================================================
  */
 
@@ -73,6 +88,26 @@ export const buildFiscalStatusHtml = (fiscal: FiscalMirrorFields | null | undefi
     'mirrored from the certified device',
   ];
   return `<div class="fiscal-mirror">${lines.join('<br/>')}</div>`;
+};
+
+/**
+ * R6: the same notice-or-mirror decision as `buildFiscalStatusHtml`, as a
+ * single plain-text cell value for the xlsx export (`INVOICE_DOCUMENT_COLUMNS`'s
+ * leading "Document Status" column — see invoices.controller.ts's document
+ * handler) — xlsx cells have no markup, so no `esc()`/no `<br/>`, just the
+ * same words the HTML/DOCX formats show, joined with " — ".
+ */
+export const buildFiscalStatusText = (fiscal: FiscalMirrorFields | null | undefined): string => {
+  if (!fiscal?.fiscalReceiptNumber) {
+    return FISCAL_NOTICE_TEXT;
+  }
+  const parts = [
+    `Fiscal receipt ${fiscal.fiscalReceiptNumber} issued ${fmtDate(fiscal.fiscalIssuedAt)} — device ${fiscal.fiscalDeviceSerial ?? '—'}`,
+    ...(fiscal.fiscalKind ? [fiscal.fiscalKind] : []),
+    ...(fiscal.fiscalNote ? [fiscal.fiscalNote] : []),
+    'mirrored from the certified device',
+  ];
+  return parts.join(' — ');
 };
 
 export interface InvoiceLineData {
