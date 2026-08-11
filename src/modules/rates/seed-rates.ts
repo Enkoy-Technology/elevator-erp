@@ -33,6 +33,14 @@ export const RATE_SEEDS: RateVersionInsert[] = [
     source: INCOME_TAX_AMENDMENT_UNVERIFIED,
   },
   {
+    // R7 (decisions doc §8.5): deliberately NO thresholdEtb here — unlike
+    // WHT_GOODS/WHT_SERVICES, there is no documented de-minimis exemption
+    // for the no-TIN 30% rate, and this is an open question for the
+    // client's tax practitioner, not something to guess at. wht-decision.ts's
+    // computeWithholding reads thresholdEtb uniformly for every kind
+    // (defaulting to '0' — always applies — when absent, as it is here), so
+    // the day a threshold is confirmed, adding it to this payload via
+    // POST /rates is enough; no code change needed.
     kind: 'WHT_NO_TIN',
     validFrom: '2025-07-08',
     payload: { percent: '30' },

@@ -16,6 +16,19 @@ const withholdingPayload = z.strictObject({
   thresholdEtb: decimalString,
 });
 
+// R7 (decisions doc §8.5): WHT_NO_TIN's threshold is an OPEN QUESTION —
+// unlike WHT_GOODS/WHT_SERVICES, Ethiopian tax law does not give a
+// documented de-minimis exemption for the no-TIN 30% rate, and guessing at
+// one is worse than not applying one (see seed-rates.ts's own comment on
+// the seeded payload, and wht-decision.ts's computeWithholding). So
+// `thresholdEtb` is OPTIONAL here rather than required — the day a tax
+// practitioner confirms a real number, adding it is a POST /rates data
+// change, never a code change (this project's rule: rates are data).
+const noTinWithholdingPayload = z.strictObject({
+  percent: decimalString,
+  thresholdEtb: decimalString.optional(),
+});
+
 const pensionPayload = z.strictObject({
   percent: decimalString,
   base: z.literal('BASIC'),
@@ -38,7 +51,7 @@ const RATE_PAYLOAD_SCHEMAS: Record<RateKind, z.ZodType> = {
   VAT: percentPayload,
   WHT_GOODS: withholdingPayload,
   WHT_SERVICES: withholdingPayload,
-  WHT_NO_TIN: percentPayload,
+  WHT_NO_TIN: noTinWithholdingPayload,
   PAYE_BANDS: payeBandsPayload,
   PENSION_EMPLOYEE: pensionPayload,
   PENSION_EMPLOYER: pensionPayload,

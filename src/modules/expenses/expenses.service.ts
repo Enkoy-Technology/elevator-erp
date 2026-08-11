@@ -77,8 +77,10 @@ export class ExpensesService {
     });
 
     // Step 4: resolve THAT rate version, also at the expense date, and
-    // parse its payload — percentPayload for WHT_NO_TIN (no threshold),
-    // withholdingPayload (adds thresholdEtb) for WHT_GOODS/WHT_SERVICES.
+    // parse its payload — noTinWithholdingPayload for WHT_NO_TIN
+    // (thresholdEtb OPTIONAL — see rate-payloads.ts and R7's own comment on
+    // wht-decision.ts's computeWithholding), withholdingPayload
+    // (thresholdEtb REQUIRED) for WHT_GOODS/WHT_SERVICES.
     const whtVersion = await this.ratesService.resolve(whtKind, dto.expenseDate);
     const whtPayload = ratePayloadSchemaFor(whtKind).parse(whtVersion.payload) as {
       percent: string;
