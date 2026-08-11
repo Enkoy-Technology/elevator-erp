@@ -53,6 +53,16 @@ export const bankAccounts = pgTable(
  * migration (see the finance schema migration's trailing ALTER TABLE
  * statements) — same "hand-finish after generate" pattern already used for
  * RLS/grants on every tenant table in this codebase.
+ *
+ * R9 — a correction is a plain INSERT of a negated mirror row, exactly like
+ * payments.reversalOfPaymentId/expenses.reversalOfExpenseId (see those
+ * tables' own doc comments): the original row is NEVER touched (still no
+ * UPDATE/DELETE grant — see the finance schema migration's REVOKE), and
+ * "this row has been reversed" is INFERRED from whether any other row's
+ * `reversalOfTransactionId` points at it, not stored as a flag on the
+ * original. Self-referencing, so — unlike paymentId/expenseId above — this
+ * FK is declared normally below: no circular-import problem referencing
+ * this same table.
  */
 export const bankTransactions = pgTable(
   'bank_transactions',
@@ -74,6 +84,10 @@ export const bankTransactions = pgTable(
     paymentId: uuid('payment_id'),
     expenseId: uuid('expense_id'),
     recordedByUserId: uuid('recorded_by_user_id'),
+    // R9: self-FK, set only on the reversing row — see the table doc
+    // comment above.
+    reversalOfTransactionId: uuid('reversal_of_transaction_id'),
+    reverseReason: text('reverse_reason'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -89,6 +103,11 @@ export const bankTransactions = pgTable(
       name: 'bank_transactions_recorded_by_fk',
       columns: [table.tenantId, table.recordedByUserId],
       foreignColumns: [users.tenantId, users.id],
+    }),
+    foreignKey({
+      name: 'bank_transactions_reversal_of_fk',
+      columns: [table.tenantId, table.reversalOfTransactionId],
+      foreignColumns: [table.tenantId, table.id],
     }),
   ],
 );

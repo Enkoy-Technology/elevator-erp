@@ -202,4 +202,96 @@ describe('Bank accounts + transactions: link uniqueness against real Postgres', 
       .send({ amountEtb: '1.00' })
       .expect(404);
   });
+
+  /**
+   * R9: bank_transactions had NO correction path at all before this —
+   * unlike the linking test above (which only exercises unit-level
+   * guards through the HTTP layer), the reversal's whole point is the
+   * account's `balanceEtb` (a live Σ signed amountEtb aggregate, computed
+   * fresh on every read — BankAccountsRepository) actually nets back to
+   * zero once the mirror row lands. That can only be proven against a
+   * real, migrated database — a mocked unit test would just be asserting
+   * decimal.js arithmetic, not that the reversal integrates with the same
+   * aggregate query every other balance figure in this codebase relies on.
+   */
+  it('reverses a bank transaction: balance nets to zero, double-reversal 409s, reversing a reversal 409s', async () => {
+    if (!available) {
+      return;
+    }
+
+    const server = app.getHttpServer() as Server;
+
+    const account = await request(server)
+      .post('/bank-accounts')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ name: 'Reversal Test', bankName: 'CBE', accountNumber: '1000234567891' })
+      .expect(201);
+    const accountId = account.body.id as string;
+
+    const original = await request(server)
+      .post(`/bank-accounts/${accountId}/transactions`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        txDate: '2026-08-08',
+        amountEtb: '5100.00',
+        kind: 'DEPOSIT',
+        description: 'Mis-keyed amount — should have been 1500.00',
+      })
+      .expect(201);
+    const originalId = original.body.id as string;
+
+    const afterOriginal = await request(server)
+      .get('/bank-accounts')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(
+      (afterOriginal.body.items as { id: string; balanceEtb: string }[]).find(
+        (row) => row.id === accountId,
+      )?.balanceEtb,
+    ).toBe('5100.00');
+
+    const reversal = await request(server)
+      .post(`/bank-accounts/${accountId}/transactions/${originalId}/reverse`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ reason: 'Mis-keyed amount — statement says 1,500.00 not 5,100.00' })
+      .expect(201);
+    expect(reversal.body.amountEtb).toBe('-5100.00');
+    expect(reversal.body.reversalOfTransactionId).toBe(originalId);
+    expect(reversal.body.id).not.toBe(originalId);
+
+    const afterReversal = await request(server)
+      .get('/bank-accounts')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(
+      (afterReversal.body.items as { id: string; balanceEtb: string }[]).find(
+        (row) => row.id === accountId,
+      )?.balanceEtb,
+    ).toBe('0.00');
+
+    // Double reversal: the original has already been reversed.
+    await request(server)
+      .post(`/bank-accounts/${accountId}/transactions/${originalId}/reverse`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ reason: 'Second attempt' })
+      .expect(409);
+
+    // Reversing the reversal itself: rejected, not chased back to the original.
+    await request(server)
+      .post(`/bank-accounts/${accountId}/transactions/${reversal.body.id as string}/reverse`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ reason: 'Reverse the reversal' })
+      .expect(409);
+
+    // Balance is unaffected by either rejected attempt.
+    const stillZero = await request(server)
+      .get('/bank-accounts')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(
+      (stillZero.body.items as { id: string; balanceEtb: string }[]).find(
+        (row) => row.id === accountId,
+      )?.balanceEtb,
+    ).toBe('0.00');
+  });
 });

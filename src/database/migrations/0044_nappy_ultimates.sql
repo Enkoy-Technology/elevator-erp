@@ -1,0 +1,3 @@
+ALTER TABLE "bank_transactions" ADD COLUMN "reversal_of_transaction_id" uuid;--> statement-breakpoint
+ALTER TABLE "bank_transactions" ADD COLUMN "reverse_reason" text;--> statement-breakpoint
+ALTER TABLE "bank_transactions" ADD CONSTRAINT "bank_transactions_reversal_of_fk" FOREIGN KEY ("tenant_id","reversal_of_transaction_id") REFERENCES "public"."bank_transactions"("tenant_id","id") ON DELETE no action ON UPDATE no action;

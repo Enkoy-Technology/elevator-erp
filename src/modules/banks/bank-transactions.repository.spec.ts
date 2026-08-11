@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 
+import { WorkflowTransitionError } from '../../common/exceptions';
 import { BankTransactionsRepository } from './bank-transactions.repository';
 
 const TENANT_ID = '22222222-2222-2222-2222-222222222222';
@@ -217,6 +218,142 @@ describe('BankTransactionsRepository.record — link existence + uniqueness (bri
     const repo = new BankTransactionsRepository({ withTenant } as never);
 
     await expect(repo.record(TENANT_ID, USER_ID, baseInput)).rejects.toThrow('connection reset');
+  });
+});
+
+describe('BankTransactionsRepository.reverse — R9: the only correction path this insert-only ledger has', () => {
+  const TX_ID = '99999999-9999-9999-9999-999999999999';
+  const originalRow = {
+    id: TX_ID,
+    tenantId: TENANT_ID,
+    bankAccountId: ACCOUNT_ID,
+    txDate: '2026-08-08',
+    amountEtb: '5100.00',
+    kind: 'DEPOSIT',
+    description: 'Mis-keyed amount',
+    paymentId: null,
+    expenseId: null,
+    recordedByUserId: USER_ID,
+    reversalOfTransactionId: null,
+    reverseReason: null,
+  };
+
+  const makeExecute = () => jest.fn(() => Promise.resolve(undefined));
+
+  it('inserts a negated mirror row with reversalOfTransactionId set, txDate = today, and paymentId/expenseId nulled out', async () => {
+    const select = jest
+      .fn()
+      // 1. account existence check
+      .mockReturnValueOnce(makeSelectChain([{ id: ACCOUNT_ID }]))
+      // 2. load original (scoped to this account)
+      .mockReturnValueOnce(makeSelectChain([originalRow]))
+      // 3. existing-reversal check: none found
+      .mockReturnValueOnce(makeSelectChain([]));
+    const execute = makeExecute();
+    let insertedValues: Record<string, unknown> = {};
+    const insertedChain: Record<string, jest.Mock> = {
+      values: jest.fn((v: unknown) => {
+        insertedValues = v as Record<string, unknown>;
+        return insertedChain;
+      }),
+      returning: jest.fn(() =>
+        Promise.resolve([{ ...originalRow, id: 'reversal-id', amountEtb: '-5100.00' }]),
+      ),
+    };
+    const insert = jest.fn().mockReturnValueOnce(insertedChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert, execute }),
+    );
+    const repo = new BankTransactionsRepository({ withTenant } as never);
+
+    const result = await repo.reverse(TENANT_ID, ACCOUNT_ID, TX_ID, USER_ID, 'Mis-keyed amount');
+
+    expect(execute).toHaveBeenCalledTimes(1); // the advisory lock
+    expect(insertedValues.amountEtb).toBe('-5100.00');
+    expect(insertedValues.reversalOfTransactionId).toBe(TX_ID);
+    expect(insertedValues.reverseReason).toBe('Mis-keyed amount');
+    expect(insertedValues.paymentId).toBeNull();
+    expect(insertedValues.expenseId).toBeNull();
+    expect(insertedValues.kind).toBe('DEPOSIT');
+    expect(result.amountEtb).toBe('-5100.00');
+  });
+
+  it('double reversal: reversing an already-reversed transaction 409s (WorkflowTransitionError)', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ id: ACCOUNT_ID }]))
+      .mockReturnValueOnce(makeSelectChain([originalRow]))
+      // existing-reversal check finds one this time
+      .mockReturnValueOnce(makeSelectChain([{ id: 'already-reversed-id' }]));
+    const execute = makeExecute();
+    const insert = jest.fn();
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert, execute }),
+    );
+    const repo = new BankTransactionsRepository({ withTenant } as never);
+
+    await expect(
+      repo.reverse(TENANT_ID, ACCOUNT_ID, TX_ID, USER_ID, 'second try'),
+    ).rejects.toThrow(WorkflowTransitionError);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('reversing a reversal itself 409s (WorkflowTransitionError) — never chases back to the original', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ id: ACCOUNT_ID }]))
+      .mockReturnValueOnce(
+        makeSelectChain([{ ...originalRow, reversalOfTransactionId: 'some-other-tx-id' }]),
+      );
+    const execute = makeExecute();
+    const insert = jest.fn();
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert, execute }),
+    );
+    const repo = new BankTransactionsRepository({ withTenant } as never);
+
+    await expect(
+      repo.reverse(TENANT_ID, ACCOUNT_ID, TX_ID, USER_ID, 'reverse the reversal'),
+    ).rejects.toThrow(WorkflowTransitionError);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('404s when the transaction does not exist on this account', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ id: ACCOUNT_ID }]))
+      .mockReturnValueOnce(makeSelectChain([]));
+    const execute = makeExecute();
+    const insert = jest.fn();
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert, execute }),
+    );
+    const repo = new BankTransactionsRepository({ withTenant } as never);
+
+    await expect(
+      repo.reverse(TENANT_ID, ACCOUNT_ID, TX_ID, USER_ID, 'reason'),
+    ).rejects.toThrow(NotFoundException);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('404s when the bank account does not exist, before taking any lock', async () => {
+    const select = jest.fn().mockReturnValueOnce(makeSelectChain([]));
+    const execute = makeExecute();
+    const insert = jest.fn();
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert, execute }),
+    );
+    const repo = new BankTransactionsRepository({ withTenant } as never);
+
+    await expect(
+      repo.reverse(TENANT_ID, ACCOUNT_ID, TX_ID, USER_ID, 'reason'),
+    ).rejects.toThrow(NotFoundException);
+    expect(execute).not.toHaveBeenCalled();
   });
 });
 
