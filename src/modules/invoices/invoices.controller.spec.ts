@@ -34,6 +34,7 @@ describe('InvoicesController — role gating', () => {
       InvoicesController.prototype.get,
       InvoicesController.prototype.voidInvoice,
       InvoicesController.prototype.patchFiscal,
+      InvoicesController.prototype.recordWithholding,
     ]) {
       expect(reflector.get<string[] | undefined>(ROLES_KEY, handler)).toBeUndefined();
     }

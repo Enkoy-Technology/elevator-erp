@@ -14,19 +14,35 @@
  * invoice-aging.spec.ts) — this is the one place that runs all three back
  * to back against the same real invoice and checks the numbers line up.
  *
+ * The withholding step specifically goes through the real HTTP layer
+ * (supertest against a real Nest app, real JwtAuthGuard/TenantGuard/
+ * RolesGuard, real ValidationPipe) rather than calling
+ * InvoicesRepository.recordWithholding directly — that is exactly the gap
+ * Finding 1 found: every other test for this feature called the repository
+ * or service directly, so `POST /invoices/:id/withholding` had no
+ * controller route at all and nothing caught it. This is the one test that
+ * would have failed before that route existed.
+ *
  * Requires a migrated database (docker compose up -d && pnpm run db:migrate).
  * Skips itself if Postgres is unreachable (see tenant-isolation.e2e-spec.ts
  * for why an unreachable DB is a failure, not a pass, unless opted out).
  */
 import { randomUUID } from 'node:crypto';
+import type { Server } from 'node:http';
 
+import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { Test } from '@nestjs/testing';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
+import request from 'supertest';
 
+import { AppModule } from '../../src/app.module';
 import * as schema from '../../src/database/schema';
 import { TenantDbService } from '../../src/database/tenant-db.service';
 import { InvoicesRepository } from '../../src/modules/invoices/invoices.repository';
 import { PaymentsRepository } from '../../src/modules/payments/payments.repository';
+import type { JwtPayload } from '../../src/types/auth.types';
 
 const ADMIN_URL =
   process.env.DATABASE_ADMIN_URL ??
@@ -50,6 +66,8 @@ const canConnect = async (url: string): Promise<boolean> => {
 describe('Full settlement: invoice + payment + withholding credit', () => {
   let adminPool: Pool;
   let appPool: Pool;
+  let app: INestApplication;
+  let accessToken: string;
   let available = false;
 
   const slug = `settlement-${randomUUID().slice(0, 8)}`;
@@ -108,12 +126,34 @@ describe('Full settlement: invoice + payment + withholding credit', () => {
       [`E2E_SETTLEMENT_${slug}`],
     );
     rateVersionId = rateVersion.rows[0]!.id;
+
+    // Real Nest app (real AppModule — same guard chain, same ValidationPipe
+    // shape as main.ts) so the withholding step below exercises the actual
+    // HTTP route, not just the repository behind it. No existing e2e spec
+    // does this yet (they all call repositories directly against Postgres),
+    // so this is the simplest correct wiring: boot the full module graph
+    // once, mint a real JWT for the FINANCE user created above via the same
+    // JwtService/JWT_SECRET the app itself verifies against, and reuse both
+    // for every HTTP call in this file.
+    const moduleFixture = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+    app = moduleFixture.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
+    await app.init();
+    accessToken = await app.get(JwtService).signAsync(
+      { sub: userId, tenantId, role: 'FINANCE', type: 'access' } satisfies JwtPayload,
+      { expiresIn: 900 },
+    );
   });
 
   afterAll(async () => {
     if (!available) {
       return;
     }
+    await app.close();
     await adminPool.query(`delete from payment_allocations where tenant_id = $1`, [tenantId]);
     await adminPool.query(`delete from payments where tenant_id = $1`, [tenantId]);
     await adminPool.query(`delete from invoice_lines where tenant_id = $1`, [tenantId]);
@@ -184,12 +224,17 @@ describe('Full settlement: invoice + payment + withholding credit', () => {
     expect(afterPayment.rows[0]!.status).toBe('PARTIALLY_PAID');
     expect(afterPayment.rows[0]!.outstanding_balance_etb).toBe('3.00');
 
-    const withheld = await invoicesRepo.recordWithholding(tenantId, invoice.id, {
-      amountEtb: '3.00',
-      voucherRef: 'WHT-TEST-0001',
-    });
-    expect(withheld.status).toBe('PAID');
-    expect(withheld.whtEtb).toBe('3.00');
+    // Finding 1: this must go through the real HTTP layer, not
+    // invoicesRepo.recordWithholding() directly — a controller route that
+    // was never wired would pass a repository-level call and only show up
+    // here, as a 404 on POST /invoices/:id/withholding.
+    const withheldResponse = await request(app.getHttpServer() as Server)
+      .post(`/invoices/${invoice.id}/withholding`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ amountEtb: '3.00', voucherRef: 'WHT-TEST-0001' })
+      .expect(200);
+    expect(withheldResponse.body.status).toBe('PAID');
+    expect(withheldResponse.body.whtEtb).toBe('3.00');
 
     // Fact #1: the invoice's own status head.
     const finalInvoice = await adminPool.query<{ status: string }>(
