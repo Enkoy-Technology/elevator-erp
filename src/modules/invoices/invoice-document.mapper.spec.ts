@@ -1,4 +1,10 @@
-import { invoiceDocumentData, type InvoiceDocumentRow } from './invoice-document.mapper';
+import { FISCAL_NOTICE_TEXT } from '../../common/export/templates/invoice.template';
+import {
+  INVOICE_DOCUMENT_COLUMNS,
+  invoiceDocumentData,
+  withDocumentStatus,
+  type InvoiceDocumentRow,
+} from './invoice-document.mapper';
 
 const baseRow: InvoiceDocumentRow = {
   invoiceNumber: 'INV-FY2026-27-0001',
@@ -64,5 +70,37 @@ describe('invoiceDocumentData', () => {
     expect(data.fiscalDeviceSerial).toBe('SN-1');
     expect(data.fiscalKind).toBe('Z-report');
     expect(data.fiscalNote).toBe('note');
+  });
+});
+
+describe('withDocumentStatus — R6: the xlsx export must carry the same fiscal notice/mirror as PDF/DOCX', () => {
+  it('leads INVOICE_DOCUMENT_COLUMNS with a "Document Status" column', () => {
+    expect(INVOICE_DOCUMENT_COLUMNS[0]).toEqual({
+      key: 'documentStatus',
+      header: 'Document Status',
+    });
+  });
+
+  it('stamps the compliance notice when fiscalReceiptNumber is null', () => {
+    const row = withDocumentStatus(baseRow);
+    expect(row.documentStatus).toBe(FISCAL_NOTICE_TEXT);
+  });
+
+  it('stamps the mirror text — with "mirrored from the certified device" — once fiscalReceiptNumber is populated', () => {
+    const row = withDocumentStatus({
+      ...baseRow,
+      fiscalReceiptNumber: 'ETR-000123456',
+      fiscalIssuedAt: new Date('2026-08-01T00:00:00.000Z'),
+      fiscalDeviceSerial: 'SN-9988776655',
+    });
+    expect(row.documentStatus).toContain('ETR-000123456');
+    expect(row.documentStatus).toContain('mirrored from the certified device');
+    expect(row.documentStatus).not.toContain(FISCAL_NOTICE_TEXT);
+  });
+
+  it('leaves every other field on the row untouched', () => {
+    const row = withDocumentStatus(baseRow);
+    expect(row.invoiceNumber).toBe(baseRow.invoiceNumber);
+    expect(row.totalEtb).toBe(baseRow.totalEtb);
   });
 });

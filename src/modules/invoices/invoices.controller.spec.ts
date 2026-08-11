@@ -346,4 +346,38 @@ describe('InvoicesController.document — format routing and filenames', () => {
     expect(pdfService.renderDocumentPdf).not.toHaveBeenCalled();
     expect(docxService.renderDocumentDocx).not.toHaveBeenCalled();
   });
+
+  it('R6: format=xlsx carries the fiscal notice as a leading "Document Status" column/value — the compliance rule PDF/DOCX already honour', async () => {
+    await controller.document(user, 'id', 'xlsx', res as never);
+
+    expect(mockWriteXlsx).toHaveBeenCalledWith(
+      res,
+      'invoice-INV-FY2026-27-0001',
+      expect.arrayContaining([{ key: 'documentStatus', header: 'Document Status' }]),
+      expect.anything(),
+    );
+    expect(mockSingleRow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentStatus: 'INTERNAL DOCUMENT — NOT A FISCAL RECEIPT',
+        invoiceNumber: 'INV-FY2026-27-0001',
+      }),
+    );
+  });
+
+  it('R6: format=xlsx carries the mirror text instead once fiscalReceiptNumber is populated', async () => {
+    invoicesService.getDocumentData.mockResolvedValue({
+      ...row,
+      fiscalReceiptNumber: 'ETR-000123456',
+      fiscalIssuedAt: new Date('2026-08-01T00:00:00.000Z'),
+      fiscalDeviceSerial: 'SN-9988776655',
+    });
+
+    await controller.document(user, 'id', 'xlsx', res as never);
+
+    expect(mockSingleRow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentStatus: expect.stringContaining('mirrored from the certified device'),
+      }),
+    );
+  });
 });

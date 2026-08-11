@@ -2,7 +2,10 @@ import { Decimal } from 'decimal.js';
 
 import type { ColumnDef } from '../../common/export/tabular';
 import { vatPercentLabel } from '../../common/export/templates/money-format';
-import type { InvoiceTemplateData } from '../../common/export/templates/invoice.template';
+import {
+  buildFiscalStatusText,
+  type InvoiceTemplateData,
+} from '../../common/export/templates/invoice.template';
 
 /**
  * The fields invoiceDocumentData/INVOICE_DOCUMENT_COLUMNS actually read —
@@ -79,8 +82,17 @@ export const invoiceDocumentData = (row: InvoiceDocumentRow): InvoiceTemplateDat
   };
 };
 
-/** Columns for the single-invoice xlsx download — line items are not flattened into this summary row (see the task-5 report). */
+/**
+ * Columns for the single-invoice xlsx download — line items are not
+ * flattened into this summary row (see the task-5 report). Leading
+ * "Document Status" column carries the R6 fiscal notice/mirror text (see
+ * `withDocumentStatus` below and invoice.template.ts's own compliance
+ * comment) — the PDF/DOCX formats already show it prominently; xlsx must
+ * too, since it's the format most likely handed to an accountant as "the
+ * invoice".
+ */
 export const INVOICE_DOCUMENT_COLUMNS: ColumnDef[] = [
+  { key: 'documentStatus', header: 'Document Status' },
   { key: 'invoiceNumber', header: 'Invoice Number' },
   { key: 'status', header: 'Status' },
   { key: 'customerName', header: 'Customer' },
@@ -93,3 +105,16 @@ export const INVOICE_DOCUMENT_COLUMNS: ColumnDef[] = [
   { key: 'totalEtb', header: 'Total (ETB)', format: 'money' },
   { key: 'fiscalReceiptNumber', header: 'Fiscal Receipt Number' },
 ];
+
+/**
+ * R6: stamps the plain-text fiscal notice/mirror onto the raw document row
+ * for the xlsx export ONLY — the PDF/DOCX path renders it via
+ * `invoiceDocumentData` + `buildFiscalStatusHtml` inside the HTML template
+ * instead, so this must never be folded into `invoiceDocumentData` itself.
+ */
+export const withDocumentStatus = (
+  row: InvoiceDocumentRow,
+): InvoiceDocumentRow & { documentStatus: string } => ({
+  ...row,
+  documentStatus: buildFiscalStatusText(row),
+});

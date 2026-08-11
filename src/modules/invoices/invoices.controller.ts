@@ -42,7 +42,11 @@ import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { FiscalMirrorDto } from './dto/fiscal-mirror.dto';
 import { VoidInvoiceDto } from './dto/void-invoice.dto';
 import { WithholdingDto } from './dto/withholding.dto';
-import { INVOICE_DOCUMENT_COLUMNS, invoiceDocumentData } from './invoice-document.mapper';
+import {
+  INVOICE_DOCUMENT_COLUMNS,
+  invoiceDocumentData,
+  withDocumentStatus,
+} from './invoice-document.mapper';
 import { InvoicesService } from './invoices.service';
 
 const INVOICE_STATUSES = invoiceStatusEnum.enumValues;
@@ -240,15 +244,16 @@ export class InvoicesController {
     const filename = `invoice-${row.invoiceNumber}`;
 
     if (format === 'xlsx') {
-      // writeXlsx reads row[col.key] at runtime — row has every field
-      // INVOICE_DOCUMENT_COLUMNS references; the cast is only needed because
-      // InvoiceDocumentRow has no index signature of its own (mirrors
-      // ProformasController.document's own cast).
+      // writeXlsx reads row[col.key] at runtime — withDocumentStatus(row)
+      // has every field INVOICE_DOCUMENT_COLUMNS references (R6 adds
+      // `documentStatus`, the fiscal notice/mirror text, on top); the cast
+      // is only needed because InvoiceDocumentRow has no index signature of
+      // its own (mirrors ProformasController.document's own cast).
       await writeXlsx(
         res,
         filename,
         INVOICE_DOCUMENT_COLUMNS,
-        singleRow(row as unknown as Record<string, unknown>),
+        singleRow(withDocumentStatus(row) as unknown as Record<string, unknown>),
       );
       return;
     }

@@ -1,6 +1,7 @@
 import type { TenantBranding } from '../document-pdf.service';
 import {
   buildFiscalStatusHtml,
+  buildFiscalStatusText,
   buildInvoiceHtml,
   FISCAL_NOTICE_TEXT,
   type InvoiceTemplateData,
@@ -33,6 +34,31 @@ describe('buildFiscalStatusHtml', () => {
   it('never invents a fiscal artifact: no QR code markup, no fabricated numbers beyond what was passed in', () => {
     const html = buildFiscalStatusHtml({ fiscalReceiptNumber: 'ETR-1' });
     expect(html.toLowerCase()).not.toContain('qr');
+  });
+});
+
+describe('buildFiscalStatusText — R6: the plain-text equivalent for the xlsx export', () => {
+  it('is exactly FISCAL_NOTICE_TEXT when fiscalReceiptNumber is null/undefined — no markup, this goes straight into a spreadsheet cell', () => {
+    expect(buildFiscalStatusText(null)).toBe(FISCAL_NOTICE_TEXT);
+    expect(buildFiscalStatusText(undefined)).toBe(FISCAL_NOTICE_TEXT);
+    expect(buildFiscalStatusText({ fiscalReceiptNumber: null })).toBe(FISCAL_NOTICE_TEXT);
+  });
+
+  it('carries the mirror wording — ending "mirrored from the certified device" — once fiscalReceiptNumber is populated, and drops the notice', () => {
+    const text = buildFiscalStatusText({
+      fiscalReceiptNumber: 'ETR-000123456',
+      fiscalIssuedAt: new Date('2026-08-01T00:00:00.000Z'),
+      fiscalDeviceSerial: 'SN-9988776655',
+      fiscalKind: 'Z-report',
+      fiscalNote: 'Reconciled manually',
+    });
+    expect(text).toContain('ETR-000123456');
+    expect(text).toContain('2026-08-01');
+    expect(text).toContain('SN-9988776655');
+    expect(text).toContain('Z-report');
+    expect(text).toContain('Reconciled manually');
+    expect(text).toContain('mirrored from the certified device');
+    expect(text).not.toContain(FISCAL_NOTICE_TEXT);
   });
 });
 
