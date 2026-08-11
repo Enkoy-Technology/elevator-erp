@@ -90,6 +90,21 @@ export class ExpensesRepository {
    * If a lock is ever added here (e.g. a future correction workflow), it
    * MUST be taken AFTER the claim, matching PaymentsRepository.record/
    * reverse's sequence -> payment -> invoices order.
+   *
+   * R8 (ACCEPTED, not a bug): `fiscalYearLabel` below is computed from
+   * TODAY — the moment this expense is being claimed/keyed in — never from
+   * `input.expenseDate`, even though `expenseDate` is user-supplied and can
+   * legitimately be backdated (a bill dated 2026-07-05 keyed in on
+   * 2026-07-10, say). This is deliberate: gapless per-fiscal-year numbering
+   * (EXP-{fy}-{seq}) has to claim against whichever fiscal year is OPEN
+   * right now — computing it from a possibly-backdated `expenseDate`
+   * instead would either collide with a year whose sequence has already
+   * moved on, or leave a gap in a year that's already closed. So
+   * `fiscalYearLabel` is a NUMBERING-SERIES artifact, not a reporting
+   * field: any fiscal-year report MUST group by `expenseDate` — the
+   * real-world date the expense happened — NEVER by `fiscalYearLabel`.
+   * PaymentsRepository.claimReceiptNumber carries the identical note for
+   * `receivedAt`/receipts.
    */
   async record(
     tenantId: string,

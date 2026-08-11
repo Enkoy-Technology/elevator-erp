@@ -706,7 +706,25 @@ export class PaymentsRepository {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${id}::text)::bigint)`);
   }
 
-  /** Claims the next gapless RCT-{fy}-{seq} number for today's fiscal year — same claim protocol as invoice/proforma numbering. */
+  /**
+   * Claims the next gapless RCT-{fy}-{seq} number for today's fiscal year —
+   * same claim protocol as invoice/proforma numbering.
+   *
+   * R8 (ACCEPTED, not a bug): the `fiscalYearLabel` this returns is computed
+   * from TODAY — the moment this receipt is being claimed/keyed in — never
+   * from the payment's own `receivedAt`, even though `receivedAt` is
+   * user-supplied and can legitimately be backdated (a cheque received
+   * 2026-07-05 but keyed in on 2026-07-10, say). This is deliberate:
+   * gapless per-fiscal-year numbering has to claim against whichever fiscal
+   * year is OPEN right now — computing it from a possibly-backdated
+   * `receivedAt` instead would either collide with a year whose sequence
+   * has already moved on, or leave a gap in a year that's already closed.
+   * So `fiscalYearLabel` is a NUMBERING-SERIES artifact, not a reporting
+   * field: any fiscal-year report MUST group by `receivedAt` — the
+   * real-world date the money arrived — NEVER by `fiscalYearLabel`.
+   * ExpensesRepository.record carries the identical note for
+   * `expenseDate`/expenses.
+   */
   private async claimReceiptNumber(
     tx: TenantTransaction,
     tenantId: string,
