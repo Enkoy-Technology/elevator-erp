@@ -610,10 +610,19 @@ export class InvoicesRepository {
         throw new Error(`Failed to record withholding on invoice ${id}`);
       }
 
-      await this.recomputePaymentStatus(tx, id);
+      // recomputePaymentStatus re-reads the invoice (already carrying the
+      // whtEtb this UPDATE just committed) and returns EITHER that fresh
+      // read (status unchanged) or its own CAS update's row (status
+      // changed) — either way the correct, current row. `row` above must
+      // NOT be returned as-is: it was captured before this call, so its
+      // `status` would still read the pre-withholding value (e.g.
+      // PARTIALLY_PAID) even on a withholding credit that just completed
+      // settlement to PAID — exactly the kind of stale-view bug this phase
+      // exists to catch.
+      const settledInvoice = await this.recomputePaymentStatus(tx, id);
       await recomputeCustomerBalance(tx, tenantId, invoice.customerId);
 
-      return row;
+      return settledInvoice;
     });
   }
 
