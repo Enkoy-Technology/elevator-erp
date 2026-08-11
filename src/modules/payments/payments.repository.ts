@@ -467,12 +467,18 @@ export class PaymentsRepository {
    *
    * B1b — the mirror inserts below are the one payment_allocations write
    * path in this codebase that does NOT go through `guardAndInsertAllocation`,
-   * so after inserting them this method asserts the same "Σ allocations +
-   * whtEtb <= totalEtb" invariant that guard enforces everywhere else, per
-   * affected invoice, before the transaction can commit. The guard above is
-   * what makes every mirror amount negative today (so in practice this
-   * assertion can only ever pass) — this is belt-and-suspenders so that
-   * stays a PROVEN invariant, not a fact this method quietly depends on.
+   * so this method asserts, per mirror it inserts, that the amount is <= 0
+   * (fix-wave-c #3 — see the mirror loop's own comment for why this is
+   * RELATIVE, not the invoice's absolute "Σ allocations + whtEtb <=
+   * totalEtb" this used to assert: the absolute form could make a payment
+   * permanently irreversible over an invoice some UNRELATED bug had already
+   * over-allocated, which is worse than the gap it was closing).
+   * `guardAndInsertAllocation` is what makes every ORIGINAL allocation
+   * positive today (so its negation can in practice only ever be <= 0) —
+   * this is belt-and-suspenders so that stays a PROVEN invariant, not a
+   * fact this method quietly depends on, without also blocking a
+   * legitimate reversal against data this method had no part in
+   * corrupting.
    */
   async reverse(
     tenantId: string,
@@ -564,13 +570,38 @@ export class PaymentsRepository {
 
       const mirrorAllocations: PaymentAllocationRecord[] = [];
       for (const alloc of originalAllocations) {
+        const mirroredAmountEtb = new Decimal(alloc.amountEtb).negated();
+        // B1b (fix-wave-c #3): asserts what THIS loop actually owns — every
+        // mirror amount it inserts must be <= 0, i.e. Σ allocations for the
+        // invoice can only shrink, never grow. The guard in
+        // guardAndInsertAllocation is what makes every original allocation
+        // positive today (so `mirroredAmountEtb` can in practice only ever
+        // be <= 0) — this proves that stays true rather than quietly
+        // depending on it.
+        //
+        // Deliberately RELATIVE, not the invoice's ABSOLUTE allocation
+        // total (Σ allocations + whtEtb <= totalEtb) this used to assert:
+        // this loop's only possible failure mode is a mirror amount that
+        // isn't negative, and asserting the absolute form instead meant
+        // that an invoice ALREADY over-allocated for an unrelated reason
+        // (manual SQL repair, a bad seed, a future bug elsewhere) would
+        // make a payment attached to it permanently IRREVERSIBLE —
+        // displacing the exact "worse bug than the one being fixed" class
+        // this belt-and-suspenders check exists to catch, one step over.
+        // A reversal must always be able to shrink an invoice's
+        // allocations, no matter how it got over-allocated.
+        if (mirroredAmountEtb.gt(0)) {
+          throw new WorkflowTransitionError(
+            `Cannot reverse payment ${paymentId}: computed a non-negative mirror allocation (${mirroredAmountEtb.toFixed(2)}) for invoice ${alloc.invoiceId} — the original allocation was not positive`,
+          );
+        }
         const [row] = await tx
           .insert(paymentAllocations)
           .values({
             tenantId,
             paymentId: reversal.id,
             invoiceId: alloc.invoiceId,
-            amountEtb: new Decimal(alloc.amountEtb).negated().toFixed(2),
+            amountEtb: mirroredAmountEtb.toFixed(2),
           })
           .returning();
         if (!row) {
@@ -579,26 +610,9 @@ export class PaymentsRepository {
         mirrorAllocations.push(row);
       }
 
-      // B1b: see this method's own doc comment.
+      // recomputePaymentStatus re-selects the invoice itself and 404s if
+      // it's gone — no separate existence check needed here.
       for (const invoiceId of invoiceIds) {
-        const [invoice] = await tx
-          .select({ totalEtb: invoices.totalEtb, whtEtb: invoices.whtEtb })
-          .from(invoices)
-          .where(eq(invoices.id, invoiceId))
-          .limit(1);
-        if (!invoice) {
-          throw new NotFoundException('Invoice not found');
-        }
-        const [allocated] = await tx
-          .select({ total: sum(paymentAllocations.amountEtb) })
-          .from(paymentAllocations)
-          .where(eq(paymentAllocations.invoiceId, invoiceId));
-        const allocatedEtb = allocated?.total ?? '0';
-        if (new Decimal(allocatedEtb).plus(invoice.whtEtb).gt(invoice.totalEtb)) {
-          throw new WorkflowTransitionError(
-            `Reversing this payment would bring invoice ${invoiceId}'s allocations to ${allocatedEtb} plus ${invoice.whtEtb} withheld, exceeding its total of ${invoice.totalEtb}`,
-          );
-        }
         await this.invoicesRepository.recomputePaymentStatus(tx, invoiceId);
       }
 

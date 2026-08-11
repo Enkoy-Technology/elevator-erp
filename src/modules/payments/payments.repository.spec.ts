@@ -526,22 +526,63 @@ describe('PaymentsRepository.reverse — immutable ledger, new mirroring row (br
     expect(insert).toHaveBeenCalledTimes(1);
   });
 
-  it('B1b: asserts Σ allocations + whtEtb <= totalEtb per invoice after the mirror insert — the mirror path cannot over-allocate even though it bypasses guardAndInsertAllocation', async () => {
-    const singleAllocation = [
-      { id: 'a1', paymentId: PAYMENT_ID, invoiceId: INVOICE_ID, amountEtb: '50.00' },
+  it('B1b (fix-wave-c #3): rejects a computed mirror allocation that is not <= 0, BEFORE ever attempting the insert — relative to the original allocation, not the invoice\'s absolute total', async () => {
+    const corruptedAllocation = [
+      // Standing in for whatever bug (today: none — B1a closes the only
+      // known path) might one day feed this method an original allocation
+      // that is not positive. The assertion must catch it regardless of
+      // cause.
+      { id: 'a1', paymentId: PAYMENT_ID, invoiceId: INVOICE_ID, amountEtb: '-50.00' },
     ];
     const select = jest
       .fn()
       .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
       .mockReturnValueOnce(makeSelectChain([originalPayment]))
       .mockReturnValueOnce(makeSelectChain([])) // no existing reversal
-      .mockReturnValueOnce(makeSelectChain(singleAllocation))
-      .mockReturnValueOnce(makeSelectChain([{ totalEtb: '100.00', whtEtb: '0.00' }]))
-      // Post-insert Σ allocations — deliberately already over the invoice's
-      // own total, standing in for whatever bug (today: none — B1a closes
-      // the only known path) might one day feed this method a positive
-      // mirror amount. The assertion must catch it regardless of cause.
-      .mockReturnValueOnce(makeSelectChain([{ total: '150.00' }]));
+      .mockReturnValueOnce(makeSelectChain(corruptedAllocation));
+    const insert = jest
+      .fn()
+      .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
+      .mockReturnValueOnce(
+        makeInsertChain([{ ...originalPayment, id: 'reversal-1', amountEtb: '-150.00' }]),
+      );
+    const execute = makeExecute();
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert, execute }),
+    );
+    const invoicesRepository = makeInvoicesRepository();
+    const repo = new PaymentsRepository(
+      { withTenant } as never,
+      invoicesRepository as unknown as InvoicesRepository,
+    );
+
+    await expect(
+      repo.reverse(TENANT_ID, PAYMENT_ID, USER_ID, 'reason'),
+    ).rejects.toBeInstanceOf(WorkflowTransitionError);
+    // Only the receipt claim + reversal payment insert happened — the
+    // mirror allocation insert never ran.
+    expect(insert).toHaveBeenCalledTimes(2);
+    expect(invoicesRepository.recomputePaymentStatus).not.toHaveBeenCalled();
+  });
+
+  it('fix-wave-c #3: a reversal still succeeds against an invoice already over-allocated by out-of-band data — the relative assertion never looks at the invoice\'s absolute total at all', async () => {
+    const singleAllocation = [
+      { id: 'a1', paymentId: PAYMENT_ID, invoiceId: INVOICE_ID, amountEtb: '50.00' },
+    ];
+    // No invoice/allocated-total select is mocked, on purpose: this method
+    // no longer queries the invoice's absolute state at all (see this
+    // method's own B1b doc comment), so however far out of band some other
+    // bug already pushed this invoice over its total, that has zero
+    // bearing on whether ITS OWN allocations can shrink via a reversal —
+    // proven here by there being nothing to over-allocate against in the
+    // first place.
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      .mockReturnValueOnce(makeSelectChain([originalPayment]))
+      .mockReturnValueOnce(makeSelectChain([])) // no existing reversal
+      .mockReturnValueOnce(makeSelectChain(singleAllocation));
     const insert = jest
       .fn()
       .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
@@ -564,10 +605,13 @@ describe('PaymentsRepository.reverse — immutable ledger, new mirroring row (br
       invoicesRepository as unknown as InvoicesRepository,
     );
 
-    await expect(
-      repo.reverse(TENANT_ID, PAYMENT_ID, USER_ID, 'reason'),
-    ).rejects.toBeInstanceOf(WorkflowTransitionError);
-    expect(invoicesRepository.recomputePaymentStatus).not.toHaveBeenCalled();
+    const result = await repo.reverse(TENANT_ID, PAYMENT_ID, USER_ID, 'reason');
+
+    expect(result.allocations[0]?.amountEtb).toBe('-50.00');
+    expect(invoicesRepository.recomputePaymentStatus).toHaveBeenCalledWith(
+      expect.anything(),
+      INVOICE_ID,
+    );
   });
 
   it('blocks a double reversal (409) — a payment may be reversed at most once', async () => {
