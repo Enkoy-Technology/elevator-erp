@@ -137,6 +137,12 @@ export const paymentMethodEnum = pgEnum('payment_method', [
   'OTHER',
 ]);
 
+// Drives the WHT threshold lookup (goods vs services — see
+// docs/planning/DECISIONS-platform-and-ethiopian-compliance.md §3):
+// ETB 20,000 for goods, ETB 10,000 for services. The thresholds themselves
+// live in the rate table (WHT_GOODS/WHT_SERVICES payloads), never here.
+export const supplyKindEnum = pgEnum('supply_kind', ['GOODS', 'SERVICES']);
+
 // Client-specific categories are pending real data — chosen generically
 // from common Ethiopian SME expense lines, with OTHER as the catch-all.
 export const expenseCategoryEnum = pgEnum('expense_category', [

@@ -13,7 +13,12 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { bankAccounts } from './banks';
-import { expenseCategoryEnum, expenseStatusEnum, paymentMethodEnum } from './enums';
+import {
+  expenseCategoryEnum,
+  expenseStatusEnum,
+  paymentMethodEnum,
+  supplyKindEnum,
+} from './enums';
 import { rateVersions } from './rate-tables';
 import { tenants } from './tenants';
 import { users } from './users';
@@ -39,11 +44,28 @@ export const expenses = pgTable(
     expenseNumber: text('expense_number').notNull(),
     fiscalYearLabel: text('fiscal_year_label').notNull(),
     category: expenseCategoryEnum('category').notNull(),
+    // Drives which WHT threshold applies (goods vs services) — see
+    // supplyKindEnum's own comment.
+    supplyKind: supplyKindEnum('supply_kind').notNull(),
     supplierName: text('supplier_name').notNull(),
     supplierTin: text('supplier_tin'),
     supplierLicenceOnFile: boolean('supplier_licence_on_file')
       .notNull()
       .default(false),
+    // Three-way relationship, always exact: amountEtb = netAmountEtb + vatEtb.
+    // netAmountEtb is the pre-VAT bill amount WHT is computed on (see the
+    // Ethiopian withholding rules in the Task 4 brief); vatEtb is the VAT
+    // component, whichever direction it was supplied (vat-inclusive gross or
+    // vat-exclusive net — see expense-money.ts). amountEtb is the gross
+    // actually billed, kept as the column name Task 1 shipped. Note: the VAT
+    // rate_versions row used for this split is NOT separately stored — only
+    // one rateVersionId column exists below and it records the WHT decision
+    // (VAT has no threshold decision to audit the way WHT does; the VAT
+    // percent itself is recoverable from vatEtb/netAmountEtb without a
+    // pointer). If VAT ever needs its own audit trail, that is a new column,
+    // not a repurposing of this one.
+    netAmountEtb: numeric('net_amount_etb', { precision: 14, scale: 2 }).notNull(),
+    vatEtb: numeric('vat_etb', { precision: 14, scale: 2 }).notNull().default('0'),
     // Gross amount before WHT is withheld.
     amountEtb: numeric('amount_etb', { precision: 14, scale: 2 }).notNull(),
     // Computed at record time from the WHT rate table below — stored, not
@@ -55,19 +77,26 @@ export const expenses = pgTable(
     whtEtb: numeric('wht_etb', { precision: 14, scale: 2 })
       .notNull()
       .default('0'),
-    // The WHT rate_versions row this was computed from; null when no WHT
-    // applies to this expense at all (not merely a zero rate). rate_versions
-    // is a global (non-tenant) table, same as proformas.rateVersionId/
-    // quotations.rateVersionId, so this is a plain (non-composite)
-    // reference like theirs.
+    // The WHT rate_versions row this was computed from — stored even when
+    // the computed withholding is zero (below-threshold GOODS/SERVICES):
+    // which version's threshold made the "no withholding" call is itself
+    // the audit trail. Null only if this row predates WHT computation
+    // (never true going forward). rate_versions is a global (non-tenant)
+    // table, same as proformas.rateVersionId/quotations.rateVersionId, so
+    // this is a plain (non-composite) reference like theirs.
     rateVersionId: uuid('rate_version_id').references(() => rateVersions.id),
     paidVia: paymentMethodEnum('paid_via').notNull(),
     bankAccountId: uuid('bank_account_id'),
     expenseDate: date('expense_date').notNull(),
+    description: text('description'),
+    // Supplier's invoice/receipt number.
+    reference: text('reference'),
     recordedByUserId: uuid('recorded_by_user_id'),
     status: expenseStatusEnum('status').notNull().default('RECORDED'),
     // Self-FK, set only on the reversing row.
     reversalOfExpenseId: uuid('reversal_of_expense_id'),
+    // Set only on the reversing row — why the original was reversed.
+    reverseReason: text('reverse_reason'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -98,3 +127,4 @@ export const expenses = pgTable(
 
 export type ExpenseCategory = (typeof expenseCategoryEnum.enumValues)[number];
 export type ExpenseStatus = (typeof expenseStatusEnum.enumValues)[number];
+export type SupplyKind = (typeof supplyKindEnum.enumValues)[number];

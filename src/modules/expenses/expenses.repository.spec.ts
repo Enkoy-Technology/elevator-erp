@@ -1,0 +1,238 @@
+import { NotFoundException } from '@nestjs/common';
+
+import { WorkflowTransitionError } from '../../common/exceptions';
+import { computeFiscalYear } from '../../common/fiscal-year';
+import { todayIso } from '../../common/business-time';
+import { ExpensesRepository, type RecordExpenseInput } from './expenses.repository';
+
+const TENANT_ID = '22222222-2222-2222-2222-222222222222';
+const USER_ID = '11111111-1111-1111-1111-111111111111';
+const RATE_VERSION_ID = '77777777-7777-7777-7777-777777777777';
+const EXPENSE_ID = '88888888-8888-8888-8888-888888888888';
+
+/** A fake select chain that is also "thenable" at any step — see invoices.repository.spec.ts's own copy for why. */
+interface SelectChain {
+  from: jest.Mock;
+  where: jest.Mock;
+  limit: jest.Mock;
+  then: (resolve: (value: unknown) => void, reject: (err: unknown) => void) => void;
+}
+
+const makeSelectChain = (rows: unknown[]): SelectChain => {
+  const chain = {} as SelectChain;
+  chain.from = jest.fn(() => chain);
+  chain.where = jest.fn(() => chain);
+  chain.limit = jest.fn(() => chain);
+  chain.then = (resolve, reject) => {
+    Promise.resolve(rows).then(resolve, reject);
+  };
+  return chain;
+};
+
+/** Wires a fake `insert().values().onConflictDoUpdate().returning()` chain (document_sequences claim). */
+const makeSeqInsertChain = (returning: unknown[]) => {
+  const chain: Record<string, jest.Mock> = {};
+  chain.values = jest.fn(() => chain);
+  chain.onConflictDoUpdate = jest.fn(() => chain);
+  chain.returning = jest.fn(() => Promise.resolve(returning));
+  return chain;
+};
+
+/** Wires a fake `insert().values().returning()` chain, capturing the inserted values. */
+const makeInsertChain = (returning: unknown[], onValues?: (v: unknown) => void) => {
+  const chain: Record<string, jest.Mock> = {};
+  chain.values = jest.fn((v: unknown) => {
+    onValues?.(v);
+    return chain;
+  });
+  chain.returning = jest.fn(() => Promise.resolve(returning));
+  return chain;
+};
+
+const makeExecute = () => jest.fn(() => Promise.resolve(undefined));
+
+const fy = computeFiscalYear(todayIso(), '07-08');
+const fyLabelSafe = fy.label.replace('/', '-');
+
+const baseInput: RecordExpenseInput = {
+  supplierName: 'Acme Supplies',
+  supplierTin: '000111222',
+  supplierLicenceOnFile: true,
+  supplyKind: 'GOODS',
+  category: 'MATERIALS',
+  expenseDate: '2020-06-15',
+  paidVia: 'CASH',
+  bankAccountId: null,
+  netAmountEtb: '20000.00',
+  vatEtb: '3000.00',
+  amountEtb: '23000.00',
+  whtRatePercent: '3.00',
+  whtEtb: '600.00',
+  rateVersionId: RATE_VERSION_ID,
+  description: null,
+  reference: 'INV-4821',
+};
+
+describe('ExpensesRepository.record — one-transaction claim + insert (brief 4.1)', () => {
+  it('claims a gapless EXP number and inserts every computed money/WHT column verbatim', async () => {
+    const select = jest
+      .fn()
+      // fiscalYearForToday: tenant fiscalYearStart
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+
+    let inserted: Record<string, unknown> = {};
+    const insert = jest
+      .fn()
+      .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
+      .mockReturnValueOnce(
+        makeInsertChain(
+          [{ id: EXPENSE_ID, tenantId: TENANT_ID, ...baseInput, status: 'RECORDED' }],
+          (v) => (inserted = v as Record<string, unknown>),
+        ),
+      );
+    const execute = makeExecute();
+
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert, execute }),
+    );
+    const repo = new ExpensesRepository({ withTenant } as never);
+
+    const result = await repo.record(TENANT_ID, USER_ID, baseInput);
+
+    expect(inserted).toMatchObject({
+      tenantId: TENANT_ID,
+      expenseNumber: `EXP-${fyLabelSafe}-0001`,
+      fiscalYearLabel: fy.label,
+      recordedByUserId: USER_ID,
+      ...baseInput,
+    });
+    // netPayableEtb (gross - wht) is computed on read, never stored.
+    expect(result.netPayableEtb).toBe('22400.00');
+    expect((inserted as { netPayableEtb?: unknown }).netPayableEtb).toBeUndefined();
+  });
+});
+
+describe('ExpensesRepository.reverse — insert-only mirror + double-reversal 409 (brief 4.2)', () => {
+  const originalRow = {
+    id: EXPENSE_ID,
+    category: 'MATERIALS',
+    supplyKind: 'GOODS',
+    supplierName: 'Acme Supplies',
+    supplierTin: '000111222',
+    supplierLicenceOnFile: true,
+    netAmountEtb: '20000.00',
+    vatEtb: '3000.00',
+    amountEtb: '23000.00',
+    whtRatePercent: '3.00',
+    whtEtb: '600.00',
+    rateVersionId: RATE_VERSION_ID,
+    paidVia: 'CASH',
+    bankAccountId: null,
+    description: null,
+    reference: 'INV-4821',
+  };
+
+  it('inserts a mirroring row with every money column negated, never touching the original', async () => {
+    const select = jest
+      .fn()
+      // 1. load original
+      .mockReturnValueOnce(makeSelectChain([originalRow]))
+      // 2. existing-reversal check: none found
+      .mockReturnValueOnce(makeSelectChain([]))
+      // 3. fiscalYearForToday
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+
+    let insertedReversal: Record<string, unknown> = {};
+    const insert = jest
+      .fn()
+      .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 2 }]))
+      .mockReturnValueOnce(
+        makeInsertChain(
+          [
+            {
+              ...originalRow,
+              id: 'reversal-id',
+              netAmountEtb: '-20000.00',
+              vatEtb: '-3000.00',
+              amountEtb: '-23000.00',
+              whtEtb: '-600.00',
+              status: 'REVERSED',
+              reversalOfExpenseId: EXPENSE_ID,
+              reverseReason: 'Duplicate entry',
+            },
+          ],
+          (v) => (insertedReversal = v as Record<string, unknown>),
+        ),
+      );
+    const execute = makeExecute();
+
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert, execute }),
+    );
+    const repo = new ExpensesRepository({ withTenant } as never);
+
+    const result = await repo.reverse(TENANT_ID, EXPENSE_ID, USER_ID, 'Duplicate entry');
+
+    // Only ONE insert of the reversal expense row happened (plus the
+    // sequence claim insert) — no update() call was ever wired into the
+    // fake tx, so the original could not have been touched even if the
+    // implementation tried.
+    expect(insert).toHaveBeenCalledTimes(2);
+    expect(insertedReversal).toMatchObject({
+      tenantId: TENANT_ID,
+      netAmountEtb: '-20000.00',
+      vatEtb: '-3000.00',
+      amountEtb: '-23000.00',
+      whtRatePercent: '3.00', // a rate, not money — copied, not negated
+      whtEtb: '-600.00',
+      rateVersionId: RATE_VERSION_ID,
+      status: 'REVERSED',
+      reversalOfExpenseId: EXPENSE_ID,
+      reverseReason: 'Duplicate entry',
+      supplierName: 'Acme Supplies',
+      supplyKind: 'GOODS',
+    });
+    expect(result.amountEtb).toBe('-23000.00');
+    // netPayableEtb on a reversal is itself negative — money handed back.
+    expect(result.netPayableEtb).toBe('-22400.00');
+  });
+
+  it('double reversal: a second reverse() on an already-reversed expense 409s', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([originalRow]))
+      // existing-reversal check finds one this time
+      .mockReturnValueOnce(makeSelectChain([{ id: 'already-reversed-id' }]));
+    const insert = jest.fn();
+    const execute = makeExecute();
+
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert, execute }),
+    );
+    const repo = new ExpensesRepository({ withTenant } as never);
+
+    await expect(repo.reverse(TENANT_ID, EXPENSE_ID, USER_ID, 'second try')).rejects.toThrow(
+      WorkflowTransitionError,
+    );
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('reversing a non-existent expense 404s', async () => {
+    const select = jest.fn().mockReturnValueOnce(makeSelectChain([]));
+    const insert = jest.fn();
+    const execute = makeExecute();
+
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert, execute }),
+    );
+    const repo = new ExpensesRepository({ withTenant } as never);
+
+    await expect(repo.reverse(TENANT_ID, EXPENSE_ID, USER_ID, 'oops')).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+});
