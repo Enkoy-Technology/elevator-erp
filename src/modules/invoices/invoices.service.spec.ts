@@ -23,6 +23,8 @@ describe('InvoicesService', () => {
     subtotalEtb: '100.00',
     vatEtb: '15.00',
     whtEtb: '0.00',
+    whtVoucherRef: null,
+    whtRecordedAt: null,
     totalEtb: '115.00',
     rateVersionId: '77777777-7777-7777-7777-777777777777',
     status: 'ISSUED',

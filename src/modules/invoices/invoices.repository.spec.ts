@@ -1,9 +1,22 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 
+import { recomputeCustomerBalance } from '../../common/customer-balance';
 import { WorkflowTransitionError } from '../../common/exceptions';
 import { computeFiscalYear } from '../../common/fiscal-year';
 import { todayIso } from '../../common/business-time';
 import { InvoicesRepository } from './invoices.repository';
+
+// Isolates "does this repository method WIRE the balance recompute
+// correctly" (asserted here via mockCustomerBalance) from "is the balance
+// formula itself correct" (exhaustively covered by customer-balance.spec.ts)
+// — mocking the module means these tests don't also have to fake every
+// select/update call recomputeCustomerBalance's real implementation makes.
+jest.mock('../../common/customer-balance');
+const mockCustomerBalance = jest.mocked(recomputeCustomerBalance);
+
+beforeEach(() => {
+  mockCustomerBalance.mockClear();
+});
 
 const TENANT_ID = '22222222-2222-2222-2222-222222222222';
 const USER_ID = '11111111-1111-1111-1111-111111111111';
@@ -32,6 +45,7 @@ interface SelectChain {
   orderBy: jest.Mock;
   limit: jest.Mock;
   offset: jest.Mock;
+  groupBy: jest.Mock;
   then: (
     resolve: (value: unknown) => void,
     reject: (err: unknown) => void,
@@ -56,6 +70,7 @@ const makeSelectChain = (rows: unknown[]): SelectChain => {
   chain.orderBy = jest.fn(() => chain);
   chain.limit = jest.fn(() => chain);
   chain.offset = jest.fn(() => chain);
+  chain.groupBy = jest.fn(() => chain);
   chain.then = (resolve, reject) => {
     Promise.resolve(rows).then(resolve, reject);
   };
@@ -138,6 +153,12 @@ describe('InvoicesRepository.issueFromProforma — one-transaction CAS + claim +
     const repo = new InvoicesRepository({ withTenant } as never);
 
     const result = await repo.issueFromProforma(TENANT_ID, USER_ID, PROFORMA_ID, null);
+
+    expect(mockCustomerBalance).toHaveBeenCalledWith(
+      expect.anything(),
+      TENANT_ID,
+      CUSTOMER_ID,
+    );
 
     const fy = computeFiscalYear(todayIso(), '07-08');
     expect(insertedInvoice.invoiceNumber).toBe(`INV-${fy.label.replace('/', '-')}-0001`);
@@ -267,7 +288,7 @@ describe('InvoicesRepository.createStandalone — claim + insert invoice + lines
       .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 7 }]))
       .mockReturnValueOnce(
         makeInsertChain(
-          [{ id: INVOICE_ID, invoiceNumber: 'x' }],
+          [{ id: INVOICE_ID, invoiceNumber: 'x', customerId: CUSTOMER_ID }],
           (v) => (insertedInvoice = v as Record<string, unknown>),
         ),
       )
@@ -314,6 +335,11 @@ describe('InvoicesRepository.createStandalone — claim + insert invoice + lines
       'Maintenance visit',
     );
     expect(result.lines).toHaveLength(2);
+    expect(mockCustomerBalance).toHaveBeenCalledWith(
+      expect.anything(),
+      TENANT_ID,
+      CUSTOMER_ID,
+    );
   });
 });
 
@@ -323,7 +349,7 @@ describe('InvoicesRepository.voidInvoice — only from ISSUED with zero allocati
     const select = jest.fn(() => makeSelectChain([]));
     const update = jest.fn(() =>
       makeUpdateChain(
-        [{ id: INVOICE_ID, status: 'VOID' }],
+        [{ id: INVOICE_ID, status: 'VOID', customerId: CUSTOMER_ID }],
         (v) => (setValues = v),
       ),
     );
@@ -338,6 +364,11 @@ describe('InvoicesRepository.voidInvoice — only from ISSUED with zero allocati
     expect(result.status).toBe('VOID');
     expect(setValues.status).toBe('VOID');
     expect(setValues.voidReason).toBe('Issued in error');
+    expect(mockCustomerBalance).toHaveBeenCalledWith(
+      expect.anything(),
+      TENANT_ID,
+      CUSTOMER_ID,
+    );
   });
 
   it('throws WorkflowTransitionError (409) when the invoice is not ISSUED or has an allocation (guard fails)', async () => {
@@ -490,3 +521,245 @@ describe('InvoicesRepository.findByIdWithLines', () => {
     await expect(repo.findByIdWithLines(TENANT_ID, INVOICE_ID)).resolves.toBeNull();
   });
 });
+
+describe('InvoicesRepository.recordWithholding — Task 3 (3.4)', () => {
+  const invoiceRow = {
+    id: INVOICE_ID,
+    status: 'ISSUED',
+    customerId: CUSTOMER_ID,
+    totalEtb: '115.00',
+    whtEtb: '0.00',
+  };
+
+  /** recomputePaymentStatus's own correctness is covered by its own describe block above — spy it out here so these tests only assert the withholding-specific guard + wiring. */
+  const stubRecomputePaymentStatus = (
+    repo: InvoicesRepository,
+  ): jest.SpyInstance =>
+    jest
+      .spyOn(repo, 'recomputePaymentStatus')
+      .mockResolvedValue({ ...invoiceRow, status: 'PAID' } as never);
+
+  it('takes the per-invoice advisory lock before reading the invoice', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([invoiceRow]))
+      .mockReturnValueOnce(makeSelectChain([{ total: '112.00' }]));
+    const execute = jest.fn(() => Promise.resolve(undefined));
+    const update = jest.fn(() => makeUpdateChain([{ ...invoiceRow, whtEtb: '3.00' }]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, execute, update }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+    stubRecomputePaymentStatus(repo);
+
+    await repo.recordWithholding(TENANT_ID, INVOICE_ID, { amountEtb: '3.00' });
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    const lockOrder = execute.mock.invocationCallOrder[0]!;
+    const selectOrder = select.mock.invocationCallOrder[0]!;
+    expect(lockOrder).toBeLessThan(selectOrder);
+  });
+
+  it('sets whtEtb/whtVoucherRef/whtRecordedAt as an absolute set, then recomputes status + customer balance', async () => {
+    let setValues: Record<string, unknown> = {};
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([invoiceRow]))
+      .mockReturnValueOnce(makeSelectChain([{ total: '112.00' }]));
+    const execute = jest.fn(() => Promise.resolve(undefined));
+    const update = jest.fn(() =>
+      makeUpdateChain([{ ...invoiceRow, whtEtb: '3.00' }], (v) => (setValues = v)),
+    );
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, execute, update }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+    const recomputeSpy = stubRecomputePaymentStatus(repo);
+
+    await repo.recordWithholding(TENANT_ID, INVOICE_ID, {
+      amountEtb: '3.00',
+      voucherRef: 'WHT-001',
+      recordedAt: '2026-09-01T00:00:00Z',
+    });
+
+    expect(setValues.whtEtb).toBe('3.00');
+    expect(setValues.whtVoucherRef).toBe('WHT-001');
+    expect(setValues.whtRecordedAt).toEqual(new Date('2026-09-01T00:00:00Z'));
+    expect(recomputeSpy).toHaveBeenCalledWith(expect.anything(), INVOICE_ID);
+    expect(mockCustomerBalance).toHaveBeenCalledWith(
+      expect.anything(),
+      TENANT_ID,
+      CUSTOMER_ID,
+    );
+  });
+
+  it('voucherRef omitted -> stored as null; recordedAt omitted -> defaults to now', async () => {
+    let setValues: Record<string, unknown> = {};
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([invoiceRow]))
+      .mockReturnValueOnce(makeSelectChain([{ total: '112.00' }]));
+    const execute = jest.fn(() => Promise.resolve(undefined));
+    const update = jest.fn(() =>
+      makeUpdateChain([{ ...invoiceRow, whtEtb: '3.00' }], (v) => (setValues = v)),
+    );
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, execute, update }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+    stubRecomputePaymentStatus(repo);
+
+    const before = Date.now();
+    await repo.recordWithholding(TENANT_ID, INVOICE_ID, { amountEtb: '3.00' });
+    const after = Date.now();
+
+    expect(setValues.whtVoucherRef).toBeNull();
+    expect(setValues.whtRecordedAt).toBeInstanceOf(Date);
+    const recordedAtMs = (setValues.whtRecordedAt as Date).getTime();
+    expect(recordedAtMs).toBeGreaterThanOrEqual(before);
+    expect(recordedAtMs).toBeLessThanOrEqual(after);
+  });
+
+  it('boundary: allocated 112 + wht 3.00 == total 115.00 passes (not strictly over)', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([invoiceRow]))
+      .mockReturnValueOnce(makeSelectChain([{ total: '112.00' }]));
+    const execute = jest.fn(() => Promise.resolve(undefined));
+    const update = jest.fn(() => makeUpdateChain([{ ...invoiceRow, whtEtb: '3.00' }]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, execute, update }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+    stubRecomputePaymentStatus(repo);
+
+    await expect(
+      repo.recordWithholding(TENANT_ID, INVOICE_ID, { amountEtb: '3.00' }),
+    ).resolves.toBeDefined();
+  });
+
+  it('boundary: allocated 112 + wht 3.01 exceeds total 115.00 by one cent -> ConflictException (409), never a silent clamp', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([invoiceRow]))
+      .mockReturnValueOnce(makeSelectChain([{ total: '112.00' }]));
+    const execute = jest.fn(() => Promise.resolve(undefined));
+    const update = jest.fn();
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, execute, update }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    await expect(
+      repo.recordWithholding(TENANT_ID, INVOICE_ID, { amountEtb: '3.01' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('rejects a VOID invoice', async () => {
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ ...invoiceRow, status: 'VOID' }]));
+    const execute = jest.fn(() => Promise.resolve(undefined));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, execute }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    await expect(
+      repo.recordWithholding(TENANT_ID, INVOICE_ID, { amountEtb: '3.00' }),
+    ).rejects.toBeInstanceOf(WorkflowTransitionError);
+  });
+
+  it('404s when the invoice does not exist', async () => {
+    const select = jest.fn().mockReturnValueOnce(makeSelectChain([]));
+    const execute = jest.fn(() => Promise.resolve(undefined));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, execute }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    await expect(
+      repo.recordWithholding(TENANT_ID, INVOICE_ID, { amountEtb: '3.00' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('InvoicesRepository.agingReport — Task 3 (3.6)', () => {
+  const TODAY = todayIso();
+
+  it('buckets outstanding amounts per customer, excluding invoices with <= 0 outstanding and VOID invoices', async () => {
+    const rows = [
+      // Fully paid — outstanding 0, must be excluded.
+      {
+        invoiceId: 'inv-paid',
+        customerId: CUSTOMER_ID,
+        customerName: 'Acme',
+        totalEtb: '100.00',
+        whtEtb: '0.00',
+        dueDate: TODAY,
+        issuedAt: new Date(),
+      },
+      // 40 days overdue, 60.00 outstanding.
+      {
+        invoiceId: 'inv-overdue',
+        customerId: CUSTOMER_ID,
+        customerName: 'Acme',
+        totalEtb: '60.00',
+        whtEtb: '0.00',
+        dueDate: daysAgoIso(40),
+        issuedAt: new Date(),
+      },
+    ];
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain(rows))
+      .mockReturnValueOnce(
+        makeSelectChain([{ invoiceId: 'inv-paid', total: '100.00' }]),
+      );
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    const result = await repo.agingReport(TENANT_ID);
+
+    expect(result).toEqual([
+      {
+        customerId: CUSTOMER_ID,
+        customerName: 'Acme',
+        current: '0.00',
+        d1_30: '0.00',
+        d31_60: '60.00',
+        d61_90: '0.00',
+        d90_plus: '0.00',
+        total: '60.00',
+      },
+    ]);
+  });
+
+  it('returns an empty array (and skips the allocation query) when there are no non-VOID invoices', async () => {
+    const select = jest.fn().mockReturnValueOnce(makeSelectChain([]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new InvoicesRepository({ withTenant } as never);
+
+    await expect(repo.agingReport(TENANT_ID)).resolves.toEqual([]);
+    expect(select).toHaveBeenCalledTimes(1);
+  });
+});
+
+/** ISO date string N days before business-time "today", for aging fixtures. */
+function daysAgoIso(days: number): string {
+  const d = new Date(`${todayIso()}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}

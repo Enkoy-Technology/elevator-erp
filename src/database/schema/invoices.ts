@@ -64,6 +64,14 @@ export const invoices = pgTable(
     whtEtb: numeric('wht_etb', { precision: 14, scale: 2 })
       .notNull()
       .default('0'),
+    // Mirrors the withholding voucher the customer hands the supplier when
+    // they retain WHT (see PaymentsRepository / InvoicesRepository's
+    // recordWithholding doc comment) — same "manual mirror of an external
+    // legal document" idea as the fiscal* columns below, just for the
+    // withholding voucher instead of the ETR receipt. Both nullable: most
+    // invoices never see a withholding credit at all.
+    whtVoucherRef: text('wht_voucher_ref'),
+    whtRecordedAt: timestamp('wht_recorded_at', { withTimezone: true }),
     totalEtb: numeric('total_etb', { precision: 14, scale: 2 }).notNull(),
     rateVersionId: uuid('rate_version_id')
       .notNull()
