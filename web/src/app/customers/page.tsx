@@ -287,7 +287,7 @@ export default function CustomersPage() {
                         <th className="py-2 pr-4 font-semibold">Type</th>
                         <th className="py-2 pr-4 font-semibold">City</th>
                         <th className="py-2 pr-4 font-semibold">Contact</th>
-                        <th className="py-2 font-semibold">Balance (ETB)</th>
+                        <th className="py-2 font-semibold">Net Balance (ETB)</th>
                         {canWrite ? (
                           <th className="py-2 pl-4 font-semibold">Actions</th>
                         ) : null}
