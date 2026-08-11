@@ -12,7 +12,6 @@ import {
   isNull,
   lte,
   ne,
-  notExists,
   or,
   sql,
   sum,
@@ -435,9 +434,33 @@ export class InvoicesRepository {
   }
 
   /**
-   * VOID guard: only from ISSUED with zero allocations. Both conditions
-   * are enforced by the WHERE clause itself (CAS + NOT EXISTS), atomically
-   * — no separate read-then-write race window.
+   * VOID guard: only from ISSUED, with zero payment allocations and no
+   * recorded withholding credit. Locked under the SAME per-invoice advisory
+   * lock as `recordWithholding` and `PaymentsRepository.guardAndInsertAllocation`
+   * — all three race the same invariant (what this invoice's allocations/
+   * withholding currently are, and whether it is still safe to write) and
+   * must serialize against each other, not just against themselves.
+   *
+   * A previous version of this method relied on a single UPDATE statement's
+   * WHERE clause (CAS on status + NOT EXISTS on allocations) and its doc
+   * comment claimed that was atomic enough to need "no separate
+   * read-then-write race window". That claim was false: under READ
+   * COMMITTED, a concurrent `guardAndInsertAllocation` that has passed its
+   * own guards and inserted an allocation — but not yet committed — is
+   * invisible to this statement's NOT EXISTS. Both transactions could then
+   * commit: this one voiding the invoice, the other attaching a live
+   * allocation to it, with the allocation side's own `recomputePaymentStatus`
+   * silently no-op'ing once it sees VOID. The result was a VOID invoice
+   * with a live allocation permanently attached — cash consumed by a
+   * payment that no "what's owed" view (balance, aging) can see anymore.
+   * The advisory lock below is what actually closes that window, the same
+   * way it closes it for the other two invoice-mutating paths; the CAS/NOT
+   * EXISTS shape alone never did.
+   *
+   * Also rejects voiding an invoice that already carries a recorded
+   * withholding credit (whtEtb > 0) — voiding would silently discard the
+   * voucher reference (whtVoucherRef/whtRecordedAt) with no path to
+   * reconcile it afterward.
    */
   async voidInvoice(
     tenantId: string,
@@ -445,45 +468,51 @@ export class InvoicesRepository {
     reason: string,
   ): Promise<InvoiceRecord> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
-      const [row] = await tx
-        .update(invoices)
-        .set({ status: 'VOID', voidReason: reason, updatedAt: new Date() })
-        .where(
-          and(
-            eq(invoices.id, id),
-            eq(invoices.status, 'ISSUED'),
-            notExists(
-              tx
-                .select({ one: sql`1` })
-                .from(paymentAllocations)
-                .where(
-                  and(
-                    eq(paymentAllocations.tenantId, invoices.tenantId),
-                    eq(paymentAllocations.invoiceId, invoices.id),
-                  ),
-                ),
-            ),
-          ),
-        )
-        .returning();
-      if (row) {
-        // Task 3 (3.5): voiding removes this invoice's totalEtb from what
-        // the customer owes — recompute in the same transaction the void
-        // itself commits in.
-        await recomputeCustomerBalance(tx, tenantId, row.customerId);
-        return row;
-      }
-      const exists = await tx
-        .select({ id: invoices.id })
+      await this.lockInvoice(tx, id);
+
+      const [invoice] = await tx
+        .select()
         .from(invoices)
         .where(eq(invoices.id, id))
         .limit(1);
-      if (!exists[0]) {
+      if (!invoice) {
         throw new NotFoundException('Invoice not found');
       }
-      throw new WorkflowTransitionError(
-        'Invoice can only be voided from ISSUED with zero payment allocations',
-      );
+      if (invoice.status !== 'ISSUED') {
+        throw new WorkflowTransitionError(
+          'Invoice can only be voided from ISSUED with zero payment allocations',
+        );
+      }
+      if (new Decimal(invoice.whtEtb).gt(0)) {
+        throw new WorkflowTransitionError(
+          'Cannot void an invoice that already has a recorded withholding credit — voiding would silently discard the voucher reference',
+        );
+      }
+      const [allocation] = await tx
+        .select({ one: sql`1` })
+        .from(paymentAllocations)
+        .where(eq(paymentAllocations.invoiceId, id))
+        .limit(1);
+      if (allocation) {
+        throw new WorkflowTransitionError(
+          'Invoice can only be voided from ISSUED with zero payment allocations',
+        );
+      }
+
+      const [row] = await tx
+        .update(invoices)
+        .set({ status: 'VOID', voidReason: reason, updatedAt: new Date() })
+        .where(eq(invoices.id, id))
+        .returning();
+      if (!row) {
+        throw new Error(`Failed to void invoice ${id}`);
+      }
+
+      // Task 3 (3.5): voiding removes this invoice's totalEtb from what
+      // the customer owes — recompute in the same transaction the void
+      // itself commits in.
+      await recomputeCustomerBalance(tx, tenantId, row.customerId);
+      return row;
     });
   }
 
@@ -566,9 +595,7 @@ export class InvoicesRepository {
     input: { amountEtb: string; voucherRef?: string; recordedAt?: string },
   ): Promise<InvoiceRecord> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
-      await tx.execute(
-        sql`select pg_advisory_xact_lock(hashtext(${id}::text)::bigint)`,
-      );
+      await this.lockInvoice(tx, id);
 
       const [invoice] = await tx
         .select()
@@ -634,6 +661,15 @@ export class InvoicesRepository {
    * is set) it is. Two plain queries (invoices, then allocation sums) +
    * TS-side bucketing — same "avoid GROUP BY/join subtleties, keep it
    * testable" reasoning as recomputeCustomerBalance.
+   *
+   * IMPORTANT — deliberately PER-INVOICE, unlike `customers.outstandingBalanceEtb`
+   * (see `recomputeCustomerBalance`'s doc comment): this report has no
+   * unapplied-cash term, because an advance/on-account payment that has not
+   * been allocated to any invoice has no invoice to be "aged" against. So
+   * this report's total and the customer's net balance will legitimately
+   * differ, by exactly that customer's unapplied cash — by design, not a
+   * bug. Any UI/export surfacing both must label them distinctly (e.g.
+   * "Aged Outstanding" here vs "Net Balance" there).
    */
   async agingReport(tenantId: string): Promise<AgingRow[]> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
@@ -794,6 +830,18 @@ export class InvoicesRepository {
       );
     }
     return row;
+  }
+
+  /**
+   * `pg_advisory_xact_lock(hashtext(id)::bigint)` — see
+   * `PaymentsRepository.lockRow` for the same idiom (3rd+ occurrence, reused
+   * verbatim per the task brief). Shared here between `voidInvoice` and
+   * `recordWithholding`, the two methods in this file that race the same
+   * per-invoice invariant, so the lock key derivation can't silently drift
+   * between them.
+   */
+  private async lockInvoice(tx: TenantTransaction, id: string): Promise<void> {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${id}::text)::bigint)`);
   }
 
   private async fiscalYearForToday(
