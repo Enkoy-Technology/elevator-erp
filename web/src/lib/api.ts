@@ -1088,6 +1088,59 @@ export const downloadProformaDocument = (
     `proforma-${proformaNumber}.${format}`,
   );
 
+export type InvoiceStatus = 'ISSUED' | 'PARTIALLY_PAID' | 'PAID' | 'VOID';
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  fiscalYearLabel: string;
+  proformaId: string | null;
+  customerId: string;
+  projectId: string | null;
+  subtotalEtb: string;
+  vatEtb: string;
+  whtEtb: string;
+  whtVoucherRef: string | null;
+  whtRecordedAt: string | null;
+  totalEtb: string;
+  status: InvoiceStatus;
+  voidReason: string | null;
+  issuedAt: string;
+  dueDate: string | null;
+  fiscalReceiptNumber: string | null;
+  fiscalDeviceSerial: string | null;
+  fiscalIssuedAt: string | null;
+  fiscalKind: string | null;
+  fiscalNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InvoiceLine {
+  id: string;
+  invoiceId: string;
+  lineNo: number;
+  description: string;
+  quantity: string;
+  unitPriceEtb: string;
+  lineTotalEtb: string;
+}
+
+export interface InvoiceWithLines extends Invoice {
+  lines: InvoiceLine[];
+}
+
+/** POST /proformas/:id/convert-to-invoice — lives on InvoicesController
+ *  (@Roles('FINANCE')), not ProformasController, despite the URL prefix. */
+export const convertProformaToInvoice = (
+  proformaId: string,
+  dueDate?: string,
+): Promise<InvoiceWithLines> =>
+  apiFetch<InvoiceWithLines>(`/proformas/${proformaId}/convert-to-invoice`, {
+    method: 'POST',
+    body: JSON.stringify(dueDate ? { dueDate } : {}),
+  });
+
 export const updateSettings = (payload: {
   primaryColorHex?: string;
   secondaryColorHex?: string;

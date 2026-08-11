@@ -15,10 +15,12 @@ import {
 import { Pagination } from '@/components/pagination';
 import { SideDrawer } from '@/components/side-drawer';
 import { Sidebar } from '@/components/sidebar';
+import { formatEtb } from '@/lib/money';
 import {
   ApiError,
   approveQuotation,
   cancelProforma,
+  convertProformaToInvoice,
   convertQuotationToProforma,
   createQuotationFromCalc,
   downloadProformaDocument,
@@ -100,16 +102,17 @@ const CALC_DEFAULTS: Omit<CreateQuotationPayload, 'validUntil' | 'notes'> = {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-const etbFormatter = new Intl.NumberFormat('en-US', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-const formatEtb = (value: string): string => `${etbFormatter.format(Number(value))} ETB`;
-
 /** Mirrors @Roles('SALES_MANAGER') on the quotations/proformas mutation
  *  routes; CEO and ADMIN bypass via RolesGuard's SUPER_ROLES. */
 const canWrite = (role: UserRole | null): boolean =>
   role === 'SALES_MANAGER' || role === 'CEO' || role === 'ADMIN';
+
+/** Mirrors @Roles('FINANCE') on InvoicesController (class-level, no
+ *  per-route override) — POST /proformas/:id/convert-to-invoice lives on
+ *  that controller, not ProformasController, so it needs its own gate
+ *  distinct from canWrite's SALES_MANAGER check above. */
+const canConvertToInvoice = (role: UserRole | null): boolean =>
+  role === 'FINANCE' || role === 'CEO' || role === 'ADMIN';
 
 export default function QuotationsPage() {
   const router = useRouter();
@@ -358,6 +361,27 @@ export default function QuotationsPage() {
     void runProformaAction(() => cancelProforma(proforma.id, reason), proforma.id);
   };
 
+  // ponytail: window.prompt for the optional due date, matching the
+  // established reason-prompt convention on this page (see onConvert above).
+  const onConvertToInvoice = (proforma: Proforma) => {
+    const entered = window.prompt(
+      `Convert ${proforma.proformaNumber} to an invoice. Due date (YYYY-MM-DD, optional)?`,
+      '',
+    );
+    if (entered === null) {
+      return;
+    }
+    const trimmed = entered.trim();
+    if (trimmed && !ISO_DATE.test(trimmed)) {
+      setError('Due date must be in YYYY-MM-DD format');
+      return;
+    }
+    void runProformaAction(
+      () => convertProformaToInvoice(proforma.id, trimmed || undefined),
+      proforma.id,
+    );
+  };
+
   const onDownloadQuote = async (quote: Quotation, format: DocumentFormat) => {
     setBusyId(quote.id);
     setError(null);
@@ -383,6 +407,7 @@ export default function QuotationsPage() {
   };
 
   const canMutate = canWrite(role);
+  const canInvoice = canConvertToInvoice(role);
 
   const renderDownloadMenu = (busy: boolean, onPick: (format: DocumentFormat) => void) => (
     <div className="flex items-center gap-1">
@@ -463,6 +488,16 @@ export default function QuotationsPage() {
     const busy = busyId === proforma.id;
     return (
       <div className="flex flex-wrap items-center gap-2">
+        {canInvoice && proforma.status === 'ISSUED' ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onConvertToInvoice(proforma)}
+            className={`${btnPrimary} px-2.5 py-1 text-xs`}
+          >
+            → Invoice
+          </button>
+        ) : null}
         {canMutate && proforma.status === 'ISSUED' ? (
           <button
             type="button"
