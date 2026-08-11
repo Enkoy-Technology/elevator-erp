@@ -34,6 +34,7 @@ import {
   writeCsv,
   writeXlsx,
 } from '../../common/export/tabular';
+import { buildFiscalStatusText } from '../../common/export/templates/invoice.template';
 import { TenantBrandingProvider } from '../../common/export/tenant-branding.provider';
 import { invoiceStatusEnum, type InvoiceStatus } from '../../database/schema';
 import type { AuthenticatedUser } from '../../types/auth.types';
@@ -47,11 +48,17 @@ import {
   invoiceDocumentData,
   withDocumentStatus,
 } from './invoice-document.mapper';
+import type { InvoiceExportRow } from './invoices.repository';
 import { InvoicesService } from './invoices.service';
 
 const INVOICE_STATUSES = invoiceStatusEnum.enumValues;
 
 export const INVOICES_EXPORT_COLUMNS: ColumnDef[] = [
+  // Fix-wave-c #5: same compliance rule the single-invoice document export
+  // already carries (see invoice.template.ts's own compliance header) —
+  // this bulk list export was the only invoice-bearing spreadsheet without
+  // it. Leading column, same convention as INVOICE_DOCUMENT_COLUMNS.
+  { key: 'documentStatus', header: 'Document Status' },
   { key: 'id', header: 'ID' },
   { key: 'invoiceNumber', header: 'Invoice Number' },
   { key: 'fiscalYearLabel', header: 'Fiscal Year' },
@@ -70,6 +77,24 @@ export const INVOICES_EXPORT_COLUMNS: ColumnDef[] = [
   { key: 'voidReason', header: 'Void Reason' },
   { key: 'createdAt', header: 'Created At', format: 'date' },
 ];
+
+/**
+ * Fix-wave-c #5: stamps the same plain-text fiscal notice/mirror
+ * (`buildFiscalStatusText`, see invoice.template.ts's own compliance
+ * comment) onto each row of the bulk list-export STREAM — mirrors
+ * `withDocumentStatus` in invoice-document.mapper.ts, but that one maps a
+ * single already-fetched row for the `:id/document` xlsx download; this
+ * one has to map lazily, one row at a time, to preserve
+ * InvoicesRepository.streamAll's batching instead of collecting the whole
+ * export into memory.
+ */
+async function* withListDocumentStatus(
+  rows: AsyncIterable<InvoiceExportRow>,
+): AsyncGenerator<InvoiceExportRow & { documentStatus: string }> {
+  for await (const row of rows) {
+    yield { ...row, documentStatus: buildFiscalStatusText(row) };
+  }
+}
 
 export const AGING_EXPORT_COLUMNS: ColumnDef[] = [
   { key: 'customerId', header: 'Customer ID' },
@@ -164,11 +189,13 @@ export class InvoicesController {
       res.json(result);
       return;
     }
-    const rows = this.invoicesService.streamAll(user, {
-      status: parsedStatus,
-      customerId,
-      q,
-    });
+    const rows = withListDocumentStatus(
+      this.invoicesService.streamAll(user, {
+        status: parsedStatus,
+        customerId,
+        q,
+      }),
+    );
     const filename = `invoices-${todayIso()}`;
     if (format === 'csv') {
       await writeCsv(res, filename, INVOICES_EXPORT_COLUMNS, rows);

@@ -138,6 +138,54 @@ describe('InvoicesController.list — status validation and format routing', () 
       expect.anything(),
     );
   });
+
+  it('fix-wave-c #5: carries the fiscal notice as a leading "Document Status" column/value — the compliance rule the single-invoice export already carries, closed for the bulk list export too', async () => {
+    invoicesService.streamAll.mockImplementation(async function* () {
+      yield { id: 'inv-1', invoiceNumber: 'INV-1', fiscalReceiptNumber: null } as never;
+    });
+
+    await controller.list(user, res as never, undefined, undefined, undefined, undefined, undefined, 'xlsx');
+
+    expect(mockWriteXlsx).toHaveBeenCalledWith(
+      res,
+      expect.any(String),
+      expect.arrayContaining([{ key: 'documentStatus', header: 'Document Status' }]),
+      expect.anything(),
+    );
+    const streamed = mockWriteXlsx.mock.calls[0]?.[3] as AsyncIterable<Record<string, unknown>>;
+    const rows: Record<string, unknown>[] = [];
+    for await (const row of streamed) {
+      rows.push(row);
+    }
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.documentStatus).toBe('INTERNAL DOCUMENT — NOT A FISCAL RECEIPT');
+    expect(rows[0]?.invoiceNumber).toBe('INV-1');
+  });
+
+  it('fix-wave-c #5: carries the mirror text instead once fiscalReceiptNumber is populated', async () => {
+    invoicesService.streamAll.mockImplementation(async function* () {
+      yield {
+        id: 'inv-2',
+        invoiceNumber: 'INV-2',
+        fiscalReceiptNumber: 'ETR-000123456',
+        fiscalIssuedAt: new Date('2026-08-01T00:00:00.000Z'),
+        fiscalDeviceSerial: 'SN-9988776655',
+        fiscalKind: null,
+        fiscalNote: null,
+      } as never;
+    });
+
+    await controller.list(user, res as never, undefined, undefined, undefined, undefined, undefined, 'xlsx');
+
+    const streamed = mockWriteXlsx.mock.calls[0]?.[3] as AsyncIterable<Record<string, unknown>>;
+    const rows: Record<string, unknown>[] = [];
+    for await (const row of streamed) {
+      rows.push(row);
+    }
+    expect(rows[0]?.documentStatus).toEqual(
+      expect.stringContaining('mirrored from the certified device'),
+    );
+  });
 });
 
 describe('InvoicesController.aging — format routing', () => {
