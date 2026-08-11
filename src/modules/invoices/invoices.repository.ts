@@ -98,6 +98,13 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
+/** `issueDateIso` + `days` calendar days, as an ISO 'YYYY-MM-DD' string — same UTC-midnight math as rates.repository.ts's own `dayBefore` (2nd occurrence in this codebase; not yet worth a shared helper per this file's own "3rd+, extract" convention). */
+function addDaysIso(issueDateIso: string, days: number): string {
+  const d = new Date(`${issueDateIso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 /** New line inserted alongside a fresh invoice, before ids/timestamps are assigned. */
 interface NewInvoiceLine {
   lineNo: number;
@@ -410,6 +417,16 @@ export class InvoicesRepository {
       const claimed = await this.claimSequence(tx, tenantId, fiscalYear.label);
       const invoiceNumber = buildInvoiceNumber(fiscalYear.label, claimed);
 
+      // 3.5 (R4): default the due date from the customer's paymentTermsDays
+      // when the caller didn't supply one — see resolveDueDate's own doc
+      // comment.
+      const resolvedDueDate = await this.resolveDueDate(
+        tx,
+        proforma.customerId,
+        dueDate,
+        today,
+      );
+
       // 4. Project name for the single presentational line — proformas
       // always carry a NOT NULL projectId (see proformas.ts), so this join
       // is guaranteed to find a row.
@@ -444,7 +461,7 @@ export class InvoicesRepository {
             totalEtb: proforma.totalEtb,
             rateVersionId: proforma.rateVersionId,
             issuedByUserId: userId,
-            dueDate,
+            dueDate: resolvedDueDate,
           })
           .returning();
       } catch (err) {
@@ -506,6 +523,18 @@ export class InvoicesRepository {
       const claimed = await this.claimSequence(tx, tenantId, fiscalYear.label);
       const invoiceNumber = buildInvoiceNumber(fiscalYear.label, claimed);
 
+      // R4: default the due date from the customer's paymentTermsDays when
+      // the caller didn't supply one — see resolveDueDate's own doc
+      // comment. Runs before the insert below, so a non-existent customerId
+      // still surfaces as the SAME foreign-key-violation 404 it always has
+      // (resolveDueDate degrades to null rather than throwing).
+      const resolvedDueDate = await this.resolveDueDate(
+        tx,
+        input.customerId,
+        input.dueDate,
+        today,
+      );
+
       let invoiceRow: InvoiceRecord | undefined;
       try {
         [invoiceRow] = await tx
@@ -522,7 +551,7 @@ export class InvoicesRepository {
             totalEtb: input.totalEtb,
             rateVersionId: input.rateVersionId,
             issuedByUserId: userId,
-            dueDate: input.dueDate,
+            dueDate: resolvedDueDate,
           })
           .returning();
       } catch (err) {
@@ -811,10 +840,20 @@ export class InvoicesRepository {
    * Per-customer AR aging as of business-time "today": buckets every
    * non-VOID invoice's outstanding amount (totalEtb - whtEtb - Σ
    * allocations, invoices with <= 0 outstanding excluded) by how many days
-   * past its dueDate (or issuedAt's business-calendar date, when no dueDate
-   * is set) it is. Two plain queries (invoices, then allocation sums) +
-   * TS-side bucketing — same "avoid GROUP BY/join subtleties, keep it
-   * testable" reasoning as recomputeCustomerBalance.
+   * past its dueDate it is. Two plain queries (invoices, then allocation
+   * sums) + TS-side bucketing — same "avoid GROUP BY/join subtleties, keep
+   * it testable" reasoning as recomputeCustomerBalance.
+   *
+   * R4 — a null dueDate is bucketed as `current`, NEVER aged from the
+   * invoice's own issuedAt. This report used to fall back to issuedAt when
+   * dueDate was unset, which put an invoice in `d1_30` the day after it was
+   * issued — the finance officer's first screen showing this week's
+   * invoices as overdue. Both creation paths (issueFromProforma,
+   * createStandalone) now default dueDate from the customer's
+   * paymentTermsDays at issue time (see resolveDueDate's own doc comment),
+   * so a null dueDate here means the customer had no resolvable terms —
+   * treating that as "not yet due" is the only choice that doesn't invent a
+   * date this report has no basis for.
    *
    * IMPORTANT — deliberately PER-INVOICE, unlike `customers.outstandingBalanceEtb`
    * (see `recomputeCustomerBalance`'s doc comment): this report has no
@@ -837,7 +876,6 @@ export class InvoicesRepository {
           totalEtb: invoices.totalEtb,
           whtEtb: invoices.whtEtb,
           dueDate: invoices.dueDate,
-          issuedAt: invoices.issuedAt,
         })
         .from(invoices)
         .leftJoin(
@@ -888,14 +926,10 @@ export class InvoicesRepository {
           continue;
         }
 
-        // Reference date for aging: dueDate when set, else the invoice's
-        // own issue date — both read as business-calendar 'YYYY-MM-DD'
-        // strings (todayIso() applied to issuedAt, the same business-time
-        // convention "today" itself uses — see business-time.ts) rather
-        // than a raw UTC date slice, so an invoice issued just after local
-        // midnight but before UTC midnight doesn't age a day early.
-        const referenceDate = row.dueDate ?? todayIso(row.issuedAt);
-        const bucket = bucketForDaysOverdue(daysOverdue(referenceDate, today));
+        // R4: a null dueDate is `current`, full stop — never aged from
+        // issuedAt (see this method's own doc comment).
+        const bucket =
+          row.dueDate === null ? 'current' : bucketForDaysOverdue(daysOverdue(row.dueDate, today));
 
         let entry = buckets.get(row.customerId);
         if (!entry) {
@@ -996,6 +1030,45 @@ export class InvoicesRepository {
    */
   private async lockInvoice(tx: TenantTransaction, id: string): Promise<void> {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${id}::text)::bigint)`);
+  }
+
+  /**
+   * R4: resolves the invoice's dueDate — the caller-supplied value when
+   * present, else issueDateIso + the customer's `paymentTermsDays` (both
+   * creation paths, `issueFromProforma` and `createStandalone`, call this).
+   *
+   * Before this fix, an omitted dueDate was stored as a literal NULL and
+   * `agingReport` fell back to ageing from the invoice's own `issuedAt` —
+   * so an invoice issued today with no due date landed in `d1_30` (overdue)
+   * the very next day, regardless of the customer's real payment terms.
+   * `customers.paymentTermsDays` (schema default 30) existed but drove
+   * nothing.
+   *
+   * Returns null — never a fabricated date — when the customer can't be
+   * resolved (defensive only: both callers already have a working
+   * customerId by construction, either FK-validated already or about to be
+   * FK-validated by the invoice insert itself). `agingReport` treats a null
+   * dueDate as `current`, NEVER as "age from issuedAt" — see its own doc
+   * comment for that other half of this fix.
+   */
+  private async resolveDueDate(
+    tx: TenantTransaction,
+    customerId: string,
+    providedDueDate: string | null,
+    issueDateIso: string,
+  ): Promise<string | null> {
+    if (providedDueDate !== null) {
+      return providedDueDate;
+    }
+    const [customer] = await tx
+      .select({ paymentTermsDays: customers.paymentTermsDays })
+      .from(customers)
+      .where(eq(customers.id, customerId))
+      .limit(1);
+    if (!customer) {
+      return null;
+    }
+    return addDaysIso(issueDateIso, Number(customer.paymentTermsDays));
   }
 
   private async fiscalYearForToday(
