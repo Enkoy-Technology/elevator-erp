@@ -6,10 +6,12 @@ import { BlockList, isIP } from 'node:net';
 import type { Browser } from 'puppeteer';
 
 import { TemplateNotImplementedError } from '../exceptions';
+import { buildAgingReportHtml } from './templates/aging.template';
 import { buildInvoiceHtml } from './templates/invoice.template';
 import { buildProformaHtml } from './templates/proforma.template';
 import { buildQuotationHtml } from './templates/quotation.template';
 import { buildReceiptHtml } from './templates/receipt.template';
+import { buildCustomerStatementHtml } from './templates/statement.template';
 
 export type DocumentTemplate =
   | 'quotation'
@@ -19,7 +21,9 @@ export type DocumentTemplate =
   | 'contract'
   | 'maintenance-report'
   | 'installation-certificate'
-  | 'warranty-certificate';
+  | 'warranty-certificate'
+  | 'aging-report'
+  | 'customer-statement';
 
 export interface TenantBranding {
   name: string;
@@ -37,9 +41,10 @@ export interface TenantBranding {
 type TemplateBuilder = (data: object, branding: TenantBranding | null) => string;
 
 /**
- * 'quotation' (Phase 2), 'proforma' (Phase 3), and 'invoice'/'receipt'
- * (Phase 4, task 5) are wired up. The rest of DocumentTemplate exists so
- * later phases can already type against it; requesting one of those throws
+ * 'quotation' (Phase 2), 'proforma' (Phase 3), 'invoice'/'receipt' (Phase 4,
+ * task 5.1/5.2), and 'aging-report'/'customer-statement' (Phase 4, task 5.3)
+ * are wired up. The rest of DocumentTemplate exists so later phases can
+ * already type against it; requesting one of those throws
  * TemplateNotImplementedError until its phase lands — do not stub the
  * remaining templates ahead of the data that would fill them.
  */
@@ -48,6 +53,8 @@ const TEMPLATE_BUILDERS: Partial<Record<DocumentTemplate, TemplateBuilder>> = {
   proforma: buildProformaHtml,
   invoice: buildInvoiceHtml,
   receipt: buildReceiptHtml,
+  'aging-report': buildAgingReportHtml,
+  'customer-statement': buildCustomerStatementHtml,
 };
 
 // Private/loopback/link-local IP ranges a tenant-controlled branding image

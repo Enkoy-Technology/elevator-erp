@@ -161,6 +161,33 @@ describe('DocumentPdfService.renderDocumentPdf', () => {
       ),
     ).resolves.toBeInstanceOf(Buffer);
   });
+
+  it('has a registered builder for "aging-report" (Phase 4, task 5.3) — does not throw TemplateNotImplementedError', async () => {
+    mockLaunch();
+    const service = new DocumentPdfService();
+    await expect(
+      service.renderDocumentPdf('aging-report', { asOfDate: '2026-08-11', rows: [] }, branding),
+    ).resolves.toBeInstanceOf(Buffer);
+  });
+
+  it('has a registered builder for "customer-statement" (Phase 4, task 5.3) — does not throw TemplateNotImplementedError', async () => {
+    mockLaunch();
+    const service = new DocumentPdfService();
+    await expect(
+      service.renderDocumentPdf(
+        'customer-statement',
+        {
+          customerName: 'Test',
+          from: '2026-07-01',
+          to: '2026-08-11',
+          openingBalance: '0.00',
+          closingBalance: '0.00',
+          rows: [],
+        },
+        branding,
+      ),
+    ).resolves.toBeInstanceOf(Buffer);
+  });
 });
 
 describe('DocumentPdfService — single-flight browser launch', () => {

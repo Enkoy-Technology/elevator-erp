@@ -1,7 +1,12 @@
 import { BadRequestException } from '@nestjs/common';
 
 import type { AuthenticatedUser } from '../../types/auth.types';
-import { arrayToAsyncIterable, writeCsv, writeXlsx } from '../../common/export/tabular';
+import {
+  arrayToAsyncIterable,
+  setDownloadHeaders,
+  writeCsv,
+  writeXlsx,
+} from '../../common/export/tabular';
 import {
   CUSTOMERS_EXPORT_COLUMNS,
   CustomersController,
@@ -12,6 +17,7 @@ import type { CustomersService } from './customers.service';
 jest.mock('../../common/export/tabular');
 const mockWriteCsv = jest.mocked(writeCsv);
 const mockWriteXlsx = jest.mocked(writeXlsx);
+const mockSetDownloadHeaders = jest.mocked(setDownloadHeaders);
 const mockArrayToAsyncIterable = jest.mocked(arrayToAsyncIterable);
 // Auto-mocked like writeCsv/writeXlsx above — give it a real (if trivial)
 // AsyncGenerator back so `expect.anything()` on the 4th writeCsv/writeXlsx
@@ -34,9 +40,13 @@ describe('CustomersController.list — format wiring', () => {
   };
 
   const res = { json: jest.fn() };
+  const pdfService = { renderDocumentPdf: jest.fn() };
+  const tenantBranding = { get: jest.fn() };
 
   const controller = new CustomersController(
     service as unknown as CustomersService,
+    pdfService as never,
+    tenantBranding as never,
   );
 
   beforeEach(() => {
@@ -110,8 +120,15 @@ describe('CustomersController.statement — date validation and format routing',
   const CUSTOMER_ID = '33333333-3333-3333-3333-333333333333';
 
   const service = { statement: jest.fn() };
-  const controller = new CustomersController(service as unknown as CustomersService);
-  const res = { json: jest.fn() };
+  const pdfService = { renderDocumentPdf: jest.fn() };
+  const tenantBranding = { get: jest.fn() };
+  const branding = { name: 'Enkoy', slogan: '', logoUrl: null, address: '', phones: [], primaryColor: '#123456' };
+  const controller = new CustomersController(
+    service as unknown as CustomersService,
+    pdfService as never,
+    tenantBranding as never,
+  );
+  const res = { json: jest.fn(), end: jest.fn() };
   const statementResult = {
     customerId: CUSTOMER_ID,
     customerName: 'Acme',
@@ -133,6 +150,7 @@ describe('CustomersController.statement — date validation and format routing',
   beforeEach(() => {
     jest.clearAllMocks();
     service.statement.mockResolvedValue(statementResult);
+    tenantBranding.get.mockResolvedValue(branding);
   });
 
   it('missing from/to: 400s before touching the service', async () => {
@@ -191,5 +209,37 @@ describe('CustomersController.statement — date validation and format routing',
       STATEMENT_EXPORT_COLUMNS,
       expect.anything(),
     );
+  });
+
+  it('?format=pdf: renders via DocumentPdfService and writes statement-<...>.pdf headers', async () => {
+    pdfService.renderDocumentPdf.mockResolvedValue(Buffer.from('%PDF'));
+
+    await controller.statement(user, res as never, CUSTOMER_ID, '2026-08-01', '2026-08-31', 'pdf');
+
+    expect(pdfService.renderDocumentPdf).toHaveBeenCalledWith(
+      'customer-statement',
+      expect.objectContaining({
+        customerName: 'Acme',
+        from: '2026-08-01',
+        to: '2026-08-31',
+        closingBalance: '60.00',
+      }),
+      branding,
+    );
+    expect(mockSetDownloadHeaders).toHaveBeenCalledWith(
+      res,
+      expect.stringMatching(/^statement-.+-2026-08-01-to-2026-08-31$/),
+      'pdf',
+      'application/pdf',
+    );
+    expect(res.end).toHaveBeenCalledWith(Buffer.from('%PDF'));
+    expect(res.json).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown format with a 400 before touching the service', async () => {
+    await expect(
+      controller.statement(user, res as never, CUSTOMER_ID, '2026-08-01', '2026-08-31', 'docx'),
+    ).rejects.toThrow(/format must be one of/);
+    expect(service.statement).not.toHaveBeenCalled();
   });
 });

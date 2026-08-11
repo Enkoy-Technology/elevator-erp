@@ -12,10 +12,14 @@ type DocxTemplateBuilder = (data: object, branding: TenantBranding | null) => Do
 
 /**
  * 'quotation' (Phase 2), 'proforma' (Phase 3), and 'invoice'/'receipt'
- * (Phase 4, task 5) are wired up, mirroring DocumentPdfService's
+ * (Phase 4, task 5.1/5.2) are wired up, mirroring DocumentPdfService's
  * TEMPLATE_BUILDERS — same reasoning: the rest of DocumentTemplate exists so
  * later phases can type against it, but nothing stubs a template ahead of
- * the data that would fill it.
+ * the data that would fill it. 'aging-report'/'customer-statement' (task
+ * 5.3) are deliberately PDF-only — see aging.template.ts/statement.
+ * template.ts's own doc comments (a report is read, not edited) — so they
+ * are absent here and requesting either as docx still throws
+ * TemplateNotImplementedError.
  */
 const TEMPLATE_BUILDERS: Partial<Record<DocumentTemplate, DocxTemplateBuilder>> = {
   quotation: buildQuotationDocx,

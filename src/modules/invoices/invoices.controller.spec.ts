@@ -151,13 +151,14 @@ describe('InvoicesController.aging — format routing', () => {
   const pdfService = { renderDocumentPdf: jest.fn() };
   const docxService = { renderDocumentDocx: jest.fn() };
   const tenantBranding = { get: jest.fn() };
+  const branding = { name: 'Enkoy', slogan: '', logoUrl: null, address: '', phones: [], primaryColor: '#123456' };
   const controller = new InvoicesController(
     invoicesService as unknown as InvoicesService,
     pdfService as never,
     docxService,
     tenantBranding as never,
   );
-  const res = { json: jest.fn() };
+  const res = { json: jest.fn(), end: jest.fn() };
   const agingRows = [
     {
       customerId: 'cust-1',
@@ -174,6 +175,7 @@ describe('InvoicesController.aging — format routing', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     invoicesService.agingReport.mockResolvedValue(agingRows);
+    tenantBranding.get.mockResolvedValue(branding);
   });
 
   it('no ?format=: replies with the raw JSON bucket rows', async () => {
@@ -207,8 +209,28 @@ describe('InvoicesController.aging — format routing', () => {
     );
   });
 
+  it('?format=pdf: renders via DocumentPdfService and writes aging-<date>.pdf headers', async () => {
+    pdfService.renderDocumentPdf.mockResolvedValue(Buffer.from('%PDF'));
+
+    await controller.aging(user, res as never, 'pdf');
+
+    expect(pdfService.renderDocumentPdf).toHaveBeenCalledWith(
+      'aging-report',
+      expect.objectContaining({ rows: agingRows }),
+      branding,
+    );
+    expect(mockSetDownloadHeaders).toHaveBeenCalledWith(
+      res,
+      expect.stringMatching(/^aging-\d{4}-\d{2}-\d{2}$/),
+      'pdf',
+      'application/pdf',
+    );
+    expect(res.end).toHaveBeenCalledWith(Buffer.from('%PDF'));
+    expect(res.json).not.toHaveBeenCalled();
+  });
+
   it('rejects an unknown format with a 400 before touching the service', async () => {
-    await expect(controller.aging(user, res as never, 'pdf')).rejects.toThrow(
+    await expect(controller.aging(user, res as never, 'docx')).rejects.toThrow(
       /format must be one of/,
     );
     expect(invoicesService.agingReport).not.toHaveBeenCalled();

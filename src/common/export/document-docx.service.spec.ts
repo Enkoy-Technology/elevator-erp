@@ -158,6 +158,20 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
     expect(buf.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
   });
 
+  it('throws TemplateNotImplementedError for "aging-report" — PDF-only by design, no docx builder', async () => {
+    const service = new DocumentDocxService();
+    await expect(
+      service.renderDocumentDocx('aging-report', {}, branding),
+    ).rejects.toBeInstanceOf(TemplateNotImplementedError);
+  });
+
+  it('throws TemplateNotImplementedError for "customer-statement" — PDF-only by design, no docx builder', async () => {
+    const service = new DocumentDocxService();
+    await expect(
+      service.renderDocumentDocx('customer-statement', {}, branding),
+    ).rejects.toBeInstanceOf(TemplateNotImplementedError);
+  });
+
   it('has a registered builder for "receipt" (Phase 4) — renders a real docx Buffer', async () => {
     const service = new DocumentDocxService();
     const buf = await service.renderDocumentDocx(

@@ -22,13 +22,16 @@ import type { Response } from 'express';
 
 import { CurrentUser, Roles } from '../../common/decorators';
 import { todayIso } from '../../common/business-time';
+import { DocumentPdfService } from '../../common/export/document-pdf.service';
 import {
   arrayToAsyncIterable,
   type ColumnDef,
+  setDownloadHeaders,
   writeCsv,
   writeXlsx,
 } from '../../common/export/tabular';
-import { parseExportFormat } from '../../common/export/export-query.dto';
+import { parseExportFormat, parseReportFormat } from '../../common/export/export-query.dto';
+import { TenantBrandingProvider } from '../../common/export/tenant-branding.provider';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { CustomersService } from './customers.service';
 import { CheckDuplicateCustomerDto } from './dto/check-duplicate-customer.dto';
@@ -107,7 +110,11 @@ export const CUSTOMERS_EXPORT_COLUMNS: ColumnDef[] = [
 // CEO and ADMIN bypass both (RolesGuard SUPER_ROLES).
 @Roles('SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE', 'DISPATCHER')
 export class CustomersController {
-  constructor(private readonly customersService: CustomersService) {}
+  constructor(
+    private readonly customersService: CustomersService,
+    private readonly pdfService: DocumentPdfService,
+    private readonly tenantBranding: TenantBrandingProvider,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -167,7 +174,7 @@ export class CustomersController {
   @Roles('FINANCE')
   @ApiOperation({
     summary:
-      'Chronological AR statement between from/to (inclusive) with a running balance, or a CSV/XLSX export with ?format=',
+      'Chronological AR statement between from/to (inclusive) with a running balance, or a CSV/XLSX/PDF export with ?format=',
   })
   @ApiOkResponse({ description: 'Customer statement' })
   async statement(
@@ -183,7 +190,7 @@ export class CustomersController {
     if (from > to) {
       throw new BadRequestException('from must not be after to');
     }
-    const format = parseExportFormat(formatRaw);
+    const format = parseReportFormat(formatRaw);
 
     const result = await this.customersService.statement(user, id, from, to);
     if (!format) {
@@ -191,6 +198,24 @@ export class CustomersController {
       return;
     }
     const filename = `statement-${result.customerId}-${from}-to-${to}`;
+    if (format === 'pdf') {
+      const branding = await this.tenantBranding.get(user.tenantId);
+      const buf = await this.pdfService.renderDocumentPdf(
+        'customer-statement',
+        {
+          customerName: result.customerName,
+          from,
+          to,
+          openingBalance: result.openingBalance,
+          closingBalance: result.closingBalance,
+          rows: result.rows,
+        },
+        branding,
+      );
+      setDownloadHeaders(res, filename, 'pdf', 'application/pdf');
+      res.end(buf);
+      return;
+    }
     const exportRows = arrayToAsyncIterable(
       result.rows as unknown as Record<string, unknown>[],
     );
