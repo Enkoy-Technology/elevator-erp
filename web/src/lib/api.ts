@@ -289,6 +289,7 @@ export interface Customer {
   country: string;
   customerType: CustomerType;
   creditLimitEtb: string;
+  /** Net account position (invoices owed minus unapplied cash) — not the same as the aging report's per-invoice total; the two legitimately disagree by unapplied cash. */
   outstandingBalanceEtb: string;
   createdAt: string;
 }

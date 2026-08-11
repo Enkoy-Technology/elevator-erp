@@ -84,9 +84,13 @@ export const CUSTOMERS_EXPORT_COLUMNS: ColumnDef[] = [
   { key: 'buildingName', header: 'Building Name' },
   { key: 'customerType', header: 'Customer Type' },
   { key: 'creditLimitEtb', header: 'Credit Limit (ETB)', format: 'money' },
+  // Net account position (invoices owed minus unapplied cash) — see
+  // recomputeCustomerBalance's doc comment. Deliberately NOT "Outstanding
+  // Balance", which the aging report's per-invoice total already uses and
+  // which legitimately disagrees with this net figure by unapplied cash.
   {
     key: 'outstandingBalanceEtb',
-    header: 'Outstanding Balance (ETB)',
+    header: 'Net Balance (ETB)',
     format: 'money',
   },
   { key: 'paymentTermsDays', header: 'Payment Terms (Days)' },
