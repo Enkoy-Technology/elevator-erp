@@ -857,7 +857,11 @@ export class InvoicesRepository {
    * fix landed also had a null dueDate, for the unrelated, mundane reason
    * that the caller simply omitted it — 0045_backfill_null_due_dates.sql
    * backfilled every such row the same way resolveDueDate computes it
-   * (issuedAt's calendar date + the customer's paymentTermsDays), so this
+   * (issuedAt's calendar date + the customer's paymentTermsDays) —
+   * 0046_fix_due_date_backfill_timezone.sql then corrected 0045 itself: its
+   * `issued_at::date` cast used Postgres's session timezone (UTC), not
+   * resolveDueDate's Africa/Addis_Ababa business date, one calendar day off
+   * for any invoice issued 21:00-23:59 UTC. So this
    * comment's claim holds for every row, not just ones written after R4.
    *
    * IMPORTANT — deliberately PER-INVOICE, unlike `customers.outstandingBalanceEtb`
