@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 interface JournalEntry {
@@ -51,5 +51,28 @@ describe('migration journal', () => {
     expect(journal.entries.map((entry) => entry.idx)).toEqual(
       journal.entries.map((_entry, i) => i),
     );
+  });
+
+  /**
+   * The other half of "a migration silently never runs": a bad `when` isn't
+   * the only way. drizzle's migrator only ever applies the `.sql` files its
+   * OWN journal entries point at (by `tag`) — a `.sql` file sitting in this
+   * directory with no matching journal entry is invisible to it, forever,
+   * with `db:migrate` still reporting success and no error anywhere. The
+   * reverse gap (a journal entry with no `.sql` file on disk) is a broken
+   * migrate on the next run, not silent — but asserting the sets are EQUAL,
+   * not just "every file has an entry", catches that too for free.
+   */
+  it('has exactly one .sql file per journal tag — no untracked file, no missing file', () => {
+    const sqlFiles = readdirSync(__dirname)
+      .filter((name) => name.endsWith('.sql'))
+      .map((name) => name.slice(0, -'.sql'.length));
+    const journalTags = journal.entries.map((entry) => entry.tag);
+
+    expect(new Set(sqlFiles)).toEqual(new Set(journalTags));
+    // Set equality alone would silently accept a duplicate filename or a
+    // duplicate journal tag (same set, different multiset) — this pins the
+    // counts too.
+    expect(sqlFiles).toHaveLength(journalTags.length);
   });
 });
