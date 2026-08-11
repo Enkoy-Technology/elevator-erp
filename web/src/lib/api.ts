@@ -1130,6 +1130,20 @@ export interface InvoiceWithLines extends Invoice {
   lines: InvoiceLine[];
 }
 
+/**
+ * GET /invoices list rows only — `allocatedEtb`/`outstandingEtb` are
+ * aggregates the server computes for the page (see
+ * InvoicesRepository.withOutstanding), never present on the create/void/
+ * fiscal/withholding endpoints' responses, which is why they live on this
+ * type instead of the base `Invoice`.
+ */
+export interface InvoiceListRow extends Invoice {
+  /** Σ payment_allocations against this invoice. */
+  allocatedEtb: string;
+  /** totalEtb − whtEtb − allocatedEtb (forced to '0.00' for VOID) — exact and server-computed; never re-derive this client-side. */
+  outstandingEtb: string;
+}
+
 /** POST /proformas/:id/convert-to-invoice — lives on InvoicesController
  *  (@Roles('FINANCE')), not ProformasController, despite the URL prefix. */
 export const convertProformaToInvoice = (
@@ -1147,7 +1161,7 @@ export const listInvoices = (options?: {
   q?: string;
   page?: number;
   pageSize?: number;
-}): Promise<Paginated<Invoice>> => {
+}): Promise<Paginated<InvoiceListRow>> => {
   const params = new URLSearchParams();
   if (options?.status) {
     params.set('status', options.status);
@@ -1165,7 +1179,7 @@ export const listInvoices = (options?: {
     params.set('pageSize', String(options.pageSize));
   }
   const query = params.toString();
-  return apiFetch<Paginated<Invoice>>(`/invoices${query ? `?${query}` : ''}`);
+  return apiFetch<Paginated<InvoiceListRow>>(`/invoices${query ? `?${query}` : ''}`);
 };
 
 export interface CreateInvoiceLinePayload {
@@ -1297,6 +1311,75 @@ export const downloadReceiptDocument = (
     `/payments/${id}/document?format=${format}`,
     `receipt-${receiptNumber}.${format}`,
   );
+
+/**
+ * GET /payments list row: the payment + its customer's display name +
+ * Σ payment_allocations (`allocatedEtb`, one aggregate the server computes
+ * for the page — never per-row). No `allocations` array here — that detail
+ * only comes back from the POST/PATCH endpoints' `PaymentWithAllocations`.
+ */
+export interface PaymentListRow extends Payment {
+  customerName: string | null;
+  allocatedEtb: string;
+}
+
+const paymentListParams = (options?: {
+  customerId?: string;
+  method?: PaymentMethod;
+  from?: string;
+  to?: string;
+  q?: string;
+}): URLSearchParams => {
+  const params = new URLSearchParams();
+  if (options?.customerId) {
+    params.set('customerId', options.customerId);
+  }
+  if (options?.method) {
+    params.set('method', options.method);
+  }
+  if (options?.from) {
+    params.set('from', options.from);
+  }
+  if (options?.to) {
+    params.set('to', options.to);
+  }
+  if (options?.q) {
+    params.set('q', options.q);
+  }
+  return params;
+};
+
+export const listPayments = (options?: {
+  customerId?: string;
+  method?: PaymentMethod;
+  from?: string;
+  to?: string;
+  q?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<Paginated<PaymentListRow>> => {
+  const params = paymentListParams(options);
+  if (options?.page) {
+    params.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set('pageSize', String(options.pageSize));
+  }
+  const query = params.toString();
+  return apiFetch<Paginated<PaymentListRow>>(`/payments${query ? `?${query}` : ''}`);
+};
+
+export type PaymentExportFormat = 'csv' | 'xlsx';
+
+/** GET /payments?format=csv|xlsx with the same filters as listPayments — same blob-download helper as downloadAgingReport/downloadCustomerStatement. */
+export const downloadPayments = (
+  format: PaymentExportFormat,
+  options?: { customerId?: string; method?: PaymentMethod; from?: string; to?: string; q?: string },
+): Promise<void> => {
+  const params = paymentListParams(options);
+  params.set('format', format);
+  return downloadDocument(`/payments?${params.toString()}`, `payments.${format}`);
+};
 
 export interface BankAccount {
   id: string;

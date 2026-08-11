@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import {
@@ -21,12 +21,14 @@ import {
   allocatePayment,
   createInvoice,
   downloadInvoiceDocument,
+  downloadPayments,
   downloadReceiptDocument,
   getAccessToken,
   getCurrentRole,
   listBankAccounts,
   listCustomers,
   listInvoices,
+  listPayments,
   listProjects,
   optional,
   recordInvoiceWithholding,
@@ -37,9 +39,11 @@ import {
   type Customer,
   type DocumentFormat,
   type Invoice,
+  type InvoiceListRow,
   type InvoiceStatus,
+  type PaymentExportFormat,
+  type PaymentListRow,
   type PaymentMethod,
-  type PaymentWithAllocations,
   type Project,
   type UserRole,
 } from '@/lib/api';
@@ -97,34 +101,13 @@ const canManageFinance = (role: UserRole | null): boolean =>
   role === 'FINANCE' || role === 'CEO' || role === 'ADMIN';
 
 /**
- * What's left to collect on an ISSUED invoice: total - wht. Allocations are
- * provably zero here — derivePaymentStatus (invoice-payment-status.ts) only
- * advances a status past ISSUED once an allocation lands — so this is exact,
- * not an estimate. The one place this figure is computed: outstandingDisplay,
- * toAllocationDrafts's per-row cap, and the record-payment prefill all call
- * this instead of re-deriving it, so a future change to the rule can't land
- * in one call site and miss the others.
+ * The list's Outstanding column — GET /invoices now returns an exact,
+ * server-computed `outstandingEtb` (totalEtb − whtEtb − allocatedEtb, see
+ * InvoicesRepository.withOutstanding) for every row and every status, so
+ * this is a straight display, never a client-side re-derivation.
  */
-function issuedRemainingEtb(invoice: Invoice): string {
-  return subtractEtb(invoice.totalEtb, invoice.whtEtb);
-}
-
-/**
- * Best-effort "outstanding" for the list column. Exact where the list
- * payload makes it derivable without another round trip: ISSUED via
- * issuedRemainingEtb above, PAID/VOID are zero by definition.
- * PARTIALLY_PAID is '—' — GET /invoices doesn't return the allocated total,
- * and guessing at one risks exactly the "a displayed total that disagrees
- * with the server's by a cent" bug this phase exists to avoid.
- */
-function outstandingDisplay(invoice: Invoice): string {
-  if (invoice.status === 'PAID' || invoice.status === 'VOID') {
-    return formatEtb('0.00');
-  }
-  if (invoice.status === 'ISSUED') {
-    return formatEtb(issuedRemainingEtb(invoice));
-  }
-  return '—';
+function outstandingDisplay(invoice: InvoiceListRow): string {
+  return formatEtb(invoice.outstandingEtb);
 }
 
 interface LineDraft {
@@ -138,19 +121,19 @@ const EMPTY_LINE: LineDraft = { description: '', quantity: '1', unitPriceEtb: '0
 interface AllocationDraft {
   invoiceId: string;
   invoiceNumber: string;
-  /** Known exact remaining amount ('' when not derivable — see outstandingDisplay). */
+  /** Exact remaining room on this invoice — server-computed outstandingEtb. */
   maxEtb: string;
   amountEtb: string;
 }
 
 function toAllocationDrafts(
-  invoices: Invoice[],
+  invoices: InvoiceListRow[],
   prefill: { invoiceId: string; amountEtb: string } | null,
 ): AllocationDraft[] {
   return invoices.map((invoice) => ({
     invoiceId: invoice.id,
     invoiceNumber: invoice.invoiceNumber,
-    maxEtb: invoice.status === 'ISSUED' ? issuedRemainingEtb(invoice) : '',
+    maxEtb: invoice.outstandingEtb,
     amountEtb: prefill && prefill.invoiceId === invoice.id ? prefill.amountEtb : '',
   }));
 }
@@ -160,7 +143,7 @@ export default function InvoicesPage() {
   const [tab, setTab] = useState<Tab>('invoices');
   const [role, setRole] = useState<UserRole | null>(null);
 
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceListRow[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -174,13 +157,19 @@ export default function InvoicesPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
 
-  // Payments tab: PaymentsController exposes no GET /payments list route —
-  // there is no persisted list to page through. This holds receipts touched
-  // in THIS browser session (recorded/reversed here), which is enough for
-  // the Allocate/Reverse/Download actions this tab is for; it is not a
-  // durable payments ledger. A future task should add a list endpoint.
-  const [sessionPayments, setSessionPayments] = useState<PaymentWithAllocations[]>([]);
-  const [reversedIds, setReversedIds] = useState<Set<string>>(new Set());
+  // --- Payments tab: paginated from GET /payments (persists across reloads,
+  // unlike the earlier session-local placeholder). ---
+  const [payments, setPayments] = useState<PaymentListRow[]>([]);
+  const [paymentsPage, setPaymentsPage] = useState(1);
+  const [paymentsTotal, setPaymentsTotal] = useState(0);
+  const [paymentsTotalPages, setPaymentsTotalPages] = useState(0);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
+  const [paymentsCustomerFilter, setPaymentsCustomerFilter] = useState('');
+  const [paymentsMethodFilter, setPaymentsMethodFilter] = useState<PaymentMethod | ''>('');
+  const [paymentsFrom, setPaymentsFrom] = useState('');
+  const [paymentsTo, setPaymentsTo] = useState('');
+  const [paymentsQInput, setPaymentsQInput] = useState('');
+  const [paymentsQ, setPaymentsQ] = useState('');
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -217,11 +206,11 @@ export default function InvoicesPage() {
   const paymentPrefillRef = useRef<{ invoiceId: string; amountEtb: string } | null>(null);
 
   // --- Allocate (existing payment) drawer ---
-  const [allocateTarget, setAllocateTarget] = useState<PaymentWithAllocations | null>(null);
+  const [allocateTarget, setAllocateTarget] = useState<PaymentListRow | null>(null);
   const [allocateDrafts, setAllocateDrafts] = useState<AllocationDraft[]>([]);
   const [allocateError, setAllocateError] = useState<string | null>(null);
   const [allocateSubmitting, setAllocateSubmitting] = useState(false);
-  const allocateTargetRef = useRef<PaymentWithAllocations | null>(null);
+  const allocateTargetRef = useRef<PaymentListRow | null>(null);
 
   const refresh = useCallback(
     async (
@@ -260,6 +249,70 @@ export default function InvoicesPage() {
     [],
   );
 
+  const refreshPayments = useCallback(
+    async (
+      nextPage: number,
+      customerId: string,
+      method: PaymentMethod | '',
+      from: string,
+      to: string,
+      query: string,
+    ) => {
+      setPaymentsLoading(true);
+      setError(null);
+      try {
+        const result = await listPayments({
+          customerId: customerId || undefined,
+          method: method || undefined,
+          from: from || undefined,
+          to: to || undefined,
+          q: query || undefined,
+          page: nextPage,
+          pageSize: PAGE_SIZE,
+        });
+        setPayments(result.items);
+        setPaymentsPage(result.page);
+        setPaymentsTotal(result.total);
+        setPaymentsTotalPages(result.totalPages);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : 'Failed to load payments');
+      } finally {
+        setPaymentsLoading(false);
+      }
+    },
+    [],
+  );
+
+  /** Both tabs' data after a payment-moving action (record/allocate/reverse) — a payment mutation can change an invoice's status/outstanding AND the payments list in the same step. */
+  const refreshAfterPaymentMutation = useCallback(
+    () =>
+      Promise.all([
+        refresh(page, statusFilter, customerFilter, q),
+        refreshPayments(
+          paymentsPage,
+          paymentsCustomerFilter,
+          paymentsMethodFilter,
+          paymentsFrom,
+          paymentsTo,
+          paymentsQ,
+        ),
+      ]),
+    [
+      refresh,
+      page,
+      statusFilter,
+      customerFilter,
+      q,
+      refreshPayments,
+      paymentsPage,
+      paymentsCustomerFilter,
+      paymentsMethodFilter,
+      paymentsFrom,
+      paymentsTo,
+      paymentsQ,
+    ],
+  );
+
   useEffect(() => {
     if (!getAccessToken()) {
       router.replace('/login');
@@ -282,6 +335,46 @@ export default function InvoicesPage() {
   useEffect(() => {
     void refresh(page, statusFilter, customerFilter, q);
   }, [refresh, page, statusFilter, customerFilter, q]);
+
+  useEffect(() => {
+    void refreshPayments(
+      paymentsPage,
+      paymentsCustomerFilter,
+      paymentsMethodFilter,
+      paymentsFrom,
+      paymentsTo,
+      paymentsQ,
+    );
+  }, [
+    refreshPayments,
+    paymentsPage,
+    paymentsCustomerFilter,
+    paymentsMethodFilter,
+    paymentsFrom,
+    paymentsTo,
+    paymentsQ,
+  ]);
+
+  // A payment is "already reversed" when some OTHER row on the currently
+  // loaded page points back at it via reversalOfPaymentId — derived from
+  // the server-backed list itself rather than a session-tracked Set, so it
+  // reflects reversals from any session, not just this browser tab's own
+  // actions. ponytail: only catches pairs that land on the SAME page (both
+  // sorted by createdAt desc); the server's own double-reversal guard
+  // (PaymentsRepository.reverse) is the real authority regardless — add a
+  // dedicated `isReversed` flag from the API if a false-enabled Reverse
+  // button in a stale/far page ever turns out to matter in practice.
+  const reversedIds = useMemo(
+    () =>
+      new Set(
+        payments
+          .filter((p): p is PaymentListRow & { reversalOfPaymentId: string } =>
+            p.reversalOfPaymentId !== null,
+          )
+          .map((p) => p.reversalOfPaymentId),
+      ),
+    [payments],
+  );
 
   // Fetch the selected customer's open (ISSUED/PARTIALLY_PAID) invoices for
   // the record-payment drawer's allocation section whenever the drawer is
@@ -334,6 +427,47 @@ export default function InvoicesPage() {
     event.preventDefault();
     setPage(1);
     setQ(qInput.trim());
+  };
+
+  const setPaymentsCustomer = (next: string) => {
+    setPaymentsPage(1);
+    setPaymentsCustomerFilter(next);
+  };
+
+  const setPaymentsMethodFilterAndReset = (next: PaymentMethod | '') => {
+    setPaymentsPage(1);
+    setPaymentsMethodFilter(next);
+  };
+
+  const setPaymentsFromDate = (next: string) => {
+    setPaymentsPage(1);
+    setPaymentsFrom(next);
+  };
+
+  const setPaymentsToDate = (next: string) => {
+    setPaymentsPage(1);
+    setPaymentsTo(next);
+  };
+
+  const onPaymentsSearch = (event: FormEvent) => {
+    event.preventDefault();
+    setPaymentsPage(1);
+    setPaymentsQ(paymentsQInput.trim());
+  };
+
+  const onDownloadPayments = async (format: PaymentExportFormat) => {
+    setError(null);
+    try {
+      await downloadPayments(format, {
+        customerId: paymentsCustomerFilter || undefined,
+        method: paymentsMethodFilter || undefined,
+        from: paymentsFrom || undefined,
+        to: paymentsTo || undefined,
+        q: paymentsQ || undefined,
+      });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Download failed');
+    }
   };
 
   const canWrite = canManageFinance(role);
@@ -487,13 +621,15 @@ export default function InvoicesPage() {
     setPaymentOpen(true);
   };
 
-  const openPaymentForInvoice = (invoice: Invoice) => {
+  const openPaymentForInvoice = (invoice: InvoiceListRow) => {
     resetPaymentForm();
     setPaymentCustomerId(invoice.customerId);
     // Prefill both the payment amount and its allocation for the common
     // "pay this invoice in full" case — the user can still lower either one
-    // (e.g. a partial payment) before submitting.
-    const remaining = invoice.status === 'ISSUED' ? issuedRemainingEtb(invoice) : '';
+    // (e.g. a partial payment) before submitting. Exact for both ISSUED and
+    // PARTIALLY_PAID now that outstandingEtb is server-computed for every
+    // status (canPay only shows this action for those two statuses anyway).
+    const remaining = invoice.outstandingEtb;
     setPaymentAmount(remaining);
     paymentPrefillRef.current = { invoiceId: invoice.id, amountEtb: remaining };
     setPaymentOpen(true);
@@ -534,7 +670,7 @@ export default function InvoicesPage() {
     }
     setPaymentSubmitting(true);
     try {
-      const result = await recordPayment({
+      await recordPayment({
         customerId: paymentCustomerId,
         amountEtb: paymentAmount,
         method: paymentMethod,
@@ -544,9 +680,8 @@ export default function InvoicesPage() {
         note: paymentNote || undefined,
         allocations: entered.map((a) => ({ invoiceId: a.invoiceId, amountEtb: a.amountEtb })),
       });
-      setSessionPayments((prev) => [result, ...prev]);
       closePayment();
-      await refresh(page, statusFilter, customerFilter, q);
+      await refreshAfterPaymentMutation();
     } catch (err) {
       setPaymentError(err instanceof ApiError ? err.message : 'Failed to record payment');
     } finally {
@@ -556,7 +691,7 @@ export default function InvoicesPage() {
 
   // ---- Allocate an existing payment ----
 
-  const openAllocate = (payment: PaymentWithAllocations) => {
+  const openAllocate = (payment: PaymentListRow) => {
     setAllocateTarget(payment);
     allocateTargetRef.current = payment;
     setAllocateError(null);
@@ -570,10 +705,16 @@ export default function InvoicesPage() {
       if (allocateTargetRef.current?.id !== payment.id) {
         return;
       }
-      const already = new Set(payment.allocations.map((a) => a.invoiceId));
-      const open = result.items.filter(
-        (i) => OPEN_STATUSES.has(i.status) && !already.has(i.id),
-      );
+      // ponytail: unlike the earlier session-only PaymentWithAllocations,
+      // a PaymentListRow carries only the aggregate allocatedEtb, not which
+      // specific invoices it already touched — GET /payments/:id doesn't
+      // exist to fetch that detail, so this no longer excludes invoices
+      // already allocated to this payment from the picker. Submitting a
+      // duplicate one 409s with a clear message (PaymentsRepository's own
+      // unique-constraint guard) rather than silently double-allocating.
+      // Add a payment-detail endpoint if that duplicate-row nuisance turns
+      // out to matter in practice.
+      const open = result.items.filter((i) => OPEN_STATUSES.has(i.status));
       setAllocateDrafts(toAllocationDrafts(open, null));
     })();
   };
@@ -602,8 +743,7 @@ export default function InvoicesPage() {
       setAllocateError('Enter an amount for at least one invoice.');
       return;
     }
-    const alreadyAllocated = sumEtb(allocateTarget.allocations.map((a) => a.amountEtb));
-    const remaining = subtractEtb(allocateTarget.amountEtb, alreadyAllocated);
+    const remaining = subtractEtb(allocateTarget.amountEtb, allocateTarget.allocatedEtb);
     const enteredTotal = sumEtb(entered.map((a) => a.amountEtb));
     if (isPositiveEtb(subtractEtb(enteredTotal, remaining))) {
       setAllocateError(
@@ -616,33 +756,28 @@ export default function InvoicesPage() {
       // Sequential, not Promise.all: each call is its own transaction, and
       // stopping on the first failure (rather than firing all and sorting
       // out partial success) keeps the error message attributable to one
-      // row. Each success is applied to state immediately (not batched
-      // after the loop) so a failure partway through leaves allocateDrafts/
-      // sessionPayments in sync with what the server actually committed —
-      // a retry then only resubmits what's still pending instead of
-      // re-hitting the unique (paymentId, invoiceId) constraint on a row
-      // that already succeeded.
+      // row. Each success is applied to allocateTarget's running
+      // allocatedEtb immediately (not batched after the loop) so a failure
+      // partway through leaves the drawer's own "remaining" figure in sync
+      // with what the server actually committed — a retry then only
+      // resubmits what's still pending instead of re-hitting the unique
+      // (paymentId, invoiceId) constraint on a row that already succeeded.
       for (const draft of entered) {
         const allocation = await allocatePayment(allocateTarget.id, {
           invoiceId: draft.invoiceId,
           amountEtb: draft.amountEtb,
         });
-        setSessionPayments((prev) =>
-          prev.map((p) =>
-            p.id === allocateTarget.id
-              ? { ...p, allocations: [...p.allocations, allocation] }
-              : p,
-          ),
-        );
         setAllocateTarget((prev) =>
-          prev ? { ...prev, allocations: [...prev.allocations, allocation] } : prev,
+          prev
+            ? { ...prev, allocatedEtb: sumEtb([prev.allocatedEtb, allocation.amountEtb]) }
+            : prev,
         );
         setAllocateDrafts((prev) =>
           prev.map((a) => (a.invoiceId === draft.invoiceId ? { ...a, amountEtb: '' } : a)),
         );
       }
       closeAllocate();
-      await refresh(page, statusFilter, customerFilter, q);
+      await refreshAfterPaymentMutation();
     } catch (err) {
       setAllocateError(err instanceof ApiError ? err.message : 'Failed to allocate payment');
     } finally {
@@ -652,7 +787,7 @@ export default function InvoicesPage() {
 
   // ---- Reverse a payment ----
 
-  const onReverse = async (payment: PaymentWithAllocations) => {
+  const onReverse = async (payment: PaymentListRow) => {
     const entered = window.prompt(`Reason for reversing receipt ${payment.receiptNumber}?`);
     if (entered === null) {
       return;
@@ -665,10 +800,8 @@ export default function InvoicesPage() {
     setBusyId(payment.id);
     setError(null);
     try {
-      const reversal = await reversePayment(payment.id, reason);
-      setSessionPayments((prev) => [reversal, ...prev]);
-      setReversedIds((prev) => new Set(prev).add(payment.id));
-      await refresh(page, statusFilter, customerFilter, q);
+      await reversePayment(payment.id, reason);
+      await refreshAfterPaymentMutation();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to reverse payment');
     } finally {
@@ -690,7 +823,7 @@ export default function InvoicesPage() {
     }
   };
 
-  const onDownloadReceipt = async (payment: PaymentWithAllocations, format: 'pdf' | 'docx') => {
+  const onDownloadReceipt = async (payment: PaymentListRow, format: 'pdf' | 'docx') => {
     setBusyId(payment.id);
     setError(null);
     try {
@@ -702,7 +835,7 @@ export default function InvoicesPage() {
     }
   };
 
-  const renderInvoiceActions = (invoice: Invoice) => {
+  const renderInvoiceActions = (invoice: InvoiceListRow) => {
     const busy = busyId === invoice.id;
     const canVoid = invoice.status === 'ISSUED' && isZeroEtb(invoice.whtEtb);
     const canPay = OPEN_STATUSES.has(invoice.status);
@@ -756,16 +889,17 @@ export default function InvoicesPage() {
     );
   };
 
-  const renderPaymentActions = (payment: PaymentWithAllocations) => {
+  const renderPaymentActions = (payment: PaymentListRow) => {
     const busy = busyId === payment.id;
-    const allocated = sumEtb(payment.allocations.map((a) => a.amountEtb));
-    const unallocated = subtractEtb(payment.amountEtb, allocated);
+    const unallocated = subtractEtb(payment.amountEtb, payment.allocatedEtb);
     // reversedIds also gates Allocate, not just Reverse: reversing doesn't
-    // touch the original's cached `allocations` (the reversal is a new row),
-    // so `unallocated` above stays at its pre-reversal value — without this
-    // check the button would still show room that reversal was meant to
-    // take back, and the server has no reversal-aware guard of its own to
-    // catch it (guardAndInsertAllocation only checks the sum invariants).
+    // change the ORIGINAL payment's own allocatedEtb (the reversal mirrors
+    // its allocations under the reversal's OWN payment id, not the
+    // original's — see PaymentsRepository.reverse), so `unallocated` above
+    // stays at its pre-reversal value — without this check the button would
+    // still show room that reversal was meant to take back, and the server
+    // has no reversal-aware guard of its own to catch it
+    // (guardAndInsertAllocation only checks the sum invariants).
     const canAllocate =
       isPositiveEtb(payment.amountEtb) &&
       isPositiveEtb(unallocated) &&
@@ -1002,37 +1136,99 @@ export default function InvoicesPage() {
               </>
             ) : (
               <>
-                <p className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                  Receipts recorded or reversed in this browser session appear
-                  below — the API has no payments list endpoint yet, so this
-                  is not a durable ledger. Reload the page and it empties.
-                </p>
-                {sessionPayments.length === 0 ? (
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Filter
+                  </span>
+                  <select
+                    className={`${fieldClass} w-48`}
+                    value={paymentsCustomerFilter}
+                    onChange={(e) => setPaymentsCustomer(e.target.value)}
+                  >
+                    <option value="">All customers</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className={`${fieldClass} w-40`}
+                    value={paymentsMethodFilter}
+                    onChange={(e) =>
+                      setPaymentsMethodFilterAndReset(e.target.value as PaymentMethod | '')
+                    }
+                  >
+                    <option value="">All methods</option>
+                    {Object.entries(PAYMENT_METHOD_LABEL).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="date"
+                    aria-label="From"
+                    className={`${fieldClass} w-40`}
+                    value={paymentsFrom}
+                    onChange={(e) => setPaymentsFromDate(e.target.value)}
+                  />
+                  <input
+                    type="date"
+                    aria-label="To"
+                    className={`${fieldClass} w-40`}
+                    value={paymentsTo}
+                    onChange={(e) => setPaymentsToDate(e.target.value)}
+                  />
+                  <form onSubmit={onPaymentsSearch} className="flex items-center gap-2">
+                    <input
+                      className={`${fieldClass} w-40`}
+                      placeholder="Receipt number"
+                      value={paymentsQInput}
+                      onChange={(e) => setPaymentsQInput(e.target.value)}
+                    />
+                    <button type="submit" className={`${btnSecondary} px-3 py-1.5 text-xs`}>
+                      Search
+                    </button>
+                  </form>
+                  <div className="ml-auto flex items-center gap-1">
+                    {(['csv', 'xlsx'] as const).map((format) => (
+                      <button
+                        key={format}
+                        type="button"
+                        onClick={() => void onDownloadPayments(format)}
+                        className={`${btnGhost} px-2 py-1 text-xs uppercase`}
+                      >
+                        {format}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {paymentsLoading ? (
+                  <p className="text-sm text-slate-500">Loading…</p>
+                ) : payments.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-slate-200 px-6 py-12 text-center">
-                    <p className="text-sm text-slate-500">
-                      No payments recorded in this session yet.
-                    </p>
+                    <p className="text-sm text-slate-500">No payments found.</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[880px] text-left text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                          <th className="py-2 pr-4 font-semibold">Receipt</th>
-                          <th className="py-2 pr-4 font-semibold">Customer</th>
-                          <th className="py-2 pr-4 font-semibold">Received</th>
-                          <th className="py-2 pr-4 font-semibold">Method</th>
-                          <th className="py-2 pr-4 font-semibold">Amount</th>
-                          <th className="py-2 pr-4 font-semibold">Allocated</th>
-                          <th className="py-2 pr-4 font-semibold">Unallocated</th>
-                          <th className="py-2 font-semibold">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sessionPayments.map((p) => {
-                          const allocated = sumEtb(p.allocations.map((a) => a.amountEtb));
-                          const unallocated = subtractEtb(p.amountEtb, allocated);
-                          return (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[880px] text-left text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                            <th className="py-2 pr-4 font-semibold">Receipt</th>
+                            <th className="py-2 pr-4 font-semibold">Customer</th>
+                            <th className="py-2 pr-4 font-semibold">Received</th>
+                            <th className="py-2 pr-4 font-semibold">Method</th>
+                            <th className="py-2 pr-4 font-semibold">Amount</th>
+                            <th className="py-2 pr-4 font-semibold">Allocated</th>
+                            <th className="py-2 pr-4 font-semibold">Unallocated</th>
+                            <th className="py-2 font-semibold">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {payments.map((p) => (
                             <tr key={p.id} className="border-b border-slate-100 last:border-0">
                               <td className="py-3 pr-4 font-mono text-xs text-slate-900">
                                 {p.receiptNumber}
@@ -1043,7 +1239,7 @@ export default function InvoicesPage() {
                                 ) : null}
                               </td>
                               <td className="py-3 pr-4 text-slate-600">
-                                {customerMap[p.customerId] ?? p.customerId.slice(0, 8)}
+                                {p.customerName ?? p.customerId.slice(0, 8)}
                               </td>
                               <td className="py-3 pr-4 text-slate-600">
                                 {p.receivedAt.slice(0, 10)}
@@ -1054,17 +1250,26 @@ export default function InvoicesPage() {
                               <td className="py-3 pr-4 font-semibold text-navy-800">
                                 {formatEtb(p.amountEtb)}
                               </td>
-                              <td className="py-3 pr-4 text-slate-600">{formatEtb(allocated)}</td>
                               <td className="py-3 pr-4 text-slate-600">
-                                {formatEtb(unallocated)}
+                                {formatEtb(p.allocatedEtb)}
+                              </td>
+                              <td className="py-3 pr-4 text-slate-600">
+                                {formatEtb(subtractEtb(p.amountEtb, p.allocatedEtb))}
                               </td>
                               <td className="py-3">{renderPaymentActions(p)}</td>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <Pagination
+                      page={paymentsPage}
+                      pageSize={PAGE_SIZE}
+                      total={paymentsTotal}
+                      totalPages={paymentsTotalPages}
+                      onPageChange={setPaymentsPage}
+                    />
+                  </>
                 )}
               </>
             )}
@@ -1481,18 +1686,11 @@ export default function InvoicesPage() {
           {allocateTarget ? (
             <p className="text-xs text-slate-500">
               Remaining:{' '}
-              {formatEtb(
-                subtractEtb(
-                  allocateTarget.amountEtb,
-                  sumEtb(allocateTarget.allocations.map((a) => a.amountEtb)),
-                ),
-              )}
+              {formatEtb(subtractEtb(allocateTarget.amountEtb, allocateTarget.allocatedEtb))}
             </p>
           ) : null}
           {allocateDrafts.length === 0 ? (
-            <p className="text-xs text-slate-400">
-              No open invoices for this customer that aren&apos;t already allocated.
-            </p>
+            <p className="text-xs text-slate-400">No open invoices for this customer.</p>
           ) : (
             <div className="space-y-2">
               {allocateDrafts.map((a) => (
