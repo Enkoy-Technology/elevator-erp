@@ -185,6 +185,17 @@ export class ExpensesRepository {
    * the whole finance module has ONE lock-order rule, not one that only
    * some methods honour.
    *
+   * Reversal-of-a-reversal guard: `original.reversalOfExpenseId !== null`
+   * means the row this call is being asked to reverse is ALREADY a negated
+   * mirror of some other expense — same B1a guard as PaymentsRepository.
+   * reverse / BankTransactionsRepository.reverse, checked FIRST, same order.
+   * Expenses have no allocations, so the arithmetic happens to net to zero
+   * either way — but without this guard, reversing a reversal produces a
+   * row with POSITIVE money columns and `status: 'REVERSED'`. Any future
+   * report that filters `status = 'REVERSED'` out would then exclude that
+   * re-instated row while including the original/first-reversal pair that
+   * nets to zero, silently reporting a real expense as 0.00.
+   *
    * Double-reversal guard: same read-then-insert race as
    * PaymentsRepository.reverse — the advisory lock on the ORIGINAL row's id
    * serializes two concurrent reverse() calls against the same original so
@@ -211,6 +222,10 @@ export class ExpensesRepository {
         .limit(1);
       if (!original) {
         throw new NotFoundException('Expense not found');
+      }
+
+      if (original.reversalOfExpenseId !== null) {
+        throw new WorkflowTransitionError('Cannot reverse a reversal expense');
       }
 
       const [existingReversal] = await tx

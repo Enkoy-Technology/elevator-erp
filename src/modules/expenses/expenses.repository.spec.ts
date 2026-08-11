@@ -160,6 +160,7 @@ describe('ExpensesRepository.reverse — insert-only mirror + double-reversal 40
     bankAccountId: null,
     description: null,
     reference: 'INV-4821',
+    reversalOfExpenseId: null,
   };
 
   it('inserts a mirroring row with every money column negated, never touching the original', async () => {
@@ -227,6 +228,28 @@ describe('ExpensesRepository.reverse — insert-only mirror + double-reversal 40
     expect(result.amountEtb).toBe('-23000.00');
     // netPayableEtb on a reversal is itself negative — money handed back.
     expect(result.netPayableEtb).toBe('-22400.00');
+  });
+
+  it('B1a: rejects reversing a reversal (409) — a reversal expense can never itself be reversed', async () => {
+    const alreadyAReversal = { ...originalRow, id: 'reversal-1', reversalOfExpenseId: EXPENSE_ID };
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      .mockReturnValueOnce(makeSelectChain([alreadyAReversal]));
+    const insert = jest.fn().mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 2 }]));
+    const execute = makeExecute();
+
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select, insert, execute }),
+    );
+    const repo = new ExpensesRepository({ withTenant } as never);
+
+    await expect(repo.reverse(TENANT_ID, 'reversal-1', USER_ID, 'oops')).rejects.toThrow(
+      WorkflowTransitionError,
+    );
+    // Only the sequence claim — never a second-order reversal insert.
+    expect(insert).toHaveBeenCalledTimes(1);
   });
 
   it('double reversal: a second reverse() on an already-reversed expense 409s', async () => {
