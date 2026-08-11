@@ -13,10 +13,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-// quantity: up to 3dp, matching invoice_lines.quantity numeric(12,3).
-const QUANTITY_RE = /^\d+(\.\d{1,3})?$/;
-// unitPriceEtb: money, up to 2dp — the exact regex the brief specifies.
-const MONEY_RE = /^\d+(\.\d{1,2})?$/;
+import { MONEY_RE, QUANTITY_RE } from '../../../common/dto/money';
 
 export class CreateInvoiceLineDto {
   @ApiProperty({ example: 'Annual maintenance visit — March' })

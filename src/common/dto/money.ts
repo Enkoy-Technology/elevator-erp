@@ -5,8 +5,27 @@ import {
 } from 'class-validator';
 import { Decimal } from 'decimal.js';
 
-/** ETB money string: non-negative, up to 2 decimal places — the exact shape every money DTO field in this codebase uses. */
-export const MONEY_RE = /^\d+(\.\d{1,2})?$/;
+/**
+ * ETB money string: non-negative, up to 2 decimal places, capped at 12
+ * integer digits — the exact shape every money DTO field in this codebase
+ * uses. The 12-digit cap matches this codebase's `numeric(14, 2)` money
+ * columns (14 total digits = 12 integer + 2 fraction); without it, a value
+ * like '999999999999999.99' passes this regex but overflows the column
+ * ("numeric field overflow ... must round to an absolute value less than
+ * 10^12") and surfaces as an unhandled 500 through AllExceptionsFilter
+ * instead of a 400 here. Keep this bound in step with the column precision —
+ * see QUANTITY_RE below for its numeric(12, 3) counterpart.
+ */
+export const MONEY_RE = /^\d{1,12}(\.\d{1,2})?$/;
+
+/**
+ * Quantity string: non-negative, up to 3 decimal places, capped at 9 integer
+ * digits — matches this codebase's `numeric(12, 3)` quantity columns (12
+ * total digits = 9 integer + 3 fraction). Same overflow story as MONEY_RE
+ * above; kept next to it so the two bounds can't drift from their column
+ * precisions independently.
+ */
+export const QUANTITY_RE = /^\d{1,9}(\.\d{1,3})?$/;
 
 /**
  * Validates an already-MONEY_RE-shaped string is strictly greater than zero.
