@@ -578,7 +578,7 @@ describe('InvoicesRepository.recordWithholding — Task 3 (3.4)', () => {
     const repo = new InvoicesRepository({ withTenant } as never);
     const recomputeSpy = stubRecomputePaymentStatus(repo);
 
-    await repo.recordWithholding(TENANT_ID, INVOICE_ID, {
+    const result = await repo.recordWithholding(TENANT_ID, INVOICE_ID, {
       amountEtb: '3.00',
       voucherRef: 'WHT-001',
       recordedAt: '2026-09-01T00:00:00Z',
@@ -593,6 +593,11 @@ describe('InvoicesRepository.recordWithholding — Task 3 (3.4)', () => {
       TENANT_ID,
       CUSTOMER_ID,
     );
+    // Regression: the returned row must be recomputePaymentStatus's fresh
+    // result, not the pre-recompute row captured by the earlier UPDATE — a
+    // withholding credit that just completed settlement must come back PAID
+    // in the SAME response, not one call behind.
+    expect(result.status).toBe('PAID');
   });
 
   it('voucherRef omitted -> stored as null; recordedAt omitted -> defaults to now', async () => {
