@@ -25,6 +25,7 @@ export type EmployeePublic = {
   phone: string | null;
   role: UserRole;
   isActive: boolean;
+  smsConsentAt: Date | null;
   lastLoginAt: Date | null;
   createdAt: Date;
 };
@@ -66,6 +67,7 @@ export class EmployeesRepository {
           phone: users.phone,
           role: users.role,
           isActive: users.isActive,
+          smsConsentAt: users.smsConsentAt,
           lastLoginAt: users.lastLoginAt,
           createdAt: users.createdAt,
         })
@@ -117,6 +119,7 @@ export class EmployeesRepository {
             phone: users.phone,
             role: users.role,
             isActive: users.isActive,
+            smsConsentAt: users.smsConsentAt,
             lastLoginAt: users.lastLoginAt,
             createdAt: users.createdAt,
           })
@@ -177,6 +180,7 @@ export class EmployeesRepository {
           phone: users.phone,
           role: users.role,
           isActive: users.isActive,
+          smsConsentAt: users.smsConsentAt,
           lastLoginAt: users.lastLoginAt,
           createdAt: users.createdAt,
         });
@@ -197,6 +201,8 @@ export class EmployeesRepository {
       isActive?: boolean;
       /** Already-hashed — the service hashes the plaintext before this call. */
       passwordHash?: string;
+      /** Server-stamped elsewhere — see UpdateEmployeeDto.smsConsentGiven. true -> now, false -> null. */
+      smsConsentGiven?: boolean;
     },
   ): Promise<EmployeePublic> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
@@ -226,6 +232,9 @@ export class EmployeesRepository {
           ...(patch.passwordHash !== undefined
             ? { passwordHash: patch.passwordHash, refreshTokenHash: null }
             : {}),
+          ...(patch.smsConsentGiven !== undefined
+            ? { smsConsentAt: patch.smsConsentGiven ? new Date() : null }
+            : {}),
           updatedAt: new Date(),
         })
         .where(
@@ -242,6 +251,7 @@ export class EmployeesRepository {
           phone: users.phone,
           role: users.role,
           isActive: users.isActive,
+          smsConsentAt: users.smsConsentAt,
           lastLoginAt: users.lastLoginAt,
           createdAt: users.createdAt,
         });

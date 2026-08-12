@@ -35,6 +35,7 @@ describe('AuthService', () => {
       passwordHash: await hash('correct-horse-battery', 4),
       fullName: 'Demo CEO',
       phone: null,
+      smsConsentAt: null,
       role: 'CEO',
       isActive: true,
       refreshTokenHash: null,

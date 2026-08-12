@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
+  IsBoolean,
   IsEmail,
   IsEnum,
   IsOptional,
@@ -97,4 +98,12 @@ export class CreateCustomerDto {
   @IsString()
   @MaxLength(2000)
   notes?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Set true once the customer has given recorded consent to receive SMS (ECA Directive 832/2021). Set false to revoke. The server stamps the current time — never a client-supplied timestamp.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  smsConsentGiven?: boolean;
 }
