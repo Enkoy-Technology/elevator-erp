@@ -9,12 +9,19 @@ export type SettingsRecord = typeof tenantBranding.$inferSelect & {
   fiscalYearStart: string;
   maintenanceReminderDays: number;
   paymentReminderOffsetDays: number[];
+  /** Last-run result of the nightly balance reconciliation (task-2 §2.5) —
+   * both null until the job has ever run. Read-only: never part of
+   * UpdateSettingsDto, only BalanceReconciliationService writes these. */
+  balanceReconciliationLastRunAt: Date | null;
+  balanceReconciliationMismatchCount: number | null;
 };
 
 const TENANT_SETTINGS_COLUMNS = {
   fiscalYearStart: tenants.fiscalYearStart,
   maintenanceReminderDays: tenants.maintenanceReminderDays,
   paymentReminderOffsetDays: tenants.paymentReminderOffsetDays,
+  balanceReconciliationLastRunAt: tenants.balanceReconciliationLastRunAt,
+  balanceReconciliationMismatchCount: tenants.balanceReconciliationMismatchCount,
 };
 
 @Injectable()

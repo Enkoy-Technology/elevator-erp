@@ -36,6 +36,19 @@ export const tenants = pgTable('tenants', {
     .array()
     .notNull()
     .default(sql`'{0,7,30}'`),
+  /**
+   * Last-run result of the nightly customer-balance reconciliation (task-2
+   * brief §2.5) — the "somewhere an admin can see it" surface: read back
+   * through GET /settings, written by BalanceReconciliationService after
+   * every run. Both null until the job has ever run once.
+   */
+  balanceReconciliationLastRunAt: timestamp(
+    'balance_reconciliation_last_run_at',
+    { withTimezone: true },
+  ),
+  balanceReconciliationMismatchCount: integer(
+    'balance_reconciliation_mismatch_count',
+  ),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

@@ -1,0 +1,2 @@
+ALTER TABLE "tenants" ADD COLUMN "balance_reconciliation_last_run_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "tenants" ADD COLUMN "balance_reconciliation_mismatch_count" integer;
