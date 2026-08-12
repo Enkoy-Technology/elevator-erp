@@ -1,5 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsEmail,
   IsIn,
   IsInt,
@@ -106,4 +109,19 @@ export class UpdateSettingsDto {
   @Min(0)
   @Max(90)
   maintenanceReminderDays?: number;
+
+  @ApiPropertyOptional({
+    example: [0, 7, 30],
+    description:
+      'Days relative to an invoice’s dueDate the payment-reminder cron fires on — 0 is the due date itself, positive is days after (task-2 §2.3).',
+    type: [Number],
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(12)
+  @IsInt({ each: true })
+  @Min(0, { each: true })
+  @Max(365, { each: true })
+  paymentReminderOffsetDays?: number[];
 }

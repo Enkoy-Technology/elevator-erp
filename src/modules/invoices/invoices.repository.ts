@@ -41,7 +41,7 @@ import {
 } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import { todayIso } from '../../common/business-time';
-import { bucketForDaysOverdue, daysOverdue } from './invoice-aging';
+import { bucketForDaysOverdue, daysOverdue, invoiceOutstandingEtb } from './invoice-aging';
 import type { InvoiceDocumentRow } from './invoice-document.mapper';
 import { derivePaymentStatus } from './invoice-payment-status';
 import { buildInvoiceNumber } from './invoice-number';
@@ -930,7 +930,11 @@ export class InvoicesRepository {
 
       for (const row of rows) {
         const allocated = allocatedByInvoice.get(row.invoiceId) ?? '0';
-        const outstanding = new Decimal(row.totalEtb).minus(row.whtEtb).minus(allocated);
+        const outstanding = invoiceOutstandingEtb({
+          totalEtb: row.totalEtb,
+          whtEtb: row.whtEtb,
+          allocatedEtb: allocated,
+        });
         if (outstanding.lte(0)) {
           continue;
         }

@@ -4,6 +4,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { MaintenanceReminderRepository } from './maintenance-reminders.repository';
 import { MaintenanceReminderService } from './maintenance-reminders.service';
+import { PaymentReminderRepository } from './payment-reminders.repository';
+import { PaymentReminderService } from './payment-reminders.service';
 import { TenantDirectoryService } from './tenant-directory.service';
 
 @Module({
@@ -17,12 +19,18 @@ import { TenantDirectoryService } from './tenant-directory.service';
     TenantDirectoryService,
     MaintenanceReminderRepository,
     MaintenanceReminderService,
+    PaymentReminderRepository,
+    PaymentReminderService,
   ],
   // MaintenanceReminderService.notifyBreakdownAssigned is called by
   // MaintenanceService right after a breakdown assignment write, on the
   // same "the module that just wrote a business fact reaches into the
   // side-effect module to react" shape PaymentsModule -> InvoicesModule
-  // already uses.
-  exports: [MaintenanceReminderService],
+  // already uses. PaymentReminderService has no external callers — its
+  // @Cron is the whole interface — but stays exported for consistency and
+  // for the same reason OutboxModule exports OutboxService: nothing else
+  // needs it today, but nothing should have to reach around this module to
+  // get it later either.
+  exports: [MaintenanceReminderService, PaymentReminderService],
 })
 export class RemindersModule {}

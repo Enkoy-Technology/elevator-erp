@@ -372,6 +372,13 @@
       "when": 1786542698850,
       "tag": "0052_list_active_tenant_ids",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1786544081070,
+      "tag": "0053_payment_reminder_offset_days",
+      "breakpoints": true
     }
   ]
 }

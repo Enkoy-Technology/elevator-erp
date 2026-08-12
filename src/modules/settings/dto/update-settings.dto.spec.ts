@@ -72,3 +72,35 @@ describe('UpdateSettingsDto maintenanceReminderDays', () => {
     expect(await validateMaintenanceReminderDays(undefined)).toHaveLength(0);
   });
 });
+
+const validatePaymentReminderOffsetDays = async (paymentReminderOffsetDays: unknown) => {
+  const dto = plainToInstance(UpdateSettingsDto, { paymentReminderOffsetDays });
+  const errors = await validate(dto);
+  return errors.filter((e) => e.property === 'paymentReminderOffsetDays');
+};
+
+describe('UpdateSettingsDto paymentReminderOffsetDays', () => {
+  it('accepts the default [0, 7, 30] offset set', async () => {
+    expect(await validatePaymentReminderOffsetDays([0, 7, 30])).toHaveLength(0);
+  });
+
+  it('rejects an empty array — at least one offset is required', async () => {
+    expect(await validatePaymentReminderOffsetDays([])).not.toHaveLength(0);
+  });
+
+  it('rejects a negative offset', async () => {
+    expect(await validatePaymentReminderOffsetDays([0, -7])).not.toHaveLength(0);
+  });
+
+  it('rejects a non-integer offset', async () => {
+    expect(await validatePaymentReminderOffsetDays([0, 7.5])).not.toHaveLength(0);
+  });
+
+  it('rejects a non-array value', async () => {
+    expect(await validatePaymentReminderOffsetDays(7)).not.toHaveLength(0);
+  });
+
+  it('accepts an absent value — it is optional', async () => {
+    expect(await validatePaymentReminderOffsetDays(undefined)).toHaveLength(0);
+  });
+});
