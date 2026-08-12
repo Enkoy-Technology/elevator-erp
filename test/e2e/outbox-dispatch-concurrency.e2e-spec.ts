@@ -11,9 +11,13 @@
  * both actually get one) racing the same rows via Promise.all.
  *
  * Bypasses NestJS DI entirely and constructs OutboxDispatcherRepository
- * directly against DATABASE_ADMIN_URL, same as the repository itself does
- * in production (see its own doc comment for why it runs as the admin role
- * outside any tenant context) — this test is exercising exactly that path.
+ * directly against OUTBOX_DISPATCHER_DATABASE_URL — the same least-privilege
+ * `outbox_dispatcher` role (migration 0049_outbox_dispatcher_role.sql) the
+ * repository connects as in production (see its own doc comment for why:
+ * SELECT+UPDATE on outbound_messages only, RLS-gated by the admin_bypass
+ * policy rather than superuser identity) — this test exercises that exact
+ * path, including the `SET LOCAL app.admin_bypass = 'on'` claimDue relies on
+ * to see rows outside any single tenant at all.
  *
  * Requires a migrated database (docker compose up -d && pnpm run db:migrate).
  * Skips itself if Postgres is unreachable (see tenant-isolation.e2e-spec.ts
@@ -30,6 +34,12 @@ import { OutboxDispatcherRepository } from '../../src/modules/outbox/outbox-disp
 const ADMIN_URL =
   process.env.DATABASE_ADMIN_URL ??
   'postgresql://postgres:postgres@localhost:5434/elevator_erp';
+// Setup (insert tenant + fixture rows) still needs the real owner role;
+// only the two competing claimDue() calls below use the dispatcher's own
+// least-privilege connection, same split as production.
+const DISPATCHER_URL =
+  process.env.OUTBOX_DISPATCHER_DATABASE_URL ??
+  'postgresql://outbox_dispatcher:dispatcher_password@localhost:5434/elevator_erp';
 
 const canConnect = async (url: string): Promise<boolean> => {
   const pool = new Pool({ connectionString: url, max: 1 });
@@ -60,7 +70,7 @@ describe('OutboxDispatcherRepository.claimDue under concurrency', () => {
   let messageIds: string[];
 
   beforeAll(async () => {
-    available = await canConnect(ADMIN_URL);
+    available = (await canConnect(ADMIN_URL)) && (await canConnect(DISPATCHER_URL));
     if (!available) {
       const message =
         'Outbox dispatch concurrency e2e could not reach Postgres. ' +
@@ -77,9 +87,10 @@ describe('OutboxDispatcherRepository.claimDue under concurrency', () => {
     setupPool = new Pool({ connectionString: ADMIN_URL, max: 2 });
     // Two SEPARATE pools (not two connections off one pool) so the two
     // claimDue calls below run on genuinely independent connections, same
-    // as two separate API instances (or two overlapping cron ticks) would.
-    poolA = new Pool({ connectionString: ADMIN_URL, max: 2 });
-    poolB = new Pool({ connectionString: ADMIN_URL, max: 2 });
+    // as two separate API instances (or two overlapping cron ticks) would —
+    // both on the dispatcher's own least-privilege role, not the admin one.
+    poolA = new Pool({ connectionString: DISPATCHER_URL, max: 2 });
+    poolB = new Pool({ connectionString: DISPATCHER_URL, max: 2 });
 
     const tenantResult = await setupPool.query<{ id: string }>(
       `insert into tenants (slug, name) values ($1, $2) returning id`,

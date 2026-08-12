@@ -3,24 +3,20 @@ import { OutboxRepository } from './outbox.repository';
 // enqueue() has to run in the same tenant transaction as the dedupe
 // swallow's fallback SELECT (see TenantDbService.withTenant) — same
 // mocking shape as CustomersRepository.softDelete's own fake tenant tx.
+// Uses ON CONFLICT DO NOTHING rather than insert-then-catch: a raw insert's
+// unique violation aborts the whole Postgres transaction, so a fallback
+// SELECT in a catch block never actually runs against real Postgres — see
+// outbox.repository.ts's own doc comment and
+// test/e2e/outbox-enqueue-dedupe.e2e-spec.ts, which proves the real
+// (non-mocked) behavior a mock like this one cannot.
 
 type Row = Record<string, unknown>;
 
-/** Mimics `pg`'s DatabaseError shape: a real Error with a Postgres `.code`. */
-class MockPgError extends Error {
-  constructor(readonly code: string) {
-    super(`mock pg error ${code}`);
-  }
-}
-
-const makeInsertChain = (insertedRow: Row | undefined, insertErrorCode?: string) => {
+const makeInsertChain = (returningRows: Row[]) => {
   const chain: Record<string, jest.Mock> = {};
   chain.values = jest.fn(() => chain);
-  chain.returning = jest.fn(() =>
-    insertErrorCode
-      ? Promise.reject(new MockPgError(insertErrorCode))
-      : Promise.resolve(insertedRow ? [insertedRow] : []),
-  );
+  chain.onConflictDoNothing = jest.fn(() => chain);
+  chain.returning = jest.fn(() => Promise.resolve(returningRows));
   return chain;
 };
 
@@ -32,12 +28,8 @@ const makeSelectChain = (rows: Row[]) => {
   return chain;
 };
 
-const repoWithTx = (
-  insertedRow: Row | undefined,
-  insertErrorCode: string | undefined,
-  existingRows: Row[],
-) => {
-  const insertChain = makeInsertChain(insertedRow, insertErrorCode);
+const repoWithTx = (insertedRows: Row[], existingRows: Row[]) => {
+  const insertChain = makeInsertChain(insertedRows);
   const selectChain = makeSelectChain(existingRows);
   const insert = jest.fn(() => insertChain);
   const select = jest.fn(() => selectChain);
@@ -60,11 +52,12 @@ const VALUES = {
 describe('OutboxRepository.enqueue', () => {
   it('inserts a new message when the dedupeKey has not been used', async () => {
     const insertedRow = { id: 'm1', tenantId: TENANT_ID, ...VALUES };
-    const { repo, insertChain, select } = repoWithTx(insertedRow, undefined, []);
+    const { repo, insertChain, select } = repoWithTx([insertedRow], []);
 
     const result = await repo.enqueue(TENANT_ID, VALUES);
 
     expect(insertChain.values).toHaveBeenCalledWith({ tenantId: TENANT_ID, ...VALUES });
+    expect(insertChain.onConflictDoNothing).toHaveBeenCalledTimes(1);
     expect(select).not.toHaveBeenCalled();
     expect(result).toBe(insertedRow);
   });
@@ -73,14 +66,12 @@ describe('OutboxRepository.enqueue', () => {
   // runs every day, or a caller retrying an HTTP request that already
   // enqueued, must produce one message — a second insert with the same
   // dedupeKey is a no-op that returns the row already there, not an error
-  // and not a second SMS.
-  it('swallows a unique-violation on dedupeKey and returns the existing row instead of inserting twice', async () => {
+  // and not a second SMS. ON CONFLICT DO NOTHING never raises (unlike a raw
+  // insert's unique violation would), so the fallback SELECT below runs in
+  // a healthy transaction — the e2e test proves this against real Postgres.
+  it('falls back to the existing row when the insert conflicts on dedupeKey, instead of inserting twice', async () => {
     const existingRow = { id: 'existing-1', tenantId: TENANT_ID, ...VALUES };
-    const { repo, insertChain, select, selectChain } = repoWithTx(
-      undefined,
-      '23505',
-      [existingRow],
-    );
+    const { repo, insertChain, select, selectChain } = repoWithTx([], [existingRow]);
 
     const result = await repo.enqueue(TENANT_ID, VALUES);
 
@@ -90,16 +81,9 @@ describe('OutboxRepository.enqueue', () => {
     expect(result).toBe(existingRow);
   });
 
-  it('does not mask an unrelated insert error as a dedupe swallow', async () => {
-    const { repo, select } = repoWithTx(undefined, '23502', []);
+  it('throws if the insert reports a conflict but the fallback SELECT finds nothing (defensive — this table has no DELETE grant)', async () => {
+    const { repo } = repoWithTx([], []);
 
-    await expect(repo.enqueue(TENANT_ID, VALUES)).rejects.toBeInstanceOf(MockPgError);
-    expect(select).not.toHaveBeenCalled();
-  });
-
-  it('rethrows the original unique-violation if the row it named cannot be found (defensive — this table has no DELETE grant)', async () => {
-    const { repo } = repoWithTx(undefined, '23505', []);
-
-    await expect(repo.enqueue(TENANT_ID, VALUES)).rejects.toBeInstanceOf(MockPgError);
+    await expect(repo.enqueue(TENANT_ID, VALUES)).rejects.toThrow(/no existing row/);
   });
 });

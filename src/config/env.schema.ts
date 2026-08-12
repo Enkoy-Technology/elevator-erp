@@ -7,6 +7,15 @@ export const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   DATABASE_URL: z.string().min(1),
   DATABASE_ADMIN_URL: z.string().min(1).optional(),
+  /**
+   * Connection string for the outbox_dispatcher role (migration
+   * 0049_outbox_dispatcher_role.sql) — SELECT+UPDATE on outbound_messages
+   * only, never the Postgres superuser. See
+   * OutboxDispatcherRepository's own doc comment for why the dispatcher
+   * uses a dedicated least-privilege role, gated by the admin_bypass RLS
+   * policy, instead of DATABASE_ADMIN_URL.
+   */
+  OUTBOX_DISPATCHER_DATABASE_URL: z.string().min(1).optional(),
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
   JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   JWT_REFRESH_TTL_SECONDS: z.coerce.number().int().positive().default(604800),

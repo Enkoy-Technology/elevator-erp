@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, lte, or, sql } from 'drizzle-orm';
 
-import type { Database } from '../../database/database.types';
+import type { Database, TenantTransaction } from '../../database/database.types';
 import { outboundMessages } from '../../database/schema';
-import { OUTBOX_ADMIN_DB } from './outbox.constants';
+import { OUTBOX_DISPATCHER_DB } from './outbox.constants';
 import type { OutboundMessageRecord } from './outbox.repository';
 
 /**
@@ -18,48 +18,75 @@ import type { OutboundMessageRecord } from './outbox.repository';
  * ACROSS every tenant in one pass, which `withTenant`'s single-tenant scope
  * cannot express even if a tenant id were available.
  *
- * The considered exception: this class connects with `DATABASE_ADMIN_URL`
- * (`OUTBOX_ADMIN_DB`, wired only in OutboxModule — see its own doc comment)
- * — the same owner role `db:migrate`/`db:seed` use, which bypasses RLS
- * entirely. That is a deliberate, documented departure from "never bypass
- * RLS in production" (CLAUDE.md), made for the same reason the seeder gets
- * the same exception: this is a system process, not a tenant request. It is
- * safe — it cannot leak one tenant's data into another's — for reasons that
- * are all about what this class is allowed to DO, not about the connection
- * itself (the connection bypasses RLS on every table, not just this one):
+ * The considered exception, and it IS narrower than the first version of
+ * this file: this class connects as `outbox_dispatcher`
+ * (`OUTBOX_ADMIN_DB`/`OUTBOX_DISPATCHER_DATABASE_URL`, wired only in
+ * OutboxModule), a dedicated role created by
+ * `0049_outbox_dispatcher_role.sql` with exactly `SELECT, UPDATE` on
+ * `outbound_messages` and nothing else — not the Postgres superuser
+ * `db:migrate`/`db:seed` use, and not a role with default privileges on
+ * every table. `outbound_messages` still has `FORCE ROW LEVEL SECURITY`
+ * enabled and `outbox_dispatcher` is subject to it like any other
+ * non-superuser role: RLS is not bypassed by connection identity here, it
+ * is bypassed by the `admin_bypass` policy (`0048_outbound_messages_rls.sql`,
+ * retargeted to this role by `0049`), which only matches when the current
+ * transaction has explicitly opted in with `SET LOCAL app.admin_bypass =
+ * 'on'` — `withAdminBypass` below does that, once, for every method in this
+ * class. This is CLAUDE.md's own rule ("admin bypass only via an explicit
+ * admin_bypass policy") taken literally, not a superuser workaround dressed
+ * up as one — an earlier version of this file used `DATABASE_ADMIN_URL`
+ * directly, which technically satisfied "considered and documented" but not
+ * "narrow": a superuser connection bypasses RLS on every table in the
+ * database, not just this one, which is a materially larger blast radius
+ * for a credential that now lives pooled inside the always-on API process
+ * instead of a short-lived operator CLI invocation. Caught in review before
+ * this ever reached production traffic (nothing calls `OutboxService` yet).
  *
- *   1. Every method here touches exactly one table, `outbound_messages`,
- *      and only ever SELECTs/UPDATEs it. There is no DELETE (the table's
- *      own grants don't even allow one) and no query anywhere in this class
- *      accepts a caller-supplied tenant filter or joins across tenants.
- *   2. `claimDue` reads rows that already carry their own `tenant_id` — it
- *      doesn't need to be told which tenant to look at, because it looks at
- *      all of them, and every row it returns is still correctly tagged with
- *      the tenant it belongs to.
- *   3. `markSent`/`markRetry`/`markFailed` never take a tenant id from
- *      anywhere except the message row that was just claimed — they write
- *      back to the exact `(tenant_id, id)` pair that came out of
- *      `claimDue`, so a message can never be attributed to, or resolved
- *      against, the wrong tenant's row.
- *   4. The provider call in between (`OutboxDispatcherService.sendOne`)
- *      sends to `message.recipient`, a value that was already resolved and
- *      normalised for that exact tenant's message at enqueue time
- *      (`OutboxService.enqueue`, running under normal RLS). Nothing about
- *      the admin connection changes what gets sent to whom.
- *   5. `OUTBOX_ADMIN_DB` is provided only inside `OutboxModule` and injected
- *      only into this class — it is not exported, so no controller or other
- *      module can reach for an RLS-bypassing connection by accident.
+ * Why this still cannot leak one tenant's data into another's, now for two
+ * independent reasons instead of one:
  *
- * In short: the safety property here is not "RLS still applies" (it
- * doesn't, on this connection) — it's "the only SQL this class is capable
- * of issuing is the four narrow, reviewed statements below, each scoped by
- * a tenant_id that came from the row itself." That is an application-level
- * discipline boundary, which is weaker than a database-enforced one, which
- * is exactly why it gets called out here instead of blended in silently.
+ *   1. Database-enforced: `outbox_dispatcher` can SELECT/UPDATE
+ *      `outbound_messages` and nothing else — no other table, no INSERT, no
+ *      DELETE. Even a fully compromised call site using this connection is
+ *      confined to one table's handful of writable columns
+ *      (status/attempts/next_attempt_at/last_error/provider_message_id/
+ *      provider_name/sent_at), and even then only to rows the admin_bypass
+ *      GUC unlocks — normal RLS still applies without it.
+ *   2. Application-level (defense in depth, same as before): every method
+ *      here only ever writes back to the exact `(tenant_id, id)` pair a row
+ *      already carried out of `claimDue` — no caller-supplied tenant
+ *      filter, no cross-tenant join. The provider call in between
+ *      (`OutboxDispatcherService.sendOne`) sends to `message.recipient`, a
+ *      value already resolved and normalised for that tenant's message at
+ *      enqueue time (`OutboxService.enqueue`, running under normal RLS via
+ *      `withTenant`).
+ *
+ * `OUTBOX_DISPATCHER_DB` is provided only inside `OutboxModule` and
+ * injected only into this class — not exported, so no controller or other
+ * module can reach for it by accident.
  */
 @Injectable()
 export class OutboxDispatcherRepository {
-  constructor(@Inject(OUTBOX_ADMIN_DB) private readonly adminDb: Database) {}
+  constructor(
+    @Inject(OUTBOX_DISPATCHER_DB) private readonly dispatcherDb: Database,
+  ) {}
+
+  /**
+   * Runs `fn` inside a transaction with `app.admin_bypass` set for that
+   * transaction only (`set_config(..., true)` — is_local, same pattern as
+   * `set_tenant_context`) so the `admin_bypass` RLS policy on
+   * `outbound_messages` actually matches. Forgetting this is fail-closed,
+   * not fail-open: without it, `outbox_dispatcher` matches no policy on
+   * this table and every query simply returns zero rows.
+   */
+  private async withAdminBypass<T>(
+    fn: (tx: TenantTransaction) => Promise<T>,
+  ): Promise<T> {
+    return this.dispatcherDb.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.admin_bypass', 'on', true)`);
+      return fn(tx);
+    });
+  }
 
   /**
    * Claims up to `limit` due messages across all tenants: `status =
@@ -77,7 +104,7 @@ export class OutboxDispatcherRepository {
    * rows where the extra round trip is free.
    */
   async claimDue(limit: number): Promise<OutboundMessageRecord[]> {
-    return this.adminDb.transaction(async (tx) => {
+    return this.withAdminBypass(async (tx) => {
       const due = await tx
         .select({
           tenantId: outboundMessages.tenantId,
@@ -125,22 +152,24 @@ export class OutboxDispatcherRepository {
     providerMessageId: string,
     providerName: string,
   ): Promise<void> {
-    await this.adminDb
-      .update(outboundMessages)
-      .set({
-        status: 'SENT',
-        sentAt: new Date(),
-        providerMessageId,
-        providerName,
-        lastError: null,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(outboundMessages.tenantId, tenantId),
-          eq(outboundMessages.id, id),
-        ),
-      );
+    await this.withAdminBypass(async (tx) => {
+      await tx
+        .update(outboundMessages)
+        .set({
+          status: 'SENT',
+          sentAt: new Date(),
+          providerMessageId,
+          providerName,
+          lastError: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(outboundMessages.tenantId, tenantId),
+            eq(outboundMessages.id, id),
+          ),
+        );
+    });
   }
 
   async markRetry(
@@ -149,26 +178,30 @@ export class OutboxDispatcherRepository {
     nextAttemptAt: Date,
     lastError: string,
   ): Promise<void> {
-    await this.adminDb
-      .update(outboundMessages)
-      .set({ status: 'QUEUED', nextAttemptAt, lastError, updatedAt: new Date() })
-      .where(
-        and(
-          eq(outboundMessages.tenantId, tenantId),
-          eq(outboundMessages.id, id),
-        ),
-      );
+    await this.withAdminBypass(async (tx) => {
+      await tx
+        .update(outboundMessages)
+        .set({ status: 'QUEUED', nextAttemptAt, lastError, updatedAt: new Date() })
+        .where(
+          and(
+            eq(outboundMessages.tenantId, tenantId),
+            eq(outboundMessages.id, id),
+          ),
+        );
+    });
   }
 
   async markFailed(tenantId: string, id: string, lastError: string): Promise<void> {
-    await this.adminDb
-      .update(outboundMessages)
-      .set({ status: 'FAILED', lastError, updatedAt: new Date() })
-      .where(
-        and(
-          eq(outboundMessages.tenantId, tenantId),
-          eq(outboundMessages.id, id),
-        ),
-      );
+    await this.withAdminBypass(async (tx) => {
+      await tx
+        .update(outboundMessages)
+        .set({ status: 'FAILED', lastError, updatedAt: new Date() })
+        .where(
+          and(
+            eq(outboundMessages.tenantId, tenantId),
+            eq(outboundMessages.id, id),
+          ),
+        );
+    });
   }
 }
