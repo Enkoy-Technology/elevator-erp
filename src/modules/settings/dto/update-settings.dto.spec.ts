@@ -40,3 +40,35 @@ describe('UpdateSettingsDto fiscalYearStart', () => {
     expect(await validateFiscalYearStart('02-28')).toHaveLength(0);
   });
 });
+
+const validateMaintenanceReminderDays = async (maintenanceReminderDays: unknown) => {
+  const dto = plainToInstance(UpdateSettingsDto, { maintenanceReminderDays });
+  const errors = await validate(dto);
+  return errors.filter((e) => e.property === 'maintenanceReminderDays');
+};
+
+describe('UpdateSettingsDto maintenanceReminderDays', () => {
+  it('accepts the default 3-day window', async () => {
+    expect(await validateMaintenanceReminderDays(3)).toHaveLength(0);
+  });
+
+  it('accepts 0 — same-day-only reminders', async () => {
+    expect(await validateMaintenanceReminderDays(0)).toHaveLength(0);
+  });
+
+  it('rejects a negative window', async () => {
+    expect(await validateMaintenanceReminderDays(-1)).not.toHaveLength(0);
+  });
+
+  it('rejects a non-integer', async () => {
+    expect(await validateMaintenanceReminderDays(2.5)).not.toHaveLength(0);
+  });
+
+  it('rejects an unreasonably large window', async () => {
+    expect(await validateMaintenanceReminderDays(91)).not.toHaveLength(0);
+  });
+
+  it('accepts an absent value — it is optional', async () => {
+    expect(await validateMaintenanceReminderDays(undefined)).toHaveLength(0);
+  });
+});

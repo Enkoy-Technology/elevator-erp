@@ -1,0 +1,1 @@
+ALTER TABLE "tenants" ADD COLUMN "maintenance_reminder_days" integer DEFAULT 3 NOT NULL;

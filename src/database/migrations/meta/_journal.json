@@ -358,6 +358,20 @@
       "when": 1786542361519,
       "tag": "0050_sms_consent_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1786542678484,
+      "tag": "0051_maintenance_reminder_days",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1786542698850,
+      "tag": "0052_list_active_tenant_ids",
+      "breakpoints": true
     }
   ]
 }
