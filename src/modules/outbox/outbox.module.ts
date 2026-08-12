@@ -1,23 +1,33 @@
-import { Inject, Module, OnApplicationShutdown } from '@nestjs/common';
+import {
+  Inject,
+  Logger,
+  Module,
+  OnApplicationShutdown,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 
 import type { Env } from '../../config';
 import * as schema from '../../database/schema';
+import { OutboxController } from './outbox.controller';
 import { OutboxDispatcherRepository } from './outbox-dispatcher.repository';
 import { OutboxDispatcherService } from './outbox-dispatcher.service';
 import {
   OUTBOX_DISPATCHER_DB,
   OUTBOX_DISPATCHER_POOL,
+  SMS_ALLOWLIST_CONFIG,
   SMS_PROVIDER,
 } from './outbox.constants';
 import { OutboxRepository } from './outbox.repository';
 import { OutboxService } from './outbox.service';
 import { createSmsProvider } from './providers/sms-provider.factory';
 import type { SmsProvider } from './providers/sms-provider.interface';
+import { parseSmsAllowlist, type SmsAllowlistRuntimeConfig } from './sms-allowlist';
 
 @Module({
+  controllers: [OutboxController],
   providers: [
     OutboxService,
     OutboxRepository,
@@ -71,11 +81,52 @@ import type { SmsProvider } from './providers/sms-provider.interface';
         }),
       inject: [ConfigService],
     },
+    {
+      provide: SMS_ALLOWLIST_CONFIG,
+      // Parsed once at boot, not on every dispatch — env doesn't change at
+      // runtime. Injected as a plain value (not ConfigService itself) so
+      // OutboxDispatcherService stays constructible in a unit test with a
+      // plain object literal, same shape as SMS_PROVIDER above.
+      useFactory: (config: ConfigService<Env, true>): SmsAllowlistRuntimeConfig => ({
+        nodeEnv: config.get('NODE_ENV', { infer: true }),
+        allowlist: parseSmsAllowlist(config.get('SMS_ALLOWLIST', { infer: true })),
+      }),
+      inject: [ConfigService],
+    },
   ],
   exports: [OutboxService],
 })
-export class OutboxModule implements OnApplicationShutdown {
-  constructor(@Inject(OUTBOX_DISPATCHER_POOL) private readonly dispatcherPool: Pool) {}
+export class OutboxModule implements OnApplicationShutdown, OnModuleInit {
+  private readonly logger = new Logger(OutboxModule.name);
+
+  constructor(
+    @Inject(OUTBOX_DISPATCHER_POOL) private readonly dispatcherPool: Pool,
+    @Inject(SMS_ALLOWLIST_CONFIG) private readonly allowlistConfig: SmsAllowlistRuntimeConfig,
+  ) {}
+
+  /**
+   * task-3 brief §3.0 SAFETY: "log at startup which mode is active, so
+   * nobody is guessing" — whether the allowlist is enforced, ignored
+   * (production), or moot (empty, non-production, only reachable with
+   * SMS_PROVIDER=noop since a real provider with an empty allowlist already
+   * refused to boot via env.schema.ts's superRefine).
+   */
+  onModuleInit(): void {
+    const { nodeEnv, allowlist } = this.allowlistConfig;
+    if (nodeEnv === 'production') {
+      this.logger.log(
+        'SMS allowlist: IGNORED (NODE_ENV=production) — outbound SMS reaches real recipients.',
+      );
+    } else if (allowlist.length === 0) {
+      this.logger.log(
+        `SMS allowlist: not enforced — empty (NODE_ENV=${nodeEnv}, SMS_PROVIDER must be noop here or boot would already have failed).`,
+      );
+    } else {
+      this.logger.log(
+        `SMS allowlist: ENFORCED (NODE_ENV=${nodeEnv}) — only ${allowlist.length} number(s) may receive SMS; every other recipient is blocked and marked FAILED.`,
+      );
+    }
+  }
 
   async onApplicationShutdown(): Promise<void> {
     await this.dispatcherPool.end();

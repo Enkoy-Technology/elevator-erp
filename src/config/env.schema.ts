@@ -42,6 +42,16 @@ export const envSchema = z.object({
   GEEZSMS_TOKEN: z.string().min(1).optional(),
   /** Optional shortcode id (GeezSMS's `shortcode_id` field) — omit to use GeezSMS's own shared shortcode. A dedicated shortcode requires GeezSMS's own registration process; see the deploy runbook. */
   GEEZSMS_SENDER_ID: z.string().min(1).optional(),
+  /**
+   * Comma-separated E.164 numbers a non-production deployment may actually
+   * SMS (task-3 brief §3.0 SAFETY) — the structural guard rail, not a
+   * promise. Outside production: a real provider selected with this empty
+   * refuses to boot (below); OutboxDispatcherService blocks — visibly,
+   * FAILED with an explanatory lastError, never silently — any recipient
+   * not on this list (see sms-allowlist.ts). Ignored entirely in
+   * production, where real customers must receive real reminders.
+   */
+  SMS_ALLOWLIST: z.string().default(''),
 }).superRefine((env, ctx) => {
   // HS256 secrets shorter than the 256-bit hash weaken the whole auth chain.
   if (env.NODE_ENV === 'production' && env.JWT_SECRET.length < 32) {
@@ -68,6 +78,26 @@ export const envSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ['GEEZSMS_TOKEN'],
       message: 'GEEZSMS_TOKEN is required when SMS_PROVIDER=geezsms',
+    });
+  }
+  // task-3 brief §3.0 SAFETY: "a staging box with live credentials and no
+  // allowlist is exactly the accident this prevents" — refuse to boot
+  // rather than let a non-production deployment with a real provider be
+  // able to text a real customer. Production is exempt: the allowlist has
+  // no effect there (real customers must receive real reminders), so
+  // requiring it would be a boot-time false alarm with no safety benefit.
+  if (
+    env.NODE_ENV !== 'production' &&
+    env.SMS_PROVIDER !== 'noop' &&
+    env.SMS_ALLOWLIST.trim() === ''
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['SMS_ALLOWLIST'],
+      message:
+        `SMS_ALLOWLIST must be set when SMS_PROVIDER=${env.SMS_PROVIDER} and NODE_ENV is not production — ` +
+        'a non-production deployment with live SMS credentials and no allowlist could text a real customer. ' +
+        'Set SMS_ALLOWLIST to the test handset(s) this deployment may reach (e.g. SMS_ALLOWLIST=+251949922604).',
     });
   }
 });

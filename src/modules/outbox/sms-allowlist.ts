@@ -1,0 +1,61 @@
+/**
+ * The allowlist guard rail (task-3 brief §3.0 SAFETY) — structural, not a
+ * promise: outside production this is the one place that decides whether
+ * `OutboxDispatcherService` is allowed to actually hand a recipient to the
+ * configured `SmsProvider`. Pure and DB/DI-free so every branch the brief
+ * calls out is unit-testable without Nest or Postgres; wired into the
+ * dispatcher via `SMS_ALLOWLIST_CONFIG` (see `outbox.module.ts`) and into
+ * boot-time refusal via `env.schema.ts`'s `superRefine`.
+ */
+
+/** `SMS_ALLOWLIST` is a raw comma-separated env string — parsed once here, not scattered as ad hoc `.split(',')` calls at each call site. */
+export const parseSmsAllowlist = (raw: string): readonly string[] =>
+  raw
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
+export interface SmsAllowlistRuntimeConfig {
+  readonly nodeEnv: string;
+  readonly allowlist: readonly string[];
+}
+
+/**
+ * Returns a human-readable, credential-free reason `recipient` must NOT be
+ * sent to right now, or `null` if sending may proceed. The dispatcher writes
+ * this string straight into `outbound_messages.last_error` on a blocked
+ * message (task-3 brief: "a blocked message must be VISIBLE... never
+ * silently dropped") — it must never contain anything but the recipient and
+ * config shape, never a message body or credential.
+ *
+ * The four branches, all unit-tested in this file's own spec:
+ *  1. `nodeEnv === 'production'` -> never blocked. Real customers must
+ *     receive real reminders; the allowlist has no effect in production.
+ *  2. non-production, empty allowlist -> never blocked. Only reachable with
+ *     `SMS_PROVIDER=noop` in practice — a real provider selected with an
+ *     empty allowlist outside production already refuses to boot (see
+ *     `env.schema.ts`'s `superRefine`), so this branch exists for
+ *     completeness and for the noop-with-no-allowlist dev default.
+ *  3. non-production, non-empty allowlist, recipient listed -> not blocked.
+ *  4. non-production, non-empty allowlist, recipient NOT listed -> blocked.
+ */
+export const smsAllowlistBlockReason = (
+  nodeEnv: string,
+  allowlist: readonly string[],
+  recipient: string,
+): string | null => {
+  if (nodeEnv === 'production') {
+    return null;
+  }
+  if (allowlist.length === 0) {
+    return null;
+  }
+  if (allowlist.includes(recipient)) {
+    return null;
+  }
+  return (
+    `Blocked by SMS_ALLOWLIST: ${recipient} is not one of the ${allowlist.length} ` +
+    `number(s) allowed to receive SMS outside production (NODE_ENV=${nodeEnv}). ` +
+    'Add it to SMS_ALLOWLIST, or deploy with NODE_ENV=production to reach real numbers.'
+  );
+};
