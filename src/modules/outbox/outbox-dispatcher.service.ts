@@ -90,13 +90,19 @@ export class OutboxDispatcherService {
     } catch (err) {
       // Recording the outcome itself failed (DB blip) — log and move on
       // rather than crashing the batch or the scheduler.
-      // ponytail: a message stuck here (provider call AND the write-back
-      // both failed) sits in SENDING forever — claimDue only reclaims
-      // QUEUED rows. Add a "SENDING longer than N minutes -> QUEUED" sweep
-      // to claimDue if this is ever observed in practice; not built now
-      // because it requires a real double-failure (send fails, then the
-      // status write ALSO fails) to trigger, which is rarer than the
-      // ordinary single failure this method already handles above.
+      // ponytail: a message can be left stuck in SENDING with no automatic
+      // way back to QUEUED — claimDue only reclaims QUEUED rows. This isn't
+      // only the rare double-failure this catch block guards against
+      // (provider call AND the write-back both failing): claimDue commits
+      // the whole batch to SENDING up front, before dispatch() sends any of
+      // them, so an ordinary process crash mid-batch (the exact scenario
+      // this feature exists for — office power cuts ~39 times/month) leaves
+      // every not-yet-processed message in that batch stuck the same way,
+      // no double failure required. Add a "SENDING longer than N minutes ->
+      // QUEUED" reclaim sweep to claimDue if this is observed in practice
+      // (flagged in code review, deferred: the brief for this task doesn't
+      // ask for it and the message-log UI to even notice a stuck row
+      // doesn't exist yet either).
       this.logger.error(
         `Failed to record outcome for outbound message ${message.id}: ${errorMessage(err)}`,
       );
