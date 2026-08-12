@@ -14,7 +14,7 @@ import {
 } from './outbox.constants';
 import { OutboxRepository } from './outbox.repository';
 import { OutboxService } from './outbox.service';
-import { NoopSmsProvider } from './providers/noop-sms.provider';
+import { createSmsProvider } from './providers/sms-provider.factory';
 import type { SmsProvider } from './providers/sms-provider.interface';
 
 @Module({
@@ -55,17 +55,20 @@ import type { SmsProvider } from './providers/sms-provider.interface';
     },
     {
       provide: SMS_PROVIDER,
-      // A switch of one, on purpose: SMS_PROVIDER's env schema only allows
-      // 'noop' today (Task 3 adds the real adapter once the client picks
-      // one, and extends both the enum and this switch together).
-      useFactory: (config: ConfigService<Env, true>): SmsProvider => {
-        const selected = config.get('SMS_PROVIDER', { infer: true });
-        switch (selected) {
-          case 'noop':
-          default:
-            return new NoopSmsProvider();
-        }
-      },
+      // Selection logic lives in createSmsProvider (own unit tests, no Nest
+      // DI needed) — including "fail loudly without credentials", which the
+      // env schema's own superRefine also already enforces at
+      // ConfigModule.forRoot boot time, before this factory ever runs; the
+      // throw inside createSmsProvider is defense in depth, matching
+      // OUTBOX_DISPATCHER_POOL's own throw-if-missing pattern above.
+      useFactory: (config: ConfigService<Env, true>): SmsProvider =>
+        createSmsProvider({
+          SMS_PROVIDER: config.get('SMS_PROVIDER', { infer: true }),
+          AFROMESSAGE_API_KEY: config.get('AFROMESSAGE_API_KEY', { infer: true }),
+          AFROMESSAGE_SENDER: config.get('AFROMESSAGE_SENDER', { infer: true }),
+          GEEZSMS_TOKEN: config.get('GEEZSMS_TOKEN', { infer: true }),
+          GEEZSMS_SENDER_ID: config.get('GEEZSMS_SENDER_ID', { infer: true }),
+        }),
       inject: [ConfigService],
     },
   ],

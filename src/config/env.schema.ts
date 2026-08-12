@@ -28,12 +28,20 @@ export const envSchema = z.object({
    */
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
   /**
-   * Which SmsProvider adapter OutboxModule wires up. Only 'noop' exists
-   * today — the real provider is Task 3, once the client picks one; this
-   * stays an enum (not a free string) so a typo fails fast at boot instead
-   * of silently falling back to noop in production.
+   * Which SmsProvider adapter OutboxModule wires up — 'noop' (default, safe:
+   * logs and sends nothing), or a real gateway once its credentials below are
+   * set. Stays an enum (not a free string) so a typo fails fast at boot
+   * instead of silently falling back to noop in production.
    */
-  SMS_PROVIDER: z.enum(['noop']).default('noop'),
+  SMS_PROVIDER: z.enum(['noop', 'afromessage', 'geezsms']).default('noop'),
+  /** Bearer token for https://api.afromessage.com/api — see AfroMessageProvider's own doc comment for the verified request/response shape. Required when SMS_PROVIDER=afromessage. */
+  AFROMESSAGE_API_KEY: z.string().min(1).optional(),
+  /** Optional verified Sender Name (AfroMessage's `sender` field) — omit to use the account's own default. Branding a custom name requires AfroMessage's own registration process; see the deploy runbook. */
+  AFROMESSAGE_SENDER: z.string().min(1).optional(),
+  /** GeezSMS's own field name for its API token (https://api.geezsms.com/api/v1/sms/send) — see GeezSmsProvider's own doc comment. Required when SMS_PROVIDER=geezsms. */
+  GEEZSMS_TOKEN: z.string().min(1).optional(),
+  /** Optional shortcode id (GeezSMS's `shortcode_id` field) — omit to use GeezSMS's own shared shortcode. A dedicated shortcode requires GeezSMS's own registration process; see the deploy runbook. */
+  GEEZSMS_SENDER_ID: z.string().min(1).optional(),
 }).superRefine((env, ctx) => {
   // HS256 secrets shorter than the 256-bit hash weaken the whole auth chain.
   if (env.NODE_ENV === 'production' && env.JWT_SECRET.length < 32) {
@@ -41,6 +49,25 @@ export const envSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ['JWT_SECRET'],
       message: 'JWT_SECRET must be at least 32 characters in production',
+    });
+  }
+  // A provider selected without its credentials would silently boot as if
+  // configured and then fail every send at runtime — the task-3 brief calls
+  // a silently-noop production deployment the worst outcome, but a
+  // selected-but-uncredentialed provider (fails loudly on every send instead
+  // of never sending) is arguably worse: fail AT BOOT instead.
+  if (env.SMS_PROVIDER === 'afromessage' && !env.AFROMESSAGE_API_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['AFROMESSAGE_API_KEY'],
+      message: 'AFROMESSAGE_API_KEY is required when SMS_PROVIDER=afromessage',
+    });
+  }
+  if (env.SMS_PROVIDER === 'geezsms' && !env.GEEZSMS_TOKEN) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['GEEZSMS_TOKEN'],
+      message: 'GEEZSMS_TOKEN is required when SMS_PROVIDER=geezsms',
     });
   }
 });
