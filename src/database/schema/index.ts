@@ -14,3 +14,4 @@ export * from './invoices';
 export * from './banks';
 export * from './payments';
 export * from './expenses';
+export * from './outbound-messages';
