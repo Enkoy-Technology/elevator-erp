@@ -1,0 +1,1 @@
+ALTER TABLE "tenants" ADD COLUMN "payment_reminder_offset_days" integer[] DEFAULT '{0,7,30}' NOT NULL;

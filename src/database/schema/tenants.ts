@@ -27,6 +27,15 @@ export const tenants = pgTable('tenants', {
   maintenanceReminderDays: integer('maintenance_reminder_days')
     .notNull()
     .default(3),
+  /**
+   * Days relative to an invoice's dueDate the payment-reminder cron fires on
+   * (task-2 brief §2.3) — 0 = due date itself, positive = days after. Same
+   * "tenant setting" path as fiscalYearStart/maintenanceReminderDays above.
+   */
+  paymentReminderOffsetDays: integer('payment_reminder_offset_days')
+    .array()
+    .notNull()
+    .default(sql`'{0,7,30}'`),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

@@ -1,4 +1,4 @@
-import { bucketForDaysOverdue, daysOverdue } from './invoice-aging';
+import { bucketForDaysOverdue, daysOverdue, invoiceOutstandingEtb } from './invoice-aging';
 
 describe('daysOverdue', () => {
   it('is 0 on the due date itself', () => {
@@ -50,5 +50,34 @@ describe('bucketForDaysOverdue — boundaries pinned exactly as the brief specif
 
   it('far past 91 days stays d90_plus', () => {
     expect(bucketForDaysOverdue(500)).toBe('d90_plus');
+  });
+});
+
+describe('invoiceOutstandingEtb — the one formula agingReport/withOutstanding/recomputeCustomerBalance agree on', () => {
+  it('totalEtb minus whtEtb minus allocations', () => {
+    const result = invoiceOutstandingEtb({
+      totalEtb: '1000.00',
+      whtEtb: '20.00',
+      allocatedEtb: '300.00',
+    });
+    expect(result.toFixed(2)).toBe('680.00');
+  });
+
+  it('defaults cleanly when nothing has been allocated yet', () => {
+    const result = invoiceOutstandingEtb({
+      totalEtb: '500.00',
+      whtEtb: '0',
+      allocatedEtb: '0',
+    });
+    expect(result.toFixed(2)).toBe('500.00');
+  });
+
+  it('can go to exactly zero once fully settled', () => {
+    const result = invoiceOutstandingEtb({
+      totalEtb: '500.00',
+      whtEtb: '50.00',
+      allocatedEtb: '450.00',
+    });
+    expect(result.isZero()).toBe(true);
   });
 });

@@ -8,11 +8,13 @@ import type { UpdateSettingsDto } from './dto/update-settings.dto';
 export type SettingsRecord = typeof tenantBranding.$inferSelect & {
   fiscalYearStart: string;
   maintenanceReminderDays: number;
+  paymentReminderOffsetDays: number[];
 };
 
 const TENANT_SETTINGS_COLUMNS = {
   fiscalYearStart: tenants.fiscalYearStart,
   maintenanceReminderDays: tenants.maintenanceReminderDays,
+  paymentReminderOffsetDays: tenants.paymentReminderOffsetDays,
 };
 
 @Injectable()
@@ -79,7 +81,8 @@ export class SettingsRepository {
       // a branding-only update has no business bumping it.
       const touchesTenant =
         dto.fiscalYearStart !== undefined ||
-        dto.maintenanceReminderDays !== undefined;
+        dto.maintenanceReminderDays !== undefined ||
+        dto.paymentReminderOffsetDays !== undefined;
       const [tenant] = touchesTenant
         ? await tx
             .update(tenants)
@@ -89,6 +92,9 @@ export class SettingsRepository {
                 : {}),
               ...(dto.maintenanceReminderDays !== undefined
                 ? { maintenanceReminderDays: dto.maintenanceReminderDays }
+                : {}),
+              ...(dto.paymentReminderOffsetDays !== undefined
+                ? { paymentReminderOffsetDays: dto.paymentReminderOffsetDays }
                 : {}),
               updatedAt: new Date(),
             })
