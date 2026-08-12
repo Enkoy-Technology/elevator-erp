@@ -4,6 +4,11 @@ const jsonResponse = (status: number, body: unknown): Response =>
   new Response(JSON.stringify(body), { status });
 
 /** Runs `send` to completion and returns whatever it threw (never undefined — fails the test if it didn't throw). */
+// The client's own test handset — the only phone number allowed in this
+// codebase's fixtures/specs/docs (task-3 brief §3.0 SAFETY). Every other
+// number belongs to a real person.
+const TEST_PHONE = '+251949922604';
+
 const captureRejection = async (promise: Promise<unknown>): Promise<Error> => {
   try {
     await promise;
@@ -38,7 +43,7 @@ describe('AfroMessageProvider', () => {
     );
 
     const provider = new AfroMessageProvider(SECRET, 'MyBrand');
-    const result = await provider.send('+251911234567', 'hello');
+    const result = await provider.send(TEST_PHONE, 'hello');
 
     expect(result).toEqual({ providerMessageId: 'msg-123' });
     const [url, init] = fetchSpy.mock.calls[0]!;
@@ -48,7 +53,7 @@ describe('AfroMessageProvider', () => {
       `Bearer ${SECRET}`,
     );
     expect(JSON.parse(init?.body as string)).toEqual({
-      to: '+251911234567',
+      to: TEST_PHONE,
       message: 'hello',
       sender: 'MyBrand',
     });
@@ -59,10 +64,10 @@ describe('AfroMessageProvider', () => {
     fetchSpy.mockResolvedValue(
       jsonResponse(200, { acknowledge: 'success', response: { message_id: 'msg-1' } }),
     );
-    await new AfroMessageProvider(SECRET).send('+251911234567', 'hi');
+    await new AfroMessageProvider(SECRET).send(TEST_PHONE, 'hi');
     const [, init] = fetchSpy.mock.calls[0]!;
     expect(JSON.parse(init?.body as string)).toEqual({
-      to: '+251911234567',
+      to: TEST_PHONE,
       message: 'hi',
     });
   });
@@ -76,7 +81,7 @@ describe('AfroMessageProvider', () => {
     );
 
     const err = await captureRejection(
-      new AfroMessageProvider(SECRET).send('+251911234567', ''),
+      new AfroMessageProvider(SECRET).send(TEST_PHONE, ''),
     );
     expect(err.message).toMatch(/Message content is empty/);
     expect(err.message).not.toContain(SECRET);
@@ -86,7 +91,7 @@ describe('AfroMessageProvider', () => {
     fetchSpy.mockResolvedValue(jsonResponse(401, { acknowledge: 'error' }));
 
     const err = await captureRejection(
-      new AfroMessageProvider(SECRET).send('+251911234567', 'hi'),
+      new AfroMessageProvider(SECRET).send(TEST_PHONE, 'hi'),
     );
     expect(err.message).toMatch(/401/);
     expect(err.message).not.toContain(SECRET);
@@ -96,7 +101,7 @@ describe('AfroMessageProvider', () => {
     fetchSpy.mockResolvedValue(new Response('<html>gateway error</html>', { status: 502 }));
 
     const err = await captureRejection(
-      new AfroMessageProvider(SECRET).send('+251911234567', 'hi'),
+      new AfroMessageProvider(SECRET).send(TEST_PHONE, 'hi'),
     );
     expect(err.message).not.toContain(SECRET);
   });
@@ -105,7 +110,7 @@ describe('AfroMessageProvider', () => {
     fetchSpy.mockResolvedValue(jsonResponse(200, { acknowledge: 'success', response: {} }));
 
     const err = await captureRejection(
-      new AfroMessageProvider(SECRET).send('+251911234567', 'hi'),
+      new AfroMessageProvider(SECRET).send(TEST_PHONE, 'hi'),
     );
     expect(err.message).toMatch(/message_id/);
     expect(err.message).not.toContain(SECRET);
@@ -115,7 +120,7 @@ describe('AfroMessageProvider', () => {
     fetchSpy.mockRejectedValue(new TypeError('fetch failed'));
 
     const err = await captureRejection(
-      new AfroMessageProvider(SECRET).send('+251911234567', 'hi'),
+      new AfroMessageProvider(SECRET).send(TEST_PHONE, 'hi'),
     );
     expect(err.message).not.toContain(SECRET);
   });
@@ -125,7 +130,7 @@ describe('AfroMessageProvider', () => {
       jsonResponse(200, { acknowledge: 'success', response: { message_id: 'msg-1' } }),
     );
 
-    await new AfroMessageProvider(SECRET).send('+251911234567', 'hi');
+    await new AfroMessageProvider(SECRET).send(TEST_PHONE, 'hi');
 
     const [, init] = fetchSpy.mock.calls[0]!;
     expect(init?.signal).toBeInstanceOf(AbortSignal);

@@ -3,9 +3,10 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { MAX_ATTEMPTS, backoffDelayMs } from './outbox-backoff';
 import { OutboxDispatcherRepository } from './outbox-dispatcher.repository';
-import { SMS_PROVIDER } from './outbox.constants';
+import { SMS_ALLOWLIST_CONFIG, SMS_PROVIDER } from './outbox.constants';
 import type { OutboundMessageRecord } from './outbox.repository';
 import type { SmsProvider } from './providers/sms-provider.interface';
+import { smsAllowlistBlockReason, type SmsAllowlistRuntimeConfig } from './sms-allowlist';
 
 const CLAIM_BATCH_SIZE = 20;
 
@@ -19,6 +20,7 @@ export class OutboxDispatcherService {
   constructor(
     private readonly dispatcherRepository: OutboxDispatcherRepository,
     @Inject(SMS_PROVIDER) private readonly smsProvider: SmsProvider,
+    @Inject(SMS_ALLOWLIST_CONFIG) private readonly allowlistConfig: SmsAllowlistRuntimeConfig,
   ) {}
 
   /**
@@ -58,6 +60,20 @@ export class OutboxDispatcherService {
         // still needs to be resolved rather than left in SENDING forever.
         throw new Error(`No provider configured for channel ${message.channel}`);
       }
+
+      // The allowlist guard rail (task-3 brief §3.0 SAFETY) — checked
+      // before the provider is ever called, so a non-allowlisted recipient
+      // outside production physically cannot reach a real gateway.
+      const blockReason = smsAllowlistBlockReason(
+        this.allowlistConfig.nodeEnv,
+        this.allowlistConfig.allowlist,
+        message.recipient,
+      );
+      if (blockReason) {
+        await this.blockByAllowlist(message, blockReason);
+        return;
+      }
+
       const result = await this.smsProvider.send(message.recipient, message.body);
       await this.dispatcherRepository.markSent(
         message.tenantId,
@@ -67,6 +83,31 @@ export class OutboxDispatcherService {
       );
     } catch (err) {
       await this.recordFailure(message, errorMessage(err));
+    }
+  }
+
+  /**
+   * A message blocked by SMS_ALLOWLIST goes straight to FAILED — never
+   * through recordFailure's attempt-based backoff, since retrying later
+   * won't change which numbers are allowlisted, and the brief requires the
+   * block to be visible immediately (task-3 brief §3.0: "never silently
+   * dropped"), not only after MAX_ATTEMPTS retries have burned down.
+   */
+  private async blockByAllowlist(
+    message: OutboundMessageRecord,
+    reason: string,
+  ): Promise<void> {
+    this.logger.warn(
+      `Outbound message ${message.id} blocked by SMS_ALLOWLIST (recipient not on the non-production allowlist)`,
+    );
+    try {
+      await this.dispatcherRepository.markFailed(message.tenantId, message.id, reason);
+    } catch (err) {
+      // Same "write-back itself failed" shape as recordFailure's own catch
+      // below — log and move on rather than crash the batch or scheduler.
+      this.logger.error(
+        `Failed to record allowlist block for outbound message ${message.id}: ${errorMessage(err)}`,
+      );
     }
   }
 
