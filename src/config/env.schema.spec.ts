@@ -28,4 +28,44 @@ describe('validateEnv', () => {
   it('coerces numeric strings for PORT', () => {
     expect(validateEnv({ ...validEnv, PORT: '8080' }).PORT).toBe(8080);
   });
+
+  it('defaults SMS_PROVIDER to noop, needing no credentials', () => {
+    expect(validateEnv(validEnv).SMS_PROVIDER).toBe('noop');
+  });
+
+  it('rejects SMS_PROVIDER=afromessage without AFROMESSAGE_API_KEY', () => {
+    expect(() =>
+      validateEnv({ ...validEnv, SMS_PROVIDER: 'afromessage' }),
+    ).toThrow(/AFROMESSAGE_API_KEY/);
+  });
+
+  it('accepts SMS_PROVIDER=afromessage with AFROMESSAGE_API_KEY set', () => {
+    const env = validateEnv({
+      ...validEnv,
+      SMS_PROVIDER: 'afromessage',
+      AFROMESSAGE_API_KEY: 'a-key',
+    });
+    expect(env.SMS_PROVIDER).toBe('afromessage');
+  });
+
+  it('rejects SMS_PROVIDER=geezsms without GEEZSMS_TOKEN', () => {
+    expect(() => validateEnv({ ...validEnv, SMS_PROVIDER: 'geezsms' })).toThrow(
+      /GEEZSMS_TOKEN/,
+    );
+  });
+
+  it('accepts SMS_PROVIDER=geezsms with GEEZSMS_TOKEN set', () => {
+    const env = validateEnv({
+      ...validEnv,
+      SMS_PROVIDER: 'geezsms',
+      GEEZSMS_TOKEN: 'a-token',
+    });
+    expect(env.SMS_PROVIDER).toBe('geezsms');
+  });
+
+  it('rejects an unknown SMS_PROVIDER value', () => {
+    expect(() => validateEnv({ ...validEnv, SMS_PROVIDER: 'twilio' })).toThrow(
+      /SMS_PROVIDER/,
+    );
+  });
 });

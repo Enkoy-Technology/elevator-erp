@@ -49,11 +49,71 @@ are not already present — idempotent, safe to run on every deploy, no
 | `DATABASE_ADMIN_URL` | Connection string for the owner role — used only by migrate/seed, never by the running app. |
 | `OUTBOX_DISPATCHER_DATABASE_URL` | Connection string for the `outbox_dispatcher` role (SELECT+UPDATE on `outbound_messages` only, migration `0049_outbox_dispatcher_role.sql`) — used by the running app's outbox dispatcher (`OutboxDispatcherRepository`), which claims due messages across every tenant on a cron with no request-scoped tenant context. Deliberately NOT `DATABASE_ADMIN_URL`/the Postgres superuser: a dedicated least-privilege role kept away from tenant data by database-enforced grants, gated into seeing across tenants only via the `admin_bypass` RLS policy the dispatcher opts into per-transaction. See that class's doc comment for the full reasoning on why it cannot leak. |
 | `CORS_ORIGINS` | Comma-separated list of allowed browser origins. |
-| `SMS_PROVIDER` | Defaults to `noop` (logs, sends nothing — see `NoopSmsProvider`). Only real value until Task 3 ships a provider adapter. |
+| `SMS_PROVIDER` | `noop` (default), `afromessage`, or `geezsms` — see §5 below. |
 
 `ALLOW_DEMO_SEED` must **never** be set to `1` in production. Its presence
 lets the demo tenant and its published credentials be seeded into a live
 database.
+
+## 5. SMS provider
+
+`SMS_PROVIDER=noop` is the **safe default** — it logs and sends nothing, so
+a fresh deployment never SMSes anyone by accident. The client picked both
+AfroMessage and GeezSMS to test real delivery before committing to one;
+switching between them (or back to `noop`) is a one-env-var change, no code
+change. Selecting `afromessage`/`geezsms` without its credential below fails
+`ConfigModule.forRoot` at boot (`src/config/env.schema.ts`) — a
+selected-but-uncredentialed provider never silently no-ops in production.
+
+| Variable | Provider | Required? | Notes |
+|---|---|---|---|
+| `AFROMESSAGE_API_KEY` | AfroMessage | Required when `SMS_PROVIDER=afromessage` | Bearer token from your AfroMessage account. |
+| `AFROMESSAGE_SENDER` | AfroMessage | Optional | Verified Sender Name (`sender` field). Omit to use the account's own default sender. |
+| `GEEZSMS_TOKEN` | GeezSMS | Required when `SMS_PROVIDER=geezsms` | API token from https://geezsms.com/#/api. |
+| `GEEZSMS_SENDER_ID` | GeezSMS | Optional | Dedicated shortcode id (`shortcode_id` field). Omit to use GeezSMS's shared shortcode. |
+
+**Sender-ID registration is the long-lead item — start it before launch, not
+after.** Sending SMS from a branded name/shortcode (rather than the
+provider's shared default) requires that provider's own registration process
+(business documents, approval). Neither vendor publishes a lead time on their
+public docs; treat 1–2 weeks as an optimistic floor and confirm directly with
+whichever provider the client keeps. Until that registration clears, deploy
+with `AFROMESSAGE_SENDER`/`GEEZSMS_SENDER_ID` unset — messages still send
+from the provider's shared default.
+
+**UNVERIFIED — read before the first live send.** Both adapters
+(`src/modules/outbox/providers/afromessage.provider.ts`,
+`geezsms.provider.ts`) were built against each vendor's own published
+documentation (AfroMessage's doc-site JS bundle; GeezSMS's official Postman
+collection), not a guess — but neither vendor documents every response shape
+in full:
+- **AfroMessage**: the success/error envelope (`acknowledge`/`response`) and
+  the `to`/`message`/`sender`/`callback` request fields are confirmed
+  verbatim from the vendor's own docs. `response.message_id` is confirmed as
+  the success id field; a success response missing it throws loudly instead
+  of guessing (watch `lastError` on the message log for this).
+- **GeezSMS**: the request fields (`token`/`phone`/`msg`/`shortcode_id`) and
+  the ONE documented success response (`message_status: "success"`,
+  `api_log_id`) are confirmed verbatim from the vendor's own Postman
+  collection. **No failure-response example is published for `/sms/send`** —
+  this adapter's failure detection (anything not `message_status: "success"`)
+  is inferred, not vendor-confirmed. **GeezSMS's own docs describe the phone
+  format as "must start with 2519"**, with no mention of Safaricom Ethiopia's
+  `07…` numbers — confirm Safaricom delivery explicitly (see the delivery
+  test below).
+
+**Delivery test — run before trusting either provider in production.** A
+provider reporting "sent"/`acknowledge: success` is not proof a handset
+received anything. For each provider you intend to use:
+1. Send one **English** and one **Amharic** message to a real **Ethio
+   Telecom** SIM.
+2. Send one **English** and one **Amharic** message to a real **Safaricom
+   Ethiopia** SIM.
+3. Confirm arrival **on the handset** for all four, not just a success
+   response from the API.
+4. Note delivery latency and any character/encoding issues on the Amharic
+   messages (see `common/sms-segments.ts` for the GSM-7/UCS-2 segment split
+   this codebase already computes).
 
 ## 3. Pre-ship check
 
