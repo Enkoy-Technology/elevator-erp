@@ -18,6 +18,13 @@ export const envSchema = z.object({
    * keys on the real client IP instead of the proxy's. 0 = direct exposure.
    */
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
+  /**
+   * Which SmsProvider adapter OutboxModule wires up. Only 'noop' exists
+   * today — the real provider is Task 3, once the client picks one; this
+   * stays an enum (not a free string) so a typo fails fast at boot instead
+   * of silently falling back to noop in production.
+   */
+  SMS_PROVIDER: z.enum(['noop']).default('noop'),
 }).superRefine((env, ctx) => {
   // HS256 secrets shorter than the 256-bit hash weaken the whole auth chain.
   if (env.NODE_ENV === 'production' && env.JWT_SECRET.length < 32) {
