@@ -351,6 +351,13 @@
       "when": 1786537805249,
       "tag": "0049_outbox_dispatcher_role",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1786542361519,
+      "tag": "0050_sms_consent_columns",
+      "breakpoints": true
     }
   ]
 }

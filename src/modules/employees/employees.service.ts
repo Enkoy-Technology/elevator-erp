@@ -37,6 +37,7 @@ export class EmployeesService {
       phone: dto.phone,
       role: dto.role,
       isActive: dto.isActive,
+      smsConsentGiven: dto.smsConsentGiven,
       // Hashed here (never persisted or logged as plaintext) so a reset
       // never touches the wire or the DB layer unhashed.
       ...(dto.password !== undefined

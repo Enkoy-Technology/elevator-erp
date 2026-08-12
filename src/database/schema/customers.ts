@@ -62,6 +62,15 @@ export const customers = pgTable(
       .default('30'),
     tags: text('tags').array(),
     notes: text('notes'),
+    /**
+     * When consent to receive transactional SMS was captured — null means no
+     * consent on file. ECA Directive 832/2021 requires recorded consent for
+     * A2P sends (see the 2018 precedent: Ethio Telecom pulled 47 companies'
+     * short codes for sending without it). Server-set only (see
+     * UpdateCustomerDto.smsConsentGiven) — never a client-supplied
+     * timestamp, so this stays a trustworthy compliance record.
+     */
+    smsConsentAt: timestamp('sms_consent_at', { withTimezone: true }),
     createdByUserId: uuid('created_by_user_id'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()

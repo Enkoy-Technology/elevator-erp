@@ -228,6 +228,9 @@ export class CustomersRepository {
           tags: dto.tags,
           notes: dto.notes,
           createdByUserId,
+          ...(dto.smsConsentGiven !== undefined
+            ? { smsConsentAt: dto.smsConsentGiven ? new Date() : null }
+            : {}),
         })
         .returning();
       if (!row) {
@@ -274,6 +277,11 @@ export class CustomersRepository {
             : {}),
           ...(dto.tags !== undefined ? { tags: dto.tags } : {}),
           ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+          // Server-stamped, never a client-supplied timestamp — see
+          // smsConsentGiven's own doc comment on CreateCustomerDto.
+          ...(dto.smsConsentGiven !== undefined
+            ? { smsConsentAt: dto.smsConsentGiven ? new Date() : null }
+            : {}),
           updatedAt: new Date(),
         })
         .where(and(eq(customers.id, id), isNull(customers.deletedAt)))

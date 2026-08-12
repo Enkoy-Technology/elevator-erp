@@ -78,4 +78,12 @@ export class UpdateEmployeeDto {
   @MinLength(8)
   @MaxLength(72)
   password?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Set true once this technician/staff member has given recorded consent to receive SMS (ECA Directive 832/2021 protects staff the same way it protects customers). Set false to revoke. The server stamps the current time — never a client-supplied timestamp.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  smsConsentGiven?: boolean;
 }
