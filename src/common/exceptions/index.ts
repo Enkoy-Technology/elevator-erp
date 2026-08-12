@@ -1,5 +1,6 @@
 export { CustomerInUseError } from './customer-in-use.error';
 export { DomainError } from './domain.error';
+export { InvalidPhoneNumberError } from './invalid-phone-number.error';
 export { InvalidRateTransitionError } from './invalid-rate-transition.error';
 export { LastAdminError } from './last-admin.error';
 export { RateNotFoundError } from './rate-not-found.error';

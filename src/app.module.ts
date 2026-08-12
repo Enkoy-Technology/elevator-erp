@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { AppController } from './app.controller';
@@ -19,6 +20,7 @@ import { ExpensesModule } from './modules/expenses/expenses.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { OutboxModule } from './modules/outbox/outbox.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { ProformasModule } from './modules/proformas/proformas.module';
 import { ProjectsModule } from './modules/projects/projects.module';
@@ -30,6 +32,9 @@ import { SettingsModule } from './modules/settings/settings.module';
   imports: [
     AppConfigModule,
     DatabaseModule,
+    // Registered once, app-wide: OutboxDispatcherService's @Cron relies on
+    // this being present (task brief 5.2).
+    ScheduleModule.forRoot(),
     // TAD §3.1: 1,000 req/min per tenant with 200 req/10s burst.
     // In-memory for Phase 0; swap to Redis storage when workers land.
     ThrottlerModule.forRoot([
@@ -50,6 +55,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     EmployeesModule,
     AssetsModule,
     NotificationsModule,
+    OutboxModule,
     MaintenanceModule,
     RatesModule,
     SettingsModule,

@@ -36,8 +36,9 @@ are not already present — idempotent, safe to run on every deploy, no
 | `JWT_SECRET` | Random, ≥32 chars. Generate with `openssl rand -base64 48`. |
 | `TRUST_PROXY_HOPS` | The real number of reverse proxies in front of the API. Setting it too high lets clients spoof the throttle key. |
 | `DATABASE_URL` | Connection string for `app_user` (RLS-restricted). |
-| `DATABASE_ADMIN_URL` | Connection string for the owner role — used only by migrate/seed, never by the running app. |
+| `DATABASE_ADMIN_URL` | Connection string for the owner role — used by migrate/seed, and now also by the running app's outbox dispatcher (`OutboxDispatcherRepository`), which claims due messages across every tenant on a cron with no request-scoped tenant context. That is a deliberate, narrowly-scoped RLS-bypass exception — see that class's doc comment for why it cannot leak. No other application code holds an admin-role connection. |
 | `CORS_ORIGINS` | Comma-separated list of allowed browser origins. |
+| `SMS_PROVIDER` | Defaults to `noop` (logs, sends nothing — see `NoopSmsProvider`). Only real value until Task 3 ships a provider adapter. |
 
 `ALLOW_DEMO_SEED` must **never** be set to `1` in production. Its presence
 lets the demo tenant and its published credentials be seeded into a live
