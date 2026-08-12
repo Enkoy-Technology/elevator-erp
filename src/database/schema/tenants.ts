@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 import { subscriptionStatusEnum, subscriptionTierEnum } from './enums';
 
@@ -19,6 +19,14 @@ export const tenants = pgTable('tenants', {
     .default('TRIAL'),
   /** MM-DD boundary of the Ethiopian fiscal year (see RatesService.fiscalYearFor). */
   fiscalYearStart: text('fiscal_year_start').notNull().default('07-08'),
+  /**
+   * How many days ahead of a maintenance contract's nextServiceAt the daily
+   * reminder cron fires (task-2 brief §2.2) — same "tenant setting" path as
+   * fiscalYearStart above.
+   */
+  maintenanceReminderDays: integer('maintenance_reminder_days')
+    .notNull()
+    .default(3),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

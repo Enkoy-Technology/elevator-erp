@@ -7,6 +7,12 @@ import type { UpdateSettingsDto } from './dto/update-settings.dto';
 
 export type SettingsRecord = typeof tenantBranding.$inferSelect & {
   fiscalYearStart: string;
+  maintenanceReminderDays: number;
+};
+
+const TENANT_SETTINGS_COLUMNS = {
+  fiscalYearStart: tenants.fiscalYearStart,
+  maintenanceReminderDays: tenants.maintenanceReminderDays,
 };
 
 @Injectable()
@@ -21,14 +27,14 @@ export class SettingsRepository {
         throw new NotFoundException('Tenant branding not found');
       }
       const [tenant] = await tx
-        .select({ fiscalYearStart: tenants.fiscalYearStart })
+        .select(TENANT_SETTINGS_COLUMNS)
         .from(tenants)
         .where(eq(tenants.id, tenantId))
         .limit(1);
       if (!tenant) {
         throw new NotFoundException('Tenant not found');
       }
-      return { ...row, fiscalYearStart: tenant.fiscalYearStart };
+      return { ...row, ...tenant };
     });
   }
 
@@ -71,23 +77,33 @@ export class SettingsRepository {
       // Only touch `tenants` (and its updatedAt, which subscription/billing
       // flows also read) when this PATCH actually changes something on it —
       // a branding-only update has no business bumping it.
-      const [tenant] =
-        dto.fiscalYearStart !== undefined
-          ? await tx
-              .update(tenants)
-              .set({ fiscalYearStart: dto.fiscalYearStart, updatedAt: new Date() })
-              .where(eq(tenants.id, tenantId))
-              .returning({ fiscalYearStart: tenants.fiscalYearStart })
-          : await tx
-              .select({ fiscalYearStart: tenants.fiscalYearStart })
-              .from(tenants)
-              .where(eq(tenants.id, tenantId))
-              .limit(1);
+      const touchesTenant =
+        dto.fiscalYearStart !== undefined ||
+        dto.maintenanceReminderDays !== undefined;
+      const [tenant] = touchesTenant
+        ? await tx
+            .update(tenants)
+            .set({
+              ...(dto.fiscalYearStart !== undefined
+                ? { fiscalYearStart: dto.fiscalYearStart }
+                : {}),
+              ...(dto.maintenanceReminderDays !== undefined
+                ? { maintenanceReminderDays: dto.maintenanceReminderDays }
+                : {}),
+              updatedAt: new Date(),
+            })
+            .where(eq(tenants.id, tenantId))
+            .returning(TENANT_SETTINGS_COLUMNS)
+        : await tx
+            .select(TENANT_SETTINGS_COLUMNS)
+            .from(tenants)
+            .where(eq(tenants.id, tenantId))
+            .limit(1);
       if (!tenant) {
         throw new NotFoundException('Tenant not found');
       }
 
-      return { ...row, fiscalYearStart: tenant.fiscalYearStart };
+      return { ...row, ...tenant };
     });
   }
 }

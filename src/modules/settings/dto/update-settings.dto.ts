@@ -2,10 +2,13 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
+  Min,
   Validate,
   ValidatorConstraint,
   isDateString,
@@ -92,4 +95,15 @@ export class UpdateSettingsDto {
   @Matches(/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/)
   @Validate(IsValidFiscalYearBoundaryConstraint)
   fiscalYearStart?: string;
+
+  @ApiPropertyOptional({
+    example: 3,
+    description:
+      'Days ahead of a maintenance contract’s next service date the daily reminder cron fires (task-2 §2.2).',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(90)
+  maintenanceReminderDays?: number;
 }

@@ -26,6 +26,7 @@ import { ProformasModule } from './modules/proformas/proformas.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { QuotationsModule } from './modules/quotations/quotations.module';
 import { RatesModule } from './modules/rates/rates.module';
+import { RemindersModule } from './modules/reminders/reminders.module';
 import { SettingsModule } from './modules/settings/settings.module';
 
 @Module({
@@ -57,6 +58,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     NotificationsModule,
     OutboxModule,
     MaintenanceModule,
+    RemindersModule,
     RatesModule,
     SettingsModule,
     DashboardModule,
