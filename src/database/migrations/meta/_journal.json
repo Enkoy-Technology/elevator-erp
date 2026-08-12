@@ -379,6 +379,13 @@
       "when": 1786544081070,
       "tag": "0053_payment_reminder_offset_days",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1786544519633,
+      "tag": "0054_balance_reconciliation_last_run",
+      "breakpoints": true
     }
   ]
 }
