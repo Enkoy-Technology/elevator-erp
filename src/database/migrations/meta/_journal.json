@@ -330,6 +330,20 @@
       "when": 1786473860086,
       "tag": "0046_fix_due_date_backfill_timezone",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1786537805247,
+      "tag": "0047_omniscient_professor_monster",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1786537805248,
+      "tag": "0048_outbound_messages_rls",
+      "breakpoints": true
     }
   ]
 }

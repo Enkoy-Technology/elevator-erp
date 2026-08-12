@@ -173,3 +173,19 @@ export const bankTxKindEnum = pgEnum('bank_tx_kind', [
   'TRANSFER_IN',
   'TRANSFER_OUT',
 ]);
+
+// SMS is the only channel with a consumer today (Phase 5 T2); EMAIL is a
+// later consumer — the outbox is generic from the start on purpose (see
+// outbound-messages.ts's own doc comment) so adding email never means a
+// schema migration.
+export const messageChannelEnum = pgEnum('message_channel', ['SMS', 'EMAIL']);
+
+// QUEUED -> SENDING (claimed by the dispatcher) -> SENT | back to QUEUED
+// (retry with backoff) -> FAILED after the 4th failed attempt. See
+// OutboxDispatcherService for the transition logic.
+export const messageStatusEnum = pgEnum('message_status', [
+  'QUEUED',
+  'SENDING',
+  'SENT',
+  'FAILED',
+]);
