@@ -17,6 +17,7 @@ describe('EmployeesService', () => {
     role: 'SALES_MANAGER',
     isActive: true,
     smsConsentAt: null,
+    smsConsentRevokedAt: null,
     lastLoginAt: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
   };

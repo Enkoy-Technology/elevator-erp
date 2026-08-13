@@ -28,6 +28,7 @@ export class EmployeesService {
       phone: dto.phone,
       role: dto.role,
       password: dto.password,
+      smsConsentGiven: dto.smsConsentGiven,
     });
   }
 

@@ -77,6 +77,16 @@ describe('OutboxController.list — filter validation and format routing', () =>
     expect(outboxService.list).not.toHaveBeenCalled();
   });
 
+  // Nit fix: the regex alone lets a calendar-invalid date (month 13, day 45)
+  // through, which would previously 500 instead of 400ing — same round-trip
+  // check as payments.controller.ts's own parseOptionalCalendarDate.
+  it('rejects a calendar-invalid "from" date (2026-13-45) with a 400, not a 500', async () => {
+    await expect(
+      controller.list(user, res as never, undefined, undefined, '2026-13-45'),
+    ).rejects.toThrow(BadRequestException);
+    expect(outboxService.list).not.toHaveBeenCalled();
+  });
+
   it('with no ?format, calls the service and writes the paginated result as JSON', async () => {
     const result = { items: [], page: 1, pageSize: 20, total: 0, totalPages: 0 };
     outboxService.list.mockResolvedValue(result);

@@ -28,12 +28,50 @@ import { OutboxService } from './outbox.service';
 
 const MESSAGE_STATUSES = messageStatusEnum.enumValues;
 const MESSAGE_CHANNELS = messageChannelEnum.enumValues;
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Same shape as payments.controller.ts's own DATE_ONLY_RE + round-trip
+// check — duplicated per this codebase's established "2nd+ occurrence,
+// duplicate a controller-local inline validator rather than extract"
+// convention. Without the round-trip check, the regex alone lets a
+// calendar-invalid date like 2026-13-45 through, which then 500s instead of
+// 400ing wherever it's actually used as a date.
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseOptionalCalendarDate(
+  paramName: string,
+  value: string | undefined,
+): string | undefined {
+  if (value === undefined || value === '') {
+    return undefined;
+  }
+  if (!DATE_ONLY_RE.test(value)) {
+    throw new BadRequestException(`${paramName} must be an ISO date (YYYY-MM-DD)`);
+  }
+  // An out-of-range DAY (e.g. 2026-02-30) rolls over to a real date
+  // (2026-03-02) rather than throwing, so the plain string-mismatch check
+  // below catches it — same as the sibling controllers' copy of this
+  // function. An out-of-range MONTH (e.g. 2026-13-45, this nit's own
+  // example) makes `new Date(...)` unparseable, and `.toISOString()` throws
+  // RangeError on an Invalid Date rather than returning a mismatched
+  // string — sibling controllers don't guard this, but the review's own
+  // example is exactly this case, so it's guarded here rather than copied
+  // as a bug alongside the fix.
+  const parsed = new Date(`${value}T00:00:00Z`);
+  const roundTrip = Number.isNaN(parsed.getTime())
+    ? null
+    : parsed.toISOString().slice(0, 10);
+  if (roundTrip !== value) {
+    throw new BadRequestException(`${paramName} is not a valid calendar date`);
+  }
+  return value;
+}
 
 export const OUTBOX_EXPORT_COLUMNS: ColumnDef[] = [
   { key: 'id', header: 'ID' },
   { key: 'channel', header: 'Channel' },
   { key: 'recipient', header: 'Recipient' },
+  { key: 'body', header: 'Body' },
+  { key: 'segments', header: 'Segments' },
   { key: 'status', header: 'Status' },
   { key: 'attempts', header: 'Attempts' },
   { key: 'providerName', header: 'Provider' },
@@ -141,17 +179,11 @@ export class OutboxController {
         `channel must be one of: ${MESSAGE_CHANNELS.join(', ')}`,
       );
     }
-    if (from !== undefined && !ISO_DATE.test(from)) {
-      throw new BadRequestException('from must be an ISO date (YYYY-MM-DD)');
-    }
-    if (to !== undefined && !ISO_DATE.test(to)) {
-      throw new BadRequestException('to must be an ISO date (YYYY-MM-DD)');
-    }
     return {
       status: status as OutboxListFilter['status'],
       channel: channel as OutboxListFilter['channel'],
-      from,
-      to,
+      from: parseOptionalCalendarDate('from', from),
+      to: parseOptionalCalendarDate('to', to),
     };
   }
 }

@@ -228,9 +228,9 @@ export class CustomersRepository {
           tags: dto.tags,
           notes: dto.notes,
           createdByUserId,
-          ...(dto.smsConsentGiven !== undefined
-            ? { smsConsentAt: dto.smsConsentGiven ? new Date() : null }
-            : {}),
+          // A brand-new row is never revoked; only "given" is meaningful at
+          // create time (smsConsentAt already defaults to null otherwise).
+          ...(dto.smsConsentGiven ? { smsConsentAt: new Date() } : {}),
         })
         .returning();
       if (!row) {
@@ -278,10 +278,16 @@ export class CustomersRepository {
           ...(dto.tags !== undefined ? { tags: dto.tags } : {}),
           ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
           // Server-stamped, never a client-supplied timestamp — see
-          // smsConsentGiven's own doc comment on CreateCustomerDto.
-          ...(dto.smsConsentGiven !== undefined
-            ? { smsConsentAt: dto.smsConsentGiven ? new Date() : null }
-            : {}),
+          // smsConsentGiven's own doc comment on CreateCustomerDto. true is
+          // a fresh grant (first-time or re-consenting after a revoke):
+          // stamp smsConsentAt, clear any prior revocation. false revokes —
+          // smsConsentAt is left untouched (phase-5 review I10: revoking
+          // must not erase the historical fact consent was once given).
+          ...(dto.smsConsentGiven === true
+            ? { smsConsentAt: new Date(), smsConsentRevokedAt: null }
+            : dto.smsConsentGiven === false
+              ? { smsConsentRevokedAt: new Date() }
+              : {}),
           updatedAt: new Date(),
         })
         .where(and(eq(customers.id, id), isNull(customers.deletedAt)))

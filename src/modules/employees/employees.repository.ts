@@ -26,6 +26,8 @@ export type EmployeePublic = {
   role: UserRole;
   isActive: boolean;
   smsConsentAt: Date | null;
+  /** See users.ts's own doc comment (phase-5 review I10) — null unless consent was later revoked. */
+  smsConsentRevokedAt: Date | null;
   lastLoginAt: Date | null;
   createdAt: Date;
 };
@@ -68,6 +70,7 @@ export class EmployeesRepository {
           role: users.role,
           isActive: users.isActive,
           smsConsentAt: users.smsConsentAt,
+          smsConsentRevokedAt: users.smsConsentRevokedAt,
           lastLoginAt: users.lastLoginAt,
           createdAt: users.createdAt,
         })
@@ -147,6 +150,8 @@ export class EmployeesRepository {
       phone?: string;
       role: UserRole;
       password: string;
+      /** Server-stamped — see CreateEmployeeDto.smsConsentGiven's own doc comment. Omitted/false leaves smsConsentAt null, same as never setting it. */
+      smsConsentGiven?: boolean;
     },
   ): Promise<EmployeePublic> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
@@ -172,6 +177,7 @@ export class EmployeesRepository {
           phone: input.phone,
           role: input.role,
           passwordHash: await hash(input.password, BCRYPT_ROUNDS),
+          ...(input.smsConsentGiven ? { smsConsentAt: new Date() } : {}),
         })
         .returning({
           id: users.id,
@@ -181,6 +187,7 @@ export class EmployeesRepository {
           role: users.role,
           isActive: users.isActive,
           smsConsentAt: users.smsConsentAt,
+          smsConsentRevokedAt: users.smsConsentRevokedAt,
           lastLoginAt: users.lastLoginAt,
           createdAt: users.createdAt,
         });
@@ -201,7 +208,14 @@ export class EmployeesRepository {
       isActive?: boolean;
       /** Already-hashed — the service hashes the plaintext before this call. */
       passwordHash?: string;
-      /** Server-stamped elsewhere — see UpdateEmployeeDto.smsConsentGiven. true -> now, false -> null. */
+      /**
+       * Server-stamped elsewhere — see UpdateEmployeeDto.smsConsentGiven.
+       * true -> smsConsentAt now, smsConsentRevokedAt cleared (a fresh
+       * grant, whether first-time or re-consenting after a revoke). false
+       * -> smsConsentRevokedAt now, smsConsentAt left untouched (phase-5
+       * review I10: revoking must not erase the historical fact consent was
+       * once given).
+       */
       smsConsentGiven?: boolean;
     },
   ): Promise<EmployeePublic> {
@@ -232,9 +246,11 @@ export class EmployeesRepository {
           ...(patch.passwordHash !== undefined
             ? { passwordHash: patch.passwordHash, refreshTokenHash: null }
             : {}),
-          ...(patch.smsConsentGiven !== undefined
-            ? { smsConsentAt: patch.smsConsentGiven ? new Date() : null }
-            : {}),
+          ...(patch.smsConsentGiven === true
+            ? { smsConsentAt: new Date(), smsConsentRevokedAt: null }
+            : patch.smsConsentGiven === false
+              ? { smsConsentRevokedAt: new Date() }
+              : {}),
           updatedAt: new Date(),
         })
         .where(
@@ -252,6 +268,7 @@ export class EmployeesRepository {
           role: users.role,
           isActive: users.isActive,
           smsConsentAt: users.smsConsentAt,
+          smsConsentRevokedAt: users.smsConsentRevokedAt,
           lastLoginAt: users.lastLoginAt,
           createdAt: users.createdAt,
         });
