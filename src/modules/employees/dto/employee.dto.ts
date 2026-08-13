@@ -27,7 +27,7 @@ export class CreateEmployeeDto {
   @MaxLength(120)
   fullName!: string;
 
-  @ApiPropertyOptional({ example: '+251911000000' })
+  @ApiPropertyOptional({ example: '+251949922604' })
   @IsOptional()
   @IsString()
   @MaxLength(32)

@@ -34,7 +34,7 @@ export class CreateCustomerDto {
   @IsEmail()
   email?: string;
 
-  @ApiPropertyOptional({ example: '+251911000000' })
+  @ApiPropertyOptional({ example: '+251949922604' })
   @IsOptional()
   @IsString()
   @MaxLength(32)
