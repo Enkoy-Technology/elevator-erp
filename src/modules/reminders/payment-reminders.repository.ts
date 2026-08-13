@@ -126,4 +126,23 @@ export class PaymentReminderRepository {
       return due;
     });
   }
+
+  /**
+   * Written after every run, matched or not — the "somewhere an admin can
+   * see it" surface (task-3 brief §3.4: "12 reminders not sent — no consent
+   * on file" must be visible, not silent), read back through GET /settings.
+   * Mirrors BalanceReconciliationRepository.recordRunResult's own pattern.
+   */
+  async recordConsentSkipCount(tenantId: string, skippedCount: number): Promise<void> {
+    await this.tenantDb.withTenant(tenantId, (tx) =>
+      tx
+        .update(tenants)
+        .set({
+          paymentReminderConsentSkippedLastRunAt: new Date(),
+          paymentReminderConsentSkippedCount: skippedCount,
+          updatedAt: new Date(),
+        })
+        .where(eq(tenants.id, tenantId)),
+    );
+  }
 }

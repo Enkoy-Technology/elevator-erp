@@ -10,25 +10,31 @@ describe('OutboxService.enqueue', () => {
       id: 'm1',
       ...(values as object),
     }));
-    const service = new OutboxService({ enqueue } as unknown as OutboxRepository);
+    const service = new OutboxService(
+      { enqueue } as unknown as OutboxRepository,
+      { name: 'noop' } as never,
+    );
 
     await service.enqueue({
       tenantId: TENANT_ID,
       channel: 'SMS',
-      recipient: '0911234567',
+      recipient: '0949922604',
       body: 'hi',
       dedupeKey: 'k1',
     });
 
     expect(enqueue).toHaveBeenCalledWith(
       TENANT_ID,
-      expect.objectContaining({ recipient: '+251911234567' }),
+      expect.objectContaining({ recipient: '+251949922604' }),
     );
   });
 
   it('rejects an unrecognisable phone number before ever reaching the repository', async () => {
     const enqueue = jest.fn();
-    const service = new OutboxService({ enqueue } as unknown as OutboxRepository);
+    const service = new OutboxService(
+      { enqueue } as unknown as OutboxRepository,
+      { name: 'noop' } as never,
+    );
 
     await expect(
       service.enqueue({
@@ -47,7 +53,10 @@ describe('OutboxService.enqueue', () => {
       id: 'm1',
       ...(values as object),
     }));
-    const service = new OutboxService({ enqueue } as unknown as OutboxRepository);
+    const service = new OutboxService(
+      { enqueue } as unknown as OutboxRepository,
+      { name: 'noop' } as never,
+    );
 
     await service.enqueue({
       tenantId: TENANT_ID,
@@ -61,5 +70,15 @@ describe('OutboxService.enqueue', () => {
       TENANT_ID,
       expect.objectContaining({ recipient: 'ops@example.com' }),
     );
+  });
+});
+
+describe('OutboxService.getSmsProviderName', () => {
+  it('reports the wired-up provider\'s own name — "noop" means nothing really sends (task-3 §3.3)', () => {
+    const service = new OutboxService(
+      {} as unknown as OutboxRepository,
+      { name: 'afromessage' } as never,
+    );
+    expect(service.getSmsProviderName()).toBe('afromessage');
   });
 });

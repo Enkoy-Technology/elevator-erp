@@ -28,6 +28,14 @@ const makeSelectChain = (rows: Row[]) => {
   return chain;
 };
 
+const makeUpdateChain = (returningRows: Row[]) => {
+  const chain: Record<string, jest.Mock> = {};
+  chain.set = jest.fn(() => chain);
+  chain.where = jest.fn(() => chain);
+  chain.returning = jest.fn(() => Promise.resolve(returningRows));
+  return chain;
+};
+
 const repoWithTx = (insertedRows: Row[], existingRows: Row[]) => {
   const insertChain = makeInsertChain(insertedRows);
   const selectChain = makeSelectChain(existingRows);
@@ -44,7 +52,7 @@ const repoWithTx = (insertedRows: Row[], existingRows: Row[]) => {
 const TENANT_ID = '22222222-2222-2222-2222-222222222222';
 const VALUES = {
   channel: 'SMS' as const,
-  recipient: '+251911234567',
+  recipient: '+251949922604',
   body: 'Your invoice is due tomorrow.',
   dedupeKey: 'invoice-reminder:abc123:2026-08-08',
 };
@@ -85,5 +93,103 @@ describe('OutboxRepository.enqueue', () => {
     const { repo } = repoWithTx([], []);
 
     await expect(repo.enqueue(TENANT_ID, VALUES)).rejects.toThrow(/no existing row/);
+  });
+});
+
+const makeCountChain = (total: number) => {
+  const chain: Record<string, jest.Mock> = {};
+  chain.from = jest.fn(() => chain);
+  chain.where = jest.fn(() => Promise.resolve([{ value: total }]));
+  return chain;
+};
+
+const makePagedChain = (rows: Row[]) => {
+  const chain: Record<string, jest.Mock> = {};
+  chain.from = jest.fn(() => chain);
+  chain.where = jest.fn(() => chain);
+  chain.orderBy = jest.fn(() => chain);
+  chain.limit = jest.fn(() => chain);
+  chain.offset = jest.fn(() => Promise.resolve(rows));
+  return chain;
+};
+
+describe('OutboxRepository.list', () => {
+  it('returns the paginated result from one count query + one paged select — never N+1', async () => {
+    const rows = [{ id: 'm1' }, { id: 'm2' }];
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeCountChain(2))
+      .mockReturnValueOnce(makePagedChain(rows));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new OutboxRepository({ withTenant } as never);
+
+    const result = await repo.list(TENANT_ID, {}, '1', '20');
+
+    expect(select).toHaveBeenCalledTimes(2);
+    expect(result.total).toBe(2);
+    expect(result.items).toEqual(rows);
+    expect(result.page).toBe(1);
+    expect(result.pageSize).toBe(20);
+  });
+});
+
+describe('OutboxRepository.streamAll', () => {
+  it('yields every row from a single batch under BATCH_SIZE, without a second page fetch', async () => {
+    const rows = [{ id: 'm1' }, { id: 'm2' }];
+    const select = jest.fn(() => makePagedChain(rows));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ select }),
+    );
+    const repo = new OutboxRepository({ withTenant } as never);
+
+    const collected: unknown[] = [];
+    for await (const row of repo.streamAll(TENANT_ID, {})) {
+      collected.push(row);
+    }
+
+    expect(collected).toEqual(rows);
+    expect(select).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('OutboxRepository.retry', () => {
+  it('sets a FAILED message to QUEUED, due immediately, without resetting attempts', async () => {
+    const updatedRow = { id: 'm1', status: 'QUEUED', attempts: 3 };
+    const update = jest.fn(() => makeUpdateChain([updatedRow]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) => fn({ update }),
+    );
+    const repo = new OutboxRepository({ withTenant } as never);
+
+    const result = await repo.retry(TENANT_ID, 'm1');
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(result).toBe(updatedRow);
+  });
+
+  it('throws WorkflowTransitionError (409) naming the actual status when the message is not FAILED', async () => {
+    const update = jest.fn(() => makeUpdateChain([]));
+    const select = jest.fn(() => makeSelectChain([{ id: 'm1', status: 'SENT' }]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ update, select }),
+    );
+    const repo = new OutboxRepository({ withTenant } as never);
+
+    await expect(repo.retry(TENANT_ID, 'm1')).rejects.toThrow(/is SENT, not FAILED/);
+  });
+
+  it('throws NotFoundException when the message id does not exist at all', async () => {
+    const update = jest.fn(() => makeUpdateChain([]));
+    const select = jest.fn(() => makeSelectChain([]));
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ update, select }),
+    );
+    const repo = new OutboxRepository({ withTenant } as never);
+
+    await expect(repo.retry(TENANT_ID, 'm1')).rejects.toThrow(/not found/i);
   });
 });

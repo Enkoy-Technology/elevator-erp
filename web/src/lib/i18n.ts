@@ -13,6 +13,7 @@ export type MessageKey =
   | 'nav.assets'
   | 'nav.notifications'
   | 'nav.maintenance'
+  | 'nav.messages'
   | 'nav.settings'
   | 'nav.collapse'
   | 'nav.expand'
@@ -51,6 +52,7 @@ const en: Record<MessageKey, string> = {
   'nav.assets': 'Assets',
   'nav.notifications': 'Notifications',
   'nav.maintenance': 'Maintenance',
+  'nav.messages': 'Messages',
   'nav.settings': 'Settings',
   'nav.collapse': 'Collapse',
   'nav.expand': 'Expand sidebar',
@@ -90,6 +92,7 @@ const am: Record<MessageKey, string> = {
   'nav.assets': 'ንብረቶች',
   'nav.notifications': 'ማሳወቂያዎች',
   'nav.maintenance': 'ጥገና',
+  'nav.messages': 'መልዕክቶች',
   'nav.settings': 'ቅንብሮች',
   'nav.collapse': 'ሰብስብ',
   'nav.expand': 'ሳይድባር አሳይ',

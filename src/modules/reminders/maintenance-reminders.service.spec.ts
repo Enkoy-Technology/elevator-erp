@@ -12,10 +12,15 @@ const contract = (
   site: 'West Wing',
   customerId: 'customer-1',
   customerName: 'Addis Heights PLC',
-  customerPhone: '+251911000000',
+  // The client's own test handset (task-3 brief §3.0) — shared by both
+  // recipients on purpose; every test below tells technician vs customer
+  // apart by dedupeKey suffix (`:technician`/`:customer`), never by phone
+  // number, same "recipients differ, the number doesn't have to" precedent
+  // as outbox-message-log.e2e-spec.ts.
+  customerPhone: '+251949922604',
   customerSmsConsentAt: new Date('2026-01-01T00:00:00Z'),
   technicianId: 'tech-1',
-  technicianPhone: '+251922000000',
+  technicianPhone: '+251949922604',
   technicianSmsConsentAt: new Date('2026-01-01T00:00:00Z'),
   ...overrides,
 });
@@ -27,6 +32,7 @@ const build = (contracts: DueMaintenanceReminder[], windowDays = 3) => {
   const remindersRepository = {
     listDueContracts: jest.fn(async () => ({ windowDays, contracts })),
     getBreakdownAssignmentInfo: jest.fn(),
+    recordConsentSkipCount: jest.fn(),
   };
   const outboxService = { enqueue: jest.fn(async (input: unknown) => input) };
   const notificationsRepository = {
@@ -53,8 +59,8 @@ describe('MaintenanceReminderService.runDailyReminders — consent gate', () => 
 
     await service.runDailyReminders();
 
-    const smsCalls = (outboxService.enqueue.mock.calls as [{ recipient: string }][]).filter(
-      ([input]) => input.recipient === '+251922000000',
+    const smsCalls = (outboxService.enqueue.mock.calls as [{ dedupeKey: string }][]).filter(
+      ([input]) => input.dedupeKey.endsWith(':technician'),
     );
     expect(smsCalls).toHaveLength(0);
     expect(notificationsRepository.create).toHaveBeenCalledWith(
@@ -64,15 +70,18 @@ describe('MaintenanceReminderService.runDailyReminders — consent gate', () => 
     );
   });
 
-  it('skips the customer SMS when customerSmsConsentAt is null', async () => {
-    const { service, outboxService } = build([contract({ customerSmsConsentAt: null })]);
+  it('skips the customer SMS when customerSmsConsentAt is null, and records the skip count for GET /settings (task-3 §3.4)', async () => {
+    const { service, outboxService, remindersRepository } = build([
+      contract({ customerSmsConsentAt: null }),
+    ]);
 
     await service.runDailyReminders();
 
-    const smsCalls = (outboxService.enqueue.mock.calls as [{ recipient: string }][]).filter(
-      ([input]) => input.recipient === '+251911000000',
+    const smsCalls = (outboxService.enqueue.mock.calls as [{ dedupeKey: string }][]).filter(
+      ([input]) => input.dedupeKey.endsWith(':customer'),
     );
     expect(smsCalls).toHaveLength(0);
+    expect(remindersRepository.recordConsentSkipCount).toHaveBeenCalledWith(TENANT_ID, 1);
   });
 
   it('sends both SMS when both recipients have consent', async () => {
@@ -93,13 +102,13 @@ describe('MaintenanceReminderService.runDailyReminders — dedupe key stability'
     }
 
     const technicianKeys = new Set(
-      (outboxService.enqueue.mock.calls as [{ recipient: string; dedupeKey: string }][])
-        .filter(([input]) => input.recipient === '+251922000000')
+      (outboxService.enqueue.mock.calls as [{ dedupeKey: string }][])
+        .filter(([input]) => input.dedupeKey.endsWith(':technician'))
         .map(([input]) => input.dedupeKey),
     );
     const customerKeys = new Set(
-      (outboxService.enqueue.mock.calls as [{ recipient: string; dedupeKey: string }][])
-        .filter(([input]) => input.recipient === '+251911000000')
+      (outboxService.enqueue.mock.calls as [{ dedupeKey: string }][])
+        .filter(([input]) => input.dedupeKey.endsWith(':customer'))
         .map(([input]) => input.dedupeKey),
     );
 
@@ -147,7 +156,7 @@ describe('MaintenanceReminderService.notifyBreakdownAssigned', () => {
     assignedUserId,
     assetName: 'Elevator 2',
     customerName: 'Addis Heights PLC',
-    technicianPhone: '+251922000000',
+    technicianPhone: '+251949922604',
     technicianSmsConsentAt: new Date('2026-01-01T00:00:00Z'),
   });
 

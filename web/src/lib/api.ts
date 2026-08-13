@@ -291,6 +291,8 @@ export interface Customer {
   creditLimitEtb: string;
   /** Net account position (invoices owed minus unapplied cash) — not the same as the aging report's per-invoice total; the two legitimately disagree by unapplied cash. */
   outstandingBalanceEtb: string;
+  /** ECA Directive 832/2021 recorded consent to receive SMS — null until given. Server-stamped only (see CreateCustomerPayload.smsConsentGiven's own doc comment); never set this directly. */
+  smsConsentAt: string | null;
   createdAt: string;
 }
 
@@ -301,6 +303,8 @@ export interface CreateCustomerPayload {
   city?: string;
   customerType?: CustomerType;
   notes?: string;
+  /** Set true once the customer has given recorded consent to receive SMS. Set false to revoke. The server stamps the current time — never send a timestamp here. */
+  smsConsentGiven?: boolean;
 }
 
 export const listCustomers = (options?: {
@@ -464,6 +468,8 @@ export interface Employee {
   phone: string | null;
   role: EmployeeRole;
   isActive: boolean;
+  /** ECA Directive 832/2021 recorded consent to receive SMS (protects staff the same way it protects customers) — null until given. Server-stamped only; never set this directly. */
+  smsConsentAt: string | null;
   lastLoginAt: string | null;
   createdAt: string;
 }
@@ -513,6 +519,8 @@ export const updateEmployee = (
     role?: EmployeeRole;
     isActive?: boolean;
     password?: string;
+    /** Set true once this technician/staff member has given recorded consent to receive SMS. Set false to revoke. The server stamps the current time — never send a timestamp here. */
+    smsConsentGiven?: boolean;
   },
 ): Promise<Employee> =>
   apiFetch<Employee>(`/employees/${id}`, {
@@ -829,6 +837,13 @@ export interface TenantSettings {
   contactEmail: string | null;
   contactPhone: string | null;
   defaultLocale: AppLocale;
+  /** Last-run result of the daily maintenance-reminder cron's consent gate
+   * (task-3 §3.4) — both null until that cron has ever run once. Read-only. */
+  maintenanceReminderConsentSkippedLastRunAt: string | null;
+  maintenanceReminderConsentSkippedCount: number | null;
+  /** Same, for the daily payment-reminder cron. */
+  paymentReminderConsentSkippedLastRunAt: string | null;
+  paymentReminderConsentSkippedCount: number | null;
   updatedAt: string;
 }
 
@@ -1494,3 +1509,88 @@ export const updateSettings = (payload: {
     method: 'PATCH',
     body: JSON.stringify(payload),
   });
+
+export type MessageChannel = 'SMS' | 'EMAIL';
+export type MessageStatus = 'QUEUED' | 'SENDING' | 'SENT' | 'FAILED';
+
+/** GET /outbox row — the message log (task-3 §3.3), role-gated to ADMIN/CEO. */
+export interface OutboundMessage {
+  id: string;
+  channel: MessageChannel;
+  recipient: string;
+  body: string;
+  status: MessageStatus;
+  attempts: number;
+  nextAttemptAt: string;
+  lastError: string | null;
+  dedupeKey: string;
+  providerMessageId: string | null;
+  providerName: string | null;
+  sentAt: string | null;
+  createdByUserId: string | null;
+  subjectKind: string | null;
+  subjectId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const outboxListParams = (options?: {
+  status?: MessageStatus;
+  channel?: MessageChannel;
+  from?: string;
+  to?: string;
+}): URLSearchParams => {
+  const params = new URLSearchParams();
+  if (options?.status) {
+    params.set('status', options.status);
+  }
+  if (options?.channel) {
+    params.set('channel', options.channel);
+  }
+  if (options?.from) {
+    params.set('from', options.from);
+  }
+  if (options?.to) {
+    params.set('to', options.to);
+  }
+  return params;
+};
+
+export const listOutbox = (options?: {
+  status?: MessageStatus;
+  channel?: MessageChannel;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<Paginated<OutboundMessage>> => {
+  const params = outboxListParams(options);
+  if (options?.page) {
+    params.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set('pageSize', String(options.pageSize));
+  }
+  const query = params.toString();
+  return apiFetch<Paginated<OutboundMessage>>(`/outbox${query ? `?${query}` : ''}`);
+};
+
+export type OutboxExportFormat = 'csv' | 'xlsx';
+
+/** GET /outbox?format=csv|xlsx with the same filters as listOutbox — same blob-download helper as downloadPayments. */
+export const downloadOutbox = (
+  format: OutboxExportFormat,
+  options?: { status?: MessageStatus; channel?: MessageChannel; from?: string; to?: string },
+): Promise<void> => {
+  const params = outboxListParams(options);
+  params.set('format', format);
+  return downloadDocument(`/outbox?${params.toString()}`, `outbox.${format}`);
+};
+
+/** Which SmsProvider is actually wired up — 'noop' means nothing on this page really sent (task-3 §3.3). */
+export const getOutboxProvider = (): Promise<{ provider: string }> =>
+  apiFetch<{ provider: string }>('/outbox/provider');
+
+/** Retry a FAILED message: QUEUED, due immediately, attempts NOT reset. */
+export const retryOutboxMessage = (id: string): Promise<OutboundMessage> =>
+  apiFetch<OutboundMessage>(`/outbox/${id}/retry`, { method: 'POST' });

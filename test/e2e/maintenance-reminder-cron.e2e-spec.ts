@@ -50,6 +50,12 @@ const canConnect = async (url: string): Promise<boolean> => {
   }
 };
 
+// The client's own test handset (task-3 brief §3.0 SAFETY) — shared by both
+// the seeded customer and technician on purpose; the assertion below tells
+// them apart by dedupe_key suffix, not by phone number, same as the unit
+// spec's own precedent.
+const TEST_PHONE = '+251949922604';
+
 const addDaysIso = (fromIso: string, days: number): string => {
   const d = new Date(`${fromIso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -91,17 +97,17 @@ describe('MaintenanceReminderService.runDailyReminders against real Postgres', (
 
     const customerResult = await adminPool.query<{ id: string }>(
       `insert into customers (tenant_id, name, phone, sms_consent_at)
-       values ($1, 'Addis Heights PLC', '+251911234567', now())
+       values ($1, 'Addis Heights PLC', $2, now())
        returning id`,
-      [tenantId],
+      [tenantId, TEST_PHONE],
     );
     const customerId = customerResult.rows[0]!.id;
 
     const technicianResult = await adminPool.query<{ id: string }>(
       `insert into users (tenant_id, email, password_hash, full_name, phone, role, sms_consent_at)
-       values ($1, 'tech@example.com', 'x', 'Abebe Kebede', '+251922345678', 'FIELD_ENGINEER', now())
+       values ($1, 'tech@example.com', 'x', 'Abebe Kebede', $2, 'FIELD_ENGINEER', now())
        returning id`,
-      [tenantId],
+      [tenantId, TEST_PHONE],
     );
     const technicianId = technicianResult.rows[0]!.id;
 
@@ -151,7 +157,7 @@ describe('MaintenanceReminderService.runDailyReminders against real Postgres', (
     const service = new MaintenanceReminderService(
       tenantDirectory as never,
       new MaintenanceReminderRepository(tenantDb),
-      new OutboxService(new OutboxRepository(tenantDb)),
+      new OutboxService(new OutboxRepository(tenantDb), { name: 'noop' } as never),
       new NotificationsRepository(tenantDb),
     );
 
@@ -171,9 +177,13 @@ describe('MaintenanceReminderService.runDailyReminders against real Postgres', (
     );
 
     expect(messages.rows).toHaveLength(2);
-    expect(messages.rows.map((r) => r.recipient).sort()).toEqual(
-      ['+251911234567', '+251922345678'].sort(),
-    );
+    expect(messages.rows.every((r) => r.recipient === TEST_PHONE)).toBe(true);
+    // One technician message, one customer message — told apart by
+    // dedupe_key suffix, not by recipient (both share the same test handset).
+    expect(messages.rows.map((r) => r.dedupe_key.split(':').pop()).sort()).toEqual([
+      'customer',
+      'technician',
+    ]);
     for (const row of messages.rows) {
       expect(row.subject_kind).toBe('MAINTENANCE_CONTRACT');
       expect(row.subject_id).toBe(contractId);

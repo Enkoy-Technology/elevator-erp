@@ -13,7 +13,7 @@ const dueInvoice = (
   offsetDays: 0,
   customerId: 'cust-1',
   customerName: 'Addis Heights PLC',
-  customerPhone: '+251911000000',
+  customerPhone: '+251949922604',
   customerSmsConsentAt: new Date('2026-01-01T00:00:00Z'),
   ...overrides,
 });
@@ -22,6 +22,7 @@ const build = (dueInvoices: DuePaymentReminder[]) => {
   const tenantDirectory = { listActiveTenantIds: jest.fn(async () => [TENANT_ID]) };
   const remindersRepository = {
     listDueInvoices: jest.fn(async () => dueInvoices),
+    recordConsentSkipCount: jest.fn(),
   };
   const outboxService = { enqueue: jest.fn(async (input: unknown) => input) };
 
@@ -34,14 +35,15 @@ const build = (dueInvoices: DuePaymentReminder[]) => {
 };
 
 describe('PaymentReminderService.runDailyReminders — consent gate', () => {
-  it('never enqueues for a customer with no smsConsentAt', async () => {
-    const { service, outboxService } = build([
+  it('never enqueues for a customer with no smsConsentAt, and records the skip count for GET /settings (task-3 §3.4)', async () => {
+    const { service, outboxService, remindersRepository } = build([
       dueInvoice({ customerSmsConsentAt: null }),
     ]);
 
     await service.runDailyReminders();
 
     expect(outboxService.enqueue).not.toHaveBeenCalled();
+    expect(remindersRepository.recordConsentSkipCount).toHaveBeenCalledWith(TENANT_ID, 1);
   });
 
   it('enqueues for a customer with consent on file', async () => {

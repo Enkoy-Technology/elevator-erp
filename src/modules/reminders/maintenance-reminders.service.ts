@@ -121,6 +121,8 @@ export class MaintenanceReminderService {
       }
     }
 
+    await this.remindersRepository.recordConsentSkipCount(tenantId, consentSkipped);
+
     this.logger.log(
       `Maintenance reminders for tenant ${tenantId}: ${technicianSent} technician SMS, ` +
         `${customerSent} customer SMS, ${consentSkipped} skipped for consent ` +

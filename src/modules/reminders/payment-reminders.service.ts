@@ -84,6 +84,8 @@ export class PaymentReminderService {
       if (sentOk) sent++;
     }
 
+    await this.remindersRepository.recordConsentSkipCount(tenantId, consentSkipped);
+
     this.logger.log(
       `Payment reminders for tenant ${tenantId}: ${sent} sent, ${consentSkipped} skipped for consent (${dueInvoices.length} invoices due)`,
     );

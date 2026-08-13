@@ -14,6 +14,14 @@ export type SettingsRecord = typeof tenantBranding.$inferSelect & {
    * UpdateSettingsDto, only BalanceReconciliationService writes these. */
   balanceReconciliationLastRunAt: Date | null;
   balanceReconciliationMismatchCount: number | null;
+  /** Last-run result of each reminder cron's consent gate (task-3 §3.4) —
+   * both pairs null until that cron has ever run once. Read-only: never
+   * part of UpdateSettingsDto, only MaintenanceReminderService/
+   * PaymentReminderService write these. */
+  maintenanceReminderConsentSkippedLastRunAt: Date | null;
+  maintenanceReminderConsentSkippedCount: number | null;
+  paymentReminderConsentSkippedLastRunAt: Date | null;
+  paymentReminderConsentSkippedCount: number | null;
 };
 
 const TENANT_SETTINGS_COLUMNS = {
@@ -22,6 +30,11 @@ const TENANT_SETTINGS_COLUMNS = {
   paymentReminderOffsetDays: tenants.paymentReminderOffsetDays,
   balanceReconciliationLastRunAt: tenants.balanceReconciliationLastRunAt,
   balanceReconciliationMismatchCount: tenants.balanceReconciliationMismatchCount,
+  maintenanceReminderConsentSkippedLastRunAt:
+    tenants.maintenanceReminderConsentSkippedLastRunAt,
+  maintenanceReminderConsentSkippedCount: tenants.maintenanceReminderConsentSkippedCount,
+  paymentReminderConsentSkippedLastRunAt: tenants.paymentReminderConsentSkippedLastRunAt,
+  paymentReminderConsentSkippedCount: tenants.paymentReminderConsentSkippedCount,
 };
 
 @Injectable()
