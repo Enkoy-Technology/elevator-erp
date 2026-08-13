@@ -73,6 +73,22 @@ export const tenants = pgTable('tenants', {
   paymentReminderConsentSkippedCount: integer(
     'payment_reminder_consent_skipped_count',
   ),
+  /**
+   * Same "somewhere an admin can see it" surface as *ConsentSkippedCount
+   * above, for the OTHER reason a reminder silently never arrives (phase-5
+   * review I4): a stored phone number that fails normalizeEthiopianPhone's
+   * format check. Root-caused by validating phone format where it's
+   * WRITTEN (customer/employee DTOs), so this only ever counts numbers that
+   * were already bad before that validation shipped — shares the
+   * corresponding *ConsentSkippedLastRunAt timestamp above, since both
+   * counts come from the same cron run.
+   */
+  maintenanceReminderInvalidPhoneSkippedCount: integer(
+    'maintenance_reminder_invalid_phone_skipped_count',
+  ),
+  paymentReminderInvalidPhoneSkippedCount: integer(
+    'payment_reminder_invalid_phone_skipped_count',
+  ),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

@@ -71,6 +71,18 @@ export const customers = pgTable(
      * timestamp, so this stays a trustworthy compliance record.
      */
     smsConsentAt: timestamp('sms_consent_at', { withTimezone: true }),
+    /**
+     * When consent was revoked — null means either never revoked, or never
+     * consented in the first place. Revoking no longer nulls smsConsentAt
+     * (phase-5 review I10): a single nullable timestamp could only ever
+     * answer "is consent active right now", never "did we have consent AT
+     * THE TIME we sent" — the actual question an ECA dispute asks. Keeping
+     * both timestamps answers it for the most recent consent/revoke pair
+     * (see canSmsRecipient in common/sms-consent.ts).
+     */
+    smsConsentRevokedAt: timestamp('sms_consent_revoked_at', {
+      withTimezone: true,
+    }),
     createdByUserId: uuid('created_by_user_id'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
