@@ -115,6 +115,26 @@ describe('GeezSmsProvider', () => {
     expect(err.message).not.toContain(TOKEN);
   });
 
+  it('I1: redacts the credential even when the vendor ECHOES it back in the error body (unverified failure shape)', async () => {
+    // The adapter's own doc comment flags GeezSMS's failure shape as
+    // UNVERIFIED — this simulates the vendor echoing the submitted token
+    // back inside an error message, which the existing "never leaks"
+    // tests above don't: they only prove OUR code never interpolates the
+    // token, not that a vendor-supplied string containing it gets redacted.
+    fetchSpy.mockResolvedValue(
+      jsonResponse(200, {
+        message_status: 'failed',
+        message: `Invalid token ${TOKEN} for this account`,
+      }),
+    );
+
+    const err = await captureRejection(
+      new GeezSmsProvider(TOKEN).send(TEST_PHONE, 'hi'),
+    );
+    expect(err.message).not.toContain(TOKEN);
+    expect(err.message).toContain('***');
+  });
+
   it('throws on a network failure (e.g. DNS/connection) without leaking the credential', async () => {
     fetchSpy.mockRejectedValue(new TypeError('fetch failed'));
 
