@@ -4,7 +4,6 @@ import { SmsConsentRequiredError } from '../../common/exceptions';
 import { normalizeEthiopianPhone } from '../../common/phone';
 import type { PaginatedResult } from '../../common/pagination';
 import { segmentsFor } from '../../common/sms-segments';
-import type { MessageChannel } from '../../database/schema';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { SMS_PROVIDER } from './outbox.constants';
 import type { OutboundMessageRecord, OutboxListFilter } from './outbox.repository';
