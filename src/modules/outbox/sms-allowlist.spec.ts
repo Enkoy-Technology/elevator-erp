@@ -10,10 +10,12 @@ const TEST_PHONE = '+251949922604';
 const NOT_ALLOWLISTED = 'not-allowlisted-recipient';
 
 describe('parseSmsAllowlist', () => {
-  it('splits on commas and trims whitespace', () => {
-    expect(parseSmsAllowlist(` ${TEST_PHONE} , ${NOT_ALLOWLISTED} `)).toEqual([
+  it('splits on commas, trims whitespace, and normalises each entry to E.164', () => {
+    // '0949922604' — the form an operator would naturally type (nit fix) —
+    // and the already-E.164 form both resolve to the SAME allowlist entry.
+    expect(parseSmsAllowlist(' 0949922604 , +251949922604 ')).toEqual([
       TEST_PHONE,
-      NOT_ALLOWLISTED,
+      TEST_PHONE,
     ]);
   });
 
@@ -21,6 +23,10 @@ describe('parseSmsAllowlist', () => {
     expect(parseSmsAllowlist(`${TEST_PHONE},`)).toEqual([TEST_PHONE]);
     expect(parseSmsAllowlist('')).toEqual([]);
     expect(parseSmsAllowlist('   ')).toEqual([]);
+  });
+
+  it('throws at parse (boot) time on a malformed entry, rather than silently keeping a number that can never match', () => {
+    expect(() => parseSmsAllowlist(NOT_ALLOWLISTED)).toThrow();
   });
 });
 

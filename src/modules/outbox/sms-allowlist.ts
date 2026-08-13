@@ -1,3 +1,5 @@
+import { normalizeEthiopianPhone } from '../../common/phone';
+
 /**
  * The allowlist guard rail (task-3 brief §3.0 SAFETY) — structural, not a
  * promise: outside production this is the one place that decides whether
@@ -8,12 +10,26 @@
  * boot-time refusal via `env.schema.ts`'s `superRefine`.
  */
 
-/** `SMS_ALLOWLIST` is a raw comma-separated env string — parsed once here, not scattered as ad hoc `.split(',')` calls at each call site. */
+/**
+ * `SMS_ALLOWLIST` is a raw comma-separated env string — parsed once here,
+ * not scattered as ad hoc `.split(',')` calls at each call site. Each entry
+ * is normalised to E.164 the same way `OutboxService.enqueue` normalises
+ * every recipient before it ever reaches `outbound_messages.recipient`
+ * (phase-5 review nit): `smsAllowlistBlockReason` below compares raw,
+ * un-normalised strings, so an operator typing `SMS_ALLOWLIST=0949922604`
+ * (the form they'd naturally type) used to compare against `+251949922604`
+ * and block every real recipient while the boot log claimed the allowlist
+ * was enforcing. A malformed entry throws at boot (same
+ * "fail loudly, at the point a human can fix it" as
+ * `InvalidPhoneNumberError`) rather than silently sitting in the list,
+ * unable to ever match anything.
+ */
 export const parseSmsAllowlist = (raw: string): readonly string[] =>
   raw
     .split(',')
     .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
+    .filter((entry) => entry.length > 0)
+    .map((entry) => normalizeEthiopianPhone(entry));
 
 export interface SmsAllowlistRuntimeConfig {
   readonly smsLive: boolean;
