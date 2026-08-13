@@ -33,6 +33,11 @@ export type MessageKey =
   | 'settings.phone'
   | 'settings.localeEn'
   | 'settings.localeAm'
+  | 'settings.reminders'
+  | 'settings.maintenanceReminderDays'
+  | 'settings.maintenanceReminderDaysHelp'
+  | 'settings.paymentReminderOffsetDays'
+  | 'settings.paymentReminderOffsetDaysHelp'
   | 'settings.save'
   | 'settings.saving'
   | 'settings.saved'
@@ -72,6 +77,13 @@ const en: Record<MessageKey, string> = {
   'settings.phone': 'Contact phone',
   'settings.localeEn': 'English',
   'settings.localeAm': 'አማርኛ',
+  'settings.reminders': 'Reminders',
+  'settings.maintenanceReminderDays': 'Maintenance reminder window (days)',
+  'settings.maintenanceReminderDaysHelp':
+    'How many days ahead of a scheduled visit the reminder SMS goes out.',
+  'settings.paymentReminderOffsetDays': 'Payment reminder days',
+  'settings.paymentReminderOffsetDaysHelp':
+    'Comma-separated days relative to the due date (0 = due date, 7 = a week after).',
   'settings.save': 'Save settings',
   'settings.saving': 'Saving…',
   'settings.saved': 'Settings saved.',
@@ -112,6 +124,13 @@ const am: Record<MessageKey, string> = {
   'settings.phone': 'ስልክ',
   'settings.localeEn': 'English',
   'settings.localeAm': 'አማርኛ',
+  'settings.reminders': 'ማስታወሻዎች',
+  'settings.maintenanceReminderDays': 'የጥገና ማስታወሻ ጊዜ (ቀናት)',
+  'settings.maintenanceReminderDaysHelp':
+    'ከቀጠሮው ስንት ቀናት ቀደም ብሎ የማስታወሻ ኤስኤምኤስ እንደሚላክ።',
+  'settings.paymentReminderOffsetDays': 'የክፍያ ማስታወሻ ቀናት',
+  'settings.paymentReminderOffsetDaysHelp':
+    'ከክፍያ ቀነ-ገደቡ አንጻር ያሉ ቀናት፣ በነጠላ ሰረዝ የተለያዩ (0 = የክፍያ ቀን፣ 7 = ከሳምንት በኋላ)።',
   'settings.save': 'አስቀምጥ',
   'settings.saving': 'በመቀመጥ ላይ…',
   'settings.saved': 'ቅንብሮች ተቀምጠዋል።',

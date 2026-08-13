@@ -58,6 +58,9 @@ export default function CustomersPage() {
   // from "unrelated edit, leave the consent timestamp alone" (see onSubmit).
   const [initialSmsConsentGiven, setInitialSmsConsentGiven] = useState(false);
   const [smsConsentAtDisplay, setSmsConsentAtDisplay] = useState<string | null>(null);
+  const [smsConsentRevokedAtDisplay, setSmsConsentRevokedAtDisplay] = useState<
+    string | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -116,6 +119,7 @@ export default function CustomersPage() {
     setSmsConsentGiven(false);
     setInitialSmsConsentGiven(false);
     setSmsConsentAtDisplay(null);
+    setSmsConsentRevokedAtDisplay(null);
     setFormError(null);
     setSimilar([]);
   };
@@ -132,10 +136,13 @@ export default function CustomersPage() {
     setPhone(customer.phone ?? '');
     setCity(customer.city ?? '');
     setCustomerType(customer.customerType);
-    const consented = customer.smsConsentAt !== null;
+    // "Currently consented" is smsConsentAt set AND not (yet) revoked (I10)
+    // — mirrors canSmsRecipient's own server-side predicate.
+    const consented = customer.smsConsentAt !== null && customer.smsConsentRevokedAt === null;
     setSmsConsentGiven(consented);
     setInitialSmsConsentGiven(consented);
     setSmsConsentAtDisplay(customer.smsConsentAt);
+    setSmsConsentRevokedAtDisplay(customer.smsConsentRevokedAt);
     setFormError(null);
     setSimilar([]);
     setDrawerOpen(true);
@@ -548,9 +555,13 @@ export default function CustomersPage() {
               Consented to SMS notifications
             </label>
             <p className="mt-1 text-xs text-slate-400">
-              {smsConsentAtDisplay
-                ? `Recorded ${new Date(smsConsentAtDisplay).toLocaleString()}`
-                : 'Not yet recorded. Required before this customer receives any SMS (ECA Directive 832/2021).'}
+              {smsConsentGiven
+                ? smsConsentAtDisplay
+                  ? `Recorded ${new Date(smsConsentAtDisplay).toLocaleString()}`
+                  : 'Will be recorded on save.'
+                : smsConsentRevokedAtDisplay
+                  ? `Revoked ${new Date(smsConsentRevokedAtDisplay).toLocaleString()}.`
+                  : 'Not yet recorded. Required before this customer receives any SMS (ECA Directive 832/2021).'}
             </p>
           </div>
         </form>
