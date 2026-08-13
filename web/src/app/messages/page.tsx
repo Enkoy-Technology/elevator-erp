@@ -213,8 +213,18 @@ export default function MessagesPage() {
 
   const maintenanceSkipped = settings?.maintenanceReminderConsentSkippedCount ?? null;
   const paymentSkipped = settings?.paymentReminderConsentSkippedCount ?? null;
+  // I4: an already-bad stored phone number is the OTHER reason a reminder
+  // silently never arrives — counted and surfaced alongside the existing
+  // consent-skip counters, in the same banner.
+  const maintenanceInvalidPhone =
+    settings?.maintenanceReminderInvalidPhoneSkippedCount ?? null;
+  const paymentInvalidPhone = settings?.paymentReminderInvalidPhoneSkippedCount ?? null;
   const hasSkipData = maintenanceSkipped !== null || paymentSkipped !== null;
-  const totalSkipped = (maintenanceSkipped ?? 0) + (paymentSkipped ?? 0);
+  const totalSkipped =
+    (maintenanceSkipped ?? 0) +
+    (paymentSkipped ?? 0) +
+    (maintenanceInvalidPhone ?? 0) +
+    (paymentInvalidPhone ?? 0);
 
   return (
     <div className="flex min-h-screen">
@@ -259,13 +269,16 @@ export default function MessagesPage() {
             <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               <span className="font-semibold">
                 {totalSkipped} reminder{totalSkipped === 1 ? '' : 's'} not sent — no consent on
-                file.
+                file or an invalid phone number.
               </span>{' '}
-              Maintenance reminders: {maintenanceSkipped ?? '—'} skipped (last run{' '}
+              Maintenance reminders: {maintenanceSkipped ?? '—'} skipped for consent,{' '}
+              {maintenanceInvalidPhone ?? '—'} skipped for an invalid phone (last run{' '}
               {formatWhen(settings?.maintenanceReminderConsentSkippedLastRunAt ?? null)}).
-              Payment reminders: {paymentSkipped ?? '—'} skipped (last run{' '}
+              Payment reminders: {paymentSkipped ?? '—'} skipped for consent,{' '}
+              {paymentInvalidPhone ?? '—'} skipped for an invalid phone (last run{' '}
               {formatWhen(settings?.paymentReminderConsentSkippedLastRunAt ?? null)}). Record
-              consent on the customer or employee record to resume sending.
+              consent, or fix the phone number, on the customer or employee record to resume
+              sending.
             </p>
           ) : null}
 
@@ -364,12 +377,15 @@ export default function MessagesPage() {
             ) : (
               <>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1080px] text-left text-sm">
+                  <table className="w-full min-w-[1400px] text-left text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                        <th className="py-2 pr-4 font-semibold">Created</th>
                         <th className="py-2 pr-4 font-semibold">Sent</th>
                         <th className="py-2 pr-4 font-semibold">Channel</th>
                         <th className="py-2 pr-4 font-semibold">Recipient</th>
+                        <th className="py-2 pr-4 font-semibold">Body</th>
+                        <th className="py-2 pr-4 font-semibold">Segments</th>
                         <th className="py-2 pr-4 font-semibold">Status</th>
                         <th className="py-2 pr-4 font-semibold">Attempts</th>
                         <th className="py-2 pr-4 font-semibold">Provider</th>
@@ -382,12 +398,39 @@ export default function MessagesPage() {
                         const link = subjectLink(m.subjectKind, m.subjectId);
                         return (
                           <tr key={m.id} className="border-b border-slate-100 last:border-0">
+                            <td className="py-3 pr-4 text-slate-600">
+                              {formatWhen(m.createdAt)}
+                            </td>
                             <td className="py-3 pr-4 text-slate-600">{formatWhen(m.sentAt)}</td>
                             <td className="py-3 pr-4 text-slate-600">
                               {CHANNEL_LABEL[m.channel]}
                             </td>
                             <td className="py-3 pr-4 font-mono text-xs text-slate-900">
                               {m.recipient}
+                            </td>
+                            <td className="py-3 pr-4">
+                              <span
+                                className="block max-w-[220px] truncate text-xs text-slate-600"
+                                title={m.body}
+                              >
+                                {m.body}
+                              </span>
+                            </td>
+                            <td className="py-3 pr-4 text-slate-600">
+                              <span
+                                className={
+                                  m.segments > 2
+                                    ? 'font-semibold text-amber-700'
+                                    : undefined
+                                }
+                                title={
+                                  m.segments > 2
+                                    ? 'More than 2 segments — each one beyond the first is a full extra charge.'
+                                    : undefined
+                                }
+                              >
+                                {m.segments}
+                              </span>
                             </td>
                             <td className="py-3 pr-4">
                               <span

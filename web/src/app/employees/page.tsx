@@ -58,6 +58,9 @@ export default function EmployeesPage() {
   // from "unrelated edit, leave the consent timestamp alone" (see onSubmit).
   const [initialSmsConsentGiven, setInitialSmsConsentGiven] = useState(false);
   const [smsConsentAtDisplay, setSmsConsentAtDisplay] = useState<string | null>(null);
+  const [smsConsentRevokedAtDisplay, setSmsConsentRevokedAtDisplay] = useState<
+    string | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -110,6 +113,7 @@ export default function EmployeesPage() {
     setSmsConsentGiven(false);
     setInitialSmsConsentGiven(false);
     setSmsConsentAtDisplay(null);
+    setSmsConsentRevokedAtDisplay(null);
     setFormError(null);
   };
 
@@ -126,10 +130,13 @@ export default function EmployeesPage() {
     setRole(employee.role);
     setPassword('');
     setIsActive(employee.isActive);
-    const consented = employee.smsConsentAt !== null;
+    // "Currently consented" is smsConsentAt set AND not (yet) revoked (I10)
+    // — mirrors canSmsRecipient's own server-side predicate.
+    const consented = employee.smsConsentAt !== null && employee.smsConsentRevokedAt === null;
     setSmsConsentGiven(consented);
     setInitialSmsConsentGiven(consented);
     setSmsConsentAtDisplay(employee.smsConsentAt);
+    setSmsConsentRevokedAtDisplay(employee.smsConsentRevokedAt);
     setFormError(null);
     setDrawerOpen(true);
   };
@@ -166,6 +173,10 @@ export default function EmployeesPage() {
           phone: phone || undefined,
           role,
           password,
+          // Matches CreateCustomerPayload: consent can be recorded at
+          // creation, not only on a later edit (nit fix). Omit rather than
+          // send false — there's nothing to revoke yet.
+          smsConsentGiven: smsConsentGiven || undefined,
         });
       }
       closeDrawer();
@@ -448,23 +459,30 @@ export default function EmployeesPage() {
                 />
                 Active (can log in)
               </label>
-              <div className="rounded-lg border border-slate-200 p-3">
-                <label className="flex items-center gap-2 text-sm text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={smsConsentGiven}
-                    onChange={(e) => setSmsConsentGiven(e.target.checked)}
-                  />
-                  Consented to SMS notifications
-                </label>
-                <p className="mt-1 text-xs text-slate-400">
-                  {smsConsentAtDisplay
-                    ? `Recorded ${new Date(smsConsentAtDisplay).toLocaleString()}`
-                    : 'Not yet recorded. Required before this technician/staff member receives any SMS (ECA Directive 832/2021).'}
-                </p>
-              </div>
             </>
           )}
+          {/* Renders in both create and edit (nit fix) — matches the
+              customer form, where consent can be recorded at creation
+              instead of requiring a create-then-edit round trip. */}
+          <div className="rounded-lg border border-slate-200 p-3">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={smsConsentGiven}
+                onChange={(e) => setSmsConsentGiven(e.target.checked)}
+              />
+              Consented to SMS notifications
+            </label>
+            <p className="mt-1 text-xs text-slate-400">
+              {smsConsentGiven
+                ? smsConsentAtDisplay
+                  ? `Recorded ${new Date(smsConsentAtDisplay).toLocaleString()}`
+                  : 'Will be recorded on save.'
+                : smsConsentRevokedAtDisplay
+                  ? `Revoked ${new Date(smsConsentRevokedAtDisplay).toLocaleString()}.`
+                  : 'Not yet recorded. Required before this technician/staff member receives any SMS (ECA Directive 832/2021).'}
+            </p>
+          </div>
         </form>
       </SideDrawer>
     </div>

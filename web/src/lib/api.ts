@@ -293,6 +293,8 @@ export interface Customer {
   outstandingBalanceEtb: string;
   /** ECA Directive 832/2021 recorded consent to receive SMS — null until given. Server-stamped only (see CreateCustomerPayload.smsConsentGiven's own doc comment); never set this directly. */
   smsConsentAt: string | null;
+  /** When consent was revoked — null means never revoked (or never given). Revoking no longer clears smsConsentAt above (I10), so both fields matter for the current consent state. */
+  smsConsentRevokedAt: string | null;
   createdAt: string;
 }
 
@@ -470,6 +472,8 @@ export interface Employee {
   isActive: boolean;
   /** ECA Directive 832/2021 recorded consent to receive SMS (protects staff the same way it protects customers) — null until given. Server-stamped only; never set this directly. */
   smsConsentAt: string | null;
+  /** When consent was revoked — null means never revoked (or never given). See Customer.smsConsentRevokedAt's own doc comment (I10). */
+  smsConsentRevokedAt: string | null;
   lastLoginAt: string | null;
   createdAt: string;
 }
@@ -480,6 +484,8 @@ export interface CreateEmployeePayload {
   phone?: string;
   role: EmployeeRole;
   password: string;
+  /** Set true once this technician/staff member has given recorded consent to receive SMS at creation time — matches CreateCustomerPayload. The server stamps the current time. */
+  smsConsentGiven?: boolean;
 }
 
 export const listEmployees = (options?: {
@@ -837,6 +843,12 @@ export interface TenantSettings {
   contactEmail: string | null;
   contactPhone: string | null;
   defaultLocale: AppLocale;
+  /** Days ahead of a maintenance contract's nextServiceAt the daily
+   * reminder cron fires (I7 — was API-only, now editable here too). */
+  maintenanceReminderDays: number;
+  /** Days relative to an invoice's dueDate the payment-reminder cron fires
+   * on — 0 is the due date itself, positive is days after (I7). */
+  paymentReminderOffsetDays: number[];
   /** Last-run result of the daily maintenance-reminder cron's consent gate
    * (task-3 §3.4) — both null until that cron has ever run once. Read-only. */
   maintenanceReminderConsentSkippedLastRunAt: string | null;
@@ -844,6 +856,10 @@ export interface TenantSettings {
   /** Same, for the daily payment-reminder cron. */
   paymentReminderConsentSkippedLastRunAt: string | null;
   paymentReminderConsentSkippedCount: number | null;
+  /** Same run, the OTHER reason a reminder silently never arrives (I4) — a
+   * stored phone number that fails validation. Read-only. */
+  maintenanceReminderInvalidPhoneSkippedCount: number | null;
+  paymentReminderInvalidPhoneSkippedCount: number | null;
   updatedAt: string;
 }
 
@@ -1504,6 +1520,8 @@ export const updateSettings = (payload: {
   contactEmail?: string | null;
   contactPhone?: string | null;
   defaultLocale?: AppLocale;
+  maintenanceReminderDays?: number;
+  paymentReminderOffsetDays?: number[];
 }): Promise<TenantSettings> =>
   apiFetch<TenantSettings>('/settings', {
     method: 'PATCH',
@@ -1532,6 +1550,10 @@ export interface OutboundMessage {
   subjectId: string | null;
   createdAt: string;
   updatedAt: string;
+  /** SMS segment count/encoding cost, computed on read (I5) — how many
+   * segments this body needs, so a template tripling the bill is visible
+   * before the bill arrives. */
+  segments: number;
 }
 
 const outboxListParams = (options?: {
