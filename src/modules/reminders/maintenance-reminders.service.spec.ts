@@ -1,3 +1,4 @@
+import { SmsConsentRequiredError } from '../../common/exceptions';
 import type { DueMaintenanceReminder } from './maintenance-reminders.repository';
 import { MaintenanceReminderService } from './maintenance-reminders.service';
 
@@ -14,17 +15,27 @@ const contract = (
   customerName: 'Addis Heights PLC',
   // The client's own test handset (task-3 brief §3.0) — shared by both
   // recipients on purpose; every test below tells technician vs customer
-  // apart by dedupeKey suffix (`:technician`/`:customer`), never by phone
-  // number, same "recipients differ, the number doesn't have to" precedent
-  // as outbox-message-log.e2e-spec.ts.
+  // apart by dedupeKey suffix (`:technician:<id>`/`:customer`), never by
+  // phone number, same "recipients differ, the number doesn't have to"
+  // precedent as outbox-message-log.e2e-spec.ts.
   customerPhone: '+251949922604',
   customerSmsConsentAt: new Date('2026-01-01T00:00:00Z'),
+  customerSmsConsentRevokedAt: null,
   technicianId: 'tech-1',
   technicianPhone: '+251949922604',
   technicianSmsConsentAt: new Date('2026-01-01T00:00:00Z'),
+  technicianSmsConsentRevokedAt: null,
   ...overrides,
 });
 
+/**
+ * A faithful-enough stand-in for OutboxService.enqueue's real consent
+ * refusal (I3): the service under test now calls enqueue UNCONDITIONALLY
+ * whenever a phone is on file, and relies on this rejecting when consentAt
+ * is null — same as the real choke point — so these tests actually exercise
+ * the service's outcome-handling, not just whether it "decided" to call
+ * enqueue.
+ */
 const build = (contracts: DueMaintenanceReminder[], windowDays = 3) => {
   const tenantDirectory = {
     listActiveTenantIds: jest.fn(async () => [TENANT_ID]),
@@ -32,9 +43,18 @@ const build = (contracts: DueMaintenanceReminder[], windowDays = 3) => {
   const remindersRepository = {
     listDueContracts: jest.fn(async () => ({ windowDays, contracts })),
     getBreakdownAssignmentInfo: jest.fn(),
-    recordConsentSkipCount: jest.fn(),
+    recordRunResult: jest.fn(),
   };
-  const outboxService = { enqueue: jest.fn(async (input: unknown) => input) };
+  const outboxService = {
+    enqueue: jest.fn(
+      async (input: { channel: string; consentAt?: Date | null }) => {
+        if (input.channel === 'SMS' && input.consentAt == null) {
+          throw new SmsConsentRequiredError();
+        }
+        return input;
+      },
+    ),
+  };
   const notificationsRepository = {
     create: jest.fn(async (_tenantId: string, _createdBy: string | null, _dto: unknown) => ({})),
     existsByLinkPath: jest.fn(
@@ -51,18 +71,26 @@ const build = (contracts: DueMaintenanceReminder[], windowDays = 3) => {
   return { service, tenantDirectory, remindersRepository, outboxService, notificationsRepository };
 };
 
+const smsCallsFor = (
+  outboxService: { enqueue: jest.Mock },
+  suffix: ':technician:tech-1' | ':customer',
+): unknown[] =>
+  (outboxService.enqueue.mock.calls as unknown as [{ dedupeKey: string }][])
+    .filter(([input]) => input.dedupeKey.endsWith(suffix))
+    .map(([input]) => input);
+
 describe('MaintenanceReminderService.runDailyReminders — consent gate', () => {
-  it('skips the technician SMS when technicianSmsConsentAt is null, but still creates the in-app notification', async () => {
+  it('attempts but does not deliver the technician SMS when technicianSmsConsentAt is null, and still creates the in-app notification', async () => {
     const { service, outboxService, notificationsRepository } = build([
       contract({ technicianSmsConsentAt: null }),
     ]);
 
     await service.runDailyReminders();
 
-    const smsCalls = (outboxService.enqueue.mock.calls as [{ dedupeKey: string }][]).filter(
-      ([input]) => input.dedupeKey.endsWith(':technician'),
-    );
-    expect(smsCalls).toHaveLength(0);
+    const [call] = smsCallsFor(outboxService, ':technician:tech-1') as [
+      { consentAt: unknown },
+    ];
+    expect(call.consentAt).toBeNull();
     expect(notificationsRepository.create).toHaveBeenCalledWith(
       TENANT_ID,
       null,
@@ -71,25 +99,52 @@ describe('MaintenanceReminderService.runDailyReminders — consent gate', () => 
   });
 
   it('skips the customer SMS when customerSmsConsentAt is null, and records the skip count for GET /settings (task-3 §3.4)', async () => {
-    const { service, outboxService, remindersRepository } = build([
+    const { service, remindersRepository } = build([
       contract({ customerSmsConsentAt: null }),
     ]);
 
     await service.runDailyReminders();
 
-    const smsCalls = (outboxService.enqueue.mock.calls as [{ dedupeKey: string }][]).filter(
-      ([input]) => input.dedupeKey.endsWith(':customer'),
-    );
-    expect(smsCalls).toHaveLength(0);
-    expect(remindersRepository.recordConsentSkipCount).toHaveBeenCalledWith(TENANT_ID, 1);
+    expect(remindersRepository.recordRunResult).toHaveBeenCalledWith(TENANT_ID, 1, 0);
   });
 
-  it('sends both SMS when both recipients have consent', async () => {
-    const { service, outboxService } = build([contract()]);
+  // I10: consent revoked after being granted must block just as hard as
+  // never having been granted — smsConsentAt alone is no longer enough.
+  it('skips the customer SMS when consent was revoked, even though customerSmsConsentAt is still set', async () => {
+    const { service, remindersRepository } = build([
+      contract({ customerSmsConsentRevokedAt: new Date('2026-02-01T00:00:00Z') }),
+    ]);
 
     await service.runDailyReminders();
 
-    expect(outboxService.enqueue).toHaveBeenCalledTimes(2);
+    expect(remindersRepository.recordRunResult).toHaveBeenCalledWith(TENANT_ID, 1, 0);
+  });
+
+  it('sends both SMS when both recipients have consent', async () => {
+    const { service, remindersRepository } = build([contract()]);
+
+    await service.runDailyReminders();
+
+    expect(remindersRepository.recordRunResult).toHaveBeenCalledWith(TENANT_ID, 0, 0);
+  });
+
+  // I6: a deactivated/soft-deleted technician surfaces as technicianId null
+  // from the repository (see maintenance-reminders.repository.ts's own
+  // comment) — the service must treat that exactly like "no assignee":
+  // neither an SMS attempt nor an in-app notification.
+  it('sends nothing to a technician the repository reports as null (deactivated/deleted)', async () => {
+    const { service, outboxService, notificationsRepository } = build([
+      contract({ technicianId: null }),
+    ]);
+
+    await service.runDailyReminders();
+
+    expect(smsCallsFor(outboxService, ':technician:tech-1')).toHaveLength(0);
+    expect(notificationsRepository.create).not.toHaveBeenCalledWith(
+      TENANT_ID,
+      null,
+      expect.objectContaining({ type: 'MAINTENANCE' }),
+    );
   });
 });
 
@@ -102,14 +157,14 @@ describe('MaintenanceReminderService.runDailyReminders — dedupe key stability'
     }
 
     const technicianKeys = new Set(
-      (outboxService.enqueue.mock.calls as [{ dedupeKey: string }][])
-        .filter(([input]) => input.dedupeKey.endsWith(':technician'))
-        .map(([input]) => input.dedupeKey),
+      smsCallsFor(outboxService, ':technician:tech-1').map(
+        (input) => (input as { dedupeKey: string }).dedupeKey,
+      ),
     );
     const customerKeys = new Set(
-      (outboxService.enqueue.mock.calls as [{ dedupeKey: string }][])
-        .filter(([input]) => input.dedupeKey.endsWith(':customer'))
-        .map(([input]) => input.dedupeKey),
+      smsCallsFor(outboxService, ':customer').map(
+        (input) => (input as { dedupeKey: string }).dedupeKey,
+      ),
     );
 
     // Five calls, ONE distinct key each — the outbox's own dedupe swallow
@@ -118,8 +173,33 @@ describe('MaintenanceReminderService.runDailyReminders — dedupe key stability'
     expect(outboxService.enqueue).toHaveBeenCalledTimes(10);
     expect(technicianKeys.size).toBe(1);
     expect(customerKeys.size).toBe(1);
-    expect([...technicianKeys][0]).toBe('maint:contract-1:2026-08-11:technician');
+    expect([...technicianKeys][0]).toBe('maint:contract-1:2026-08-11:technician:tech-1');
     expect([...customerKeys][0]).toBe('maint:contract-1:2026-08-11:customer');
+  });
+
+  // Nit fix: the technician key used to omit the technician id (unlike the
+  // breakdown key below, which always included it) — reassigning a contract
+  // before the service date reused the OLD key, and the outbox's own
+  // dedupe swallow silently ate the new technician's reminder.
+  it('reassigning the contract to a DIFFERENT technician computes a DIFFERENT dedupeKey', async () => {
+    const { service, outboxService, remindersRepository } = build([
+      contract({ technicianId: 'tech-1' }),
+    ]);
+    await service.runDailyReminders();
+
+    remindersRepository.listDueContracts.mockResolvedValueOnce({
+      windowDays: 3,
+      contracts: [contract({ technicianId: 'tech-2' })],
+    });
+    await service.runDailyReminders();
+
+    const technicianKeys = (outboxService.enqueue.mock.calls as unknown as [{ dedupeKey: string }][])
+      .map(([input]) => input.dedupeKey)
+      .filter((key) => key.includes(':technician:'));
+    expect(technicianKeys).toEqual([
+      'maint:contract-1:2026-08-11:technician:tech-1',
+      'maint:contract-1:2026-08-11:technician:tech-2',
+    ]);
   });
 });
 
@@ -198,6 +278,7 @@ describe('MaintenanceReminderService.notifyBreakdownAssigned', () => {
     customerName: 'Addis Heights PLC',
     technicianPhone: '+251949922604',
     technicianSmsConsentAt: new Date('2026-01-01T00:00:00Z'),
+    technicianSmsConsentRevokedAt: null,
   });
 
   it('reassigning to the SAME technician computes the SAME dedupeKey', async () => {
@@ -209,7 +290,7 @@ describe('MaintenanceReminderService.notifyBreakdownAssigned', () => {
     await service.notifyBreakdownAssigned(TENANT_ID, 'bd-1');
     await service.notifyBreakdownAssigned(TENANT_ID, 'bd-1');
 
-    const keys = (outboxService.enqueue.mock.calls as [{ dedupeKey: string }][]).map(
+    const keys = (outboxService.enqueue.mock.calls as unknown as [{ dedupeKey: string }][]).map(
       ([input]) => input.dedupeKey,
     );
     expect(keys).toEqual(['breakdown:bd-1:tech-1', 'breakdown:bd-1:tech-1']);
@@ -224,7 +305,7 @@ describe('MaintenanceReminderService.notifyBreakdownAssigned', () => {
     await service.notifyBreakdownAssigned(TENANT_ID, 'bd-1');
     await service.notifyBreakdownAssigned(TENANT_ID, 'bd-1');
 
-    const keys = (outboxService.enqueue.mock.calls as [{ dedupeKey: string }][]).map(
+    const keys = (outboxService.enqueue.mock.calls as unknown as [{ dedupeKey: string }][]).map(
       ([input]) => input.dedupeKey,
     );
     expect(keys).toEqual(['breakdown:bd-1:tech-1', 'breakdown:bd-1:tech-2']);
@@ -242,7 +323,7 @@ describe('MaintenanceReminderService.notifyBreakdownAssigned', () => {
     expect(notificationsRepository.create).not.toHaveBeenCalled();
   });
 
-  it('skips the SMS (consent gate) but still creates the in-app notification', async () => {
+  it('attempts but does not deliver the SMS when consent is missing, and still creates the in-app notification', async () => {
     const { service, remindersRepository, outboxService, notificationsRepository } = build([]);
     remindersRepository.getBreakdownAssignmentInfo.mockResolvedValue({
       ...assignmentInfo('tech-1'),
@@ -251,11 +332,28 @@ describe('MaintenanceReminderService.notifyBreakdownAssigned', () => {
 
     await service.notifyBreakdownAssigned(TENANT_ID, 'bd-1');
 
-    expect(outboxService.enqueue).not.toHaveBeenCalled();
+    expect(outboxService.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ consentAt: null }),
+    );
     expect(notificationsRepository.create).toHaveBeenCalledWith(
       TENANT_ID,
       null,
       expect.objectContaining({ userId: 'tech-1', type: 'ASSIGNMENT' }),
+    );
+  });
+
+  // I10: same revoked-consent gate as the maintenance-contract path above.
+  it('attempts but does not deliver the SMS when consent was revoked', async () => {
+    const { service, remindersRepository, outboxService } = build([]);
+    remindersRepository.getBreakdownAssignmentInfo.mockResolvedValue({
+      ...assignmentInfo('tech-1'),
+      technicianSmsConsentRevokedAt: new Date('2026-02-01T00:00:00Z'),
+    });
+
+    await service.notifyBreakdownAssigned(TENANT_ID, 'bd-1');
+
+    expect(outboxService.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ consentAt: null }),
     );
   });
 });

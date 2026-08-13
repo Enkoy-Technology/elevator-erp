@@ -21,9 +21,19 @@ export interface DueMaintenanceReminder {
   customerName: string;
   customerPhone: string | null;
   customerSmsConsentAt: Date | null;
+  customerSmsConsentRevokedAt: Date | null;
+  /**
+   * Null when the contract has no assignee, OR when the assignee is
+   * deactivated/soft-deleted (phase-5 review I6) — sourced from the
+   * (filtered) `users` join, not `maintenanceContracts.assignedUserId`
+   * directly, so a technician who has left the company gets neither the SMS
+   * nor the in-app notification: both call sites already gate on
+   * `contract.technicianId` being truthy.
+   */
   technicianId: string | null;
   technicianPhone: string | null;
   technicianSmsConsentAt: Date | null;
+  technicianSmsConsentRevokedAt: Date | null;
 }
 
 export interface BreakdownAssignmentInfo {
@@ -31,9 +41,11 @@ export interface BreakdownAssignmentInfo {
   severity: string;
   assetName: string;
   customerName: string;
+  /** Same active/not-deleted gate as DueMaintenanceReminder.technicianId above — null suppresses both the SMS and the in-app notification. */
   assignedUserId: string | null;
   technicianPhone: string | null;
   technicianSmsConsentAt: Date | null;
+  technicianSmsConsentRevokedAt: Date | null;
 }
 
 /**
@@ -91,7 +103,13 @@ export class MaintenanceReminderRepository {
           contractId: maintenanceContracts.id,
           nextServiceAt: maintenanceContracts.nextServiceAt,
           customerId: maintenanceContracts.customerId,
-          assignedUserId: maintenanceContracts.assignedUserId,
+          // Sourced from the (filtered) users join, NOT
+          // maintenanceContracts.assignedUserId directly (I6) — the raw FK
+          // column stays populated even after the assignee leaves, which is
+          // exactly what let a deactivated/deleted technician keep getting
+          // notified. This is null unless the join actually matched an
+          // active, non-deleted user.
+          technicianId: users.id,
           assetName: assets.name,
           buildingName: assets.buildingName,
           locationNotes: assets.locationNotes,
@@ -99,8 +117,10 @@ export class MaintenanceReminderRepository {
           customerCity: customers.city,
           customerPhone: customers.phone,
           customerSmsConsentAt: customers.smsConsentAt,
+          customerSmsConsentRevokedAt: customers.smsConsentRevokedAt,
           technicianPhone: users.phone,
           technicianSmsConsentAt: users.smsConsentAt,
+          technicianSmsConsentRevokedAt: users.smsConsentRevokedAt,
         })
         .from(maintenanceContracts)
         .leftJoin(
@@ -122,6 +142,12 @@ export class MaintenanceReminderRepository {
           and(
             eq(maintenanceContracts.tenantId, users.tenantId),
             eq(maintenanceContracts.assignedUserId, users.id),
+            // I6: a technician who has left the company (deactivated or
+            // soft-deleted) must not keep receiving SMS/in-app
+            // notifications about customer sites — excluding them from the
+            // join is what makes technicianId (above) null for them.
+            eq(users.isActive, true),
+            isNull(users.deletedAt),
           ),
         )
         .where(
@@ -142,9 +168,11 @@ export class MaintenanceReminderRepository {
         customerName: row.customerName ?? 'the customer',
         customerPhone: row.customerPhone,
         customerSmsConsentAt: row.customerSmsConsentAt,
-        technicianId: row.assignedUserId,
+        customerSmsConsentRevokedAt: row.customerSmsConsentRevokedAt,
+        technicianId: row.technicianId,
         technicianPhone: row.technicianPhone,
         technicianSmsConsentAt: row.technicianSmsConsentAt,
+        technicianSmsConsentRevokedAt: row.technicianSmsConsentRevokedAt,
       }));
 
       return { windowDays, contracts };
@@ -156,14 +184,22 @@ export class MaintenanceReminderRepository {
    * see it" surface (task-3 brief §3.4: "12 reminders not sent — no consent
    * on file" must be visible, not silent), read back through GET /settings.
    * Mirrors BalanceReconciliationRepository.recordRunResult's own pattern.
+   * `invalidPhoneSkipped` (I4) is the OTHER reason a reminder silently never
+   * arrives — a stored phone number that fails normalizeEthiopianPhone —
+   * recorded alongside the consent count since both come from the same run.
    */
-  async recordConsentSkipCount(tenantId: string, skippedCount: number): Promise<void> {
+  async recordRunResult(
+    tenantId: string,
+    consentSkipped: number,
+    invalidPhoneSkipped: number,
+  ): Promise<void> {
     await this.tenantDb.withTenant(tenantId, (tx) =>
       tx
         .update(tenants)
         .set({
           maintenanceReminderConsentSkippedLastRunAt: new Date(),
-          maintenanceReminderConsentSkippedCount: skippedCount,
+          maintenanceReminderConsentSkippedCount: consentSkipped,
+          maintenanceReminderInvalidPhoneSkippedCount: invalidPhoneSkipped,
           updatedAt: new Date(),
         })
         .where(eq(tenants.id, tenantId)),
@@ -184,11 +220,15 @@ export class MaintenanceReminderRepository {
         .select({
           title: breakdowns.title,
           severity: breakdowns.severity,
-          assignedUserId: breakdowns.assignedUserId,
+          // Sourced from the (filtered) users join, not
+          // breakdowns.assignedUserId directly — see listDueContracts'
+          // identical technicianId comment (I6).
+          assignedUserId: users.id,
           assetName: assets.name,
           customerName: customers.name,
           technicianPhone: users.phone,
           technicianSmsConsentAt: users.smsConsentAt,
+          technicianSmsConsentRevokedAt: users.smsConsentRevokedAt,
         })
         .from(breakdowns)
         .leftJoin(
@@ -210,6 +250,9 @@ export class MaintenanceReminderRepository {
           and(
             eq(breakdowns.tenantId, users.tenantId),
             eq(breakdowns.assignedUserId, users.id),
+            // I6: same active/not-deleted gate as listDueContracts above.
+            eq(users.isActive, true),
+            isNull(users.deletedAt),
           ),
         )
         .where(and(eq(breakdowns.id, breakdownId), isNull(breakdowns.deletedAt)))
@@ -226,6 +269,7 @@ export class MaintenanceReminderRepository {
         customerName: row.customerName ?? 'the customer',
         technicianPhone: row.technicianPhone,
         technicianSmsConsentAt: row.technicianSmsConsentAt,
+        technicianSmsConsentRevokedAt: row.technicianSmsConsentRevokedAt,
       };
     });
   }

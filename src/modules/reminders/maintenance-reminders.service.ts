@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
+import { InvalidPhoneNumberError, SmsConsentRequiredError } from '../../common/exceptions';
 import { canSmsRecipient, logSmsConsentSkip } from '../../common/sms-consent';
 import type { CreateNotificationDto } from '../notifications/dto/notification.dto';
 import { NotificationsRepository } from '../notifications/notifications.repository';
@@ -14,6 +15,10 @@ import { TenantDirectoryService } from './tenant-directory.service';
 
 const errorMessage = (err: unknown): string =>
   err instanceof Error ? err.message : String(err);
+
+/** What `enqueueSafely` actually did, so each call site can bump the right
+ * per-run counter without re-deriving it from a caught error itself (I3/I4). */
+type EnqueueOutcome = 'SENT' | 'NO_CONSENT' | 'INVALID_PHONE' | 'FAILED';
 
 /**
  * Task-2 brief §2.2: the daily per-tenant maintenance-contract reminder cron,
@@ -59,30 +64,43 @@ export class MaintenanceReminderService {
     let technicianSent = 0;
     let customerSent = 0;
     let consentSkipped = 0;
+    let invalidPhoneSkipped = 0;
 
     for (const contract of contracts) {
       if (contract.technicianId) {
-        if (
-          contract.technicianPhone &&
-          canSmsRecipient({ smsConsentAt: contract.technicianSmsConsentAt })
-        ) {
-          const sent = await this.enqueueSafely({
+        if (contract.technicianPhone) {
+          const outcome = await this.enqueueSafely({
             tenantId,
             channel: 'SMS',
             recipient: contract.technicianPhone,
             body: technicianBody(contract),
-            dedupeKey: `maint:${contract.contractId}:${contract.nextServiceAt}:technician`,
+            // Includes the technician id (nit fix) — without it, reassigning
+            // a contract before the service date reuses the SAME dedupeKey
+            // the old technician already consumed, and the outbox's own
+            // dedupe swallow (task-1) then silently drops the new
+            // technician's reminder. Mirrors notifyBreakdownAssigned's own
+            // `breakdown:<id>:<assigneeId>` key below, which already
+            // includes it.
+            dedupeKey: `maint:${contract.contractId}:${contract.nextServiceAt}:technician:${contract.technicianId}`,
             subjectKind: 'MAINTENANCE_CONTRACT',
             subjectId: contract.contractId,
+            consentAt: effectiveConsentAt({
+              smsConsentAt: contract.technicianSmsConsentAt,
+              smsConsentRevokedAt: contract.technicianSmsConsentRevokedAt,
+            }),
           });
-          if (sent) technicianSent++;
-        } else if (contract.technicianPhone) {
-          logSmsConsentSkip(this.logger, {
-            tenantId,
-            recipientKind: 'technician',
-            recipientId: contract.technicianId,
-          });
-          consentSkipped++;
+          if (outcome === 'SENT') {
+            technicianSent++;
+          } else if (outcome === 'NO_CONSENT') {
+            logSmsConsentSkip(this.logger, {
+              tenantId,
+              recipientKind: 'technician',
+              recipientId: contract.technicianId,
+            });
+            consentSkipped++;
+          } else if (outcome === 'INVALID_PHONE') {
+            invalidPhoneSkipped++;
+          }
         }
 
         await this.notifySafely(tenantId, contract.technicianId, {
@@ -102,33 +120,44 @@ export class MaintenanceReminderService {
       }
 
       if (contract.customerPhone) {
-        if (canSmsRecipient({ smsConsentAt: contract.customerSmsConsentAt })) {
-          const sent = await this.enqueueSafely({
-            tenantId,
-            channel: 'SMS',
-            recipient: contract.customerPhone,
-            body: customerBody(contract),
-            dedupeKey: `maint:${contract.contractId}:${contract.nextServiceAt}:customer`,
-            subjectKind: 'MAINTENANCE_CONTRACT',
-            subjectId: contract.contractId,
-          });
-          if (sent) customerSent++;
-        } else {
+        const outcome = await this.enqueueSafely({
+          tenantId,
+          channel: 'SMS',
+          recipient: contract.customerPhone,
+          body: customerBody(contract),
+          dedupeKey: `maint:${contract.contractId}:${contract.nextServiceAt}:customer`,
+          subjectKind: 'MAINTENANCE_CONTRACT',
+          subjectId: contract.contractId,
+          consentAt: effectiveConsentAt({
+            smsConsentAt: contract.customerSmsConsentAt,
+            smsConsentRevokedAt: contract.customerSmsConsentRevokedAt,
+          }),
+        });
+        if (outcome === 'SENT') {
+          customerSent++;
+        } else if (outcome === 'NO_CONSENT') {
           logSmsConsentSkip(this.logger, {
             tenantId,
             recipientKind: 'customer',
             recipientId: contract.customerId,
           });
           consentSkipped++;
+        } else if (outcome === 'INVALID_PHONE') {
+          invalidPhoneSkipped++;
         }
       }
     }
 
-    await this.remindersRepository.recordConsentSkipCount(tenantId, consentSkipped);
+    await this.remindersRepository.recordRunResult(
+      tenantId,
+      consentSkipped,
+      invalidPhoneSkipped,
+    );
 
     this.logger.log(
       `Maintenance reminders for tenant ${tenantId}: ${technicianSent} technician SMS, ` +
-        `${customerSent} customer SMS, ${consentSkipped} skipped for consent ` +
+        `${customerSent} customer SMS, ${consentSkipped} skipped for consent, ` +
+        `${invalidPhoneSkipped} skipped for invalid phone ` +
         `(window ${windowDays}d, ${contracts.length} contracts due)`,
     );
   }
@@ -157,11 +186,8 @@ export class MaintenanceReminderService {
       }
       const body = `New breakdown assigned: ${info.title} at ${info.customerName} (${info.assetName}). Severity: ${info.severity}.`;
 
-      if (
-        info.technicianPhone &&
-        canSmsRecipient({ smsConsentAt: info.technicianSmsConsentAt })
-      ) {
-        await this.enqueueSafely({
+      if (info.technicianPhone) {
+        const outcome = await this.enqueueSafely({
           tenantId,
           channel: 'SMS',
           recipient: info.technicianPhone,
@@ -169,13 +195,21 @@ export class MaintenanceReminderService {
           dedupeKey: `breakdown:${breakdownId}:${info.assignedUserId}`,
           subjectKind: 'BREAKDOWN',
           subjectId: breakdownId,
+          consentAt: effectiveConsentAt({
+            smsConsentAt: info.technicianSmsConsentAt,
+            smsConsentRevokedAt: info.technicianSmsConsentRevokedAt,
+          }),
         });
-      } else if (info.technicianPhone) {
-        logSmsConsentSkip(this.logger, {
-          tenantId,
-          recipientKind: 'technician',
-          recipientId: info.assignedUserId,
-        });
+        // INVALID_PHONE/FAILED are already logged inside enqueueSafely;
+        // NO_CONSENT is the one outcome this caller still has to log itself
+        // (no per-run counter here — this path isn't a cron batch).
+        if (outcome === 'NO_CONSENT') {
+          logSmsConsentSkip(this.logger, {
+            tenantId,
+            recipientKind: 'technician',
+            recipientId: info.assignedUserId,
+          });
+        }
       }
 
       await this.notifySafely(tenantId, info.assignedUserId, {
@@ -194,15 +228,28 @@ export class MaintenanceReminderService {
     }
   }
 
-  private async enqueueSafely(input: EnqueueMessageInput): Promise<boolean> {
+  private async enqueueSafely(input: EnqueueMessageInput): Promise<EnqueueOutcome> {
     try {
       await this.outboxService.enqueue(input);
-      return true;
+      return 'SENT';
     } catch (err) {
+      if (err instanceof SmsConsentRequiredError) {
+        return 'NO_CONSENT';
+      }
+      if (err instanceof InvalidPhoneNumberError) {
+        // I4: this is now expected to be rare (phone format is validated at
+        // write time), but a number stored before that validation shipped
+        // can still land here — visible in the log (masked, never a full
+        // number) and counted, not silent.
+        this.logger.error(
+          `Skipped SMS for an invalid stored phone number (dedupeKey ${input.dedupeKey}): ${errorMessage(err)}`,
+        );
+        return 'INVALID_PHONE';
+      }
       this.logger.error(
         `Failed to enqueue reminder SMS (dedupeKey ${input.dedupeKey}): ${errorMessage(err)}`,
       );
-      return false;
+      return 'FAILED';
     }
   }
 
@@ -228,6 +275,20 @@ export class MaintenanceReminderService {
       );
     }
   }
+}
+
+/**
+ * The recipient's consent timestamp if — and only if — `canSmsRecipient`
+ * says they're currently entitled (never consented, or consented and later
+ * revoked, both read null); `EnqueueMessageInput.consentAt` for the SMS
+ * channel (I3) — `OutboxService.enqueue` is the actual choke point that
+ * refuses on null, this only computes what to hand it.
+ */
+function effectiveConsentAt(recipient: {
+  smsConsentAt: Date | null;
+  smsConsentRevokedAt: Date | null;
+}): Date | null {
+  return canSmsRecipient(recipient) ? recipient.smsConsentAt : null;
 }
 
 function technicianBody(contract: DueMaintenanceReminder): string {

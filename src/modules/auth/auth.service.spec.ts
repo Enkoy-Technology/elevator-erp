@@ -36,6 +36,7 @@ describe('AuthService', () => {
       fullName: 'Demo CEO',
       phone: null,
       smsConsentAt: null,
+      smsConsentRevokedAt: null,
       role: 'CEO',
       isActive: true,
       refreshTokenHash: null,
