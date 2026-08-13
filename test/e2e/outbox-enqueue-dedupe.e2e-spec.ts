@@ -110,7 +110,7 @@ describe('OutboxRepository.enqueue dedupe swallow against real Postgres', () => 
 
     const first = await repo.enqueue(tenantId, {
       channel: 'SMS',
-      recipient: '+251911234567',
+      recipient: '+251949922604',
       body: 'Your payment is due tomorrow.',
       dedupeKey,
     });
@@ -121,7 +121,7 @@ describe('OutboxRepository.enqueue dedupe swallow against real Postgres', () => 
     // reject entirely.
     const second = await repo.enqueue(tenantId, {
       channel: 'SMS',
-      recipient: '+251911234567',
+      recipient: '+251949922604',
       body: 'A different body — must never be what gets stored.',
       dedupeKey,
     });

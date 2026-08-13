@@ -8,7 +8,7 @@ describe('NoopSmsProvider', () => {
   it('returns a synthetic providerMessageId without contacting any real gateway', async () => {
     const provider = new NoopSmsProvider();
 
-    const result = await provider.send('+251911234567', 'hello');
+    const result = await provider.send('+251949922604', 'hello');
 
     expect(result.providerMessageId).toEqual(expect.stringMatching(/^noop-/));
   });
