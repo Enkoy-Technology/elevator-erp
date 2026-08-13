@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+build
+*.log
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+
+# Secrets — NEXT_PUBLIC_API_URL is a required build ARG (see Dockerfile),
+# never read from a committed/mounted .env file for the image build.
+.env
+.env.*
+!.env.example

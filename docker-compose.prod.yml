@@ -1,0 +1,176 @@
+# Production bundle: postgres + api + web + a backup sidecar, for the
+# client's own LAN server in Addis Ababa (task-1 brief — see
+# docs/ops/deploy-runbook.md for the install steps). The dev
+# docker-compose.yml is untouched; this is a separate file, run with
+# `docker compose -f docker-compose.prod.yml <command>`.
+#
+# Every secret comes from a `.env` file the operator creates next to this
+# file (docker compose loads it automatically for the `${VAR}` substitutions
+# below, and `api`'s env_file: entry hands the same file straight to the
+# app) — never baked into an image, never committed. See the runbook for
+# every required variable.
+#
+# restart: unless-stopped on every service — the client's grid drops power
+# ~39 times a month; a service that doesn't restart itself needs a human at
+# the box every time, which does not scale to an unattended office server.
+#
+# Every service shares the same log-rotation policy (below) — Docker's own
+# json-file driver, not an OS-level logrotate job: NestJS/Next log to
+# stdout only (no app-managed log files), so capping and rotating the
+# driver that already captures stdout is the whole job. 10m x 5 files = 50MB
+# retained per service, so a year of uptime cannot fill the disk and take
+# the ERP down with it.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: elevator-erp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env — see docs/ops/deploy-runbook.md}
+      POSTGRES_DB: ${POSTGRES_DB:-elevator_erp}
+    # synchronous_commit=on is Postgres's own default — pinned explicitly
+    # here so a future edit can't silently tune it off. This is a finance
+    # database on a box that loses power ~39 times a month: turning
+    # synchronous_commit off trades a small write-latency win for the
+    # possibility that a commit the client already saw succeed is lost in
+    # the outage, which is exactly backwards for money records.
+    command: ['postgres', '-c', 'synchronous_commit=on']
+    logging: *default-logging
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-elevator_erp}',
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+    # No published port — only api/backup, on the compose network, ever
+    # talk to Postgres. Nothing on the LAN needs to reach it directly.
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: elevator-erp-api
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      # Production behaviour is gated on this: it is what hides Swagger
+      # (src/main.ts) and what turns on the >=32-char JWT_SECRET check
+      # (src/config/env.schema.ts). Verified once by finding /docs served
+      # from this very bundle because the API container defaulted to
+      # development. Note this deliberately does NOT enable live SMS —
+      # that is gated separately on SMS_LIVE, so a production-built image
+      # used for staging still cannot text a real customer.
+      NODE_ENV: production
+    env_file:
+      - .env
+    ports:
+      # LAN clients' browsers call the API directly (NEXT_PUBLIC_API_URL is
+      # baked into the web build, not proxied through the web server), so
+      # this must be reachable — but never expose it beyond the LAN.
+      - '3002:3002'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "require('node:http').get('http://127.0.0.1:3002/v1/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        # Baked into the bundle and the CSP's connect-src at BUILD time —
+        # see web/Dockerfile and web/next.config.ts. Compose fails loudly
+        # here if it's missing from .env rather than silently building a UI
+        # that points at localhost:3002.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?Set NEXT_PUBLIC_API_URL in .env — see docs/ops/deploy-runbook.md}
+    container_name: elevator-erp-web
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - '3003:3003'
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "require('node:http').get('http://127.0.0.1:3003/',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+  # Task 3 (finance-exports-sms plan) owns the backup schedule/script itself
+  # — this service is deliberately left as a stub so that task only has to
+  # add a command/entrypoint, not stand up a service, wire the volume, or
+  # grant DB access. postgres:16-alpine already ships pg_dump.
+  backup:
+    image: postgres:16-alpine
+    container_name: elevator-erp-backup
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env — see docs/ops/deploy-runbook.md}
+      POSTGRES_DB: ${POSTGRES_DB:-elevator_erp}
+      PGHOST: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - backups:/backups
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 256M
+    # Placeholder command — Task 3 replaces this with the real backup
+    # schedule. Keeps the container alive (and restartable) without doing
+    # anything until then.
+    entrypoint: ['sleep', 'infinity']
+
+volumes:
+  pgdata_prod:
+  backups:

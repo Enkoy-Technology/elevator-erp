@@ -52,6 +52,10 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // The API workspace at the repo root has its own lockfile; pin tracing here.
   outputFileTracingRoot: __dirname,
+  // A minimal, self-contained runtime for the Docker image: `.next/standalone`
+  // traces only the node_modules the server actually needs instead of
+  // shipping the whole workspace's node_modules into the container.
+  output: 'standalone',
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }];
   },
