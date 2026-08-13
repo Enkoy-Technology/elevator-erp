@@ -70,6 +70,9 @@ describe('MaintenanceReminderService.runDailyReminders against real Postgres', (
   const slug = `maint-reminder-${randomUUID().slice(0, 8)}`;
   let tenantId: string;
   let contractId: string;
+  // Exposed beyond beforeAll so the I6 test below can attach a second
+  // contract to the same customer without re-seeding one from scratch.
+  let customerId: string;
 
   beforeAll(async () => {
     available = (await canConnect(ADMIN_URL)) && (await canConnect(APP_URL));
@@ -101,7 +104,7 @@ describe('MaintenanceReminderService.runDailyReminders against real Postgres', (
        returning id`,
       [tenantId, TEST_PHONE],
     );
-    const customerId = customerResult.rows[0]!.id;
+    customerId = customerResult.rows[0]!.id;
 
     const technicianResult = await adminPool.query<{ id: string }>(
       `insert into users (tenant_id, email, password_hash, full_name, phone, role, sms_consent_at)
@@ -179,11 +182,13 @@ describe('MaintenanceReminderService.runDailyReminders against real Postgres', (
     expect(messages.rows).toHaveLength(2);
     expect(messages.rows.every((r) => r.recipient === TEST_PHONE)).toBe(true);
     // One technician message, one customer message — told apart by
-    // dedupe_key suffix, not by recipient (both share the same test handset).
-    expect(messages.rows.map((r) => r.dedupe_key.split(':').pop()).sort()).toEqual([
-      'customer',
-      'technician',
-    ]);
+    // dedupe_key suffix (`:technician:<id>`/`:customer`, the id included
+    // per the phase-5 dedupe-key nit fix), not by recipient (both share the
+    // same test handset).
+    const kinds = messages.rows
+      .map((r) => (r.dedupe_key.includes(':technician:') ? 'technician' : 'customer'))
+      .sort();
+    expect(kinds).toEqual(['customer', 'technician']);
     for (const row of messages.rows) {
       expect(row.subject_kind).toBe('MAINTENANCE_CONTRACT');
       expect(row.subject_id).toBe(contractId);
@@ -198,5 +203,78 @@ describe('MaintenanceReminderService.runDailyReminders against real Postgres', (
     );
     expect(notifications.rows).toHaveLength(1);
     expect(notifications.rows[0]!.type).toBe('MAINTENANCE');
+  });
+
+  // I6: a technician who has left the company (deactivated or soft-deleted)
+  // must not keep receiving SMS about customer sites, nor in-app
+  // notifications for an account that can no longer log in — proven against
+  // real Postgres because the fix is in the join condition itself
+  // (maintenance-reminders.repository.ts), not something a mocked unit test
+  // can see.
+  it('sends nothing to a deactivated or soft-deleted assigned technician (I6)', async () => {
+    if (!available) {
+      return;
+    }
+
+    const deactivatedResult = await adminPool.query<{ id: string }>(
+      `insert into users (tenant_id, email, password_hash, full_name, phone, role, sms_consent_at, is_active)
+       values ($1, 'left-the-company@example.com', 'x', 'Former Tech', $2, 'FIELD_ENGINEER', now(), false)
+       returning id`,
+      [tenantId, TEST_PHONE],
+    );
+    const deactivatedTechId = deactivatedResult.rows[0]!.id;
+
+    const deletedResult = await adminPool.query<{ id: string }>(
+      `insert into users (tenant_id, email, password_hash, full_name, phone, role, sms_consent_at, deleted_at)
+       values ($1, 'offboarded@example.com', 'x', 'Offboarded Tech', $2, 'FIELD_ENGINEER', now(), now())
+       returning id`,
+      [tenantId, TEST_PHONE],
+    );
+    const deletedTechId = deletedResult.rows[0]!.id;
+
+    const assetResult = await adminPool.query<{ id: string }>(
+      `insert into assets (tenant_id, customer_id, category, name, building_name)
+       values ($1, $2, 'ELEVATOR', 'Elevator 9', 'North Wing')
+       returning id`,
+      [tenantId, customerId],
+    );
+    const assetId = assetResult.rows[0]!.id;
+
+    const nextServiceAt = addDaysIso(todayIso(), 1);
+    const contracts = await adminPool.query<{ id: string }>(
+      `insert into maintenance_contracts
+         (tenant_id, asset_id, customer_id, recurrence, status, start_date, next_service_at, assigned_user_id)
+       values
+         ($1, $2, $3, 'MONTHLY', 'ACTIVE', current_date, $4, $5),
+         ($1, $2, $3, 'MONTHLY', 'ACTIVE', current_date, $4, $6)
+       returning id`,
+      [tenantId, assetId, customerId, nextServiceAt, deactivatedTechId, deletedTechId],
+    );
+    const newContractIds = contracts.rows.map((r) => r.id);
+
+    const db = drizzle(appPool, { schema });
+    const tenantDb = new TenantDbService(db);
+    const tenantDirectory = { listActiveTenantIds: async () => [tenantId] };
+    const service = new MaintenanceReminderService(
+      tenantDirectory as never,
+      new MaintenanceReminderRepository(tenantDb),
+      new OutboxService(new OutboxRepository(tenantDb), { name: 'noop' } as never),
+      new NotificationsRepository(tenantDb),
+    );
+
+    await service.runDailyReminders();
+
+    const messages = await adminPool.query<{ dedupe_key: string }>(
+      `select dedupe_key from outbound_messages
+       where tenant_id = $1 and subject_id = any($2::uuid[]) and dedupe_key like '%:technician:%'`,
+      [tenantId, newContractIds],
+    );
+    expect(messages.rows).toHaveLength(0);
+
+    const notifications = await adminPool.query<{ user_id: string }>(
+      `select user_id from notifications where tenant_id = $1 and user_id = any($2::uuid[])`,
+      [tenantId, [deactivatedTechId, deletedTechId]],
+    );
+    expect(notifications.rows).toHaveLength(0);
   });
 });
