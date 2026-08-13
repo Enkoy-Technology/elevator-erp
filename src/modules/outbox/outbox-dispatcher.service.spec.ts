@@ -131,6 +131,22 @@ describe('OutboxDispatcherService.dispatch', () => {
     expect(repository.markSent).toHaveBeenCalledWith(TENANT_ID, 'm2', 'sms-2', 'noop');
   });
 
+  it('C1: a successful send whose markSent write-back throws does NOT retry or re-send — the row is left stranded in SENDING instead', async () => {
+    const send = jest.fn(async () => ({ providerMessageId: 'sms-123' }));
+    const { service, repository } = build([message()], send);
+    repository.markSent.mockRejectedValueOnce(new Error('connection reset'));
+
+    await expect(service.dispatch()).resolves.toBeUndefined();
+
+    expect(send).toHaveBeenCalledTimes(1);
+    // The whole point: markSent failing must NOT fall through to the
+    // retry/backoff or FAILED paths — either would put the message back
+    // where the next tick sends it again, duplicating an SMS that already
+    // reached a real customer.
+    expect(repository.markRetry).not.toHaveBeenCalled();
+    expect(repository.markFailed).not.toHaveBeenCalled();
+  });
+
   it('a claimDue failure is caught and logged, not thrown — the scheduler must survive a DB blip', async () => {
     const send = jest.fn();
     const { service, repository } = build([], send);

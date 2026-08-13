@@ -75,14 +75,42 @@ export class OutboxDispatcherService {
       }
 
       const result = await this.smsProvider.send(message.recipient, message.body);
+      await this.confirmSent(message, result.providerMessageId);
+    } catch (err) {
+      await this.recordFailure(message, errorMessage(err));
+    }
+  }
+
+  /**
+   * C1 fix: `send()` returning successfully is the durability boundary — an
+   * SMS that already reached a real customer must never be retried just
+   * because writing that fact down failed (DB restart, pool exhaustion; the
+   * dispatcher pool is `max: 5` and this client's site loses power ~39
+   * times/month). This method deliberately swallows its own error instead of
+   * letting it reach sendOne's catch: falling through to recordFailure would
+   * put the row back to QUEUED with a 1-minute backoff, and the next tick
+   * would send the SAME SMS again — indistinguishable in the log from an
+   * ordinary provider failure. A row stranded in SENDING (recovered later by
+   * C2's stale-claim reclaim, not by this method) is strictly better than an
+   * unsolicited duplicate.
+   */
+  private async confirmSent(
+    message: OutboundMessageRecord,
+    providerMessageId: string,
+  ): Promise<void> {
+    try {
       await this.dispatcherRepository.markSent(
         message.tenantId,
         message.id,
-        result.providerMessageId,
+        providerMessageId,
         this.smsProvider.name,
       );
     } catch (err) {
-      await this.recordFailure(message, errorMessage(err));
+      this.logger.error(
+        `Outbound message ${message.id} to ${message.recipient} was SENT successfully but recording ` +
+          `that failed — leaving it in SENDING rather than retrying, to avoid re-sending an SMS that ` +
+          `already reached the recipient: ${errorMessage(err)}`,
+      );
     }
   }
 
