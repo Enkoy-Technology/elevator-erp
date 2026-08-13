@@ -19,7 +19,7 @@ describe('CustomersService', () => {
     nameNormalized: 'addis heights plc',
     legalName: null,
     email: 'ops@addisheights.et',
-    phone: '+251911000000',
+    phone: '+251949922604',
     alternatePhone: null,
     addressLine1: null,
     addressLine2: null,

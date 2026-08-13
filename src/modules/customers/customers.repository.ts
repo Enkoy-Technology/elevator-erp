@@ -140,7 +140,7 @@ export class CustomersRepository {
    * Look-alike check for the create form. Warns, never blocks: name contains
    * in either direction (so "Addis Heights" matches "Addis Heights PLC" and
    * vice versa), or the same trailing 9 phone digits on either phone column
-   * (so +251911000000, 0911000000 and 911000000 all match).
+   * (so +251949922604, 0949922604 and 949922604 all match).
    */
   async findSimilar(
     tenantId: string,
