@@ -20,7 +20,7 @@
     "web:lint": "pnpm --dir web lint",
     "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\"",
     "typecheck": "tsc --noEmit",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test": "sh -c 'jest --config jest.unit.config.js --passWithNoTests \"$@\" && NODE_OPTIONS=--experimental-vm-modules jest --config jest.pdf-smoke.config.js --passWithNoTests \"$@\"' --",
     "test:e2e": "jest --config test/jest-e2e.json --runInBand",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env src/database/migrate.ts",
