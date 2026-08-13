@@ -22,6 +22,7 @@ const invoiceRow = (overrides: Row = {}): Row => ({
   customerName: 'Addis Heights PLC',
   customerPhone: '+251949922604',
   customerSmsConsentAt: new Date('2026-01-01T00:00:00Z'),
+  customerSmsConsentRevokedAt: null,
   ...overrides,
 });
 

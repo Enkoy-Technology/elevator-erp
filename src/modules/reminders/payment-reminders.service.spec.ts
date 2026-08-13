@@ -1,3 +1,4 @@
+import { InvalidPhoneNumberError, SmsConsentRequiredError } from '../../common/exceptions';
 import type { DuePaymentReminder } from './payment-reminders.repository';
 import { PaymentReminderService } from './payment-reminders.service';
 
@@ -15,16 +16,27 @@ const dueInvoice = (
   customerName: 'Addis Heights PLC',
   customerPhone: '+251949922604',
   customerSmsConsentAt: new Date('2026-01-01T00:00:00Z'),
+  customerSmsConsentRevokedAt: null,
   ...overrides,
 });
 
+/** Same real-consent-refusal stand-in as maintenance-reminders.service.spec.ts's own `build()` — see its doc comment (I3). */
 const build = (dueInvoices: DuePaymentReminder[]) => {
   const tenantDirectory = { listActiveTenantIds: jest.fn(async () => [TENANT_ID]) };
   const remindersRepository = {
     listDueInvoices: jest.fn(async () => dueInvoices),
-    recordConsentSkipCount: jest.fn(),
+    recordRunResult: jest.fn(),
   };
-  const outboxService = { enqueue: jest.fn(async (input: unknown) => input) };
+  const outboxService = {
+    enqueue: jest.fn(
+      async (input: { channel: string; consentAt?: Date | null }) => {
+        if (input.channel === 'SMS' && input.consentAt == null) {
+          throw new SmsConsentRequiredError();
+        }
+        return input;
+      },
+    ),
+  };
 
   const service = new PaymentReminderService(
     tenantDirectory as never,
@@ -35,15 +47,31 @@ const build = (dueInvoices: DuePaymentReminder[]) => {
 };
 
 describe('PaymentReminderService.runDailyReminders — consent gate', () => {
-  it('never enqueues for a customer with no smsConsentAt, and records the skip count for GET /settings (task-3 §3.4)', async () => {
+  it('attempts but does not deliver an SMS for a customer with no smsConsentAt, and records the skip count for GET /settings (task-3 §3.4)', async () => {
     const { service, outboxService, remindersRepository } = build([
       dueInvoice({ customerSmsConsentAt: null }),
     ]);
 
     await service.runDailyReminders();
 
-    expect(outboxService.enqueue).not.toHaveBeenCalled();
-    expect(remindersRepository.recordConsentSkipCount).toHaveBeenCalledWith(TENANT_ID, 1);
+    expect(outboxService.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ consentAt: null }),
+    );
+    expect(remindersRepository.recordRunResult).toHaveBeenCalledWith(TENANT_ID, 1, 0);
+  });
+
+  // I10: revoked consent must block just as hard as never having consented.
+  it('attempts but does not deliver an SMS for a customer whose consent was revoked', async () => {
+    const { service, outboxService, remindersRepository } = build([
+      dueInvoice({ customerSmsConsentRevokedAt: new Date('2026-02-01T00:00:00Z') }),
+    ]);
+
+    await service.runDailyReminders();
+
+    expect(outboxService.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ consentAt: null }),
+    );
+    expect(remindersRepository.recordRunResult).toHaveBeenCalledWith(TENANT_ID, 1, 0);
   });
 
   it('enqueues for a customer with consent on file', async () => {
@@ -52,6 +80,9 @@ describe('PaymentReminderService.runDailyReminders — consent gate', () => {
     await service.runDailyReminders();
 
     expect(outboxService.enqueue).toHaveBeenCalledTimes(1);
+    expect(outboxService.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ consentAt: dueInvoice().customerSmsConsentAt }),
+    );
   });
 
   it('skips a customer with no phone on file, without throwing', async () => {
@@ -62,6 +93,19 @@ describe('PaymentReminderService.runDailyReminders — consent gate', () => {
   });
 });
 
+// I4: an already-bad stored phone number is counted and surfaced, not just
+// logged and forgotten.
+describe('PaymentReminderService.runDailyReminders — invalid phone counter (I4)', () => {
+  it('counts and records an InvalidPhoneNumberError separately from a consent skip', async () => {
+    const { service, outboxService, remindersRepository } = build([dueInvoice()]);
+    outboxService.enqueue.mockRejectedValueOnce(new InvalidPhoneNumberError('0911 2345'));
+
+    await service.runDailyReminders();
+
+    expect(remindersRepository.recordRunResult).toHaveBeenCalledWith(TENANT_ID, 0, 1);
+  });
+});
+
 describe('PaymentReminderService.runDailyReminders — dedupeKey and money formatting', () => {
   it('the dedupeKey is stable per invoice per offset — repeated runs never drift', async () => {
     const { service, outboxService } = build([dueInvoice({ offsetDays: 7 })]);
@@ -69,7 +113,7 @@ describe('PaymentReminderService.runDailyReminders — dedupeKey and money forma
     await service.runDailyReminders();
     await service.runDailyReminders();
 
-    const keys = (outboxService.enqueue.mock.calls as [{ dedupeKey: string }][]).map(
+    const keys = (outboxService.enqueue.mock.calls as unknown as [{ dedupeKey: string }][]).map(
       ([input]) => input.dedupeKey,
     );
     expect(keys).toEqual(['invoice-due:inv-1:7', 'invoice-due:inv-1:7']);
@@ -83,7 +127,7 @@ describe('PaymentReminderService.runDailyReminders — dedupeKey and money forma
 
     await service.runDailyReminders();
 
-    const keys = (outboxService.enqueue.mock.calls as [{ dedupeKey: string }][]).map(
+    const keys = (outboxService.enqueue.mock.calls as unknown as [{ dedupeKey: string }][]).map(
       ([input]) => input.dedupeKey,
     );
     expect(keys.sort()).toEqual(['invoice-due:inv-1:0', 'invoice-due:inv-1:7']);
@@ -96,7 +140,7 @@ describe('PaymentReminderService.runDailyReminders — dedupeKey and money forma
 
     await service.runDailyReminders();
 
-    const [input] = outboxService.enqueue.mock.calls[0] as [{ body: string }];
+    const [input] = outboxService.enqueue.mock.calls[0] as unknown as [{ body: string }];
     expect(input.body).toContain('12,345.60 ETB');
   });
 });
@@ -109,7 +153,7 @@ describe('PaymentReminderService — resilience', () => {
     ]);
     outboxService.enqueue
       .mockRejectedValueOnce(new Error('provider down'))
-      .mockResolvedValueOnce({});
+      .mockResolvedValueOnce({} as never);
 
     await expect(service.runDailyReminders()).resolves.toBeUndefined();
     expect(outboxService.enqueue).toHaveBeenCalledTimes(2);

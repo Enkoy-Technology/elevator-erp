@@ -123,6 +123,7 @@ export class EmployeesRepository {
             role: users.role,
             isActive: users.isActive,
             smsConsentAt: users.smsConsentAt,
+            smsConsentRevokedAt: users.smsConsentRevokedAt,
             lastLoginAt: users.lastLoginAt,
             createdAt: users.createdAt,
           })

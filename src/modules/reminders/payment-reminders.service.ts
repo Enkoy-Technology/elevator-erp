@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
+import { InvalidPhoneNumberError, SmsConsentRequiredError } from '../../common/exceptions';
 import { formatEtb } from '../../common/export/templates/money-format';
 import { canSmsRecipient, logSmsConsentSkip } from '../../common/sms-consent';
 import type { EnqueueMessageInput } from '../outbox/outbox.service';
@@ -13,6 +14,11 @@ import { TenantDirectoryService } from './tenant-directory.service';
 
 const errorMessage = (err: unknown): string =>
   err instanceof Error ? err.message : String(err);
+
+/** What `enqueueSafely` actually did — same shape as
+ * MaintenanceReminderService's own (2nd occurrence, duplicated per this
+ * codebase's established convention rather than shared). */
+type EnqueueOutcome = 'SENT' | 'NO_CONSENT' | 'INVALID_PHONE' | 'FAILED';
 
 /**
  * Task-2 brief §2.3 (plan 4.8, deferred from Phase 4): daily per-tenant
@@ -57,22 +63,14 @@ export class PaymentReminderService {
     const dueInvoices = await this.remindersRepository.listDueInvoices(tenantId);
     let sent = 0;
     let consentSkipped = 0;
+    let invalidPhoneSkipped = 0;
 
     for (const invoice of dueInvoices) {
       if (!invoice.customerPhone) {
         continue;
       }
-      if (!canSmsRecipient({ smsConsentAt: invoice.customerSmsConsentAt })) {
-        logSmsConsentSkip(this.logger, {
-          tenantId,
-          recipientKind: 'customer',
-          recipientId: invoice.customerId,
-        });
-        consentSkipped++;
-        continue;
-      }
 
-      const sentOk = await this.enqueueSafely({
+      const outcome = await this.enqueueSafely({
         tenantId,
         channel: 'SMS',
         recipient: invoice.customerPhone,
@@ -80,26 +78,65 @@ export class PaymentReminderService {
         dedupeKey: `invoice-due:${invoice.invoiceId}:${invoice.offsetDays}`,
         subjectKind: 'INVOICE',
         subjectId: invoice.invoiceId,
+        // I3: consentAt is resolved via canSmsRecipient (which now also
+        // accounts for a later revoke — I10) right here at the call site;
+        // OutboxService.enqueue is the actual choke point that refuses on
+        // null, this only decides what to hand it.
+        consentAt: canSmsRecipient({
+          smsConsentAt: invoice.customerSmsConsentAt,
+          smsConsentRevokedAt: invoice.customerSmsConsentRevokedAt,
+        })
+          ? invoice.customerSmsConsentAt
+          : null,
       });
-      if (sentOk) sent++;
+
+      if (outcome === 'SENT') {
+        sent++;
+      } else if (outcome === 'NO_CONSENT') {
+        logSmsConsentSkip(this.logger, {
+          tenantId,
+          recipientKind: 'customer',
+          recipientId: invoice.customerId,
+        });
+        consentSkipped++;
+      } else if (outcome === 'INVALID_PHONE') {
+        invalidPhoneSkipped++;
+      }
     }
 
-    await this.remindersRepository.recordConsentSkipCount(tenantId, consentSkipped);
+    await this.remindersRepository.recordRunResult(
+      tenantId,
+      consentSkipped,
+      invalidPhoneSkipped,
+    );
 
     this.logger.log(
-      `Payment reminders for tenant ${tenantId}: ${sent} sent, ${consentSkipped} skipped for consent (${dueInvoices.length} invoices due)`,
+      `Payment reminders for tenant ${tenantId}: ${sent} sent, ${consentSkipped} skipped for consent, ` +
+        `${invalidPhoneSkipped} skipped for invalid phone (${dueInvoices.length} invoices due)`,
     );
   }
 
-  private async enqueueSafely(input: EnqueueMessageInput): Promise<boolean> {
+  private async enqueueSafely(input: EnqueueMessageInput): Promise<EnqueueOutcome> {
     try {
       await this.outboxService.enqueue(input);
-      return true;
+      return 'SENT';
     } catch (err) {
+      if (err instanceof SmsConsentRequiredError) {
+        return 'NO_CONSENT';
+      }
+      if (err instanceof InvalidPhoneNumberError) {
+        // I4: expected to be rare going forward (phone format is now
+        // validated at write time) — a number stored before that
+        // validation shipped can still land here.
+        this.logger.error(
+          `Skipped payment reminder SMS for an invalid stored phone number (dedupeKey ${input.dedupeKey}): ${errorMessage(err)}`,
+        );
+        return 'INVALID_PHONE';
+      }
       this.logger.error(
         `Failed to enqueue payment reminder SMS (dedupeKey ${input.dedupeKey}): ${errorMessage(err)}`,
       );
-      return false;
+      return 'FAILED';
     }
   }
 }

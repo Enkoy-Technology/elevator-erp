@@ -22,6 +22,11 @@ export type SettingsRecord = typeof tenantBranding.$inferSelect & {
   maintenanceReminderConsentSkippedCount: number | null;
   paymentReminderConsentSkippedLastRunAt: Date | null;
   paymentReminderConsentSkippedCount: number | null;
+  /** Same run, the OTHER reason a reminder silently never arrives (phase-5
+   * review I4) — a stored phone number that fails normalizeEthiopianPhone.
+   * Shares the *ConsentSkippedLastRunAt timestamps above. Read-only. */
+  maintenanceReminderInvalidPhoneSkippedCount: number | null;
+  paymentReminderInvalidPhoneSkippedCount: number | null;
 };
 
 const TENANT_SETTINGS_COLUMNS = {
@@ -35,6 +40,9 @@ const TENANT_SETTINGS_COLUMNS = {
   maintenanceReminderConsentSkippedCount: tenants.maintenanceReminderConsentSkippedCount,
   paymentReminderConsentSkippedLastRunAt: tenants.paymentReminderConsentSkippedLastRunAt,
   paymentReminderConsentSkippedCount: tenants.paymentReminderConsentSkippedCount,
+  maintenanceReminderInvalidPhoneSkippedCount:
+    tenants.maintenanceReminderInvalidPhoneSkippedCount,
+  paymentReminderInvalidPhoneSkippedCount: tenants.paymentReminderInvalidPhoneSkippedCount,
 };
 
 @Injectable()
