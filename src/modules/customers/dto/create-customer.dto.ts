@@ -8,7 +8,10 @@ import {
   IsString,
   MaxLength,
   MinLength,
+  Validate,
 } from 'class-validator';
+
+import { IsEthiopianPhoneConstraint } from '../../../common/dto/phone';
 
 export const CUSTOMER_TYPES = [
   'RESIDENTIAL',
@@ -38,6 +41,12 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsString()
   @MaxLength(32)
+  // Validated at the point it's WRITTEN (phase-5 review I4) — this is the
+  // same phone column the maintenance/payment reminder crons read
+  // (customers.phone), so a malformed value stored here is a reminder that
+  // silently never arrives, forever, with only a masked ERROR log line to
+  // show for it.
+  @Validate(IsEthiopianPhoneConstraint)
   phone?: string;
 
   @ApiPropertyOptional()

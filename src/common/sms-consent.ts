@@ -10,10 +10,22 @@ import type { Logger } from '@nestjs/common';
  */
 export interface SmsConsentRecipient {
   smsConsentAt: Date | null;
+  /**
+   * When consent was revoked (phase-5 review I10) — null means either never
+   * revoked, or never consented at all. A revoke no longer nulls
+   * smsConsentAt (see customers.ts/users.ts's own doc comments on this
+   * column), so entitlement is smsConsentAt set AND not (yet) revoked.
+   */
+  smsConsentRevokedAt: Date | null;
 }
 
 export function canSmsRecipient(recipient: SmsConsentRecipient): boolean {
-  return recipient.smsConsentAt !== null;
+  // != null (not !==) so an accidentally-`undefined` field fails closed
+  // instead of silently passing the gate (phase-5 review I3) — `null` and
+  // `undefined` are both "no answer", and only a real Date should pass.
+  return (
+    recipient.smsConsentAt != null && recipient.smsConsentRevokedAt == null
+  );
 }
 
 /**
