@@ -100,7 +100,7 @@ describe('OutboxDispatcherRepository.claimDue under concurrency', () => {
 
     const inserted = await setupPool.query<{ id: string }>(
       `insert into outbound_messages (tenant_id, channel, recipient, body, dedupe_key)
-       select $1, 'SMS', '+251911234567', 'concurrency test', 'outbox-conc-' || gen_random_uuid()
+       select $1, 'SMS', '+251949922604', 'concurrency test', 'outbox-conc-' || gen_random_uuid()
        from generate_series(1, $2)
        returning id`,
       [tenantId, MESSAGE_COUNT],

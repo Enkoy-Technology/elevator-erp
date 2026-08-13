@@ -20,7 +20,7 @@ const invoiceRow = (overrides: Row = {}): Row => ({
   whtEtb: '0',
   customerId: 'cust-1',
   customerName: 'Addis Heights PLC',
-  customerPhone: '+251911000000',
+  customerPhone: '+251949922604',
   customerSmsConsentAt: new Date('2026-01-01T00:00:00Z'),
   ...overrides,
 });
