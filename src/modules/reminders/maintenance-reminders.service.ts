@@ -93,8 +93,11 @@ export class MaintenanceReminderService {
           // has no dedupeKey column — see NotificationsRepository.
           // existsByLinkPath's own doc comment) — the cron runs once per day
           // for every day the contract sits inside the window, so without
-          // this the technician would get a fresh notification each day.
-          linkPath: `/maintenance?contract=${contract.contractId}`,
+          // `nextServiceAt` in the path the September notification would
+          // suppress October's, November's, and every cycle after that,
+          // forever (C3). Mirrors the SMS dedupeKey above, which already
+          // includes it.
+          linkPath: `/maintenance?contract=${contract.contractId}&due=${contract.nextServiceAt}`,
         });
       }
 

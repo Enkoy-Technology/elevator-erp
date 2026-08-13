@@ -147,6 +147,46 @@ describe('MaintenanceReminderService — in-app notification repeat-run safety',
 
     expect(notificationsRepository.create).toHaveBeenCalledTimes(1);
   });
+
+  // C3: the test above alone can't see this bug — it runs the cron three
+  // times against the SAME nextServiceAt, which is supposed to dedupe. This
+  // one varies nextServiceAt between runs, standing in for the same contract
+  // coming due again next month — linkPath must carry nextServiceAt or the
+  // September notification suppresses every cycle after it, forever.
+  it('varying nextServiceAt between runs (a new maintenance cycle) creates a NEW notification each time, not just the first', async () => {
+    const { service, remindersRepository, notificationsRepository } = build([contract()]);
+    const created = new Set<string>();
+    (notificationsRepository.existsByLinkPath as jest.Mock).mockImplementation(
+      (_t: string, userId: string, type: string, linkPath: string) =>
+        Promise.resolve(created.has(`${userId}:${type}:${linkPath}`)),
+    );
+    (notificationsRepository.create as jest.Mock).mockImplementation(
+      (_t: string, _c: string | null, dto: { userId: string; type: string; linkPath: string }) => {
+        created.add(`${dto.userId}:${dto.type}:${dto.linkPath}`);
+        return Promise.resolve({});
+      },
+    );
+
+    remindersRepository.listDueContracts
+      .mockResolvedValueOnce({ windowDays: 3, contracts: [contract({ nextServiceAt: '2026-09-11' })] })
+      .mockResolvedValueOnce({ windowDays: 3, contracts: [contract({ nextServiceAt: '2026-10-11' })] })
+      .mockResolvedValueOnce({ windowDays: 3, contracts: [contract({ nextServiceAt: '2026-11-11' })] });
+
+    await service.runDailyReminders();
+    await service.runDailyReminders();
+    await service.runDailyReminders();
+
+    const linkPaths = (
+      notificationsRepository.create as jest.Mock
+    ).mock.calls.map(([, , dto]: [string, string | null, { linkPath: string }]) => dto.linkPath);
+    expect(notificationsRepository.create).toHaveBeenCalledTimes(3);
+    expect(new Set(linkPaths).size).toBe(3);
+    expect(linkPaths).toEqual([
+      '/maintenance?contract=contract-1&due=2026-09-11',
+      '/maintenance?contract=contract-1&due=2026-10-11',
+      '/maintenance?contract=contract-1&due=2026-11-11',
+    ]);
+  });
 });
 
 describe('MaintenanceReminderService.notifyBreakdownAssigned', () => {
