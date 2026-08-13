@@ -1,4 +1,5 @@
 const PG_FOREIGN_KEY_VIOLATION = '23503';
+const PG_UNIQUE_VIOLATION = '23505';
 
 /**
  * Extracts a Postgres error code from a thrown error. drizzle-orm's
@@ -33,4 +34,18 @@ function pgErrorCode(err: unknown): string | undefined {
  */
 export function isForeignKeyViolation(err: unknown): boolean {
   return pgErrorCode(err) === PG_FOREIGN_KEY_VIOLATION;
+}
+
+/**
+ * Postgres `unique_violation`, reclassified instead of surfacing as a raw
+ * driver error. `payments`/`invoices`/`bank-transactions` repositories each
+ * still carry their own pre-existing local copy of this exact check (the
+ * codebase's own "tolerate up to the 2nd occurrence, extract at the 3rd+"
+ * convention — see their own `isUniqueViolation` doc comments) — those are
+ * left untouched here, since this task has no reason to touch them.
+ * `IdempotencyKeysRepository` is the 4th call site, so it gets the shared
+ * one instead of a 5th local copy.
+ */
+export function isUniqueViolation(err: unknown): boolean {
+  return pgErrorCode(err) === PG_UNIQUE_VIOLATION;
 }

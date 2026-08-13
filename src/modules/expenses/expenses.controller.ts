@@ -9,12 +9,17 @@ import {
   Post,
   Query,
   Res,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiHeader, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 
 import { todayIso } from '../../common/business-time';
 import { CurrentUser, Roles } from '../../common/decorators';
+import {
+  IDEMPOTENCY_KEY_API_HEADER,
+  IdempotencyInterceptor,
+} from '../../common/idempotency/idempotency.interceptor';
 import { parseExportFormat } from '../../common/export/export-query.dto';
 import { type ColumnDef, writeCsv, writeXlsx } from '../../common/export/tabular';
 import {
@@ -89,6 +94,8 @@ export class ExpensesController {
 
   @Post()
   @HttpCode(201)
+  @UseInterceptors(IdempotencyInterceptor)
+  @ApiHeader(IDEMPOTENCY_KEY_API_HEADER)
   @ApiOperation({
     summary:
       'Record a supplier expense — server computes VAT split and WHT from the rate table, resolved at expenseDate',
@@ -156,6 +163,8 @@ export class ExpensesController {
 
   @Post(':id/reverse')
   @HttpCode(201)
+  @UseInterceptors(IdempotencyInterceptor)
+  @ApiHeader(IDEMPOTENCY_KEY_API_HEADER)
   @ApiOperation({
     summary:
       'Reverse an expense: inserts a new mirroring expense with negated amounts (the original is never edited)',
