@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, lte, or, sql } from 'drizzle-orm';
+import { and, eq, lt, lte, or, sql } from 'drizzle-orm';
 
 import type { Database, TenantTransaction } from '../../database/database.types';
 import { outboundMessages } from '../../database/schema';
@@ -89,11 +89,35 @@ export class OutboxDispatcherRepository {
   }
 
   /**
-   * Claims up to `limit` due messages across all tenants: `status =
-   * 'QUEUED' AND next_attempt_at <= now()`, oldest due first, `FOR UPDATE
-   * SKIP LOCKED` so a second dispatcher instance (or overlapping run) skips
-   * whatever this one already has locked instead of blocking on it or
-   * double-claiming it — the property proven by the concurrency e2e.
+   * Claims up to `limit` due messages across all tenants: either `status =
+   * 'QUEUED' AND next_attempt_at <= now()` (the ordinary case), OR `status =
+   * 'SENDING' AND updated_at < now() - 15 minutes` (the stale-claim reclaim,
+   * C2). Oldest due first, `FOR UPDATE SKIP LOCKED` so a second dispatcher
+   * instance (or overlapping run) skips whatever this one already has
+   * locked instead of blocking on it or double-claiming it — the property
+   * proven by the concurrency e2e.
+   *
+   * The stale-claim reclaim exists because claiming commits an entire batch
+   * to SENDING up front, before any of them are actually sent — a crash
+   * partway through a batch (an ordinary event here: office power cuts
+   * ~39x/month) leaves the not-yet-sent remainder stuck in SENDING forever,
+   * with no cron predicate that would ever look at them again and no
+   * operator action available (the message-log UI only offers Retry on
+   * FAILED). Without this, "sent but unrecorded" (C1's stranded-in-SENDING
+   * outcome) would ALSO never self-heal. 15 minutes is comfortably longer
+   * than one dispatch tick (EVERY_MINUTE) plus the provider's own 10s
+   * timeout, so a row still legitimately in flight is never reclaimed out
+   * from under itself — see the "fresh SENDING row is NOT reclaimed" spec
+   * below.
+   *
+   * Deliberate tradeoff, spelled out because it's easy to miss: a message
+   * that was actually sent successfully but whose markSent write-back also
+   * failed (C1) now gets reclaimed and re-sent once, 15 minutes later,
+   * instead of never — we accept a rare late duplicate to eliminate a
+   * guaranteed silent loss of every not-yet-sent message in a crashed
+   * batch. A duplicate SMS after 15 minutes is a customer inconvenience;
+   * 14 messages that silently never send, never retry, and never surface
+   * as FAILED is exactly what the outbox exists to prevent.
    *
    * Two statements in one transaction rather than a single `UPDATE ...
    * FROM (SELECT ... FOR UPDATE SKIP LOCKED)`: the lock taken by the first
@@ -112,9 +136,15 @@ export class OutboxDispatcherRepository {
         })
         .from(outboundMessages)
         .where(
-          and(
-            eq(outboundMessages.status, 'QUEUED'),
-            lte(outboundMessages.nextAttemptAt, sql`now()`),
+          or(
+            and(
+              eq(outboundMessages.status, 'QUEUED'),
+              lte(outboundMessages.nextAttemptAt, sql`now()`),
+            ),
+            and(
+              eq(outboundMessages.status, 'SENDING'),
+              lt(outboundMessages.updatedAt, sql`now() - interval '15 minutes'`),
+            ),
           ),
         )
         .orderBy(outboundMessages.nextAttemptAt)
