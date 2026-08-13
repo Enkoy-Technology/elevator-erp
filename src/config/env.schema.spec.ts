@@ -71,16 +71,17 @@ describe('validateEnv', () => {
     );
   });
 
-  // task-3 brief §3.0 SAFETY: "Test all four branches" — env.schema.ts owns
-  // the boot-time refusal branch; sms-allowlist.spec.ts owns the runtime
-  // block/allow branches.
+  // task-3 brief §3.0 SAFETY / I2: "Test all four branches" — env.schema.ts
+  // owns the boot-time refusal branch; sms-allowlist.spec.ts owns the
+  // runtime block/allow branches. Gated on SMS_LIVE, not NODE_ENV — see
+  // env.schema.ts's own doc comment for why.
   describe('SMS_ALLOWLIST — the boot-time guard rail', () => {
     it('defaults to empty, and a noop provider needs no allowlist to boot in development', () => {
       const env = validateEnv(validEnv);
       expect(env.SMS_ALLOWLIST).toBe('');
     });
 
-    it('refuses to boot with SMS_PROVIDER=afromessage, NODE_ENV!=production, and no SMS_ALLOWLIST', () => {
+    it('refuses to boot with SMS_PROVIDER=afromessage, SMS_LIVE unset, and no SMS_ALLOWLIST', () => {
       expect(() =>
         validateEnv({
           ...validEnv,
@@ -90,11 +91,11 @@ describe('validateEnv', () => {
       ).toThrow(/SMS_ALLOWLIST/);
     });
 
-    it('refuses to boot with SMS_PROVIDER=geezsms, NODE_ENV=development, and a whitespace-only SMS_ALLOWLIST', () => {
+    it('refuses to boot with SMS_PROVIDER=geezsms, SMS_LIVE=0, and a whitespace-only SMS_ALLOWLIST', () => {
       expect(() =>
         validateEnv({
           ...validEnv,
-          NODE_ENV: 'development',
+          SMS_LIVE: '0',
           SMS_PROVIDER: 'geezsms',
           GEEZSMS_TOKEN: 'a-token',
           SMS_ALLOWLIST: '   ',
@@ -102,7 +103,19 @@ describe('validateEnv', () => {
       ).toThrow(/SMS_ALLOWLIST/);
     });
 
-    it('boots fine with a real provider outside production once SMS_ALLOWLIST is set', () => {
+    it('still refuses to boot with SMS_PROVIDER=afromessage, NODE_ENV=production, SMS_LIVE unset, and no SMS_ALLOWLIST — NODE_ENV alone must not bypass this', () => {
+      expect(() =>
+        validateEnv({
+          ...validEnv,
+          JWT_SECRET: 'a-sufficiently-long-secret-for-production-use',
+          NODE_ENV: 'production',
+          SMS_PROVIDER: 'afromessage',
+          AFROMESSAGE_API_KEY: 'a-key',
+        }),
+      ).toThrow(/SMS_ALLOWLIST/);
+    });
+
+    it('boots fine with a real provider and SMS_LIVE unset once SMS_ALLOWLIST is set', () => {
       const env = validateEnv({
         ...validEnv,
         SMS_PROVIDER: 'afromessage',
@@ -112,20 +125,35 @@ describe('validateEnv', () => {
       expect(env.SMS_ALLOWLIST).toBe('+251949922604');
     });
 
-    it('does NOT require SMS_ALLOWLIST in production — the list is ignored there, not enforced', () => {
+    it('does NOT require SMS_ALLOWLIST when SMS_LIVE=1 — the list is ignored there, not enforced', () => {
       const env = validateEnv({
         ...validEnv,
-        NODE_ENV: 'production',
-        JWT_SECRET: 'a-sufficiently-long-secret-for-production-use',
+        SMS_LIVE: '1',
         SMS_PROVIDER: 'afromessage',
         AFROMESSAGE_API_KEY: 'a-key',
       });
       expect(env.SMS_ALLOWLIST).toBe('');
     });
 
-    it('never requires SMS_ALLOWLIST for the default noop provider, in any non-production NODE_ENV', () => {
-      expect(() => validateEnv({ ...validEnv, NODE_ENV: 'test' })).not.toThrow();
-      expect(() => validateEnv({ ...validEnv, NODE_ENV: 'development' })).not.toThrow();
+    it('never requires SMS_ALLOWLIST for the default noop provider, regardless of SMS_LIVE', () => {
+      expect(() => validateEnv({ ...validEnv, SMS_LIVE: '0' })).not.toThrow();
+      expect(() => validateEnv({ ...validEnv, SMS_LIVE: '1' })).not.toThrow();
+    });
+  });
+
+  describe('SMS_LIVE (I2) — the ONLY switch that lets outbound SMS reach real numbers', () => {
+    it('defaults to false, independent of NODE_ENV', () => {
+      expect(validateEnv(validEnv).SMS_LIVE).toBe(false);
+      expect(validateEnv({ ...validEnv, NODE_ENV: 'production' as const, JWT_SECRET: 'a-sufficiently-long-secret-for-production-use' }).SMS_LIVE).toBe(false);
+    });
+
+    it('coerces "1" to true and "0" to false', () => {
+      expect(validateEnv({ ...validEnv, SMS_LIVE: '1' }).SMS_LIVE).toBe(true);
+      expect(validateEnv({ ...validEnv, SMS_LIVE: '0' }).SMS_LIVE).toBe(false);
+    });
+
+    it('rejects any value other than "0"/"1" — a typo like "true" must fail loudly, not silently default to off', () => {
+      expect(() => validateEnv({ ...validEnv, SMS_LIVE: 'true' })).toThrow(/SMS_LIVE/);
     });
   });
 });

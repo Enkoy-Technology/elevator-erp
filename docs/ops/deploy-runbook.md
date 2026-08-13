@@ -50,7 +50,8 @@ are not already present — idempotent, safe to run on every deploy, no
 | `OUTBOX_DISPATCHER_DATABASE_URL` | Connection string for the `outbox_dispatcher` role (SELECT+UPDATE on `outbound_messages` only, migration `0049_outbox_dispatcher_role.sql`) — used by the running app's outbox dispatcher (`OutboxDispatcherRepository`), which claims due messages across every tenant on a cron with no request-scoped tenant context. Deliberately NOT `DATABASE_ADMIN_URL`/the Postgres superuser: a dedicated least-privilege role kept away from tenant data by database-enforced grants, gated into seeing across tenants only via the `admin_bypass` RLS policy the dispatcher opts into per-transaction. See that class's doc comment for the full reasoning on why it cannot leak. |
 | `CORS_ORIGINS` | Comma-separated list of allowed browser origins. |
 | `SMS_PROVIDER` | `noop` (default), `afromessage`, or `geezsms` — see §5 below. |
-| `SMS_ALLOWLIST` | Not required in production (ignored there) — required outside production the moment `SMS_PROVIDER` is anything but `noop`. See §5's allowlist guard rail below. |
+| `SMS_LIVE` | `1` in production — the only switch that lets outbound SMS reach real numbers. See §5 below. |
+| `SMS_ALLOWLIST` | Not required once `SMS_LIVE=1` (ignored there) — required while `SMS_LIVE` is not `1` the moment `SMS_PROVIDER` is anything but `noop`. See §5's allowlist guard rail below. |
 
 `ALLOW_DEMO_SEED` must **never** be set to `1` in production. Its presence
 lets the demo tenant and its published credentials be seeded into a live
@@ -73,21 +74,34 @@ selected-but-uncredentialed provider never silently no-ops in production.
 | `GEEZSMS_TOKEN` | GeezSMS | Required when `SMS_PROVIDER=geezsms` | API token from https://geezsms.com/#/api. |
 | `GEEZSMS_SENDER_ID` | GeezSMS | Optional | Dedicated shortcode id (`shortcode_id` field). Omit to use GeezSMS's shared shortcode. |
 
-**The allowlist guard rail — a structural safeguard, not a promise.**
-Outside production (`NODE_ENV != production`), `SMS_ALLOWLIST` (comma-
-separated E.164 numbers) decides who a non-`noop` deployment may actually
-text: a message to any other number is blocked — visibly, marked `FAILED`
-with an explanatory `lastError`, never silently dropped — before it ever
-reaches the provider (`OutboxDispatcherService`/`sms-allowlist.ts`). Select
-`afromessage`/`geezsms` outside production with `SMS_ALLOWLIST` empty and
-the app **refuses to boot** (`src/config/env.schema.ts`) — a staging box
-with live credentials and no allowlist is exactly the accident this exists
-to prevent. In production the allowlist is ignored entirely (real customers
-must receive real reminders); `OutboxModule` logs which mode is active at
-every boot (`ENFORCED` / `not enforced — empty` / `IGNORED
-(NODE_ENV=production)`) so nobody has to guess. `.env.example` ships
+**`SMS_LIVE` is the only switch that lets outbound SMS reach real phone
+numbers — deliberately independent of `NODE_ENV`.** The idiomatic Dockerfile
+for a built Node app sets `NODE_ENV=production`, and that is exactly the
+Dockerfile a deploy phase writes for staging too — gating live sending on
+`NODE_ENV` would mean the moment such a staging container exists, the
+allowlist below and the boot refusal are silently skipped on a box that may
+hold the client's real credentials. `SMS_LIVE` decouples "is this a
+production build" from "may this box text real people", permanently: set
+`SMS_LIVE=1` explicitly in production to reach real recipients; leave it
+unset (default `0`) everywhere else, regardless of `NODE_ENV`. It accepts
+only `0`/`1` — a typo like `SMS_LIVE=true` fails loudly at boot
+(`src/config/env.schema.ts`) instead of silently staying off.
+
+**The allowlist guard rail — a structural safeguard, not a promise.** While
+`SMS_LIVE` is not `1`, `SMS_ALLOWLIST` (comma-separated E.164 numbers)
+decides who a non-`noop` deployment may actually text: a message to any
+other number is blocked — visibly, marked `FAILED` with an explanatory
+`lastError`, never silently dropped — before it ever reaches the provider
+(`OutboxDispatcherService`/`sms-allowlist.ts`). Select `afromessage`/
+`geezsms` with `SMS_LIVE` not `1` and `SMS_ALLOWLIST` empty and the app
+**refuses to boot** (`src/config/env.schema.ts`) — a box with live
+credentials, `SMS_LIVE` unset, and no allowlist is exactly the accident this
+exists to prevent. Once `SMS_LIVE=1` the allowlist is ignored entirely (real
+customers must receive real reminders); `OutboxModule` logs which mode is
+active at every boot (`ENFORCED` / `not enforced — empty` / `IGNORED
+(SMS_LIVE=1)`) so nobody has to guess. `.env.example` ships
 `SMS_ALLOWLIST=+251949922604` — the client's own test handset; never add a
-real customer's or colleague's number to a non-production allowlist.
+real customer's or colleague's number to a non-live allowlist.
 
 **Sender-ID registration is the long-lead item — start it before launch, not
 after.** Sending SMS from a branded name/shortcode (rather than the

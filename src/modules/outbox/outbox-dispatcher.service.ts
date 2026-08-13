@@ -61,11 +61,11 @@ export class OutboxDispatcherService {
         throw new Error(`No provider configured for channel ${message.channel}`);
       }
 
-      // The allowlist guard rail (task-3 brief §3.0 SAFETY) — checked
+      // The allowlist guard rail (task-3 brief §3.0 SAFETY / I2) — checked
       // before the provider is ever called, so a non-allowlisted recipient
-      // outside production physically cannot reach a real gateway.
+      // physically cannot reach a real gateway while SMS_LIVE is not "1".
       const blockReason = smsAllowlistBlockReason(
-        this.allowlistConfig.nodeEnv,
+        this.allowlistConfig.smsLive,
         this.allowlistConfig.allowlist,
         message.recipient,
       );
@@ -126,7 +126,7 @@ export class OutboxDispatcherService {
     reason: string,
   ): Promise<void> {
     this.logger.warn(
-      `Outbound message ${message.id} blocked by SMS_ALLOWLIST (recipient not on the non-production allowlist)`,
+      `Outbound message ${message.id} blocked by SMS_ALLOWLIST (SMS_LIVE is not "1" and recipient is not on the allowlist)`,
     );
     try {
       await this.dispatcherRepository.markFailed(message.tenantId, message.id, reason);

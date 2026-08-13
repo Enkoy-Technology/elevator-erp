@@ -88,7 +88,7 @@ import { parseSmsAllowlist, type SmsAllowlistRuntimeConfig } from './sms-allowli
       // OutboxDispatcherService stays constructible in a unit test with a
       // plain object literal, same shape as SMS_PROVIDER above.
       useFactory: (config: ConfigService<Env, true>): SmsAllowlistRuntimeConfig => ({
-        nodeEnv: config.get('NODE_ENV', { infer: true }),
+        smsLive: config.get('SMS_LIVE', { infer: true }),
         allowlist: parseSmsAllowlist(config.get('SMS_ALLOWLIST', { infer: true })),
       }),
       inject: [ConfigService],
@@ -105,25 +105,26 @@ export class OutboxModule implements OnApplicationShutdown, OnModuleInit {
   ) {}
 
   /**
-   * task-3 brief §3.0 SAFETY: "log at startup which mode is active, so
-   * nobody is guessing" — whether the allowlist is enforced, ignored
-   * (production), or moot (empty, non-production, only reachable with
-   * SMS_PROVIDER=noop since a real provider with an empty allowlist already
-   * refused to boot via env.schema.ts's superRefine).
+   * task-3 brief §3.0 SAFETY / I2: "log at startup which mode is active, so
+   * nobody is guessing" — whether the allowlist is enforced, ignored (live),
+   * or moot (empty, not live, only reachable with SMS_PROVIDER=noop since a
+   * real provider with an empty allowlist already refused to boot via
+   * env.schema.ts's superRefine). Keyed on SMS_LIVE, not NODE_ENV — see
+   * sms-allowlist.ts's own doc comment for why.
    */
   onModuleInit(): void {
-    const { nodeEnv, allowlist } = this.allowlistConfig;
-    if (nodeEnv === 'production') {
+    const { smsLive, allowlist } = this.allowlistConfig;
+    if (smsLive) {
       this.logger.log(
-        'SMS allowlist: IGNORED (NODE_ENV=production) — outbound SMS reaches real recipients.',
+        'SMS allowlist: IGNORED (SMS_LIVE=1) — outbound SMS reaches real recipients.',
       );
     } else if (allowlist.length === 0) {
       this.logger.log(
-        `SMS allowlist: not enforced — empty (NODE_ENV=${nodeEnv}, SMS_PROVIDER must be noop here or boot would already have failed).`,
+        'SMS allowlist: not enforced — empty (SMS_LIVE=0, SMS_PROVIDER must be noop here or boot would already have failed).',
       );
     } else {
       this.logger.log(
-        `SMS allowlist: ENFORCED (NODE_ENV=${nodeEnv}) — only ${allowlist.length} number(s) may receive SMS; every other recipient is blocked and marked FAILED.`,
+        `SMS allowlist: ENFORCED (SMS_LIVE=0) — only ${allowlist.length} number(s) may receive SMS; every other recipient is blocked and marked FAILED.`,
       );
     }
   }

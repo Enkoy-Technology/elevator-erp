@@ -9,7 +9,7 @@ const TENANT_ID = '22222222-2222-2222-2222-222222222222';
 // codebase's fixtures/specs/docs (task-3 brief §3.0 SAFETY).
 const TEST_PHONE = '+251949922604';
 // Never enforced by default here: build()'s default allowlistConfig is
-// empty + 'test', which smsAllowlistBlockReason never blocks (branch 2) —
+// empty + not live, which smsAllowlistBlockReason never blocks (branch 2) —
 // existing tests above prove ordinary send/retry/backoff behaviour
 // unaffected by the guard rail's mere presence. The allowlist-specific
 // describe block below overrides allowlistConfig to prove the other three
@@ -49,7 +49,7 @@ const makeRepository = (claimed: OutboundMessageRecord[]) => ({
   markFailed: jest.fn(async (_tenantId: string, _id: string, _lastError: string) => undefined),
 });
 
-const NEVER_BLOCKS_ALLOWLIST: SmsAllowlistRuntimeConfig = { nodeEnv: 'test', allowlist: [] };
+const NEVER_BLOCKS_ALLOWLIST: SmsAllowlistRuntimeConfig = { smsLive: false, allowlist: [] };
 
 const build = (
   claimed: OutboundMessageRecord[],
@@ -181,10 +181,10 @@ describe('OutboxDispatcherService.dispatch', () => {
 describe('OutboxDispatcherService.dispatch — the SMS_ALLOWLIST guard rail', () => {
   const NOT_ALLOWLISTED = 'not-allowlisted-recipient';
 
-  it('a recipient on the allowlist sends normally (branch: non-production, listed)', async () => {
+  it('a recipient on the allowlist sends normally (branch: not live, listed)', async () => {
     const send = jest.fn(async () => ({ providerMessageId: 'sms-1' }));
     const { service, repository } = build([message({ recipient: TEST_PHONE })], send, {
-      nodeEnv: 'development',
+      smsLive: false,
       allowlist: [TEST_PHONE],
     });
 
@@ -195,12 +195,12 @@ describe('OutboxDispatcherService.dispatch — the SMS_ALLOWLIST guard rail', ()
     expect(repository.markFailed).not.toHaveBeenCalled();
   });
 
-  it('a recipient NOT on the allowlist is blocked — never reaches the provider, marked FAILED immediately with a visible reason (branch: non-production, unlisted)', async () => {
+  it('a recipient NOT on the allowlist is blocked — never reaches the provider, marked FAILED immediately with a visible reason (branch: not live, unlisted)', async () => {
     const send = jest.fn();
     const { service, repository } = build(
       [message({ recipient: NOT_ALLOWLISTED, attempts: 1 })],
       send,
-      { nodeEnv: 'development', allowlist: [TEST_PHONE] },
+      { smsLive: false, allowlist: [TEST_PHONE] },
     );
 
     await service.dispatch();
@@ -215,10 +215,10 @@ describe('OutboxDispatcherService.dispatch — the SMS_ALLOWLIST guard rail', ()
     expect(lastError).toContain(NOT_ALLOWLISTED);
   });
 
-  it('an empty allowlist blocks nothing (branch: non-production, empty — only reachable with SMS_PROVIDER=noop)', async () => {
+  it('an empty allowlist blocks nothing (branch: not live, empty — only reachable with SMS_PROVIDER=noop)', async () => {
     const send = jest.fn(async () => ({ providerMessageId: 'sms-1' }));
     const { service, repository } = build([message({ recipient: NOT_ALLOWLISTED })], send, {
-      nodeEnv: 'development',
+      smsLive: false,
       allowlist: [],
     });
 
@@ -228,10 +228,10 @@ describe('OutboxDispatcherService.dispatch — the SMS_ALLOWLIST guard rail', ()
     expect(repository.markFailed).not.toHaveBeenCalled();
   });
 
-  it('production ignores the allowlist entirely, even for an unlisted recipient (branch: production)', async () => {
+  it('SMS_LIVE=1 ignores the allowlist entirely, even for an unlisted recipient (branch: live)', async () => {
     const send = jest.fn(async () => ({ providerMessageId: 'sms-1' }));
     const { service, repository } = build([message({ recipient: NOT_ALLOWLISTED })], send, {
-      nodeEnv: 'production',
+      smsLive: true,
       allowlist: [TEST_PHONE],
     });
 
