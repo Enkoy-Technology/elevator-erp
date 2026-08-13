@@ -10,12 +10,17 @@ import {
   Post,
   Query,
   Res,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiHeader, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 
 import { todayIso } from '../../common/business-time';
 import { CurrentUser, Roles } from '../../common/decorators';
+import {
+  IDEMPOTENCY_KEY_API_HEADER,
+  IdempotencyInterceptor,
+} from '../../common/idempotency/idempotency.interceptor';
 import { parseExportFormat } from '../../common/export/export-query.dto';
 import { type ColumnDef, writeCsv, writeXlsx } from '../../common/export/tabular';
 import type { AuthenticatedUser } from '../../types/auth.types';
@@ -109,6 +114,8 @@ export class BankAccountsController {
 
   @Post(':id/transactions')
   @HttpCode(201)
+  @UseInterceptors(IdempotencyInterceptor)
+  @ApiHeader(IDEMPOTENCY_KEY_API_HEADER)
   @ApiOperation({
     summary:
       'Record one bank ledger line for this account — insert-only, no edit/delete endpoint exists',
@@ -123,6 +130,8 @@ export class BankAccountsController {
 
   @Post(':id/transactions/:txId/reverse')
   @HttpCode(201)
+  @UseInterceptors(IdempotencyInterceptor)
+  @ApiHeader(IDEMPOTENCY_KEY_API_HEADER)
   @ApiOperation({
     summary:
       'Reverse an UNLINKED bank transaction: inserts a new mirroring row with the negated amount (the original is never edited). Refuses (409) a transaction linked to a payment or expense — reverse that payment/expense instead',

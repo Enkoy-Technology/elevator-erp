@@ -9,13 +9,18 @@ import {
   Post,
   Query,
   Res,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiHeader, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { isUUID } from 'class-validator';
 
 import { todayIso } from '../../common/business-time';
 import { CurrentUser, Roles } from '../../common/decorators';
+import {
+  IDEMPOTENCY_KEY_API_HEADER,
+  IdempotencyInterceptor,
+} from '../../common/idempotency/idempotency.interceptor';
 import { DocumentDocxService } from '../../common/export/document-docx.service';
 import { DocumentPdfService } from '../../common/export/document-pdf.service';
 import { parseDocumentFormat } from '../../common/export/document-format';
@@ -88,6 +93,8 @@ export class PaymentsController {
 
   @Post()
   @HttpCode(201)
+  @UseInterceptors(IdempotencyInterceptor)
+  @ApiHeader(IDEMPOTENCY_KEY_API_HEADER)
   @ApiOperation({
     summary:
       'Record a receipt, optionally allocating it against one or more invoices in the same transaction',
@@ -147,6 +154,8 @@ export class PaymentsController {
 
   @Post(':id/allocations')
   @HttpCode(201)
+  @UseInterceptors(IdempotencyInterceptor)
+  @ApiHeader(IDEMPOTENCY_KEY_API_HEADER)
   @ApiOperation({
     summary: 'Allocate an existing payment against an invoice (over-allocation guards apply)',
   })
@@ -160,6 +169,8 @@ export class PaymentsController {
 
   @Post(':id/reverse')
   @HttpCode(201)
+  @UseInterceptors(IdempotencyInterceptor)
+  @ApiHeader(IDEMPOTENCY_KEY_API_HEADER)
   @ApiOperation({
     summary:
       'Reverse a payment: inserts a new mirroring payment with negated amounts (the original is never edited)',

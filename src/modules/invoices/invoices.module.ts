@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 
 import { ExportModule } from '../../common/export/export.module';
+import { IdempotencyKeysRepository } from '../../common/idempotency/idempotency-keys.repository';
+import { IdempotencyInterceptor } from '../../common/idempotency/idempotency.interceptor';
 import { RatesModule } from '../rates/rates.module';
 import { InvoicesController } from './invoices.controller';
 import { InvoicesRepository } from './invoices.repository';
@@ -13,7 +15,14 @@ import { InvoicesService } from './invoices.service';
   // as ProformasModule's own import.
   imports: [RatesModule, ExportModule],
   controllers: [InvoicesController],
-  providers: [InvoicesService, InvoicesRepository],
+  // IdempotencyInterceptor/IdempotencyKeysRepository — see PaymentsModule's
+  // own comment on this registration for why it's repeated per-module.
+  providers: [
+    InvoicesService,
+    InvoicesRepository,
+    IdempotencyKeysRepository,
+    IdempotencyInterceptor,
+  ],
   // InvoicesRepository (not just the Service) is exported so PaymentsRepository
   // can inject it directly and call recomputePaymentStatus(tx, invoiceId) with
   // its OWN transaction handle — that method is tx-scoped precisely so the

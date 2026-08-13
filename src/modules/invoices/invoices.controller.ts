@@ -10,9 +10,11 @@ import {
   Post,
   Query,
   Res,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiHeader,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -22,6 +24,10 @@ import { isUUID } from 'class-validator';
 
 import { todayIso } from '../../common/business-time';
 import { CurrentUser, Roles } from '../../common/decorators';
+import {
+  IDEMPOTENCY_KEY_API_HEADER,
+  IdempotencyInterceptor,
+} from '../../common/idempotency/idempotency.interceptor';
 import { DocumentDocxService } from '../../common/export/document-docx.service';
 import { DocumentPdfService } from '../../common/export/document-pdf.service';
 import { parseDocumentFormat } from '../../common/export/document-format';
@@ -125,6 +131,8 @@ export class InvoicesController {
 
   @Post('proformas/:id/convert-to-invoice')
   @HttpCode(201)
+  @UseInterceptors(IdempotencyInterceptor)
+  @ApiHeader(IDEMPOTENCY_KEY_API_HEADER)
   @ApiOperation({
     summary:
       'Convert an ISSUED proforma into an issued invoice (VAT guard + gapless numbering, one transaction)',
@@ -139,6 +147,8 @@ export class InvoicesController {
 
   @Post('invoices')
   @HttpCode(201)
+  @UseInterceptors(IdempotencyInterceptor)
+  @ApiHeader(IDEMPOTENCY_KEY_API_HEADER)
   @ApiOperation({
     summary: 'Create a standalone invoice (e.g. maintenance billing) — server computes VAT/total',
   })
@@ -305,6 +315,8 @@ export class InvoicesController {
 
   @Post('invoices/:id/void')
   @HttpCode(200)
+  @UseInterceptors(IdempotencyInterceptor)
+  @ApiHeader(IDEMPOTENCY_KEY_API_HEADER)
   @ApiOperation({
     summary:
       'Void an ISSUED invoice with a reason (only when its payment allocations net to zero)',
@@ -332,6 +344,8 @@ export class InvoicesController {
 
   @Post('invoices/:id/withholding')
   @HttpCode(200)
+  @UseInterceptors(IdempotencyInterceptor)
+  @ApiHeader(IDEMPOTENCY_KEY_API_HEADER)
   @ApiOperation({
     summary:
       "Record the withholding credit the customer retained when settling this invoice (absolute set, not cumulative — see WithholdingDto)",

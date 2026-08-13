@@ -407,6 +407,20 @@
       "when": 1786604047953,
       "tag": "0057_list_active_tenant_ids_subscription_filter",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1786620013997,
+      "tag": "0058_swift_venus",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1786620013998,
+      "tag": "0059_idempotency_keys_rls",
+      "breakpoints": true
     }
   ]
 }
