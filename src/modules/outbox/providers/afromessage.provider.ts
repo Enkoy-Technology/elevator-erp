@@ -96,10 +96,15 @@ export class AfroMessageProvider implements SmsProvider {
     }
 
     if (!response.ok || parsed.acknowledge !== 'success') {
-      const detail =
+      const rawDetail =
         parsed.response?.errors?.join('; ') ||
         `HTTP ${response.status}, acknowledge=${parsed.acknowledge ?? 'unknown'}`;
-      throw new Error(`AfroMessage send failed: ${detail}`);
+      // I1: `response.errors` is vendor-supplied text — if AfroMessage ever
+      // echoes the request back in its error body, `this.apiKey` could ride
+      // along straight into `lastError`, which GET /outbox serves, the
+      // message-log UI renders, and the CSV export ships. Redact before it
+      // ever reaches a thrown Error, not after.
+      throw new Error(`AfroMessage send failed: ${redactSecret(rawDetail, this.apiKey)}`);
     }
 
     const messageId = parsed.response?.message_id;
@@ -118,3 +123,7 @@ export class AfroMessageProvider implements SmsProvider {
 
 const networkErrorMessage = (err: unknown): string =>
   err instanceof Error ? err.message : String(err);
+
+/** I1: strip our own credential out of any provider-supplied text before it reaches a thrown error. */
+const redactSecret = (text: string, secret: string): string =>
+  secret ? text.split(secret).join('***') : text;

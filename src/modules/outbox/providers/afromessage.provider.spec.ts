@@ -116,6 +116,26 @@ describe('AfroMessageProvider', () => {
     expect(err.message).not.toContain(SECRET);
   });
 
+  it('I1: redacts the credential even when the vendor ECHOES it back in the error body (unverified failure shape)', async () => {
+    // AfroMessage's own error envelope is vendor-supplied text — this
+    // simulates it echoing the submitted key back inside `response.errors`,
+    // which the existing "never leaks" tests above don't: they only prove
+    // OUR code never interpolates the key, not that a vendor-supplied
+    // string containing it gets redacted.
+    fetchSpy.mockResolvedValue(
+      jsonResponse(200, {
+        acknowledge: 'error',
+        response: { errors: [`Invalid token: ${SECRET}`] },
+      }),
+    );
+
+    const err = await captureRejection(
+      new AfroMessageProvider(SECRET).send(TEST_PHONE, 'hi'),
+    );
+    expect(err.message).not.toContain(SECRET);
+    expect(err.message).toContain('***');
+  });
+
   it('throws on a network failure (e.g. DNS/connection) without leaking the credential', async () => {
     fetchSpy.mockRejectedValue(new TypeError('fetch failed'));
 

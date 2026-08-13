@@ -107,12 +107,18 @@ export class GeezSmsProvider implements SmsProvider {
     }
 
     if (!response.ok || parsed.message_status !== 'success' || parsed.error) {
-      const detail =
+      const rawDetail =
         stringifyErrorField(parsed.error) ||
         parsed.message ||
         parsed.log ||
         `HTTP ${response.status}, message_status=${parsed.message_status ?? 'unknown'}`;
-      throw new Error(`GeezSMS send failed: ${detail}`);
+      // I1: this failure shape is explicitly UNVERIFIED (see doc comment
+      // above) — if the vendor ever echoes the request back in its error
+      // body, `this.token` could ride along in `rawDetail` straight into
+      // `lastError`, which GET /outbox serves, the message-log UI renders,
+      // and the CSV export ships. Redact before it ever reaches a thrown
+      // Error, not after.
+      throw new Error(`GeezSMS send failed: ${redactSecret(rawDetail, this.token)}`);
     }
 
     if (parsed.api_log_id === undefined || parsed.api_log_id === null) {
@@ -137,3 +143,7 @@ const stringifyErrorField = (value: unknown): string | undefined => {
   }
   return typeof value === 'string' ? value : JSON.stringify(value);
 };
+
+/** I1: strip our own credential out of any provider-supplied text before it reaches a thrown error. */
+const redactSecret = (text: string, secret: string): string =>
+  secret ? text.split(secret).join('***') : text;
