@@ -1,9 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 import { normalizeEthiopianPhone } from '../../common/phone';
+import type { PaginatedResult } from '../../common/pagination';
 import type { MessageChannel } from '../../database/schema';
-import type { OutboundMessageRecord } from './outbox.repository';
+import type { AuthenticatedUser } from '../../types/auth.types';
+import { SMS_PROVIDER } from './outbox.constants';
+import type { OutboundMessageRecord, OutboxListFilter } from './outbox.repository';
 import { OutboxRepository } from './outbox.repository';
+import type { SmsProvider } from './providers/sms-provider.interface';
 
 export interface EnqueueMessageInput {
   tenantId: string;
@@ -18,7 +22,10 @@ export interface EnqueueMessageInput {
 
 @Injectable()
 export class OutboxService {
-  constructor(private readonly outboxRepository: OutboxRepository) {}
+  constructor(
+    private readonly outboxRepository: OutboxRepository,
+    @Inject(SMS_PROVIDER) private readonly smsProvider: SmsProvider,
+  ) {}
 
   /**
    * The only way anything in this codebase enqueues an outbound message
@@ -43,5 +50,33 @@ export class OutboxService {
       subjectId: input.subjectId,
       createdByUserId: input.createdByUserId,
     });
+  }
+
+  /** The message-log UI (task-3 brief §3.3) — thin pass-throughs, same shape as InvoicesService.list/streamAll/etc. */
+  list(
+    user: AuthenticatedUser,
+    filter: OutboxListFilter,
+    page?: string,
+    pageSize?: string,
+  ): Promise<PaginatedResult<OutboundMessageRecord>> {
+    return this.outboxRepository.list(user.tenantId, filter, page, pageSize);
+  }
+
+  streamAll(
+    user: AuthenticatedUser,
+    filter: OutboxListFilter,
+  ): AsyncGenerator<OutboundMessageRecord> {
+    return this.outboxRepository.streamAll(user.tenantId, filter);
+  }
+
+  retry(user: AuthenticatedUser, id: string): Promise<OutboundMessageRecord> {
+    return this.outboxRepository.retry(user.tenantId, id);
+  }
+
+  /** Which SmsProvider adapter is actually wired up (task-3 brief §3.3: "so
+   * nobody mistakes a dev deployment for a live one") — 'noop' means
+   * nothing really sends. */
+  getSmsProviderName(): string {
+    return this.smsProvider.name;
   }
 }

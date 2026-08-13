@@ -49,6 +49,30 @@ export const tenants = pgTable('tenants', {
   balanceReconciliationMismatchCount: integer(
     'balance_reconciliation_mismatch_count',
   ),
+  /**
+   * Last-run result of each daily reminder cron's consent gate (task-3
+   * brief §3.4: "12 reminders not sent — no consent on file" must be
+   * visible, not silent) — same "somewhere an admin can see it" surface as
+   * balanceReconciliation* above, one pair per cron since they run
+   * independently (6am/7am) and each only knows its own tally. Both null
+   * until that cron has ever run once. Written by
+   * MaintenanceReminderService/PaymentReminderService after every run, read
+   * back through GET /settings.
+   */
+  maintenanceReminderConsentSkippedLastRunAt: timestamp(
+    'maintenance_reminder_consent_skipped_last_run_at',
+    { withTimezone: true },
+  ),
+  maintenanceReminderConsentSkippedCount: integer(
+    'maintenance_reminder_consent_skipped_count',
+  ),
+  paymentReminderConsentSkippedLastRunAt: timestamp(
+    'payment_reminder_consent_skipped_last_run_at',
+    { withTimezone: true },
+  ),
+  paymentReminderConsentSkippedCount: integer(
+    'payment_reminder_consent_skipped_count',
+  ),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

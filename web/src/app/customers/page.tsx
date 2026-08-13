@@ -52,6 +52,12 @@ export default function CustomersPage() {
   const [city, setCity] = useState('Addis Ababa');
   const [customerType, setCustomerType] =
     useState<CustomerType>('COMMERCIAL');
+  const [smsConsentGiven, setSmsConsentGiven] = useState(false);
+  // What's actually on the record right now — the baseline the checkbox
+  // started from, so onSubmit can tell "the operator toggled this" apart
+  // from "unrelated edit, leave the consent timestamp alone" (see onSubmit).
+  const [initialSmsConsentGiven, setInitialSmsConsentGiven] = useState(false);
+  const [smsConsentAtDisplay, setSmsConsentAtDisplay] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -107,6 +113,9 @@ export default function CustomersPage() {
     setPhone('');
     setCity('Addis Ababa');
     setCustomerType('COMMERCIAL');
+    setSmsConsentGiven(false);
+    setInitialSmsConsentGiven(false);
+    setSmsConsentAtDisplay(null);
     setFormError(null);
     setSimilar([]);
   };
@@ -123,6 +132,10 @@ export default function CustomersPage() {
     setPhone(customer.phone ?? '');
     setCity(customer.city ?? '');
     setCustomerType(customer.customerType);
+    const consented = customer.smsConsentAt !== null;
+    setSmsConsentGiven(consented);
+    setInitialSmsConsentGiven(consented);
+    setSmsConsentAtDisplay(customer.smsConsentAt);
     setFormError(null);
     setSimilar([]);
     setDrawerOpen(true);
@@ -164,6 +177,12 @@ export default function CustomersPage() {
         phone: phone || undefined,
         city: city || undefined,
         customerType,
+        // Omit unless the operator actually toggled it — this is a
+        // regulatory consent record (ECA Directive 832/2021), not a
+        // preference; an unrelated edit (e.g. fixing a typo in the phone
+        // number) must never silently re-stamp smsConsentAt to "now".
+        smsConsentGiven:
+          smsConsentGiven !== initialSmsConsentGiven ? smsConsentGiven : undefined,
       };
       if (editId) {
         await updateCustomer(editId, payload);
@@ -518,6 +537,21 @@ export default function CustomersPage() {
               <option value="RESIDENTIAL">Residential</option>
               <option value="GOVERNMENT">Government</option>
             </select>
+          </div>
+          <div className="rounded-lg border border-slate-200 p-3">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={smsConsentGiven}
+                onChange={(e) => setSmsConsentGiven(e.target.checked)}
+              />
+              Consented to SMS notifications
+            </label>
+            <p className="mt-1 text-xs text-slate-400">
+              {smsConsentAtDisplay
+                ? `Recorded ${new Date(smsConsentAtDisplay).toLocaleString()}`
+                : 'Not yet recorded. Required before this customer receives any SMS (ECA Directive 832/2021).'}
+            </p>
           </div>
         </form>
       </SideDrawer>
