@@ -16,7 +16,7 @@ export const parseSmsAllowlist = (raw: string): readonly string[] =>
     .filter((entry) => entry.length > 0);
 
 export interface SmsAllowlistRuntimeConfig {
-  readonly nodeEnv: string;
+  readonly smsLive: boolean;
   readonly allowlist: readonly string[];
 }
 
@@ -28,23 +28,28 @@ export interface SmsAllowlistRuntimeConfig {
  * silently dropped") — it must never contain anything but the recipient and
  * config shape, never a message body or credential.
  *
- * The four branches, all unit-tested in this file's own spec:
- *  1. `nodeEnv === 'production'` -> never blocked. Real customers must
- *     receive real reminders; the allowlist has no effect in production.
- *  2. non-production, empty allowlist -> never blocked. Only reachable with
+ * The four branches, all unit-tested in this file's own spec. Gated on
+ * SMS_LIVE (I2), never on NODE_ENV: an idiomatic Dockerfile sets
+ * NODE_ENV=production for any built Node app, staging included, so tying
+ * this to NODE_ENV would silently disable the guard rail the moment such a
+ * container exists. SMS_LIVE is the one flag an operator must set
+ * deliberately to let a box reach real numbers.
+ *  1. `smsLive === true` -> never blocked. Real customers must receive real
+ *     reminders; the allowlist has no effect once live.
+ *  2. not live, empty allowlist -> never blocked. Only reachable with
  *     `SMS_PROVIDER=noop` in practice — a real provider selected with an
- *     empty allowlist outside production already refuses to boot (see
+ *     empty allowlist while not live already refuses to boot (see
  *     `env.schema.ts`'s `superRefine`), so this branch exists for
  *     completeness and for the noop-with-no-allowlist dev default.
- *  3. non-production, non-empty allowlist, recipient listed -> not blocked.
- *  4. non-production, non-empty allowlist, recipient NOT listed -> blocked.
+ *  3. not live, non-empty allowlist, recipient listed -> not blocked.
+ *  4. not live, non-empty allowlist, recipient NOT listed -> blocked.
  */
 export const smsAllowlistBlockReason = (
-  nodeEnv: string,
+  smsLive: boolean,
   allowlist: readonly string[],
   recipient: string,
 ): string | null => {
-  if (nodeEnv === 'production') {
+  if (smsLive) {
     return null;
   }
   if (allowlist.length === 0) {
@@ -55,7 +60,7 @@ export const smsAllowlistBlockReason = (
   }
   return (
     `Blocked by SMS_ALLOWLIST: ${recipient} is not one of the ${allowlist.length} ` +
-    `number(s) allowed to receive SMS outside production (NODE_ENV=${nodeEnv}). ` +
-    'Add it to SMS_ALLOWLIST, or deploy with NODE_ENV=production to reach real numbers.'
+    'number(s) allowed to receive SMS while SMS_LIVE is not "1". ' +
+    'Add it to SMS_ALLOWLIST, or set SMS_LIVE=1 to reach real numbers (production only).'
   );
 };

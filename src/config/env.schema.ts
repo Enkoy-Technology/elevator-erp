@@ -43,15 +43,33 @@ export const envSchema = z.object({
   /** Optional shortcode id (GeezSMS's `shortcode_id` field) — omit to use GeezSMS's own shared shortcode. A dedicated shortcode requires GeezSMS's own registration process; see the deploy runbook. */
   GEEZSMS_SENDER_ID: z.string().min(1).optional(),
   /**
-   * Comma-separated E.164 numbers a non-production deployment may actually
-   * SMS (task-3 brief §3.0 SAFETY) — the structural guard rail, not a
-   * promise. Outside production: a real provider selected with this empty
-   * refuses to boot (below); OutboxDispatcherService blocks — visibly,
-   * FAILED with an explanatory lastError, never silently — any recipient
-   * not on this list (see sms-allowlist.ts). Ignored entirely in
-   * production, where real customers must receive real reminders.
+   * Comma-separated E.164 numbers this deployment may actually SMS while
+   * SMS_LIVE is not "1" (task-3 brief §3.0 SAFETY) — the structural guard
+   * rail, not a promise. While not live: a real provider selected with this
+   * empty refuses to boot (below); OutboxDispatcherService blocks —
+   * visibly, FAILED with an explanatory lastError, never silently — any
+   * recipient not on this list (see sms-allowlist.ts). Ignored entirely
+   * once SMS_LIVE=1, where real customers must receive real reminders.
    */
   SMS_ALLOWLIST: z.string().default(''),
+  /**
+   * The ONLY switch that lets outbound SMS reach real phone numbers —
+   * default off (I2). Deliberately independent of NODE_ENV: the idiomatic
+   * Dockerfile for a built Node app sets NODE_ENV=production, and that is
+   * exactly the Dockerfile a later deploy phase writes — the moment a
+   * staging container is built the normal way, gating on NODE_ENV would
+   * silently drop the allowlist and the boot refusal below, on a box that
+   * may hold the client's real credentials. SMS_LIVE decouples "is this a
+   * production build" from "may this box text real people": production
+   * must set SMS_LIVE=1 explicitly to reach real recipients; every other
+   * deployment (dev/test/staging, regardless of NODE_ENV) is
+   * allowlist-gated by default. Accepts only "0" or "1" so a typo (e.g.
+   * "true") fails loudly at boot instead of silently defaulting to off.
+   */
+  SMS_LIVE: z
+    .enum(['0', '1'])
+    .default('0')
+    .transform((value) => value === '1'),
 }).superRefine((env, ctx) => {
   // HS256 secrets shorter than the 256-bit hash weaken the whole auth chain.
   if (env.NODE_ENV === 'production' && env.JWT_SECRET.length < 32) {
@@ -80,24 +98,24 @@ export const envSchema = z.object({
       message: 'GEEZSMS_TOKEN is required when SMS_PROVIDER=geezsms',
     });
   }
-  // task-3 brief §3.0 SAFETY: "a staging box with live credentials and no
-  // allowlist is exactly the accident this prevents" — refuse to boot
-  // rather than let a non-production deployment with a real provider be
-  // able to text a real customer. Production is exempt: the allowlist has
-  // no effect there (real customers must receive real reminders), so
+  // task-3 brief §3.0 SAFETY / I2: "a staging box with live credentials and
+  // no allowlist is exactly the accident this prevents" — refuse to boot
+  // rather than let a deployment with a real provider and SMS_LIVE not set
+  // to "1" be able to text a real customer. Deliberately keyed on SMS_LIVE,
+  // not NODE_ENV: an idiomatic Dockerfile sets NODE_ENV=production for any
+  // built Node app, staging included, and that must not be enough on its
+  // own to skip this refusal. SMS_LIVE=1 is exempt: the allowlist has no
+  // effect once live (real customers must receive real reminders), so
   // requiring it would be a boot-time false alarm with no safety benefit.
-  if (
-    env.NODE_ENV !== 'production' &&
-    env.SMS_PROVIDER !== 'noop' &&
-    env.SMS_ALLOWLIST.trim() === ''
-  ) {
+  if (!env.SMS_LIVE && env.SMS_PROVIDER !== 'noop' && env.SMS_ALLOWLIST.trim() === '') {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['SMS_ALLOWLIST'],
       message:
-        `SMS_ALLOWLIST must be set when SMS_PROVIDER=${env.SMS_PROVIDER} and NODE_ENV is not production — ` +
-        'a non-production deployment with live SMS credentials and no allowlist could text a real customer. ' +
-        'Set SMS_ALLOWLIST to the test handset(s) this deployment may reach (e.g. SMS_ALLOWLIST=+251949922604).',
+        `SMS_ALLOWLIST must be set when SMS_PROVIDER=${env.SMS_PROVIDER} and SMS_LIVE is not "1" — ` +
+        'a deployment with live SMS credentials, SMS_LIVE unset, and no allowlist could text a real customer. ' +
+        'Set SMS_ALLOWLIST to the test handset(s) this deployment may reach (e.g. SMS_ALLOWLIST=+251949922604), ' +
+        'or set SMS_LIVE=1 if this deployment is authorized to reach real numbers (production only).',
     });
   }
 });

@@ -24,37 +24,38 @@ describe('parseSmsAllowlist', () => {
   });
 });
 
-// task-3 brief §3.0: "Test all four branches" — this is branch 1.
-describe('smsAllowlistBlockReason — production', () => {
-  it('never blocks in production, allowlist ignored entirely', () => {
-    expect(smsAllowlistBlockReason('production', [], NOT_ALLOWLISTED)).toBeNull();
-    expect(
-      smsAllowlistBlockReason('production', [TEST_PHONE], NOT_ALLOWLISTED),
-    ).toBeNull();
+// task-3 brief §3.0 / I2: "Test all four branches" — this is branch 1.
+// Gated on SMS_LIVE, not NODE_ENV — see sms-allowlist.ts's own doc comment
+// for why (an idiomatic Dockerfile sets NODE_ENV=production for any built
+// Node app, staging included; that must not be enough to disable this).
+describe('smsAllowlistBlockReason — SMS_LIVE=1', () => {
+  it('never blocks when live, allowlist ignored entirely', () => {
+    expect(smsAllowlistBlockReason(true, [], NOT_ALLOWLISTED)).toBeNull();
+    expect(smsAllowlistBlockReason(true, [TEST_PHONE], NOT_ALLOWLISTED)).toBeNull();
   });
 });
 
 // Branch 2.
-describe('smsAllowlistBlockReason — non-production, empty allowlist', () => {
+describe('smsAllowlistBlockReason — not live, empty allowlist', () => {
   it('never blocks (only reachable with SMS_PROVIDER=noop in practice — a real provider with an empty allowlist already refuses to boot)', () => {
-    expect(smsAllowlistBlockReason('development', [], NOT_ALLOWLISTED)).toBeNull();
-    expect(smsAllowlistBlockReason('test', [], NOT_ALLOWLISTED)).toBeNull();
+    expect(smsAllowlistBlockReason(false, [], NOT_ALLOWLISTED)).toBeNull();
   });
 });
 
 // Branch 3.
-describe('smsAllowlistBlockReason — non-production, recipient on the list', () => {
+describe('smsAllowlistBlockReason — not live, recipient on the list', () => {
   it('does not block', () => {
-    expect(smsAllowlistBlockReason('development', [TEST_PHONE], TEST_PHONE)).toBeNull();
+    expect(smsAllowlistBlockReason(false, [TEST_PHONE], TEST_PHONE)).toBeNull();
   });
 });
 
 // Branch 4.
-describe('smsAllowlistBlockReason — non-production, recipient NOT on the list', () => {
+describe('smsAllowlistBlockReason — not live, recipient NOT on the list', () => {
   it('blocks with an explanatory, credential-free reason naming the recipient', () => {
-    const reason = smsAllowlistBlockReason('development', [TEST_PHONE], NOT_ALLOWLISTED);
+    const reason = smsAllowlistBlockReason(false, [TEST_PHONE], NOT_ALLOWLISTED);
     expect(reason).not.toBeNull();
     expect(reason).toContain(NOT_ALLOWLISTED);
     expect(reason).toMatch(/SMS_ALLOWLIST/);
+    expect(reason).toMatch(/SMS_LIVE/);
   });
 });
