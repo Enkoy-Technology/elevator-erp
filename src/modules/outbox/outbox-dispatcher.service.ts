@@ -158,20 +158,13 @@ export class OutboxDispatcherService {
       }
     } catch (err) {
       // Recording the outcome itself failed (DB blip) — log and move on
-      // rather than crashing the batch or the scheduler.
-      // ponytail: a message can be left stuck in SENDING with no automatic
-      // way back to QUEUED — claimDue only reclaims QUEUED rows. This isn't
-      // only the rare double-failure this catch block guards against
-      // (provider call AND the write-back both failing): claimDue commits
-      // the whole batch to SENDING up front, before dispatch() sends any of
-      // them, so an ordinary process crash mid-batch (the exact scenario
-      // this feature exists for — office power cuts ~39 times/month) leaves
-      // every not-yet-processed message in that batch stuck the same way,
-      // no double failure required. Add a "SENDING longer than N minutes ->
-      // QUEUED" reclaim sweep to claimDue if this is observed in practice
-      // (flagged in code review, deferred: the brief for this task doesn't
-      // ask for it and the message-log UI to even notice a stuck row
-      // doesn't exist yet either).
+      // rather than crashing the batch or the scheduler. A message stuck
+      // here in SENDING (this double-failure, or an ordinary crash mid-batch
+      // — claimDue commits the whole batch to SENDING before dispatch()
+      // sends any of them, so a process crash mid-batch strands the rest the
+      // same way) is no longer stuck forever: claimDue's stale-claim reclaim
+      // (C2 — SENDING older than 15 minutes) picks it back up on a later
+      // tick.
       this.logger.error(
         `Failed to record outcome for outbound message ${message.id}: ${errorMessage(err)}`,
       );
