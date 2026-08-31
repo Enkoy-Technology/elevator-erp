@@ -199,6 +199,90 @@ export class EmployeesRepository {
     });
   }
 
+  /**
+   * Lowercased emails from `emails` that already belong to a live user in this
+   * tenant. Used by the import to report SKIPPED_DUPLICATE rather than failing
+   * a whole file because someone re-ran it.
+   */
+  async findExistingEmails(
+    tenantId: string,
+    emails: readonly string[],
+  ): Promise<Set<string>> {
+    if (emails.length === 0) {
+      return new Set();
+    }
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const rows = await tx
+        .select({ email: users.email })
+        .from(users)
+        .where(
+          and(
+            inArray(users.email, [...new Set(emails)]),
+            isNull(users.deletedAt),
+          ),
+        );
+      return new Set(rows.map((row) => row.email));
+    });
+  }
+
+  /**
+   * Bulk employee import. One transaction: the duplicate re-check and every
+   * insert commit together or not at all, so a half-applied staff import is
+   * impossible. Returns the emails actually inserted — anything missing from
+   * that set was created by someone else between the caller's check and this
+   * transaction, and is a skip, not a failure.
+   *
+   * Passwords arrive already hashed (bcrypt at cost 12 is far too slow to run
+   * inside an open write transaction) — this layer never sees a plaintext one.
+   */
+  async createMany(
+    tenantId: string,
+    records: ReadonlyArray<{
+      email: string;
+      fullName: string;
+      phone?: string;
+      role: UserRole;
+      passwordHash: string;
+    }>,
+  ): Promise<Set<string>> {
+    if (records.length === 0) {
+      return new Set();
+    }
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const existing = await tx
+        .select({ email: users.email })
+        .from(users)
+        .where(
+          and(
+            inArray(
+              users.email,
+              records.map((record) => record.email),
+            ),
+            isNull(users.deletedAt),
+          ),
+        );
+      const taken = new Set(existing.map((row) => row.email));
+      const toInsert = records.filter((record) => !taken.has(record.email));
+      if (toInsert.length === 0) {
+        return new Set<string>();
+      }
+      const inserted = await tx
+        .insert(users)
+        .values(
+          toInsert.map((record) => ({
+            tenantId,
+            email: record.email,
+            fullName: record.fullName,
+            phone: record.phone,
+            role: record.role,
+            passwordHash: record.passwordHash,
+          })),
+        )
+        .returning({ email: users.email });
+      return new Set(inserted.map((row) => row.email));
+    });
+  }
+
   async update(
     tenantId: string,
     id: string,
