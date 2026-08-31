@@ -1,0 +1,1 @@
+ALTER TABLE "tenant_branding" ADD COLUMN "slogan" text;
