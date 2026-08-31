@@ -20,3 +20,6 @@ service-account*.json
 
 # Playwright MCP scratch output (screenshots, snapshots, console logs)
 .playwright-mcp/
+
+# Scratch screenshots from local browser testing (root level only).
+/*.png
