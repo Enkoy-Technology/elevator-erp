@@ -25,3 +25,16 @@ export const btnGhost = `${btnBase} font-medium text-slate-600 hover:bg-slate-10
 
 /** Destructive or high-consequence confirmations. */
 export const btnDanger = `${btnBase} bg-red-600 text-white hover:bg-red-700`;
+
+/**
+ * The product's most repeated gesture: a mono, uppercase, wide-tracked label
+ * sitting above the figure it names. Table headers, eyebrows, stat captions.
+ */
+export const metaLabelClass =
+  'font-mono text-[11px] uppercase tracking-[0.14em] text-slate-500';
+
+/** Table header row — the same label gesture, ruled off from the body. */
+export const tableHeadRowClass = `border-b border-slate-200 ${metaLabelClass}`;
+
+/** Money and count cells: right-aligned, tabular figures so columns line up. */
+export const numericCellClass = 'text-right tabular-nums';
