@@ -1,7 +1,31 @@
 import type { UserRole } from '@/lib/api';
 
+/** Sidebar sections — what a module is *for*, not what it is called. */
+export type ModuleGroup =
+  | 'overview'
+  | 'sales'
+  | 'finance'
+  | 'operations'
+  | 'hr'
+  | 'admin';
+
+/** Render order of the sidebar sections, with their heading keys. */
+export const MODULE_GROUPS: readonly {
+  key: ModuleGroup;
+  labelKey: import('@/lib/i18n').MessageKey;
+}[] = [
+  { key: 'overview', labelKey: 'nav.group.overview' },
+  { key: 'sales', labelKey: 'nav.group.sales' },
+  { key: 'finance', labelKey: 'nav.group.finance' },
+  { key: 'operations', labelKey: 'nav.group.operations' },
+  { key: 'hr', labelKey: 'nav.group.hr' },
+  { key: 'admin', labelKey: 'nav.group.admin' },
+];
+
 export interface ModuleNavItem {
   nameKey: import('@/lib/i18n').MessageKey;
+  /** Sidebar section this module is listed under. */
+  group: ModuleGroup;
   description: string;
   /** Delivery phase from product plan; null = shipped. */
   phase: number | null;
@@ -30,6 +54,7 @@ export const modulesForRole = (role: UserRole | null): ModuleNavItem[] =>
 export const MODULES: ModuleNavItem[] = [
   {
     nameKey: 'nav.dashboard',
+    group: 'overview',
     description: 'Company overview',
     phase: null,
     href: '/',
@@ -38,6 +63,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.calculator',
+    group: 'sales',
     description: 'Specs & ETB pricing',
     phase: null,
     href: '/calculator',
@@ -46,6 +72,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.customers',
+    group: 'sales',
     description: 'CRM accounts',
     phase: null,
     href: '/customers',
@@ -54,6 +81,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.projects',
+    group: 'sales',
     description: 'Sales pipeline',
     phase: null,
     href: '/projects',
@@ -62,6 +90,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.quotations',
+    group: 'sales',
     description: 'Quote → proforma',
     phase: null,
     href: '/quotations',
@@ -70,6 +99,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.invoices',
+    group: 'finance',
     description: 'Issue → collect',
     phase: null,
     href: '/invoices',
@@ -81,6 +111,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.payments',
+    group: 'finance',
     description: 'Receipts & allocations',
     phase: null,
     href: '/invoices?tab=payments',
@@ -90,6 +121,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.receivables',
+    group: 'finance',
     description: 'Aging & statements',
     phase: null,
     href: '/receivables',
@@ -101,6 +133,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.employees',
+    group: 'hr',
     description: 'Staff & roles',
     phase: null,
     href: '/employees',
@@ -109,6 +142,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.assets',
+    group: 'operations',
     description: 'Elevators, stairs, other',
     phase: null,
     href: '/assets',
@@ -117,6 +151,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.notifications',
+    group: 'overview',
     description: 'Alerts & assignments',
     phase: null,
     href: '/notifications',
@@ -125,6 +160,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.maintenance',
+    group: 'operations',
     description: 'Service & follow-up',
     phase: null,
     href: '/maintenance',
@@ -133,6 +169,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.messages',
+    group: 'finance',
     description: 'SMS delivery log & consent',
     phase: null,
     href: '/messages',
@@ -143,10 +180,21 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.settings',
+    group: 'admin',
     description: 'Branding & EN / አማርኛ',
     phase: null,
     href: '/settings',
     icon: 'M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4',
     roles: ['ADMIN'],
+  },
+  {
+    nameKey: 'nav.docs',
+    group: 'admin',
+    description: 'How the whole system works',
+    phase: null,
+    href: '/docs',
+    icon: 'M12 6.5C10.5 5 8.5 4.5 5 4.5v13c3.5 0 5.5.5 7 2m0-13c1.5-1.5 3.5-2 7-2v13c-3.5 0-5.5.5-7 2m0-13v13',
+    // Documentation, not data: every role may read it.
+    roles: null,
   },
 ];
