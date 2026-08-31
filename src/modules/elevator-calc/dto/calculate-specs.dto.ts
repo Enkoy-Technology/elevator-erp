@@ -11,12 +11,18 @@ import {
   BUILDING_USAGES,
   DOOR_TYPES,
   MACHINE_ROOM_TYPES,
+  PRODUCT_TYPES,
   type BuildingUsage,
   type DoorType,
   type MachineRoomType,
+  type ProductType,
 } from '../types';
 
 export class CalculateSpecsDto {
+  @ApiProperty({ enum: PRODUCT_TYPES, example: 'PASSENGER' })
+  @IsEnum(PRODUCT_TYPES)
+  productType!: ProductType;
+
   @ApiProperty({ minimum: 320, maximum: 5000, example: 1000 })
   @IsInt()
   @Min(320)
