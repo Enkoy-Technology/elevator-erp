@@ -23,6 +23,16 @@ export const customers = pgTable(
       .notNull()
       .default(sql`gen_random_uuid()`),
     name: text('name').notNull(),
+    /**
+     * Ethiopic-homophone-folded, lowercased shadow of `name` (see
+     * src/common/text/ethiopic-normalize.ts). Nullable at the schema level —
+     * populated on every write from now on; the migration backfills history.
+     * Not intended for display (JSON list/get responses currently return
+     * the raw row, so it is technically present there — just not meant to
+     * be read); search/duplicate-check filter on this column
+     * instead of `name` so ሀ/ሐ/ኀ-style spelling differences still match.
+     */
+    nameNormalized: text('name_normalized'),
     legalName: text('legal_name'),
     email: text('email'),
     phone: text('phone'),
@@ -52,6 +62,27 @@ export const customers = pgTable(
       .default('30'),
     tags: text('tags').array(),
     notes: text('notes'),
+    /**
+     * When consent to receive transactional SMS was captured — null means no
+     * consent on file. ECA Directive 832/2021 requires recorded consent for
+     * A2P sends (see the 2018 precedent: Ethio Telecom pulled 47 companies'
+     * short codes for sending without it). Server-set only (see
+     * UpdateCustomerDto.smsConsentGiven) — never a client-supplied
+     * timestamp, so this stays a trustworthy compliance record.
+     */
+    smsConsentAt: timestamp('sms_consent_at', { withTimezone: true }),
+    /**
+     * When consent was revoked — null means either never revoked, or never
+     * consented in the first place. Revoking no longer nulls smsConsentAt
+     * (phase-5 review I10): a single nullable timestamp could only ever
+     * answer "is consent active right now", never "did we have consent AT
+     * THE TIME we sent" — the actual question an ECA dispute asks. Keeping
+     * both timestamps answers it for the most recent consent/revoke pair
+     * (see canSmsRecipient in common/sms-consent.ts).
+     */
+    smsConsentRevokedAt: timestamp('sms_consent_revoked_at', {
+      withTimezone: true,
+    }),
     createdByUserId: uuid('created_by_user_id'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()

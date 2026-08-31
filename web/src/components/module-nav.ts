@@ -1,7 +1,31 @@
 import type { UserRole } from '@/lib/api';
 
+/** Sidebar sections — what a module is *for*, not what it is called. */
+export type ModuleGroup =
+  | 'overview'
+  | 'sales'
+  | 'finance'
+  | 'operations'
+  | 'hr'
+  | 'admin';
+
+/** Render order of the sidebar sections, with their heading keys. */
+export const MODULE_GROUPS: readonly {
+  key: ModuleGroup;
+  labelKey: import('@/lib/i18n').MessageKey;
+}[] = [
+  { key: 'overview', labelKey: 'nav.group.overview' },
+  { key: 'sales', labelKey: 'nav.group.sales' },
+  { key: 'finance', labelKey: 'nav.group.finance' },
+  { key: 'operations', labelKey: 'nav.group.operations' },
+  { key: 'hr', labelKey: 'nav.group.hr' },
+  { key: 'admin', labelKey: 'nav.group.admin' },
+];
+
 export interface ModuleNavItem {
   nameKey: import('@/lib/i18n').MessageKey;
+  /** Sidebar section this module is listed under. */
+  group: ModuleGroup;
   description: string;
   /** Delivery phase from product plan; null = shipped. */
   phase: number | null;
@@ -30,6 +54,7 @@ export const modulesForRole = (role: UserRole | null): ModuleNavItem[] =>
 export const MODULES: ModuleNavItem[] = [
   {
     nameKey: 'nav.dashboard',
+    group: 'overview',
     description: 'Company overview',
     phase: null,
     href: '/',
@@ -38,6 +63,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.calculator',
+    group: 'sales',
     description: 'Specs & ETB pricing',
     phase: null,
     href: '/calculator',
@@ -46,6 +72,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.customers',
+    group: 'sales',
     description: 'CRM accounts',
     phase: null,
     href: '/customers',
@@ -54,6 +81,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.projects',
+    group: 'sales',
     description: 'Sales pipeline',
     phase: null,
     href: '/projects',
@@ -61,7 +89,51 @@ export const MODULES: ModuleNavItem[] = [
     roles: ['SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
   },
   {
+    nameKey: 'nav.quotations',
+    group: 'sales',
+    description: 'Quote → proforma',
+    phase: null,
+    href: '/quotations',
+    icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+    roles: ['SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
+  },
+  {
+    nameKey: 'nav.invoices',
+    group: 'finance',
+    description: 'Issue → collect',
+    phase: null,
+    href: '/invoices',
+    icon: 'M12 6v12m3-8.5c0-1.38-1.343-2.5-3-2.5s-3 1.12-3 2.5c0 1.38 1.343 2 3 2s3 .62 3 2-1.343 2.5-3 2.5-3-1.12-3-2.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+    // Mirrors InvoicesController's class-level @Roles('FINANCE') (no
+    // per-route override) — CEO/ADMIN reach it via modulesForRole's
+    // SUPER_ROLES check.
+    roles: ['FINANCE'],
+  },
+  {
+    nameKey: 'nav.payments',
+    group: 'finance',
+    description: 'Receipts & allocations',
+    phase: null,
+    href: '/invoices?tab=payments',
+    icon: 'M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3M4.5 19.5h15a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5h-15A1.5 1.5 0 003 6v12a1.5 1.5 0 001.5 1.5zM15 12a3 3 0 11-6 0 3 3 0 016 0z',
+    // Mirrors PaymentsController's class-level @Roles('FINANCE').
+    roles: ['FINANCE'],
+  },
+  {
+    nameKey: 'nav.receivables',
+    group: 'finance',
+    description: 'Aging & statements',
+    phase: null,
+    href: '/receivables',
+    icon: 'M3 13h4v8H3v-8zM10 8h4v13h-4V8zM17 3h4v18h-4V3z',
+    // Mirrors GET /invoices/aging (class-level @Roles('FINANCE')) and
+    // GET /customers/:id/statement (route-level @Roles('FINANCE'),
+    // narrower than CustomersController's own class-level roles).
+    roles: ['FINANCE'],
+  },
+  {
     nameKey: 'nav.employees',
+    group: 'hr',
     description: 'Staff & roles',
     phase: null,
     href: '/employees',
@@ -70,6 +142,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.assets',
+    group: 'operations',
     description: 'Elevators, stairs, other',
     phase: null,
     href: '/assets',
@@ -78,6 +151,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.notifications',
+    group: 'overview',
     description: 'Alerts & assignments',
     phase: null,
     href: '/notifications',
@@ -86,6 +160,7 @@ export const MODULES: ModuleNavItem[] = [
   },
   {
     nameKey: 'nav.maintenance',
+    group: 'operations',
     description: 'Service & follow-up',
     phase: null,
     href: '/maintenance',
@@ -93,11 +168,33 @@ export const MODULES: ModuleNavItem[] = [
     roles: ['TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER'],
   },
   {
+    nameKey: 'nav.messages',
+    group: 'finance',
+    description: 'SMS delivery log & consent',
+    phase: null,
+    href: '/messages',
+    icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
+    // Mirrors OutboxController's class-level @Roles('ADMIN') (no per-route
+    // override) — CEO/ADMIN reach it via modulesForRole's SUPER_ROLES check.
+    roles: ['ADMIN'],
+  },
+  {
     nameKey: 'nav.settings',
+    group: 'admin',
     description: 'Branding & EN / አማርኛ',
     phase: null,
     href: '/settings',
     icon: 'M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4',
     roles: ['ADMIN'],
+  },
+  {
+    nameKey: 'nav.docs',
+    group: 'admin',
+    description: 'How the whole system works',
+    phase: null,
+    href: '/docs',
+    icon: 'M12 6.5C10.5 5 8.5 4.5 5 4.5v13c3.5 0 5.5.5 7 2m0-13c1.5-1.5 3.5-2 7-2v13c-3.5 0-5.5.5-7 2m0-13v13',
+    // Documentation, not data: every role may read it.
+    roles: null,
   },
 ];

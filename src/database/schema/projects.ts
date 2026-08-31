@@ -25,6 +25,8 @@ export const projects = pgTable(
       .default(sql`gen_random_uuid()`),
     customerId: uuid('customer_id').notNull(),
     name: text('name').notNull(),
+    /** See customers.nameNormalized — same shadow-column convention. */
+    nameNormalized: text('name_normalized'),
     code: text('code'),
     status: projectStatusEnum('status').notNull().default('LEAD'),
     siteAddressLine1: text('site_address_line1'),

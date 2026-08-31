@@ -183,6 +183,251 @@
       "when": 1784751000000,
       "tag": "0025_scope_rls_policies_and_list_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1786220480983,
+      "tag": "0026_busy_rumiko_fujikawa",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1786221749523,
+      "tag": "0027_brainy_nocturne",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1786224048906,
+      "tag": "0028_revoke_delete_rate_versions",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1786302253115,
+      "tag": "0029_lying_marten_broadcloak",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1786343256021,
+      "tag": "0030_open_lilandra",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1786343266389,
+      "tag": "0031_quotations_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1786344908845,
+      "tag": "0032_premium_blue_shield",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1786344916818,
+      "tag": "0033_proformas_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1786351329132,
+      "tag": "0034_worried_the_anarchist",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1786358521290,
+      "tag": "0035_natural_paladin",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1786358670200,
+      "tag": "0036_rename_document_sequences_last_value",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1786358707505,
+      "tag": "0037_revoke_quotations_delete",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1786359522989,
+      "tag": "0038_revoke_delete_document_sequences_proformas",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1786400000000,
+      "tag": "0039_invoices_proforma_unique_partial_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1786396290398,
+      "tag": "0040_perfect_morgan_stark",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1786432373818,
+      "tag": "0041_reapply_invoice_wht_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1786436205963,
+      "tag": "0042_overjoyed_greymalkin",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1786438031142,
+      "tag": "0043_bank_transactions_link_unique_partial_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1786473860084,
+      "tag": "0044_nappy_ultimates",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1786473860085,
+      "tag": "0045_backfill_null_due_dates",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1786473860086,
+      "tag": "0046_fix_due_date_backfill_timezone",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1786537805247,
+      "tag": "0047_omniscient_professor_monster",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1786537805248,
+      "tag": "0048_outbound_messages_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1786537805249,
+      "tag": "0049_outbox_dispatcher_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1786542361519,
+      "tag": "0050_sms_consent_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1786542678484,
+      "tag": "0051_maintenance_reminder_days",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1786542698850,
+      "tag": "0052_list_active_tenant_ids",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1786544081070,
+      "tag": "0053_payment_reminder_offset_days",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1786544519633,
+      "tag": "0054_balance_reconciliation_last_run",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1786546338942,
+      "tag": "0055_familiar_quicksilver",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1786604047952,
+      "tag": "0056_slow_molecule_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1786604047953,
+      "tag": "0057_list_active_tenant_ids_subscription_filter",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1786620013997,
+      "tag": "0058_swift_venus",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1786620013998,
+      "tag": "0059_idempotency_keys_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1788162430581,
+      "tag": "0060_optimal_namora",
+      "breakpoints": true
     }
   ]
 }

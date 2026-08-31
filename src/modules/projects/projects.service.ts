@@ -8,6 +8,7 @@ import type { CreateProjectDto } from './dto/create-project.dto';
 import { canTransitionProjectStatus } from './project-status';
 import {
   ProjectsRepository,
+  type ProjectExportRow,
   type ProjectInsert,
   type ProjectRecord,
 } from './projects.repository';
@@ -20,11 +21,19 @@ export class ProjectsService {
     user: AuthenticatedUser,
     options: {
       status?: ProjectStatus;
+      q?: string;
       page?: string;
       pageSize?: string;
     },
   ): Promise<PaginatedResult<ProjectRecord>> {
     return this.projectsRepository.list(user.tenantId, options);
+  }
+
+  streamAll(
+    user: AuthenticatedUser,
+    options: { status?: ProjectStatus; q?: string },
+  ): AsyncGenerator<ProjectExportRow> {
+    return this.projectsRepository.streamAll(user.tenantId, options);
   }
 
   async getById(
@@ -66,6 +75,18 @@ export class ProjectsService {
     if (!canTransitionProjectStatus(project.status, nextStatus)) {
       throw new WorkflowTransitionError(
         `Cannot transition project from ${project.status} to ${nextStatus}`,
+      );
+    }
+    // DAG gate: QUOTATION -> PROFORMA is only reachable once an approved
+    // quotation has actually been converted (ProformasRepository.issue) —
+    // see projectsRepository.hasIssuedProforma for why this is a schema-level
+    // check rather than a cross-module import.
+    if (
+      nextStatus === 'PROFORMA' &&
+      !(await this.projectsRepository.hasIssuedProforma(user.tenantId, id))
+    ) {
+      throw new WorkflowTransitionError(
+        `Project ${id} has no issued proforma — convert an approved quotation to a proforma before advancing to PROFORMA`,
       );
     }
     return this.projectsRepository.updateStatus(

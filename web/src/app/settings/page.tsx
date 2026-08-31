@@ -15,10 +15,21 @@ import {
   type TenantSettings,
 } from '@/lib/api';
 
+/** "0, 7, 30" -> [0, 7, 30] — non-numeric junk is dropped rather than
+ * blocking the field entirely; the API's own validation is the final say
+ * (surfaced through the existing error banner on submit). */
+const parseOffsetDays = (text: string): number[] =>
+  text
+    .split(',')
+    .map((part) => Number.parseInt(part.trim(), 10))
+    .filter((n) => Number.isInteger(n));
+
 export default function SettingsPage() {
   const router = useRouter();
   const { t, setLocale } = useLocale();
   const [settings, setSettings] = useState<TenantSettings | null>(null);
+  const [name, setName] = useState('');
+  const [slogan, setSlogan] = useState('');
   const [primaryColorHex, setPrimaryColorHex] = useState('#1B2A4A');
   const [secondaryColorHex, setSecondaryColorHex] = useState('#E8B54D');
   const [logoUrl, setLogoUrl] = useState('');
@@ -27,6 +38,11 @@ export default function SettingsPage() {
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [defaultLocale, setDefaultLocale] = useState<AppLocale>('en');
+  const [maintenanceReminderDays, setMaintenanceReminderDays] = useState(3);
+  // Comma-separated in the UI (e.g. "0, 7, 30") — parsed to number[] on
+  // submit; simplest control for a short, small-cardinality list (I7).
+  const [paymentReminderOffsetDaysText, setPaymentReminderOffsetDaysText] =
+    useState('0, 7, 30');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,6 +51,8 @@ export default function SettingsPage() {
   const applySettings = useCallback(
     (data: TenantSettings) => {
       setSettings(data);
+      setName(data.name);
+      setSlogan(data.slogan ?? '');
       setPrimaryColorHex(data.primaryColorHex);
       setSecondaryColorHex(data.secondaryColorHex);
       setLogoUrl(data.logoUrl ?? '');
@@ -44,6 +62,8 @@ export default function SettingsPage() {
       setContactPhone(data.contactPhone ?? '');
       setDefaultLocale(data.defaultLocale);
       setLocale(data.defaultLocale);
+      setMaintenanceReminderDays(data.maintenanceReminderDays);
+      setPaymentReminderOffsetDaysText(data.paymentReminderOffsetDays.join(', '));
     },
     [setLocale],
   );
@@ -78,6 +98,8 @@ export default function SettingsPage() {
     setSuccess(null);
     try {
       const data = await updateSettings({
+        name: name.trim(),
+        slogan: slogan.trim() || null,
         primaryColorHex,
         secondaryColorHex,
         logoUrl: logoUrl || null,
@@ -86,6 +108,8 @@ export default function SettingsPage() {
         contactEmail: contactEmail || null,
         contactPhone: contactPhone || null,
         defaultLocale,
+        maintenanceReminderDays,
+        paymentReminderOffsetDays: parseOffsetDays(paymentReminderOffsetDaysText),
       });
       applySettings(data);
       setSuccess(t('settings.saved'));
@@ -177,6 +201,32 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <div>
+                  <label className={labelClass} htmlFor="companyName">
+                    {t('settings.companyName')}
+                  </label>
+                  <input
+                    id="companyName"
+                    className={fieldClass}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    maxLength={200}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="slogan">
+                    {t('settings.slogan')}
+                  </label>
+                  <input
+                    id="slogan"
+                    className={fieldClass}
+                    value={slogan}
+                    onChange={(e) => setSlogan(e.target.value)}
+                    maxLength={200}
+                    placeholder="Star of Elevation"
+                  />
+                </div>
+                <div>
                   <label className={labelClass} htmlFor="logoUrl">
                     {t('settings.logoUrl')}
                   </label>
@@ -262,6 +312,48 @@ export default function SettingsPage() {
                     />
                     {t('settings.localeAm')}
                   </label>
+                </div>
+              </section>
+
+              <section className="space-y-4 border-t border-slate-100 pt-6">
+                <h2 className="font-display text-base font-semibold text-slate-900">
+                  {t('settings.reminders')}
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={labelClass} htmlFor="maintenanceReminderDays">
+                      {t('settings.maintenanceReminderDays')}
+                    </label>
+                    <input
+                      id="maintenanceReminderDays"
+                      type="number"
+                      min={0}
+                      max={90}
+                      className={fieldClass}
+                      value={maintenanceReminderDays}
+                      onChange={(e) =>
+                        setMaintenanceReminderDays(Number(e.target.value))
+                      }
+                    />
+                    <p className="mt-1 text-xs text-slate-400">
+                      {t('settings.maintenanceReminderDaysHelp')}
+                    </p>
+                  </div>
+                  <div>
+                    <label className={labelClass} htmlFor="paymentReminderOffsetDays">
+                      {t('settings.paymentReminderOffsetDays')}
+                    </label>
+                    <input
+                      id="paymentReminderOffsetDays"
+                      className={fieldClass}
+                      placeholder="0, 7, 30"
+                      value={paymentReminderOffsetDaysText}
+                      onChange={(e) => setPaymentReminderOffsetDaysText(e.target.value)}
+                    />
+                    <p className="mt-1 text-xs text-slate-400">
+                      {t('settings.paymentReminderOffsetDaysHelp')}
+                    </p>
+                  </div>
                 </div>
               </section>
 

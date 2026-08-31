@@ -1,0 +1,31 @@
+# Docker build context for the API image (repo root). Keep this in sync
+# with anything the API Dockerfile's build stage does NOT need — everything
+# else just slows down the build context upload.
+node_modules
+.pnpm-store
+dist
+coverage
+.git
+.github
+.vscode
+.idea
+*.log
+.DS_Store
+
+# Secrets — never enter the build context, let alone the image.
+.env
+.env.*
+!.env.example
+
+# The admin UI is its own isolated pnpm workspace (see web/pnpm-workspace.yaml)
+# built by web/Dockerfile with web/ as its own context — irrelevant here.
+web
+
+# Not needed to build dist/ (nest build compiles src/ only) or to run it.
+test
+docs
+.superpowers
+.playwright-mcp
+.cursor
+.mcp.json
+*.md

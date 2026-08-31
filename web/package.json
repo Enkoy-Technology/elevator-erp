@@ -7,19 +7,25 @@
     "build": "next build",
     "start": "next start -p 3003",
     "typecheck": "tsc --noEmit",
-    "lint": "next lint"
+    "lint": "eslint \"src/**/*.{ts,tsx}\""
   },
   "dependencies": {
+    "@tanstack/react-table": "^8.21.3",
+    "lucide-react": "^1.37.0",
     "next": "^15.5.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/postcss": "^4.1.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "eslint": "^10.7.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "tailwindcss": "^4.1.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.65.0"
   }
 }

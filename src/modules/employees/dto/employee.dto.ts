@@ -7,8 +7,10 @@ import {
   IsString,
   MaxLength,
   MinLength,
+  Validate,
 } from 'class-validator';
 
+import { IsEthiopianPhoneConstraint } from '../../../common/dto/phone';
 import { USER_ROLES, type UserRole } from '../../../types/auth.types';
 
 /** Staff roles only — CUSTOMER is not an employee. */
@@ -27,10 +29,13 @@ export class CreateEmployeeDto {
   @MaxLength(120)
   fullName!: string;
 
-  @ApiPropertyOptional({ example: '+251911000000' })
+  @ApiPropertyOptional({ example: '+251949922604' })
   @IsOptional()
   @IsString()
   @MaxLength(32)
+  // See CreateCustomerDto.phone's own comment — same root-cause fix
+  // (phase-5 review I4), same reminder-cron read path (users.phone).
+  @Validate(IsEthiopianPhoneConstraint)
   phone?: string;
 
   @ApiProperty({ enum: EMPLOYEE_ROLES, example: 'SALES_MANAGER' })
@@ -42,6 +47,14 @@ export class CreateEmployeeDto {
   @MinLength(8)
   @MaxLength(72)
   password!: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Set true once this technician/staff member has given recorded consent to receive SMS (ECA Directive 832/2021 protects staff the same way it protects customers). The server stamps the current time — never a client-supplied timestamp. Matches CreateCustomerDto: consent can be recorded at creation, not only on a later edit.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  smsConsentGiven?: boolean;
 }
 
 export class UpdateEmployeeDto {
@@ -56,6 +69,7 @@ export class UpdateEmployeeDto {
   @IsOptional()
   @IsString()
   @MaxLength(32)
+  @Validate(IsEthiopianPhoneConstraint)
   phone?: string;
 
   @ApiPropertyOptional({ enum: EMPLOYEE_ROLES })
@@ -67,4 +81,23 @@ export class UpdateEmployeeDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    example: 'NewTempPass!123',
+    minLength: 8,
+    description: 'Set to reset the password. Omit to leave it unchanged.',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(8)
+  @MaxLength(72)
+  password?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Set true once this technician/staff member has given recorded consent to receive SMS (ECA Directive 832/2021 protects staff the same way it protects customers). Set false to revoke. The server stamps the current time — never a client-supplied timestamp.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  smsConsentGiven?: boolean;
 }

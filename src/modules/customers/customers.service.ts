@@ -8,6 +8,7 @@ import type { UpdateCustomerDto } from './dto/update-customer.dto';
 import {
   CustomersRepository,
   type CustomerRecord,
+  type CustomerStatement,
   type SimilarCustomer,
 } from './customers.repository';
 
@@ -20,6 +21,13 @@ export class CustomersService {
     options: { search?: string; page?: string; pageSize?: string },
   ): Promise<PaginatedResult<CustomerRecord>> {
     return this.customersRepository.list(user.tenantId, options);
+  }
+
+  streamAll(
+    user: AuthenticatedUser,
+    options: { search?: string },
+  ): AsyncGenerator<CustomerRecord> {
+    return this.customersRepository.streamAll(user.tenantId, options);
   }
 
   async getById(
@@ -62,5 +70,14 @@ export class CustomersService {
 
   softDelete(user: AuthenticatedUser, id: string): Promise<void> {
     return this.customersRepository.softDelete(user.tenantId, id);
+  }
+
+  statement(
+    user: AuthenticatedUser,
+    id: string,
+    from: string,
+    to: string,
+  ): Promise<CustomerStatement> {
+    return this.customersRepository.statement(user.tenantId, id, from, to);
   }
 }

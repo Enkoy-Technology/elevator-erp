@@ -8,7 +8,7 @@ export class CheckDuplicateCustomerDto {
   @MaxLength(200)
   name!: string;
 
-  @ApiPropertyOptional({ example: '+251911000000' })
+  @ApiPropertyOptional({ example: '+251949922604' })
   @IsOptional()
   @IsString()
   @MaxLength(32)

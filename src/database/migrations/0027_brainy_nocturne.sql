@@ -1,0 +1,1 @@
+ALTER TABLE "tenants" ADD COLUMN "fiscal_year_start" text DEFAULT '07-08' NOT NULL;

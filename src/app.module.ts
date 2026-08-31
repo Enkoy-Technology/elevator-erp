@@ -1,27 +1,41 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { AppController } from './app.controller';
+import { ExportModule } from './common/export/export.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { JwtAuthGuard, RolesGuard, TenantGuard } from './common/guards';
 import { AppConfigModule } from './config';
 import { DatabaseModule } from './database/database.module';
 import { AssetsModule } from './modules/assets/assets.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { BanksModule } from './modules/banks/banks.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ElevatorCalcModule } from './modules/elevator-calc/elevator-calc.module';
 import { EmployeesModule } from './modules/employees/employees.module';
+import { ExpensesModule } from './modules/expenses/expenses.module';
+import { InvoicesModule } from './modules/invoices/invoices.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { OutboxModule } from './modules/outbox/outbox.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { ProformasModule } from './modules/proformas/proformas.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { QuotationsModule } from './modules/quotations/quotations.module';
+import { RatesModule } from './modules/rates/rates.module';
+import { RemindersModule } from './modules/reminders/reminders.module';
 import { SettingsModule } from './modules/settings/settings.module';
 
 @Module({
   imports: [
     AppConfigModule,
     DatabaseModule,
+    // Registered once, app-wide: OutboxDispatcherService's @Cron relies on
+    // this being present (task brief 5.2).
+    ScheduleModule.forRoot(),
     // TAD §3.1: 1,000 req/min per tenant with 200 req/10s burst.
     // In-memory for Phase 0; swap to Redis storage when workers land.
     ThrottlerModule.forRoot([
@@ -30,12 +44,22 @@ import { SettingsModule } from './modules/settings/settings.module';
     ]),
     AuthModule,
     ElevatorCalcModule,
+    ExportModule,
     CustomersModule,
     ProjectsModule,
+    QuotationsModule,
+    ProformasModule,
+    InvoicesModule,
+    PaymentsModule,
+    ExpensesModule,
+    BanksModule,
     EmployeesModule,
     AssetsModule,
     NotificationsModule,
+    OutboxModule,
     MaintenanceModule,
+    RemindersModule,
+    RatesModule,
     SettingsModule,
     DashboardModule,
   ],

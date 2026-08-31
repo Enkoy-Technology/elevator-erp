@@ -12,7 +12,13 @@ export interface PaginatedResult<T> {
   totalPages: number;
 }
 
-const DEFAULT_PAGE_SIZE = 20;
+/**
+ * The list pages offer 5 / 10 / 25 / 50 / 100 and default to 10, so the
+ * server's default matches what a client that sends no pageSize gets in the
+ * UI. MAX_PAGE_SIZE is the real guard — it is a trust boundary, not a
+ * preference, and stays the ceiling whatever the UI offers.
+ */
+const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 100;
 
 export const normalizePageQuery = (

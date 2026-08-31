@@ -1,418 +1,317 @@
 'use client';
 
-import {
-  FormEvent,
-  useCallback,
-  useEffect,
-  useState,
-} from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { btnPrimary, btnSecondary, fieldClass, labelClass } from '@/components/form-styles';
-import { Pagination } from '@/components/pagination';
-import { SideDrawer } from '@/components/side-drawer';
+import { btnPrimary, btnSecondary } from '@/components/form-styles';
+import { DataTable } from '@/components/data-table';
+import { ListToolbar, RowAction, SearchField, StatusPill } from '@/components/list-toolbar';
+import { Ban, Check, Pencil, X } from 'lucide-react';
+import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
 import {
   ApiError,
-  createEmployee,
-  EMPLOYEE_ROLES,
   getAccessToken,
   listEmployees,
   updateEmployee,
   type Employee,
-  type EmployeeRole,
 } from '@/lib/api';
+import { csvRows, saveCsv } from './csv';
+import { ROLE_LABELS } from './labels';
 
-const PAGE_SIZE = 20;
-
-const ROLE_LABELS: Record<EmployeeRole, string> = {
-  CEO: 'CEO',
-  SALES_MANAGER: 'Sales Manager',
-  TECHNICAL_LEAD: 'Technical Lead',
-  FIELD_ENGINEER: 'Field Engineer',
-  FINANCE: 'Finance',
-  WAREHOUSE_MANAGER: 'Warehouse Manager',
-  DISPATCHER: 'Dispatcher',
-  ADMIN: 'Admin',
-};
+/** Bulk-bar button: matches the bar's own Clear control, not a page button. */
+const bulkBtn =
+  'rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium ' +
+  'text-slate-700 transition hover:border-slate-400 hover:bg-slate-50';
 
 export default function EmployeesPage() {
   const router = useRouter();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<EmployeeRole>('SALES_MANAGER');
-  const [password, setPassword] = useState('');
-  const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const [bulkNotice, setBulkNotice] = useState<string | null>(null);
+  // Which row is mid-confirm. One at a time: opening a second confirm closes
+  // the first, so there is never an ambiguous armed button off-screen.
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
-  const refresh = useCallback(async (nextPage: number, q: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await listEmployees({
-        q,
-        page: nextPage,
-        pageSize: PAGE_SIZE,
-      });
-      setEmployees(result.items);
-      setPage(result.page);
-      setTotal(result.total);
-      setTotalPages(result.totalPages);
-    } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : 'Failed to load employees',
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const refresh = useCallback(
+    async (nextPage: number, size: number, q: string) => {
+      setLoading(true);
+      setError(null);
+      // The rows behind the selection are about to be replaced; a selection
+      // that outlives them would act on ids the user can no longer see.
+      setSelectedIds(new Set());
+      setConfirmId(null);
+      try {
+        const result = await listEmployees({
+          q,
+          page: nextPage,
+          pageSize: size,
+        });
+        setEmployees(result.items);
+        setPage(result.page);
+        setTotal(result.total);
+        setTotalPages(result.totalPages);
+      } catch (err) {
+        setError(
+          err instanceof ApiError ? err.message : 'Failed to load employees',
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!getAccessToken()) {
       router.replace('/login');
       return;
     }
-    void refresh(page, search);
-  }, [router, refresh, page, search]);
+    void refresh(page, pageSize, search);
+  }, [router, refresh, page, pageSize, search]);
 
-  const onSearch = (event: FormEvent) => {
-    event.preventDefault();
+  const runSearch = () => {
     setPage(1);
     setSearch(searchInput.trim());
   };
 
-  const resetForm = () => {
-    setEditId(null);
-    setFullName('');
-    setEmail('');
-    setPhone('');
-    setRole('SALES_MANAGER');
-    setPassword('');
-    setIsActive(true);
-    setFormError(null);
+  const selected = employees.filter((employee) => selectedIds.has(employee.id));
+
+  const exportSelected = () => {
+    saveCsv(
+      'employees-selected.csv',
+      csvRows([
+        ['Full name', 'Email', 'Role', 'Phone', 'Active'],
+        ...selected.map((employee) => [
+          employee.fullName,
+          employee.email,
+          employee.role,
+          employee.phone ?? '',
+          employee.isActive ? 'Yes' : 'No',
+        ]),
+      ]),
+    );
   };
 
-  const openCreate = () => {
-    resetForm();
-    setDrawerOpen(true);
-  };
-
-  const openEdit = (employee: Employee) => {
-    setEditId(employee.id);
-    setFullName(employee.fullName);
-    setEmail(employee.email);
-    setPhone(employee.phone ?? '');
-    setRole(employee.role);
-    setPassword('');
-    setIsActive(employee.isActive);
-    setFormError(null);
-    setDrawerOpen(true);
-  };
-
-  const closeDrawer = () => {
-    setDrawerOpen(false);
-    setFormError(null);
-  };
-
-  const onSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    setSubmitting(true);
-    setFormError(null);
+  const deactivateOne = async (employee: Employee) => {
+    setConfirmId(null);
     try {
-      if (editId) {
-        await updateEmployee(editId, {
-          fullName,
-          phone: phone || undefined,
-          role,
-          isActive,
-        });
-      } else {
-        await createEmployee({
-          fullName,
-          email,
-          phone: phone || undefined,
-          role,
-          password,
-        });
-      }
-      closeDrawer();
-      setPage(1);
-      setSearch('');
-      setSearchInput('');
-      await refresh(1, '');
+      await updateEmployee(employee.id, { isActive: false });
+      await refresh(page, pageSize, search);
     } catch (err) {
-      setFormError(
-        err instanceof ApiError ? err.message : 'Failed to save employee',
+      setError(
+        err instanceof ApiError ? err.message : 'Failed to deactivate employee',
       );
-    } finally {
-      setSubmitting(false);
     }
   };
+
+  const deactivateSelected = async () => {
+    const targets = selected.filter((employee) => employee.isActive);
+    if (targets.length === 0) {
+      setBulkNotice('Every selected employee is already inactive.');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Deactivate ${targets.length} employee(s)? They will not be able to log in.`,
+      )
+    ) {
+      return;
+    }
+    setBulkNotice(null);
+    // No bulk endpoint exists — this is N PATCHes, so it is NOT atomic and a
+    // partial failure is reported as one rather than dressed up as success.
+    const results = await Promise.allSettled(
+      targets.map((employee) => updateEmployee(employee.id, { isActive: false })),
+    );
+    const failed = results.filter((result) => result.status === 'rejected').length;
+    setBulkNotice(
+      failed === 0
+        ? `Deactivated ${targets.length} employee(s).`
+        : `Deactivated ${targets.length - failed} of ${targets.length}. ${failed} failed and are still active — try those again.`,
+    );
+    await refresh(page, pageSize, search);
+  };
+
+  const columns: ColumnDef<Employee, unknown>[] = [
+    {
+      accessorKey: 'fullName',
+      header: 'Name',
+      enableSorting: true,
+      cell: ({ row }) => (
+        <span className="font-medium text-slate-900">{row.original.fullName}</span>
+      ),
+    },
+    { accessorKey: 'email', header: 'Email' },
+    {
+      id: 'role',
+      header: 'Role',
+      cell: ({ row }) => (
+        <StatusPill label={ROLE_LABELS[row.original.role] ?? row.original.role} />
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: ({ row }) => (
+        <StatusPill
+          label={row.original.isActive ? 'Active' : 'Inactive'}
+          tone={row.original.isActive ? 'good' : 'neutral'}
+        />
+      ),
+    },
+    {
+      id: 'actions',
+      header: '',
+      meta: { align: 'right' },
+      cell: ({ row }) => {
+        const employee = row.original;
+        return (
+          <div className="flex items-center justify-end gap-0.5">
+            <RowAction
+              icon={Pencil}
+              label={`Edit ${employee.fullName}`}
+              onClick={() => router.push(`/employees/${employee.id}/edit`)}
+            />
+            {/* There is no DELETE for an employee — the record is referenced
+                by every job they touched. Deactivating is the destructive
+                action that actually exists, so that is what sits here. */}
+            {employee.isActive ? (
+              confirmId === employee.id ? (
+                <>
+                  <RowAction
+                    icon={Check}
+                    tone="danger"
+                    label={`Confirm deactivating ${employee.fullName}`}
+                    onClick={() => void deactivateOne(employee)}
+                  />
+                  <RowAction
+                    icon={X}
+                    label={`Keep ${employee.fullName} active`}
+                    onClick={() => setConfirmId(null)}
+                  />
+                </>
+              ) : (
+                <RowAction
+                  icon={Ban}
+                  tone="danger"
+                  label={`Deactivate ${employee.fullName}`}
+                  onClick={() => setConfirmId(employee.id)}
+                />
+              )
+            ) : null}
+          </div>
+        );
+      },
+    },
+  ];
 
   return (
     <div className="flex min-h-screen">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-slate-200 bg-white px-8 py-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h1 className="font-display text-lg font-semibold">Employees</h1>
-              <p className="text-sm text-slate-500">
-                Staff directory and role-based access
-              </p>
+        <PageHeader
+          eyebrow="People"
+          title="Employees"
+          description="The staff directory. A person's role here is what the API grants them across every screen."
+          actions={
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => router.push('/employees/import')}
+                className={btnSecondary}
+              >
+                Import
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/employees/new')}
+                className={btnPrimary}
+              >
+                Add employee
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={openCreate}
-              className={btnPrimary}
-            >
-              Add employee
-            </button>
-          </div>
-        </header>
+          }
+        />
 
-        <main className="flex-1 bg-slate-50 p-8">
+        <main className="flex-1 bg-slate-50 p-4 sm:p-8">
           {error ? (
             <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
             </p>
           ) : null}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6">
-            <form
-              onSubmit={onSearch}
-              className="mb-4 flex flex-wrap items-end gap-3"
-            >
-              <div className="min-w-[220px] flex-1">
-                <label className={labelClass} htmlFor="search">
-                  Search
-                </label>
-                <input
-                  id="search"
-                  className={fieldClass}
-                  placeholder="Name or email"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                />
-              </div>
-              <button
-                type="submit"
-                className={btnSecondary}
-              >
-                Search
-              </button>
-            </form>
+          <ListToolbar
+            search={
+              <SearchField
+                value={searchInput}
+                onChange={setSearchInput}
+                onSubmit={runSearch}
+                placeholder="Name or email"
+              />
+            }
+          />
 
-            {loading ? (
-              <p className="text-sm text-slate-500">Loading…</p>
-            ) : employees.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 px-6 py-12 text-center">
-                <p className="text-sm text-slate-500">No employees yet.</p>
-                <button
-                  type="button"
-                  onClick={openCreate}
-                  className="mt-3 text-sm font-semibold text-navy-800 hover:underline"
-                >
-                  Add your first employee
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[640px] text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                        <th className="py-2 pr-4 font-semibold">Name</th>
-                        <th className="py-2 pr-4 font-semibold">Email</th>
-                        <th className="py-2 pr-4 font-semibold">Role</th>
-                        <th className="py-2 pr-4 font-semibold">Status</th>
-                        <th className="py-2 font-semibold">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {employees.map((employee) => (
-                        <tr
-                          key={employee.id}
-                          className="border-b border-slate-100 last:border-0"
-                        >
-                          <td className="py-3 pr-4 font-medium text-slate-900">
-                            {employee.fullName}
-                          </td>
-                          <td className="py-3 pr-4 text-slate-600">
-                            {employee.email}
-                          </td>
-                          <td className="py-3 pr-4 text-slate-600">
-                            {ROLE_LABELS[employee.role] ?? employee.role}
-                          </td>
-                          <td className="py-3 pr-4">
-                            <span
-                              className={
-                                employee.isActive
-                                  ? 'text-emerald-700'
-                                  : 'text-slate-400'
-                              }
-                            >
-                              {employee.isActive ? 'Active' : 'Inactive'}
-                            </span>
-                          </td>
-                          <td className="py-3">
-                            <button
-                              type="button"
-                              onClick={() => openEdit(employee)}
-                              className="text-sm font-semibold text-navy-800 hover:underline"
-                            >
-                              Edit
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <Pagination
-                  page={page}
-                  pageSize={PAGE_SIZE}
-                  total={total}
-                  totalPages={totalPages}
-                  onPageChange={setPage}
-                />
-              </>
-            )}
-          </section>
-        </main>
-      </div>
-
-      <SideDrawer
-        open={drawerOpen}
-        onClose={closeDrawer}
-        title={editId ? 'Edit employee' : 'Add employee'}
-        description="Assign a role to control what they can access."
-        footer={
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={closeDrawer}
-              className={`${btnSecondary} flex-1`}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="employee-form"
-              disabled={submitting}
-              className={`${btnPrimary} flex-1`}
-            >
-              {submitting ? 'Saving…' : editId ? 'Save changes' : 'Add employee'}
-            </button>
-          </div>
-        }
-      >
-        <form
-          id="employee-form"
-          onSubmit={(e) => void onSubmit(e)}
-          className="space-y-4"
-        >
-          {formError ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {formError}
+          {bulkNotice ? (
+            <p className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+              {bulkNotice}
             </p>
           ) : null}
 
-          <div>
-            <label className={labelClass} htmlFor="fullName">
-              Full name
-            </label>
-            <input
-              id="fullName"
-              className={fieldClass}
-              required
-              minLength={2}
-              autoFocus
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              className={fieldClass}
-              required={!editId}
-              disabled={!!editId}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="phone">
-              Phone
-            </label>
-            <input
-              id="phone"
-              className={fieldClass}
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="role">
-              Role
-            </label>
-            <select
-              id="role"
-              className={fieldClass}
-              value={role}
-              onChange={(e) => setRole(e.target.value as EmployeeRole)}
-            >
-              {EMPLOYEE_ROLES.map((value) => (
-                <option key={value} value={value}>
-                  {ROLE_LABELS[value]}
-                </option>
-              ))}
-            </select>
-          </div>
-          {!editId ? (
-            <div>
-              <label className={labelClass} htmlFor="password">
-                Temporary password
-              </label>
-              <input
-                id="password"
-                type="password"
-                className={fieldClass}
-                required
-                minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          ) : (
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={isActive}
-                onChange={(e) => setIsActive(e.target.checked)}
-              />
-              Active (can log in)
-            </label>
-          )}
-        </form>
-      </SideDrawer>
+          <DataTable
+            columns={columns}
+            rows={employees}
+            getRowId={(employee) => employee.id}
+            loading={loading}
+            caption="Employees"
+            selectable
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
+            getRowLabel={(employee) => employee.fullName}
+            bulkActions={
+              <>
+                {/* Sized to the selection bar's own Clear button, not the
+                    page's full-size btnSecondary. */}
+                <button type="button" onClick={exportSelected} className={bulkBtn}>
+                  Export selected
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deactivateSelected()}
+                  className={bulkBtn}
+                >
+                  Deactivate selected
+                </button>
+              </>
+            }
+            pagination={{
+              page,
+              pageSize,
+              total,
+              totalPages,
+              onPageChange: setPage,
+              onPageSizeChange: (size) => {
+                setPageSize(size);
+                setPage(1);
+              },
+            }}
+            empty={
+              search
+                ? `No employee matches “${search}”. Clear the search to see everyone.`
+                : 'No employees yet. Add one here and give them a role — that role decides what they can open.'
+            }
+          />
+        </main>
+      </div>
     </div>
   );
 }

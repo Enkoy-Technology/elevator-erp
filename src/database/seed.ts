@@ -4,11 +4,27 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 
+import { RatesRepository } from '../modules/rates/rates.repository';
+import { seedRates } from '../modules/rates/seed-rates';
 import * as schema from './schema';
 
 const BCRYPT_ROUNDS = 12;
 
+export const assertSeedAllowed = (env: NodeJS.ProcessEnv): void => {
+  // Gated in every environment, not just NODE_ENV=production: an operator
+  // shell with no NODE_ENV set but DATABASE_ADMIN_URL pointed at a real
+  // database must not sail through just because the shell isn't labeled
+  // "production".
+  if (env.ALLOW_DEMO_SEED !== '1') {
+    throw new Error(
+      'Refusing to seed demo data. Set ALLOW_DEMO_SEED=1 to override.',
+    );
+  }
+};
+
 const main = async (): Promise<void> => {
+  assertSeedAllowed(process.env);
+
   const url = process.env.DATABASE_ADMIN_URL ?? process.env.DATABASE_URL;
   if (!url) {
     throw new Error('DATABASE_ADMIN_URL (or DATABASE_URL) must be set');
@@ -17,6 +33,14 @@ const main = async (): Promise<void> => {
   const db = drizzle(pool, { schema });
 
   try {
+    // Statutory rates are not demo data — seed them regardless of whether
+    // the demo tenant below already exists, so re-running this script never
+    // skips them once the demo tenant is in place. This script is gated by
+    // assertSeedAllowed above and must never run in production; the
+    // production path for rates is `pnpm run db:seed:rates`
+    // (seed-rates.cli.ts), which has no demo gate and runs on every deploy.
+    await seedRates(new RatesRepository(db));
+
     const existing = await db
       .select({ id: schema.tenants.id })
       .from(schema.tenants)
@@ -58,7 +82,9 @@ const main = async (): Promise<void> => {
   }
 };
 
-main().catch((error: unknown) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}

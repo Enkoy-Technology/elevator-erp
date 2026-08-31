@@ -1,5 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, count, desc, eq, isNull } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  getTableColumns,
+  isNull,
+  sql,
+} from 'drizzle-orm';
 
 import { WorkflowTransitionError } from '../../common/exceptions';
 import {
@@ -7,12 +17,31 @@ import {
   toPaginatedResult,
   type PaginatedResult,
 } from '../../common/pagination';
-import { projects, type ProjectStatus } from '../../database/schema';
+import { normalizeEthiopic } from '../../common/text/ethiopic-normalize';
+import {
+  customers,
+  proformas,
+  projects,
+  type ProjectStatus,
+} from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import type { CreateProjectDto } from './dto/create-project.dto';
 
 export type ProjectRecord = typeof projects.$inferSelect;
 export type ProjectInsert = typeof projects.$inferInsert;
+
+/** Same shape `list()`/`streamAll()` build the `q` filter with, mirroring
+ * CustomersRepository.list()'s coalesce(nameNormalized, lower(name)) pattern
+ * so an out-of-band row with a NULL nameNormalized never silently drops out
+ * of search. */
+const nameSearchFilter = (q: string) =>
+  sql`coalesce(${projects.nameNormalized}, lower(${projects.name})) like ${`%${normalizeEthiopic(q.trim())}%`}`;
+
+/** `streamAll()`'s row shape: the raw `customerId` FK is replaced (not
+ * appended) with the joined customer's display name — see REC 5. */
+export type ProjectExportRow = Omit<ProjectRecord, 'customerId'> & {
+  customerName: string | null;
+};
 
 @Injectable()
 export class ProjectsRepository {
@@ -22,6 +51,7 @@ export class ProjectsRepository {
     tenantId: string,
     options: {
       status?: ProjectStatus;
+      q?: string;
       page?: string;
       pageSize?: string;
     },
@@ -34,6 +64,9 @@ export class ProjectsRepository {
       const filters = [isNull(projects.deletedAt)];
       if (options.status) {
         filters.push(eq(projects.status, options.status));
+      }
+      if (options.q && options.q.trim().length > 0) {
+        filters.push(nameSearchFilter(options.q));
       }
       const where = and(...filters);
       const [totalRow] = await tx
@@ -50,6 +83,63 @@ export class ProjectsRepository {
         .offset(offset);
       return toPaginatedResult(items, total, page, pageSize);
     });
+  }
+
+  /**
+   * Streams every project matching the same filters `list()` honors, for
+   * bulk export, in batches of BATCH_SIZE.
+   *
+   * ponytail: offset batching, ties broken by the `id` tiebreaker below so
+   * equal `createdAt` values (bulk import, seed data) no longer duplicate
+   * or skip rows across batch boundaries — concurrent inserts/deletes can
+   * still shift the offset window; acceptable for ad-hoc admin downloads,
+   * switch to keyset cursor before this feeds accounting reconciliation.
+   * Perf ceiling: keyset if large-tenant exports time out.
+   *
+   * Tenant-scoping subtlety: `app.tenant_id` is a transaction-local GUC
+   * (set by `withTenant`), so each batch opens its own `withTenant`
+   * transaction rather than reusing one `tx` across the whole generator.
+   */
+  async *streamAll(
+    tenantId: string,
+    options: { status?: ProjectStatus; q?: string },
+  ): AsyncGenerator<ProjectExportRow> {
+    const BATCH_SIZE = 500;
+    let offset = 0;
+    const { customerId: _customerId, ...projectColumns } =
+      getTableColumns(projects);
+    for (;;) {
+      const batch = await this.tenantDb.withTenant(tenantId, (tx) => {
+        const filters = [isNull(projects.deletedAt)];
+        if (options.status) {
+          filters.push(eq(projects.status, options.status));
+        }
+        if (options.q && options.q.trim().length > 0) {
+          filters.push(nameSearchFilter(options.q));
+        }
+        return tx
+          .select({ ...projectColumns, customerName: customers.name })
+          .from(projects)
+          .leftJoin(
+            customers,
+            and(
+              eq(projects.tenantId, customers.tenantId),
+              eq(projects.customerId, customers.id),
+            ),
+          )
+          .where(and(...filters))
+          .orderBy(desc(projects.createdAt), asc(projects.id))
+          .limit(BATCH_SIZE)
+          .offset(offset);
+      });
+      for (const row of batch) {
+        yield row;
+      }
+      if (batch.length < BATCH_SIZE) {
+        return;
+      }
+      offset += BATCH_SIZE;
+    }
   }
 
   async findById(
@@ -78,6 +168,7 @@ export class ProjectsRepository {
           tenantId,
           customerId: dto.customerId,
           name: dto.name,
+          nameNormalized: normalizeEthiopic(dto.name),
           code: dto.code,
           siteAddressLine1: dto.siteAddressLine1,
           siteAddressLine2: dto.siteAddressLine2,
@@ -100,8 +191,41 @@ export class ProjectsRepository {
   }
 
   /**
+   * DAG gate (finance-exports-sms task 2): QUOTATION -> PROFORMA requires an
+   * issued, non-cancelled proforma for this project. Queries the proformas
+   * table directly — proformas is a shared /database/schema table, not a
+   * quotations- or proformas-module internal, so this stays a plain
+   * repository-level EXISTS query rather than a cross-module import (which
+   * would create a cycle: quotations already imports projects).
+   */
+  async hasIssuedProforma(
+    tenantId: string,
+    projectId: string,
+  ): Promise<boolean> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const rows = await tx
+        .select({ id: proformas.id })
+        .from(proformas)
+        .where(
+          and(eq(proformas.projectId, projectId), eq(proformas.status, 'ISSUED')),
+        )
+        .limit(1);
+      return rows.length > 0;
+    });
+  }
+
+  /**
    * Compare-and-swap: the update only lands if the project is still in
    * `expectedStatus`, so two concurrent transitions cannot both apply.
+   *
+   * Security-review fix: the QUOTATION -> PROFORMA DAG gate in
+   * ProjectsService.updateStatus() checks hasIssuedProforma() as a separate,
+   * earlier transaction — a TOCTOU window (e.g. a concurrent proforma
+   * cancellation) could otherwise let the write land after the check already
+   * passed. The EXISTS re-check below runs inside THIS UPDATE's own WHERE
+   * clause, so a PROFORMA transition can only ever commit alongside a
+   * currently-ISSUED proforma for the same project, evaluated atomically at
+   * write time — not just at check time.
    */
   async updateStatus(
     tenantId: string,
@@ -128,16 +252,31 @@ export class ProjectsRepository {
             eq(projects.id, id),
             eq(projects.status, expectedStatus),
             isNull(projects.deletedAt),
+            ...(status === 'PROFORMA'
+              ? [
+                  exists(
+                    tx
+                      .select({ one: sql`1` })
+                      .from(proformas)
+                      .where(
+                        and(
+                          eq(proformas.projectId, id),
+                          eq(proformas.status, 'ISSUED'),
+                        ),
+                      ),
+                  ),
+                ]
+              : []),
           ),
         )
         .returning();
       if (!row) {
-        const exists = await tx
+        const existingRow = await tx
           .select({ id: projects.id })
           .from(projects)
           .where(and(eq(projects.id, id), isNull(projects.deletedAt)))
           .limit(1);
-        if (exists[0]) {
+        if (existingRow[0]) {
           throw new WorkflowTransitionError(
             'Project status changed concurrently — reload and retry',
           );

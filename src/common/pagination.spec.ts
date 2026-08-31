@@ -1,10 +1,10 @@
 import { normalizePageQuery, toPaginatedResult } from './pagination';
 
 describe('pagination helpers', () => {
-  it('defaults to page 1 and pageSize 20', () => {
+  it('defaults to page 1 and pageSize 10', () => {
     expect(normalizePageQuery()).toEqual({
       page: 1,
-      pageSize: 20,
+      pageSize: 10,
       offset: 0,
     });
   });

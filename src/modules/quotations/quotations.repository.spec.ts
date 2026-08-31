@@ -1,0 +1,217 @@
+import { NotFoundException } from '@nestjs/common';
+
+import { WorkflowTransitionError } from '../../common/exceptions';
+import { QuotationsRepository } from './quotations.repository';
+
+const TENANT_ID = '22222222-2222-2222-2222-222222222222';
+const QUOTE_ID = '44444444-4444-4444-4444-444444444444';
+
+/** Wires a fake `update().set().where().returning()` chain. */
+const makeUpdateChain = (
+  onWhere: (w: unknown) => void,
+  returning: unknown[],
+) => {
+  const chain: Record<string, jest.Mock> = {};
+  chain.set = jest.fn(() => chain);
+  chain.where = jest.fn((w: unknown) => {
+    onWhere(w);
+    return chain;
+  });
+  chain.returning = jest.fn(() => Promise.resolve(returning));
+  return chain;
+};
+
+/** Wires a fake `select().from().where().limit()` chain, for the
+ * exists-check the CAS miss path runs. */
+const makeSelectChain = (rows: unknown[]) => {
+  const chain: Record<string, jest.Mock> = {};
+  chain.from = jest.fn(() => chain);
+  chain.where = jest.fn(() => chain);
+  chain.limit = jest.fn(() => Promise.resolve(rows));
+  return chain;
+};
+
+describe('QuotationsRepository.updateStatus — compare-and-swap', () => {
+  it('includes the expected-status equality in the update WHERE clause', async () => {
+    let where: unknown;
+    const updateChain = makeUpdateChain(
+      (w) => (where = w),
+      [{ id: QUOTE_ID, status: 'PENDING_APPROVAL' }],
+    );
+    const update = jest.fn(() => updateChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ update }),
+    );
+    const repo = new QuotationsRepository({ withTenant } as never);
+
+    await repo.updateStatus(TENANT_ID, QUOTE_ID, 'DRAFT', 'PENDING_APPROVAL');
+
+    expect(where).toBeDefined();
+  });
+
+  it('throws WorkflowTransitionError (409) when the row exists but is no longer in the expected status', async () => {
+    const updateChain = makeUpdateChain(() => {}, []);
+    const update = jest.fn(() => updateChain);
+    const selectChain = makeSelectChain([{ id: QUOTE_ID }]);
+    const select = jest.fn(() => selectChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ update, select }),
+    );
+    const repo = new QuotationsRepository({ withTenant } as never);
+
+    await expect(
+      repo.updateStatus(TENANT_ID, QUOTE_ID, 'DRAFT', 'PENDING_APPROVAL'),
+    ).rejects.toBeInstanceOf(WorkflowTransitionError);
+  });
+
+  it('throws NotFoundException when the row does not exist at all', async () => {
+    const updateChain = makeUpdateChain(() => {}, []);
+    const update = jest.fn(() => updateChain);
+    const selectChain = makeSelectChain([]);
+    const select = jest.fn(() => selectChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ update, select }),
+    );
+    const repo = new QuotationsRepository({ withTenant } as never);
+
+    await expect(
+      repo.updateStatus(TENANT_ID, QUOTE_ID, 'DRAFT', 'PENDING_APPROVAL'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('QuotationsRepository.findByIdForDocument — joined customer/project names', () => {
+  it('joins customers and projects and returns the joined row', async () => {
+    const joinedRow = {
+      id: QUOTE_ID,
+      quoteNumber: 'QTN-2026-ABCD1234',
+      customerName: 'Acme',
+      projectName: 'Bole Tower',
+    };
+    const leftJoins: Array<{ table: unknown; condition: unknown }> = [];
+    const chain: Record<string, jest.Mock> = {};
+    chain.from = jest.fn(() => chain);
+    chain.leftJoin = jest.fn((table: unknown, condition: unknown) => {
+      leftJoins.push({ table, condition });
+      return chain;
+    });
+    chain.where = jest.fn(() => chain);
+    chain.limit = jest.fn(() => Promise.resolve([joinedRow]));
+    const select = jest.fn(() => chain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new QuotationsRepository({ withTenant } as never);
+
+    const result = await repo.findByIdForDocument(TENANT_ID, QUOTE_ID);
+
+    expect(result).toEqual(joinedRow);
+    // Two leftJoins: customers, then projects — each with a real ON
+    // condition passed (not a bare table with an implicit/missing join
+    // predicate, which drizzle would otherwise happily accept as a cross join).
+    expect(leftJoins).toHaveLength(2);
+    for (const { condition } of leftJoins) {
+      expect(condition).toBeDefined();
+    }
+  });
+
+  it('returns null when no matching row exists', async () => {
+    const chain: Record<string, jest.Mock> = {};
+    chain.from = jest.fn(() => chain);
+    chain.leftJoin = jest.fn(() => chain);
+    chain.where = jest.fn(() => chain);
+    chain.limit = jest.fn(() => Promise.resolve([]));
+    const select = jest.fn(() => chain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new QuotationsRepository({ withTenant } as never);
+
+    await expect(
+      repo.findByIdForDocument(TENANT_ID, QUOTE_ID),
+    ).resolves.toBeNull();
+  });
+});
+
+describe('QuotationsRepository.create — project stage auto-advance', () => {
+  const PROJECT_ID = '55555555-5555-5555-5555-555555555555';
+  const insertedQuote = {
+    id: QUOTE_ID,
+    projectId: PROJECT_ID,
+    status: 'DRAFT',
+  };
+
+  /** insert().values().returning() + the select/update chains
+   * autoAdvanceProject drives, all on one fake tx. */
+  const makeTx = (projectRows: unknown[]) => {
+    const insertChain: Record<string, jest.Mock> = {};
+    insertChain.values = jest.fn(() => insertChain);
+    insertChain.returning = jest.fn(() => Promise.resolve([insertedQuote]));
+
+    const selectChain: Record<string, jest.Mock> = {};
+    selectChain.from = jest.fn(() => selectChain);
+    selectChain.where = jest.fn(() => selectChain);
+    selectChain.limit = jest.fn(() => Promise.resolve(projectRows));
+
+    const setValues: unknown[] = [];
+    const updateChain: Record<string, jest.Mock> = {};
+    updateChain.set = jest.fn((v: unknown) => {
+      setValues.push(v);
+      return updateChain;
+    });
+    updateChain.where = jest.fn(() => Promise.resolve([]));
+
+    const update = jest.fn(() => updateChain);
+    const tx = {
+      insert: jest.fn(() => insertChain),
+      select: jest.fn(() => selectChain),
+      update,
+    };
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (t: unknown) => Promise<unknown>) => fn(tx),
+    );
+    return { withTenant, update, setValues };
+  };
+
+  it('advances the project to QUOTATION inside the insert transaction', async () => {
+    const { withTenant, update, setValues } = makeTx([{ status: 'LEAD' }]);
+    const repo = new QuotationsRepository({ withTenant } as never);
+
+    await expect(
+      repo.create(TENANT_ID, { projectId: PROJECT_ID } as never),
+    ).resolves.toEqual(insertedQuote);
+
+    // One withTenant call => insert and stage move share a transaction, so a
+    // quotation can never commit next to a project that failed to advance.
+    expect(withTenant).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(setValues[0]).toMatchObject({ status: 'QUOTATION' });
+  });
+
+  it('still returns the quotation when the stage cannot move (CANCELLED project)', async () => {
+    const { withTenant, update } = makeTx([{ status: 'CANCELLED' }]);
+    const repo = new QuotationsRepository({ withTenant } as never);
+
+    await expect(
+      repo.create(TENANT_ID, { projectId: PROJECT_ID } as never),
+    ).resolves.toEqual(insertedQuote);
+
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('still returns the quotation when the project is already past QUOTATION', async () => {
+    const { withTenant, update } = makeTx([{ status: 'CONTRACT' }]);
+    const repo = new QuotationsRepository({ withTenant } as never);
+
+    await expect(
+      repo.create(TENANT_ID, { projectId: PROJECT_ID } as never),
+    ).resolves.toEqual(insertedQuote);
+
+    expect(update).not.toHaveBeenCalled();
+  });
+});

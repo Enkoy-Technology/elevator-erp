@@ -3,8 +3,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, count, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getTableColumns, isNull } from 'drizzle-orm';
 
+import { todayIso } from '../../common/business-time';
 import {
   normalizePageQuery,
   toPaginatedResult,
@@ -13,6 +14,7 @@ import {
 import {
   assets,
   breakdowns,
+  customers,
   maintenanceContracts,
   serviceVisits,
 } from '../../database/schema';
@@ -22,15 +24,32 @@ import type {
   CreateBreakdownDto,
   CreateMaintenanceContractDto,
   LogServiceVisitDto,
+  MaintenanceContractStatus,
   UpdateBreakdownDto,
   UpdateMaintenanceContractDto,
 } from './dto/maintenance.dto';
-import { nextServiceDateAfter, toIsoDate } from './recurrence';
+import { nextServiceDateAfter } from './recurrence';
 
 export type MaintenanceContractRecord =
   typeof maintenanceContracts.$inferSelect;
 export type ServiceVisitRecord = typeof serviceVisits.$inferSelect;
 export type BreakdownRecord = typeof breakdowns.$inferSelect;
+
+/** `streamAllContracts()`'s row shape: both FKs are replaced (not
+ * appended) with their joined display names — see REC 5. Mirrors
+ * BreakdownExportRow below: contracts have the same assetId+customerId FK
+ * shape as breakdowns, so both get the same treatment. */
+export type MaintenanceContractExportRow = Omit<
+  MaintenanceContractRecord,
+  'assetId' | 'customerId'
+> & { assetName: string | null; customerName: string | null };
+
+/** `streamAllBreakdowns()`'s row shape: both FKs are replaced (not
+ * appended) with their joined display names — see REC 5. */
+export type BreakdownExportRow = Omit<
+  BreakdownRecord,
+  'assetId' | 'customerId'
+> & { assetName: string | null; customerName: string | null };
 
 @Injectable()
 export class MaintenanceRepository {
@@ -38,7 +57,11 @@ export class MaintenanceRepository {
 
   async listContracts(
     tenantId: string,
-    options: { page?: string; pageSize?: string; status?: string },
+    options: {
+      page?: string;
+      pageSize?: string;
+      status?: MaintenanceContractStatus;
+    },
   ): Promise<PaginatedResult<MaintenanceContractRecord>> {
     const { page, pageSize, offset } = normalizePageQuery(
       options.page,
@@ -47,12 +70,7 @@ export class MaintenanceRepository {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       const filters = [isNull(maintenanceContracts.deletedAt)];
       if (options.status) {
-        filters.push(
-          eq(
-            maintenanceContracts.status,
-            options.status as MaintenanceContractRecord['status'],
-          ),
-        );
+        filters.push(eq(maintenanceContracts.status, options.status));
       }
       const where = and(...filters);
       const [totalRow] = await tx
@@ -73,6 +91,75 @@ export class MaintenanceRepository {
         pageSize,
       );
     });
+  }
+
+  /**
+   * Streams every contract matching the same filters `listContracts()`
+   * honors, for bulk export, in batches of BATCH_SIZE.
+   *
+   * ponytail: offset batching, ties broken by the `id` tiebreaker below so
+   * equal `nextServiceAt` values (e.g. a batch of monthly contracts all due
+   * the same day) no longer duplicate or skip rows across batch boundaries
+   * — concurrent inserts/deletes can still shift the offset window;
+   * acceptable for ad-hoc admin downloads, switch to keyset cursor before
+   * this feeds accounting reconciliation. Perf ceiling: keyset if
+   * large-tenant exports time out.
+   *
+   * Tenant-scoping subtlety: `app.tenant_id` is a transaction-local GUC
+   * (set by `withTenant`), so each batch opens its own `withTenant`
+   * transaction rather than reusing one `tx` across the whole generator.
+   */
+  async *streamAllContracts(
+    tenantId: string,
+    options: { status?: MaintenanceContractStatus },
+  ): AsyncGenerator<MaintenanceContractExportRow> {
+    const BATCH_SIZE = 500;
+    let offset = 0;
+    const {
+      assetId: _assetId,
+      customerId: _customerId,
+      ...contractColumns
+    } = getTableColumns(maintenanceContracts);
+    for (;;) {
+      const batch = await this.tenantDb.withTenant(tenantId, (tx) => {
+        const filters = [isNull(maintenanceContracts.deletedAt)];
+        if (options.status) {
+          filters.push(eq(maintenanceContracts.status, options.status));
+        }
+        return tx
+          .select({
+            ...contractColumns,
+            assetName: assets.name,
+            customerName: customers.name,
+          })
+          .from(maintenanceContracts)
+          .leftJoin(
+            assets,
+            and(
+              eq(maintenanceContracts.tenantId, assets.tenantId),
+              eq(maintenanceContracts.assetId, assets.id),
+            ),
+          )
+          .leftJoin(
+            customers,
+            and(
+              eq(maintenanceContracts.tenantId, customers.tenantId),
+              eq(maintenanceContracts.customerId, customers.id),
+            ),
+          )
+          .where(and(...filters))
+          .orderBy(maintenanceContracts.nextServiceAt, asc(maintenanceContracts.id))
+          .limit(BATCH_SIZE)
+          .offset(offset);
+      });
+      for (const row of batch) {
+        yield row;
+      }
+      if (batch.length < BATCH_SIZE) {
+        return;
+      }
+      offset += BATCH_SIZE;
+    }
   }
 
   async createContract(
@@ -176,7 +263,7 @@ export class MaintenanceRepository {
           'Only active contracts can log service visits',
         );
       }
-      const visitedDay = toIsoDate();
+      const visitedDay = todayIso();
       const nextServiceAt = nextServiceDateAfter(
         contract.nextServiceAt,
         visitedDay,
@@ -289,6 +376,72 @@ export class MaintenanceRepository {
         pageSize,
       );
     });
+  }
+
+  /**
+   * Streams every breakdown matching the same filters `listBreakdowns()`
+   * honors, for bulk export, in batches of BATCH_SIZE.
+   *
+   * ponytail: offset batching, ties broken by the `id` tiebreaker below so
+   * equal `createdAt` values (e.g. a bulk-logged incident batch) no longer
+   * duplicate or skip rows across batch boundaries — concurrent
+   * inserts/deletes can still shift the offset window; acceptable for
+   * ad-hoc admin downloads, switch to keyset cursor before this feeds
+   * accounting reconciliation. Perf ceiling: keyset if large-tenant exports
+   * time out.
+   *
+   * Tenant-scoping subtlety: `app.tenant_id` is a transaction-local GUC
+   * (set by `withTenant`), so each batch opens its own `withTenant`
+   * transaction rather than reusing one `tx` across the whole generator.
+   */
+  async *streamAllBreakdowns(
+    tenantId: string,
+    options: { status?: BreakdownStatus },
+  ): AsyncGenerator<BreakdownExportRow> {
+    const BATCH_SIZE = 500;
+    let offset = 0;
+    const { assetId: _assetId, customerId: _customerId, ...breakdownColumns } =
+      getTableColumns(breakdowns);
+    for (;;) {
+      const batch = await this.tenantDb.withTenant(tenantId, (tx) => {
+        const filters = [isNull(breakdowns.deletedAt)];
+        if (options.status) {
+          filters.push(eq(breakdowns.status, options.status));
+        }
+        return tx
+          .select({
+            ...breakdownColumns,
+            assetName: assets.name,
+            customerName: customers.name,
+          })
+          .from(breakdowns)
+          .leftJoin(
+            assets,
+            and(
+              eq(breakdowns.tenantId, assets.tenantId),
+              eq(breakdowns.assetId, assets.id),
+            ),
+          )
+          .leftJoin(
+            customers,
+            and(
+              eq(breakdowns.tenantId, customers.tenantId),
+              eq(breakdowns.customerId, customers.id),
+            ),
+          )
+          .where(and(...filters))
+          .orderBy(desc(breakdowns.createdAt), asc(breakdowns.id))
+          .limit(BATCH_SIZE)
+          .offset(offset);
+      });
+      for (const row of batch) {
+        yield row;
+      }
+      if (batch.length < BATCH_SIZE) {
+        return;
+      }
+      offset += BATCH_SIZE;
+    }
   }
 
   async createBreakdown(

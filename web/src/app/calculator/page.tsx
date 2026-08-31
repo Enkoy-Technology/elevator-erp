@@ -6,15 +6,19 @@ import { FormEvent, useEffect, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Sidebar } from '@/components/sidebar';
+import { formatNumber } from '@/lib/money';
 import {
   ApiError,
   calculateSpecs,
+  PRODUCT_TYPES,
+  PRODUCT_TYPE_LABELS,
   type CalcInputPayload,
   type CalcResult,
   getAccessToken,
 } from '@/lib/api';
 
 const WORKED_EXAMPLE: CalcInputPayload = {
+  productType: 'PASSENGER',
   capacityKg: 1000,
   stops: 12,
   travelHeightM: 45,
@@ -24,7 +28,10 @@ const WORKED_EXAMPLE: CalcInputPayload = {
   doorWidthMm: 900,
   buildingUsage: 'COMMERCIAL',
   marginPercent: 25,
-  taxPercent: 5,
+  // Statutory VAT. The §4.2.3 worked example uses 5%, but quotations always
+  // recompute at the statutory rate from the rates table, so defaulting to 5
+  // here made the same machine read two different totals on two screens.
+  taxPercent: 15,
 };
 
 const field =
@@ -92,6 +99,32 @@ export default function CalculatorPage() {
             onSubmit={(event) => void onSubmit(event)}
             className="h-fit space-y-4 rounded-2xl border border-slate-200 bg-white p-6"
           >
+            <label className="block">
+              <span className={label}>Product</span>
+              <select
+                className={field}
+                value={form.productType}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    productType: e.target
+                      .value as CalcInputPayload['productType'],
+                  }))
+                }
+              >
+                {PRODUCT_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {PRODUCT_TYPE_LABELS[t]}
+                  </option>
+                ))}
+              </select>
+              {form.productType !== 'PASSENGER' && (
+                <span className="mt-1 block text-xs text-slate-500">
+                  Flat price — stops and capacity do not change it.
+                </span>
+              )}
+            </label>
+
             <div className="grid grid-cols-2 gap-3">
               <label>
                 <span className={label}>Capacity (kg)</span>
@@ -180,6 +213,10 @@ export default function CalculatorPage() {
                   onChange={setNumber('taxPercent')}
                   required
                 />
+                <span className="mt-1 block text-xs text-slate-500">
+                  Scenario only — a quotation always uses the statutory VAT
+                  rate from Settings.
+                </span>
               </label>
             </div>
 
@@ -273,7 +310,8 @@ export default function CalculatorPage() {
             {!result && (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-16 text-center text-sm text-slate-500">
                 Enter parameters and calculate to see technical specs and
-                pricing. Defaults match the §4.2.4 worked example.
+                pricing. Defaults match the §4.2.3 worked example, at the
+                statutory 15% VAT.
               </div>
             )}
 
@@ -285,7 +323,7 @@ export default function CalculatorPage() {
                     {formatMoney(result.pricing.totalPrice)}
                   </p>
                   <p className="mt-2 text-xs text-navy-100/60">
-                    Equipment {formatMoney(result.pricing.equipmentSubtotal)} ·
+                    List {formatMoney(result.pricing.totalBeforeMargin)} ·
                     Margin {formatMoney(result.pricing.marginAmount)} · Tax{' '}
                     {formatMoney(result.pricing.taxAmount)}
                   </p>
@@ -295,25 +333,48 @@ export default function CalculatorPage() {
                   <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
                     Technical specifications
                   </h2>
-                  <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
-                    {(
-                      [
-                        ['Persons', result.technical.capacityPersons],
-                        ['Car W×D×H (mm)', `${result.technical.carWidthMm}×${result.technical.carDepthMm}×${result.technical.carHeightMm}`],
-                        ['Shaft W×D (mm)', `${result.technical.shaftWidthMm}×${result.technical.shaftDepthMm}`],
-                        ['Pit depth (mm)', result.technical.pitDepthMm],
-                        ['Overhead (mm)', result.technical.overheadClearanceMm],
-                        ['Counterweight (kg)', result.technical.counterweightMassKg],
-                        ['Motor (kW)', result.technical.motorPowerKw],
-                        ['Guide rail', result.technical.guideRailSpec],
-                      ] as const
-                    ).map(([k, v]) => (
-                      <div key={k}>
-                        <dt className="text-xs text-slate-500">{k}</dt>
-                        <dd className="font-medium text-slate-900">{v}</dd>
-                      </div>
-                    ))}
-                  </dl>
+                  {result.technical.capacityPersons === null ? (
+                    <p className="text-sm text-slate-500">
+                      {PRODUCT_TYPE_LABELS[result.technical.productType]} is
+                      priced as a flat product — the EN 81 shaft and machine
+                      calculations apply to passenger lifts only.
+                    </p>
+                  ) : (
+                    <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
+                      {(
+                        [
+                          ['Persons', formatNumber(result.technical.capacityPersons)],
+                          [
+                            'Car W×D×H (mm)',
+                            `${formatNumber(result.technical.carWidthMm)}×${formatNumber(result.technical.carDepthMm)}×${formatNumber(result.technical.carHeightMm)}`,
+                          ],
+                          [
+                            'Shaft W×D (mm)',
+                            `${formatNumber(result.technical.shaftWidthMm)}×${formatNumber(result.technical.shaftDepthMm)}`,
+                          ],
+                          ['Pit depth (mm)', formatNumber(result.technical.pitDepthMm)],
+                          ['Overhead (mm)', formatNumber(result.technical.overheadClearanceMm)],
+                          [
+                            'Counterweight (kg)',
+                            formatNumber(result.technical.counterweightMassKg, { decimals: 2 }),
+                          ],
+                          ['Motor (kW)', formatNumber(result.technical.motorPowerKw, { decimals: 2 })],
+                          ['Guide rail', result.technical.guideRailSpec ?? '—'],
+                          [
+                            'Machine room W×D×H (mm)',
+                            result.technical.machineRoomWidthMm === null
+                              ? 'None (MRL)'
+                              : `${formatNumber(result.technical.machineRoomWidthMm)}×${formatNumber(result.technical.machineRoomDepthMm)}×${formatNumber(result.technical.machineRoomHeightMm)}`,
+                          ],
+                        ] as const
+                      ).map(([k, v]) => (
+                        <div key={k}>
+                          <dt className="text-xs text-slate-500">{k}</dt>
+                          <dd className="font-medium text-slate-900">{v}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
                 </section>
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-6">
@@ -323,12 +384,12 @@ export default function CalculatorPage() {
                   <dl className="space-y-2 text-sm">
                     {(
                       [
-                        ['Base cost', result.pricing.baseCost],
-                        ['Stop cost', result.pricing.stopCost],
-                        ['Speed premium', result.pricing.speedPremium],
-                        ['Door premium', result.pricing.doorPremium],
-                        ['Installation', result.pricing.installationCost],
-                        ['Freight', result.pricing.freightCost],
+                        ['Base price', result.pricing.basePrice],
+                        ['Additional stops', result.pricing.stopsAdjustment],
+                        [
+                          'Additional capacity',
+                          result.pricing.capacityAdjustment,
+                        ],
                         ['Before margin', result.pricing.totalBeforeMargin],
                         ['Margin', result.pricing.marginAmount],
                         ['Tax', result.pricing.taxAmount],

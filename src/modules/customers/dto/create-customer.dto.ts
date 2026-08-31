@@ -1,13 +1,17 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
+  IsBoolean,
   IsEmail,
   IsEnum,
   IsOptional,
   IsString,
   MaxLength,
   MinLength,
+  Validate,
 } from 'class-validator';
+
+import { IsEthiopianPhoneConstraint } from '../../../common/dto/phone';
 
 export const CUSTOMER_TYPES = [
   'RESIDENTIAL',
@@ -33,10 +37,16 @@ export class CreateCustomerDto {
   @IsEmail()
   email?: string;
 
-  @ApiPropertyOptional({ example: '+251911000000' })
+  @ApiPropertyOptional({ example: '+251949922604' })
   @IsOptional()
   @IsString()
   @MaxLength(32)
+  // Validated at the point it's WRITTEN (phase-5 review I4) — this is the
+  // same phone column the maintenance/payment reminder crons read
+  // (customers.phone), so a malformed value stored here is a reminder that
+  // silently never arrives, forever, with only a masked ERROR log line to
+  // show for it.
+  @Validate(IsEthiopianPhoneConstraint)
   phone?: string;
 
   @ApiPropertyOptional()
@@ -97,4 +107,12 @@ export class CreateCustomerDto {
   @IsString()
   @MaxLength(2000)
   notes?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Set true once the customer has given recorded consent to receive SMS (ECA Directive 832/2021). Set false to revoke. The server stamps the current time — never a client-supplied timestamp.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  smsConsentGiven?: boolean;
 }

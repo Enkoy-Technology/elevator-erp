@@ -25,6 +25,18 @@ export const users = pgTable(
     passwordHash: text('password_hash').notNull(),
     fullName: text('full_name').notNull(),
     phone: text('phone'),
+    /**
+     * When consent to receive transactional SMS was captured — null means no
+     * consent on file. Technicians are staff, but the same ECA Directive
+     * 832/2021 consent rule protects them too (see customers.ts's identical
+     * column for the full citation). Server-set only, never a client-supplied
+     * timestamp.
+     */
+    smsConsentAt: timestamp('sms_consent_at', { withTimezone: true }),
+    /** Same revoke-without-erasing-history shape as customers.ts's identical column — see its doc comment for the full reasoning (phase-5 review I10). */
+    smsConsentRevokedAt: timestamp('sms_consent_revoked_at', {
+      withTimezone: true,
+    }),
     role: userRoleEnum('role').notNull(),
     isActive: boolean('is_active').notNull().default(true),
     refreshTokenHash: text('refresh_token_hash'),

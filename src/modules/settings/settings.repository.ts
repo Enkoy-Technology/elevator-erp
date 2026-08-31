@@ -1,11 +1,52 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 
-import { tenantBranding } from '../../database/schema';
+import { tenantBranding, tenants } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import type { UpdateSettingsDto } from './dto/update-settings.dto';
 
-export type SettingsRecord = typeof tenantBranding.$inferSelect;
+export type SettingsRecord = typeof tenantBranding.$inferSelect & {
+  /** Company name — the letterhead on every branded document. */
+  name: string;
+  fiscalYearStart: string;
+  maintenanceReminderDays: number;
+  paymentReminderOffsetDays: number[];
+  /** Last-run result of the nightly balance reconciliation (task-2 §2.5) —
+   * both null until the job has ever run. Read-only: never part of
+   * UpdateSettingsDto, only BalanceReconciliationService writes these. */
+  balanceReconciliationLastRunAt: Date | null;
+  balanceReconciliationMismatchCount: number | null;
+  /** Last-run result of each reminder cron's consent gate (task-3 §3.4) —
+   * both pairs null until that cron has ever run once. Read-only: never
+   * part of UpdateSettingsDto, only MaintenanceReminderService/
+   * PaymentReminderService write these. */
+  maintenanceReminderConsentSkippedLastRunAt: Date | null;
+  maintenanceReminderConsentSkippedCount: number | null;
+  paymentReminderConsentSkippedLastRunAt: Date | null;
+  paymentReminderConsentSkippedCount: number | null;
+  /** Same run, the OTHER reason a reminder silently never arrives (phase-5
+   * review I4) — a stored phone number that fails normalizeEthiopianPhone.
+   * Shares the *ConsentSkippedLastRunAt timestamps above. Read-only. */
+  maintenanceReminderInvalidPhoneSkippedCount: number | null;
+  paymentReminderInvalidPhoneSkippedCount: number | null;
+};
+
+const TENANT_SETTINGS_COLUMNS = {
+  name: tenants.name,
+  fiscalYearStart: tenants.fiscalYearStart,
+  maintenanceReminderDays: tenants.maintenanceReminderDays,
+  paymentReminderOffsetDays: tenants.paymentReminderOffsetDays,
+  balanceReconciliationLastRunAt: tenants.balanceReconciliationLastRunAt,
+  balanceReconciliationMismatchCount: tenants.balanceReconciliationMismatchCount,
+  maintenanceReminderConsentSkippedLastRunAt:
+    tenants.maintenanceReminderConsentSkippedLastRunAt,
+  maintenanceReminderConsentSkippedCount: tenants.maintenanceReminderConsentSkippedCount,
+  paymentReminderConsentSkippedLastRunAt: tenants.paymentReminderConsentSkippedLastRunAt,
+  paymentReminderConsentSkippedCount: tenants.paymentReminderConsentSkippedCount,
+  maintenanceReminderInvalidPhoneSkippedCount:
+    tenants.maintenanceReminderInvalidPhoneSkippedCount,
+  paymentReminderInvalidPhoneSkippedCount: tenants.paymentReminderInvalidPhoneSkippedCount,
+};
 
 @Injectable()
 export class SettingsRepository {
@@ -18,7 +59,15 @@ export class SettingsRepository {
       if (!row) {
         throw new NotFoundException('Tenant branding not found');
       }
-      return row;
+      const [tenant] = await tx
+        .select(TENANT_SETTINGS_COLUMNS)
+        .from(tenants)
+        .where(eq(tenants.id, tenantId))
+        .limit(1);
+      if (!tenant) {
+        throw new NotFoundException('Tenant not found');
+      }
+      return { ...row, ...tenant };
     });
   }
 
@@ -36,6 +85,7 @@ export class SettingsRepository {
           ...(dto.secondaryColorHex !== undefined
             ? { secondaryColorHex: dto.secondaryColorHex }
             : {}),
+          ...(dto.slogan !== undefined ? { slogan: dto.slogan } : {}),
           ...(dto.logoUrl !== undefined ? { logoUrl: dto.logoUrl } : {}),
           ...(dto.stampUrl !== undefined ? { stampUrl: dto.stampUrl } : {}),
           ...(dto.officialAddress !== undefined
@@ -57,7 +107,43 @@ export class SettingsRepository {
       if (!row) {
         throw new NotFoundException('Tenant branding not found');
       }
-      return row;
+
+      // Only touch `tenants` (and its updatedAt, which subscription/billing
+      // flows also read) when this PATCH actually changes something on it —
+      // a branding-only update has no business bumping it.
+      const touchesTenant =
+        dto.name !== undefined ||
+        dto.fiscalYearStart !== undefined ||
+        dto.maintenanceReminderDays !== undefined ||
+        dto.paymentReminderOffsetDays !== undefined;
+      const [tenant] = touchesTenant
+        ? await tx
+            .update(tenants)
+            .set({
+              ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+              ...(dto.fiscalYearStart !== undefined
+                ? { fiscalYearStart: dto.fiscalYearStart }
+                : {}),
+              ...(dto.maintenanceReminderDays !== undefined
+                ? { maintenanceReminderDays: dto.maintenanceReminderDays }
+                : {}),
+              ...(dto.paymentReminderOffsetDays !== undefined
+                ? { paymentReminderOffsetDays: dto.paymentReminderOffsetDays }
+                : {}),
+              updatedAt: new Date(),
+            })
+            .where(eq(tenants.id, tenantId))
+            .returning(TENANT_SETTINGS_COLUMNS)
+        : await tx
+            .select(TENANT_SETTINGS_COLUMNS)
+            .from(tenants)
+            .where(eq(tenants.id, tenantId))
+            .limit(1);
+      if (!tenant) {
+        throw new NotFoundException('Tenant not found');
+      }
+
+      return { ...row, ...tenant };
     });
   }
 }

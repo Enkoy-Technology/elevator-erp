@@ -1,3 +1,13 @@
+export { CustomerInUseError } from './customer-in-use.error';
 export { DomainError } from './domain.error';
+export { IdempotencyKeyConflictError } from './idempotency-key-conflict.error';
+export { IdempotencyKeyInProgressError } from './idempotency-key-in-progress.error';
+export { InvalidPhoneNumberError } from './invalid-phone-number.error';
+export { InvalidRateTransitionError } from './invalid-rate-transition.error';
+export { LastAdminError } from './last-admin.error';
+export { RateNotFoundError } from './rate-not-found.error';
+export { RateVersionConflictError } from './rate-version-conflict.error';
+export { SmsConsentRequiredError } from './sms-consent-required.error';
+export { TemplateNotImplementedError } from './template-not-implemented.error';
 export { TenantIsolationError } from './tenant-isolation.error';
 export { WorkflowTransitionError } from './workflow-transition.error';

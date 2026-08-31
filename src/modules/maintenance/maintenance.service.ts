@@ -1,27 +1,48 @@
 import { Injectable } from '@nestjs/common';
 
+import { MaintenanceReminderService } from '../reminders/maintenance-reminders.service';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type {
   BreakdownStatus,
   CreateBreakdownDto,
   CreateMaintenanceContractDto,
   LogServiceVisitDto,
+  MaintenanceContractStatus,
   UpdateBreakdownDto,
   UpdateMaintenanceContractDto,
 } from './dto/maintenance.dto';
-import { MaintenanceRepository } from './maintenance.repository';
+import {
+  MaintenanceRepository,
+  type BreakdownExportRow,
+  type MaintenanceContractExportRow,
+} from './maintenance.repository';
 
 @Injectable()
 export class MaintenanceService {
   constructor(
     private readonly maintenanceRepository: MaintenanceRepository,
+    private readonly maintenanceReminderService: MaintenanceReminderService,
   ) {}
 
   listContracts(
     user: AuthenticatedUser,
-    options: { page?: string; pageSize?: string; status?: string },
+    options: {
+      page?: string;
+      pageSize?: string;
+      status?: MaintenanceContractStatus;
+    },
   ) {
     return this.maintenanceRepository.listContracts(user.tenantId, options);
+  }
+
+  streamAllContracts(
+    user: AuthenticatedUser,
+    options: { status?: MaintenanceContractStatus },
+  ): AsyncGenerator<MaintenanceContractExportRow> {
+    return this.maintenanceRepository.streamAllContracts(
+      user.tenantId,
+      options,
+    );
   }
 
   createContract(user: AuthenticatedUser, dto: CreateMaintenanceContractDto) {
@@ -76,19 +97,57 @@ export class MaintenanceService {
     return this.maintenanceRepository.listBreakdowns(user.tenantId, options);
   }
 
-  createBreakdown(user: AuthenticatedUser, dto: CreateBreakdownDto) {
-    return this.maintenanceRepository.createBreakdown(
+  streamAllBreakdowns(
+    user: AuthenticatedUser,
+    options: { status?: BreakdownStatus },
+  ): AsyncGenerator<BreakdownExportRow> {
+    return this.maintenanceRepository.streamAllBreakdowns(
+      user.tenantId,
+      options,
+    );
+  }
+
+  async createBreakdown(user: AuthenticatedUser, dto: CreateBreakdownDto) {
+    const breakdown = await this.maintenanceRepository.createBreakdown(
       user.tenantId,
       user.userId,
       dto,
     );
+    await this.notifyIfAssigned(user.tenantId, breakdown);
+    return breakdown;
   }
 
-  updateBreakdown(
+  async updateBreakdown(
     user: AuthenticatedUser,
     id: string,
     dto: UpdateBreakdownDto,
   ) {
-    return this.maintenanceRepository.updateBreakdown(user.tenantId, id, dto);
+    const breakdown = await this.maintenanceRepository.updateBreakdown(
+      user.tenantId,
+      id,
+      dto,
+    );
+    await this.notifyIfAssigned(user.tenantId, breakdown);
+    return breakdown;
+  }
+
+  /**
+   * Immediate (not cron) reminder — task-2 brief §2.2. Fired after EVERY
+   * create/update that leaves the breakdown assigned, not only ones that
+   * actually change the assignee: the outbox's own dedupeKey
+   * (`breakdown:<id>:<assigneeId>`) is what makes that safe, so this never
+   * needs to diff old vs new itself. notifyBreakdownAssigned never throws,
+   * so a reminder failure can never fail the write that already committed.
+   */
+  private async notifyIfAssigned(
+    tenantId: string,
+    breakdown: { id: string; assignedUserId: string | null },
+  ): Promise<void> {
+    if (breakdown.assignedUserId) {
+      await this.maintenanceReminderService.notifyBreakdownAssigned(
+        tenantId,
+        breakdown.id,
+      );
+    }
   }
 }
