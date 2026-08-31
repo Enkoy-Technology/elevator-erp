@@ -195,7 +195,21 @@ export const logout = async (): Promise<void> => {
 export const getProfile = (): Promise<AuthProfile> =>
   apiFetch<AuthProfile>('/auth/me');
 
+export const PRODUCT_TYPES = [
+  'PASSENGER',
+  'CAR_PLATFORM_LIFT',
+  'ESCALATOR',
+] as const;
+export type ProductType = (typeof PRODUCT_TYPES)[number];
+
+export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
+  PASSENGER: 'Passenger / hospital elevator',
+  CAR_PLATFORM_LIFT: 'Car platform lift',
+  ESCALATOR: 'Escalator',
+};
+
 export interface CalcInputPayload {
+  productType: ProductType;
   capacityKg: number;
   stops: number;
   travelHeightM: number;
@@ -209,32 +223,29 @@ export interface CalcInputPayload {
 }
 
 export interface CalcResult {
+  // Every technical field except productType is null for non-PASSENGER
+  // products — §4.1 is EN 81 lift geometry and an escalator has none of it.
   technical: {
-    capacityPersons: number;
-    carWidthMm: number;
-    carDepthMm: number;
-    carHeightMm: number;
-    shaftWidthMm: number;
-    shaftDepthMm: number;
-    pitDepthMm: number;
-    overheadClearanceMm: number;
-    counterweightMassKg: string;
-    motorPowerKw: string;
-    guideRailSpec: string;
+    productType: ProductType;
+    capacityPersons: number | null;
+    carWidthMm: number | null;
+    carDepthMm: number | null;
+    carHeightMm: number | null;
+    shaftWidthMm: number | null;
+    shaftDepthMm: number | null;
+    pitDepthMm: number | null;
+    overheadClearanceMm: number | null;
+    counterweightMassKg: string | null;
+    motorPowerKw: string | null;
+    guideRailSpec: string | null;
     machineRoomWidthMm: number | null;
     machineRoomDepthMm: number | null;
     machineRoomHeightMm: number | null;
   };
   pricing: {
-    qBase: string;
-    baseCost: string;
-    stopCost: string;
-    capacityMultiplier: string;
-    speedPremium: string;
-    doorPremium: string;
-    installationCost: string;
-    freightCost: string;
-    equipmentSubtotal: string;
+    basePrice: string;
+    stopsAdjustment: string;
+    capacityAdjustment: string;
     totalBeforeMargin: string;
     marginAmount: string;
     subtotalWithMargin: string;
@@ -534,6 +545,62 @@ export const updateEmployee = (
     body: JSON.stringify(payload),
   });
 
+/** One sheet row's verdict from POST /employees/import. */
+export interface EmployeeImportRow {
+  /** 1-based row in the uploaded sheet, so a person can find it and fix it. */
+  rowNumber: number;
+  fullName: string | null;
+  email: string | null;
+  /** As written in the sheet, before mapping to an EmployeeRole. */
+  role: string | null;
+  status: 'READY' | 'CREATED' | 'SKIPPED_DUPLICATE' | 'ERROR';
+  message?: string;
+  /** Server-generated, returned ONCE on commit for CREATED rows. Never store or log it. */
+  temporaryPassword?: string;
+}
+
+export interface EmployeeImportResult {
+  dryRun: boolean;
+  totalRows: number;
+  /** Always 0 on a dry run. */
+  created: number;
+  rows: EmployeeImportRow[];
+}
+
+/**
+ * Upload a staff spreadsheet. Default is a DRY RUN: the server validates and
+ * reports per row, writing nothing. `commit` writes, in one transaction.
+ *
+ * apiFetch can't be used here — it forces `Content-Type: application/json`,
+ * and a multipart body must be left alone so the browser can set the boundary.
+ * Same 401-refresh-and-retry dance as fetchDocument; the FormData is rebuilt
+ * on the retry rather than replayed.
+ */
+export const importEmployees = async (
+  file: File,
+  commit = false,
+  retryOn401 = true,
+): Promise<EmployeeImportResult> => {
+  const body = new FormData();
+  body.append('file', file);
+  if (commit) {
+    body.append('commit', 'true');
+  }
+  const token = getAccessToken();
+  const response = await fetch(`${API_URL}/employees/import`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body,
+  });
+  if (response.status === 401 && retryOn401 && (await refreshTokens())) {
+    return importEmployees(file, commit, false);
+  }
+  if (!response.ok) {
+    throw new ApiError(await parseProblem(response));
+  }
+  return (await response.json()) as EmployeeImportResult;
+};
+
 export const ASSET_CATEGORIES = [
   'ELEVATOR',
   'ESCALATOR',
@@ -775,6 +842,21 @@ export const createMaintenanceContract = (payload: {
     body: JSON.stringify(payload),
   });
 
+export const updateMaintenanceContract = (
+  id: string,
+  payload: {
+    recurrence?: MaintenanceRecurrence;
+    status?: MaintenanceContract['status'];
+    nextServiceAt?: string;
+    assignedUserId?: string | null;
+    notes?: string | null;
+  },
+): Promise<MaintenanceContract> =>
+  apiFetch<MaintenanceContract>(`/maintenance/contracts/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+
 export const logServiceVisit = (
   contractId: string,
   payload?: { notes?: string },
@@ -835,6 +917,10 @@ export type AppLocale = 'en' | 'am';
 
 export interface TenantSettings {
   tenantId: string;
+  /** Company name — the letterhead on every branded document. */
+  name: string;
+  /** Printed under the company name on every branded document. */
+  slogan: string | null;
   primaryColorHex: string;
   secondaryColorHex: string;
   logoUrl: string | null;
@@ -903,10 +989,46 @@ export interface ServiceFigures {
   upcomingServices: UpcomingService[];
 }
 
+/**
+ * The AR book on the aging report's definition of outstanding (per-invoice
+ * balance, VOID excluded) — label it "Aged Outstanding", not "Net Balance":
+ * a customer's net balance also carries unapplied cash and will differ.
+ * Money fields are 2-decimal strings; render with `formatEtb`.
+ */
+export interface FinanceFigures {
+  /** Payments received this calendar month, Addis time. Reversals net out. */
+  revenueThisMonthEtb: string;
+  outstandingTotalEtb: string;
+  /** The part of `outstandingTotalEtb` already past its due date. */
+  overdueTotalEtb: string;
+  overdueInvoiceCount: number;
+  /** Invoices with any balance left, overdue or not. */
+  outstandingInvoiceCount: number;
+  /**
+   * The same ageing buckets the receivables report shows, summed from the
+   * same balances expression — so the dashboard chart and the report can
+   * never disagree. A null dueDate is `current`, never aged.
+   */
+  agingBuckets: {
+    currentEtb: string;
+    d1_30Etb: string;
+    d31_60Etb: string;
+    d61_90Etb: string;
+    d90PlusEtb: string;
+  };
+  /**
+   * Twelve months of collections, oldest first, zero-filled, `YYYY-MM` in
+   * Addis local time. Always twelve entries so a chart never has to decide
+   * whether a gap means "no data" or "no money".
+   */
+  collectionsByMonth: { month: string; totalEtb: string }[];
+}
+
 /** Sections absent from the response are ones this role may not see. */
 export interface DashboardSummary {
   sales?: SalesFigures;
   service?: ServiceFigures;
+  finance?: FinanceFigures;
   totals?: { customers: number; assets: number; employees: number };
 }
 
@@ -916,30 +1038,33 @@ export const getDashboardSummary = (): Promise<DashboardSummary> =>
 export type DocumentFormat = 'pdf' | 'docx' | 'xlsx';
 
 /**
- * Fetch a binary document (PDF/Word/Excel) and trigger a browser download.
- * apiFetch can't be used here — it assumes a JSON body. The filename is
- * reconstructed client-side from the same `<prefix>-<number>.<ext>` scheme
- * the server uses (QuotationsController/ProformasController#document),
- * rather than parsing Content-Disposition — smaller, and the two are
- * guaranteed to agree since both come from the same source data.
+ * Fetch a binary document (PDF/Word/Excel). apiFetch can't be used here — it
+ * assumes a JSON body. Shared by download and print so the 401-refresh dance
+ * lives in one place.
  */
-const downloadDocument = async (
-  path: string,
-  filename: string,
-  retryOn401 = true,
-): Promise<void> => {
+const fetchDocument = async (path: string, retryOn401 = true): Promise<Blob> => {
   const token = getAccessToken();
   const response = await fetch(`${API_URL}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (response.status === 401 && retryOn401 && (await refreshTokens())) {
-    return downloadDocument(path, filename, false);
+    return fetchDocument(path, false);
   }
   if (!response.ok) {
     throw new ApiError(await parseProblem(response));
   }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
+  return response.blob();
+};
+
+/**
+ * Save a document to disk. The filename is reconstructed client-side from the
+ * same `<prefix>-<number>.<ext>` scheme the server uses
+ * (QuotationsController/ProformasController#document) rather than parsing
+ * Content-Disposition — smaller, and the two are guaranteed to agree since
+ * both come from the same source data.
+ */
+const downloadDocument = async (path: string, filename: string): Promise<void> => {
+  const url = URL.createObjectURL(await fetchDocument(path));
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = filename;
@@ -948,6 +1073,98 @@ const downloadDocument = async (
   anchor.remove();
   URL.revokeObjectURL(url);
 };
+
+/** Long enough for the print dialog to have taken the blob. */
+const PRINT_CLEANUP_MS = 60_000;
+
+/**
+ * Print a document instead of saving it: the same PDF the download produces,
+ * loaded into a hidden iframe and sent straight to the print dialog. Safari
+ * refuses to print a PDF inside an iframe, so fall back to opening it in a
+ * tab — and if the browser blocks that too, say so rather than doing nothing.
+ *
+ * ponytail: resolves when the dialog is handed the document, not when it
+ * closes; the caller's busy state clears a moment early. Wire `afterprint`
+ * through if that ever reads wrong.
+ */
+export const printDocument = async (path: string): Promise<void> => {
+  const url = URL.createObjectURL(await fetchDocument(path));
+  const frame = document.createElement('iframe');
+  frame.setAttribute('aria-hidden', 'true');
+  frame.style.cssText =
+    'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+  const cleanup = (): void => {
+    frame.remove();
+    URL.revokeObjectURL(url);
+  };
+  await new Promise<void>((resolve, reject) => {
+    frame.onload = () => {
+      const view = frame.contentWindow;
+      try {
+        if (!view) {
+          throw new Error('no print view');
+        }
+        view.addEventListener('afterprint', cleanup);
+        view.focus();
+        view.print();
+        // Not every browser fires afterprint; release the blob regardless.
+        window.setTimeout(cleanup, PRINT_CLEANUP_MS);
+        resolve();
+        return;
+      } catch {
+        frame.remove();
+      }
+      // The iframe refused to print (Safari): show the PDF in a tab instead.
+      window.setTimeout(() => URL.revokeObjectURL(url), PRINT_CLEANUP_MS);
+      if (window.open(url, '_blank')) {
+        resolve();
+        return;
+      }
+      reject(
+        new Error(
+          'The browser blocked the print window. Allow pop-ups for this site, or use PDF to download it.',
+        ),
+      );
+    };
+    frame.onerror = () => {
+      cleanup();
+      reject(new Error('The document could not be opened for printing.'));
+    };
+    document.body.appendChild(frame);
+    frame.src = url;
+  });
+};
+
+export const printQuotationDocument = (id: string): Promise<void> =>
+  printDocument(`/quotations/${id}/document?format=pdf`);
+
+export const printProformaDocument = (id: string): Promise<void> =>
+  printDocument(`/proformas/${id}/document?format=pdf`);
+
+export const printInvoiceDocument = (id: string): Promise<void> =>
+  printDocument(`/invoices/${id}/document?format=pdf`);
+
+export const printReceiptDocument = (id: string): Promise<void> =>
+  printDocument(`/payments/${id}/document?format=pdf`);
+
+/**
+ * The date in the print header (globals.css `body::before` reads it). Stamped
+ * here because CSS has no clock, and every page already imports this module.
+ */
+const stampPrintDate = (): void => {
+  document.body.dataset.printDate = new Date().toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+if (typeof document !== 'undefined') {
+  window.addEventListener('beforeprint', stampPrintDate);
+  if (document.body) {
+    stampPrintDate();
+  }
+}
 
 export type QuoteStatus =
   | 'DRAFT'
@@ -1512,6 +1729,8 @@ export const downloadCustomerStatement = (
   );
 
 export const updateSettings = (payload: {
+  name?: string;
+  slogan?: string | null;
   primaryColorHex?: string;
   secondaryColorHex?: string;
   logoUrl?: string | null;
