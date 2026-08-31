@@ -180,3 +180,247 @@ fails immediately instead of shipping that broken CSP.
 
 - Single session per user: logging in on a second device signs the first out within 15 minutes. By design for launch.
 - Production CSP keeps `script-src 'unsafe-inline'` (documented tradeoff — see `web/next.config.ts`).
+
+---
+
+# Deploying the compose bundle
+
+Two deployment shapes share one bundle. `docker-compose.prod.yml` is the
+LAN install for the client's own Addis Ababa server. Adding
+`docker-compose.uat.yml` on top turns the same bundle into an
+internet-facing UAT box behind TLS. Everything below marked **LAN** or
+**UAT** applies to one; unmarked steps apply to both.
+
+## First run
+
+Prerequisites on the target box: Docker Engine with the Compose plugin, and
+the repository (or at minimum `docker-compose.prod.yml`, `Caddyfile`, the
+two `Dockerfile`s and the source needed to build them).
+
+### 1. Write `.env` next to the compose file
+
+Never committed. Generate every secret on the box; do not reuse a value
+from another environment.
+
+```sh
+# Three role passwords and the JWT secret — all independent.
+openssl rand -base64 24   # POSTGRES_PASSWORD
+openssl rand -base64 24   # app_user
+openssl rand -base64 24   # outbox_dispatcher
+openssl rand -base64 48   # JWT_SECRET
+```
+
+```sh
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=<generated>
+POSTGRES_DB=elevator_erp
+
+# `postgres` is the compose service name — these resolve on the private
+# compose network, which is the only place Postgres is reachable at all.
+DATABASE_URL=postgresql://app_user:<generated>@postgres:5432/elevator_erp
+DATABASE_ADMIN_URL=postgresql://postgres:<POSTGRES_PASSWORD>@postgres:5432/elevator_erp
+OUTBOX_DISPATCHER_DATABASE_URL=postgresql://outbox_dispatcher:<generated>@postgres:5432/elevator_erp
+
+JWT_SECRET=<generated>
+NODE_ENV=production
+
+# LAN: the server's address on the office network.
+NEXT_PUBLIC_API_URL=http://192.168.1.10:3002/v1
+CORS_ORIGINS=http://192.168.1.10:3003
+TRUST_PROXY_HOPS=0
+
+# UAT: one origin serves both, so these three agree and CORS is moot.
+# SITE_ADDRESS=erp-demo.example.com
+# NEXT_PUBLIC_API_URL=https://erp-demo.example.com/v1
+# CORS_ORIGINS=https://erp-demo.example.com
+# (TRUST_PROXY_HOPS is forced to 1 by the UAT overlay — do not set it here.)
+
+SMS_PROVIDER=noop
+SMS_LIVE=0
+BACKUP_RETENTION_DAYS=7
+```
+
+`ALLOW_DEMO_SEED` must not appear in this file at all. See §2.
+
+### 2. Pre-create the two database roles
+
+Start Postgres alone, then create the roles **before** the first migration
+so `0001`/`0049` skip their hardcoded default passwords (§1 above explains
+why this matters):
+
+```sh
+docker compose -f docker-compose.prod.yml up -d postgres
+docker compose -f docker-compose.prod.yml exec postgres \
+  psql -U postgres -d elevator_erp -c \
+  "CREATE ROLE app_user LOGIN PASSWORD '<generated>';
+   CREATE ROLE outbox_dispatcher LOGIN PASSWORD '<generated>';"
+```
+
+### 3. Migrate and seed the statutory rates
+
+The shipped `api` image cannot run migrations itself — `pnpm prune --prod`
+strips `tsx` and `drizzle-kit` before the runtime stage. That is what
+`docker-compose.migrate.yml` is for; it mounts a full `node_modules`
+(including devDependencies) that you bring from the build machine.
+
+```sh
+docker compose -f docker-compose.prod.yml -f docker-compose.migrate.yml \
+  run --rm migrate src/database/migrate.ts
+docker compose -f docker-compose.prod.yml -f docker-compose.migrate.yml \
+  run --rm migrate src/database/seed-rates.cli.ts
+```
+
+### 4. Create the first tenant and administrator
+
+`db:seed` is the **demo** seeder: it writes a tenant literally named "Demo
+Elevators PLC" with the published credentials `ceo@demo.example.com` /
+`Demo!Passw0rd`, which is why it refuses to run without `ALLOW_DEMO_SEED=1`.
+On any box reachable from outside the office, running it would publish a
+known login. Use the bootstrap entrypoint instead — same job, real values,
+no gate, idempotent:
+
+```sh
+docker compose -f docker-compose.prod.yml -f docker-compose.migrate.yml \
+  run --rm \
+  -e TENANT_SLUG=shining-star \
+  -e TENANT_NAME='Shining Star Electromechanical Works' \
+  -e ADMIN_EMAIL=admin@shiningstar.example \
+  -e ADMIN_PASSWORD='<generated, 12+ chars>' \
+  migrate src/database/bootstrap-tenant.cli.ts
+```
+
+It refuses a short password and a malformed slug rather than creating a
+tenant nobody can log into. The password is never logged. Hand it to the
+client over a channel that is not this terminal, and have them change it.
+
+### 5. Build and start
+
+```sh
+# LAN
+docker compose -f docker-compose.prod.yml up -d --build
+
+# UAT — prod first, then the overlay
+docker compose -f docker-compose.prod.yml -f docker-compose.uat.yml up -d --build
+```
+
+`NEXT_PUBLIC_API_URL` is a **build** argument, not a runtime variable: it is
+compiled into the JavaScript bundle and into the CSP `connect-src`.
+Changing it later means `--build`, not `restart`.
+
+### 6. Verify before handing over the URL
+
+```sh
+docker compose -f docker-compose.prod.yml ps        # every service healthy
+curl -sf https://<host>/v1/health                   # UAT (or http://…:3002 on LAN)
+docker compose -f docker-compose.prod.yml logs backup | head   # first dump ran
+```
+
+Then in a browser: log in as the bootstrapped administrator, open
+Settings and set the company name, slogan, logo and colours, and download
+one quotation PDF. That last step is the real check — it is the only one
+that exercises Chromium, fonts and the branding row together.
+
+## UAT specifics
+
+### DNS before first start
+
+`SITE_ADDRESS` must already resolve to the box's public IP when Caddy first
+starts. Let's Encrypt validates over HTTP on port 80; if the name does not
+resolve yet, Caddy falls back to a self-signed certificate and the client
+gets a browser warning. Point the A record first, confirm with `dig`, then
+`up -d`.
+
+No domain to hand? `<dashed-ip>.sslip.io` (e.g. `203-0-113-10.sslip.io`)
+resolves to that IP with no signup and Let's Encrypt will issue for it. It
+works, and it looks like infrastructure — fine for an internal test, not
+for a URL you put in front of a client you are selling to.
+
+### The firewall is not optional
+
+The overlay stops `api` and `web` publishing their own ports, so Caddy is
+the only door in the compose file. Close the rest at the cloud firewall too
+— ingress on 22, 80 and 443 only. On Oracle Cloud this is the VCN security
+list **and** the instance's own iptables, which its Ubuntu images ship
+pre-populated; changing only the security list is the usual reason a
+correctly-configured box still refuses traffic.
+
+### What UAT is not
+
+Demo and test data only. Article 22 of Proclamation 1321/2024 requires
+personal data collected in Ethiopia to be stored on a server in Ethiopia,
+and no free or near-free host exists inside the country — every option here
+is Europe or North America. A UAT box with synthetic data raises no Article
+22 question. The moment real customer names, phone numbers or contracts are
+entered, it does. Keep production on the client's own Addis server, and say
+this out loud to the client rather than leaving it implied.
+
+## Backups
+
+The `backup` sidecar runs `pg_dump -Fc` on start and every 24h after,
+writing to the `backups` volume and pruning past `BACKUP_RETENTION_DAYS`
+(default 7). It restarts with the stack, so a power cut produces more
+backup coverage, not less.
+
+### Put the backups on a second disk
+
+The `backups` volume is separate from `pgdata_prod` on purpose, but naming
+two volumes does not put them on two disks. Until you bind it to different
+physical storage, it is a copy, not a backup — one disk failure takes both.
+
+```sh
+# Attach and mount a second disk at /mnt/backups first, then:
+docker volume create --driver local \
+  --opt type=none --opt o=bind --opt device=/mnt/backups elevator-erp_backups
+```
+
+On-premises only. Do not point this at S3 or any offsite target — see
+Article 22 above and `docs/planning/DECISIONS-platform-and-ethiopian-compliance.md` §8.
+
+### Restore drill — run it once before go-live, then quarterly
+
+A backup nobody has restored is a hypothesis. Restore into a throwaway
+database on the same box; this never touches the live one:
+
+```sh
+LATEST=$(docker compose -f docker-compose.prod.yml exec -T backup \
+  sh -c 'ls -1t /backups/elevator_erp_*.dump | head -1')
+
+docker compose -f docker-compose.prod.yml exec -T postgres \
+  psql -U postgres -c 'CREATE DATABASE restore_drill;'
+
+docker compose -f docker-compose.prod.yml exec -T backup \
+  sh -c "PGPASSWORD=\$POSTGRES_PASSWORD pg_restore -h postgres -U \$POSTGRES_USER \
+         -d restore_drill --no-owner --no-privileges '$LATEST'"
+
+# Prove it: row counts should match the live database.
+docker compose -f docker-compose.prod.yml exec -T postgres \
+  psql -U postgres -d restore_drill -c \
+  'SELECT (SELECT count(*) FROM customers) AS customers,
+          (SELECT count(*) FROM invoices)  AS invoices,
+          (SELECT count(*) FROM payments)  AS payments;'
+
+docker compose -f docker-compose.prod.yml exec -T postgres \
+  psql -U postgres -c 'DROP DATABASE restore_drill;'
+```
+
+`--no-owner --no-privileges` matters: the dump references `app_user` and
+`outbox_dispatcher`, and a restore that tries to reassign ownership fails
+noisily on a box where those roles have different passwords. Record the
+date of each drill — an undated claim that backups work is not evidence.
+
+## Day-2 operations
+
+```sh
+# Logs (one service or all)
+docker compose -f docker-compose.prod.yml logs -f api
+
+# Update to a new build
+git pull && docker compose -f docker-compose.prod.yml up -d --build
+
+# Rotate the administrator password: log in as another ADMIN/CEO and use
+# the employees screen. It evicts that user's live sessions.
+
+# Restart policy is unless-stopped on every service, so the stack comes
+# back by itself after a power cut. `docker compose stop` is remembered
+# across reboots — use `down`/`up -d` if you want it to come back.
+```
