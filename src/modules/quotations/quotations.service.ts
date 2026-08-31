@@ -60,8 +60,10 @@ export class QuotationsService {
     dto: CreateQuotationDto,
   ): Promise<QuotationRecord> {
     // Reuses the exported ProjectsService (tenant-scoped, 404s on missing).
-    // ponytail: does not gate on project status. Wiring the DAG (only quote
-    // from SPEC_CALCULATION/QUOTATION) is out of scope for this task.
+    // Deliberately does NOT gate on project status: quoting is allowed from
+    // any stage, and the project's stage is advanced to QUOTATION as a
+    // consequence of the insert — see QuotationsRepository.create, which does
+    // it in the insert's own transaction.
     const project = await this.projectsService.getById(user, projectId);
 
     const { validUntil, notes, ...calcInput } = dto;

@@ -33,6 +33,7 @@ import {
   type ProformaStatus,
 } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
+import { autoAdvanceProject } from '../projects/project-auto-advance';
 import type { ProformaDocumentRow } from './proforma-document.mapper';
 import { buildProformaNumber } from './proforma-number';
 
@@ -354,6 +355,15 @@ export class ProformasRepository {
       if (!row) {
         throw new Error('Failed to insert proforma');
       }
+
+      // 5. The project's stage follows the work: issuing the proforma IS the
+      // PROFORMA event, so advance it here, in this same transaction, rather
+      // than making someone re-declare it through
+      // ProjectsService.updateStatus (whose hasIssuedProforma gate exists
+      // precisely to look for the row inserted above). Silent no-op if the
+      // project is already at or past PROFORMA or is CANCELLED; never throws,
+      // so a stalled stage can't roll back an issued proforma.
+      await autoAdvanceProject(tx, quote.projectId, 'PROFORMA');
       return row;
     });
   }
