@@ -1,5 +1,5 @@
 import type { TenantBranding } from '../document-pdf.service';
-import { esc, renderLayout } from './layout';
+import { esc, renderLayout, renderReferencePlate } from './layout';
 import { formatEtb } from './money-format';
 
 export { formatEtb };
@@ -50,13 +50,14 @@ export const buildAgingReportHtml = (data: object, branding: TenantBranding | nu
     .join('');
 
   const bodyHtml = `
-  <div class="meta-grid">
-    <div><div class="label">As Of</div><div class="value">${esc(d.asOfDate)}</div></div>
-  </div>
+  ${renderReferencePlate([{ label: 'As Of', value: d.asOfDate }])}
 
-  <table>
-    <tr><th>Customer</th><th class="num">Current</th><th class="num">1-30 Days</th><th class="num">31-60 Days</th><th class="num">61-90 Days</th><th class="num">90+ Days</th><th class="num">Total</th></tr>
-    ${rows || '<tr><td colspan="7">No outstanding balances</td></tr>'}
+  <h2>Outstanding Receivables by Age</h2>
+  <table class="lines compact">
+    <thead>
+      <tr><th>Customer</th><th class="num">Current</th><th class="num">1-30 Days</th><th class="num">31-60 Days</th><th class="num">61-90 Days</th><th class="num">90+ Days</th><th class="num">Total</th></tr>
+    </thead>
+    <tbody>${rows || '<tr><td colspan="7">No outstanding balances</td></tr>'}</tbody>
   </table>`;
 
   return renderLayout({

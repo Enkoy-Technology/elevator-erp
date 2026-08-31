@@ -1,5 +1,5 @@
 import type { TenantBranding } from '../document-pdf.service';
-import { esc, renderLayout } from './layout';
+import { esc, renderLayout, renderReferencePlate } from './layout';
 import { formatEtb } from './money-format';
 
 export { formatEtb };
@@ -49,24 +49,31 @@ export const buildCustomerStatementHtml = (
     .join('');
 
   const bodyHtml = `
-  <div class="meta-grid">
-    <div><div class="label">Customer</div><div class="value">${esc(d.customerName)}</div></div>
-    <div><div class="label">From</div><div class="value">${esc(d.from)}</div></div>
-    <div><div class="label">To</div><div class="value">${esc(d.to)}</div></div>
+  ${renderReferencePlate([
+    { label: 'Customer', value: d.customerName },
+    { label: 'From', value: d.from },
+    { label: 'To', value: d.to },
+  ])}
+
+  <div class="sum-block">
+  <table class="totals">
+    <tbody><tr><td>Opening Balance</td><td class="num">${formatEtb(d.openingBalance)}</td></tr></tbody>
+  </table>
   </div>
 
-  <table class="totals">
-    <tr><td>Opening Balance</td><td class="num">${formatEtb(d.openingBalance)}</td></tr>
+  <h2>Account Activity</h2>
+  <table class="lines compact">
+    <thead>
+      <tr><th>Date</th><th>Type</th><th>Reference</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr>
+    </thead>
+    <tbody>${rows || '<tr><td colspan="6">No activity in this period</td></tr>'}</tbody>
   </table>
 
-  <table>
-    <tr><th>Date</th><th>Type</th><th>Reference</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr>
-    ${rows || '<tr><td colspan="6">No activity in this period</td></tr>'}
-  </table>
-
+  <div class="sum-block">
   <table class="totals">
-    <tr class="grand"><td>Closing Balance</td><td class="num">${formatEtb(d.closingBalance)}</td></tr>
-  </table>`;
+    <tbody><tr class="grand"><td>Closing Balance</td><td class="num">${formatEtb(d.closingBalance)}</td></tr></tbody>
+  </table>
+  </div>`;
 
   return renderLayout({
     branding,
