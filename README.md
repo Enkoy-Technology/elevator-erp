@@ -13,8 +13,11 @@ Delivery plan: `docs/planning/ROADMAP.md`.
 pnpm install
 cp .env.example .env          # defaults work with the compose file below
 pnpm run db:seed:dev          # once: demo tenant + CEO user (needs DB up — see below)
-pnpm run dev                  # Postgres + Redis + migrate + API + admin UI
+pnpm run kill                 # free API :3002 and UI :3003 leftovers
+pnpm run dev                  # kill leftovers, then Postgres + migrate + API + admin UI
 ```
+
+`pnpm run kill` stops leftover Nest/Next processes on **3002** / **3003** (the usual `EADDRINUSE` after a previous `dev` did not exit cleanly). `pnpm run dev` runs `kill` first so a restart does not hit that.
 
 `pnpm run dev` starts everything needed for day-to-day work:
 
