@@ -16,7 +16,8 @@ export class DashboardController {
 
   @Get('summary')
   @ApiOperation({
-    summary: 'Pipeline, sales, maintenance and breakdown figures for the home page',
+    summary:
+      'Pipeline, sales, receivables, maintenance and breakdown figures for the home page',
   })
   @ApiOkResponse({ description: 'Aggregated tenant figures' })
   summary(@CurrentUser() user: AuthenticatedUser): Promise<DashboardSummary> {

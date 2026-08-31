@@ -1,12 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { and, count, eq, gte, isNull, lte, ne, sql, sum } from 'drizzle-orm';
+import { and, count, eq, gte, isNull, lt, lte, ne, sql, sum } from 'drizzle-orm';
 
 import { BUSINESS_TIMEZONE, todayIso } from '../../common/business-time';
 import {
   assets,
   breakdowns,
   customers,
+  invoices,
   maintenanceContracts,
+  paymentAllocations,
+  payments,
   projects,
   users,
 } from '../../database/schema';
@@ -44,12 +47,49 @@ export interface ServiceFigures {
 }
 
 /**
+ * The AR position, on the aging report's definition of "outstanding"
+ * (per-invoice: totalEtb - whtEtb - allocations, VOID excluded), NOT
+ * `customers.outstandingBalanceEtb` — that one is a net account position and
+ * carries an unapplied-cash term, so the two legitimately differ. See
+ * InvoicesRepository.agingReport's doc comment.
+ */
+export interface FinanceFigures {
+  /** Payments received this calendar month, Addis time. Reversals net out. */
+  revenueThisMonthEtb: string;
+  outstandingTotalEtb: string;
+  /** The part of `outstandingTotalEtb` whose dueDate is already past. */
+  overdueTotalEtb: string;
+  overdueInvoiceCount: number;
+  /** Invoices with any balance left, overdue or not. */
+  outstandingInvoiceCount: number;
+  /**
+   * The same ageing buckets the receivables report shows, summed from the
+   * same balances expression — so the dashboard chart and the report can
+   * never disagree. A null dueDate is `current`, never aged.
+   */
+  agingBuckets: {
+    currentEtb: string;
+    d1_30Etb: string;
+    d31_60Etb: string;
+    d61_90Etb: string;
+    d90PlusEtb: string;
+  };
+  /**
+   * Twelve months of collections, oldest first, zero-filled, `YYYY-MM` in
+   * Addis local time. Always twelve entries so a chart never has to decide
+   * whether a gap means "no data" or "no money".
+   */
+  collectionsByMonth: { month: string; totalEtb: string }[];
+}
+
+/**
  * Sections are omitted, not blanked, for roles that shouldn't see them — a
  * field engineer never receives deal values over the wire at all.
  */
 export interface DashboardSummary {
   sales?: SalesFigures;
   service?: ServiceFigures;
+  finance?: FinanceFigures;
   totals?: { customers: number; assets: number; employees: number };
 }
 
@@ -60,6 +100,9 @@ const SALES_ROLES: readonly UserRole[] = [
   'SALES_MANAGER',
   'FINANCE',
 ];
+
+/** Roles that may see the accounts-receivable book. */
+const FINANCE_ROLES: readonly UserRole[] = ['CEO', 'ADMIN', 'FINANCE'];
 
 /** Roles that run or dispatch service work. */
 const SERVICE_ROLES: readonly UserRole[] = [
@@ -109,6 +152,20 @@ const businessDayStart = (isoDate: string): Date => {
   return new Date(new Date(`${isoDate}T00:00:00Z`).getTime() - offsetMs);
 };
 
+/** First day of the month after the one `monthStartIso` (always a -01) begins. */
+const nextMonthStart = (monthStartIso: string): string => {
+  const date = new Date(`${monthStartIso}T00:00:00.000Z`);
+  date.setUTCMonth(date.getUTCMonth() + 1);
+  return date.toISOString().slice(0, 10);
+};
+
+/** The first of the month `count` months before `monthStartIso` (a -01). */
+const monthsBack = (monthStartIso: string, count: number): string => {
+  const date = new Date(`${monthStartIso}T00:00:00.000Z`);
+  date.setUTCMonth(date.getUTCMonth() - count);
+  return date.toISOString().slice(0, 10);
+};
+
 const addDays = (isoDate: string, days: number): string => {
   const date = new Date(`${isoDate}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
@@ -133,6 +190,7 @@ export class DashboardRepository {
     const monthStart = `${today.slice(0, 7)}-01`;
 
     const wantsSales = SALES_ROLES.includes(role);
+    const wantsFinance = FINANCE_ROLES.includes(role);
     const wantsService = SERVICE_ROLES.includes(role);
     const wantsTotals = TOTALS_ROLES.includes(role);
 
@@ -141,6 +199,9 @@ export class DashboardRepository {
 
       if (wantsSales) {
         summary.sales = await this.salesFigures(tx, monthStart);
+      }
+      if (wantsFinance) {
+        summary.finance = await this.financeFigures(tx, today, monthStart);
       }
       if (wantsService) {
         summary.service = await this.serviceFigures(tx, today, weekAhead);
@@ -212,6 +273,123 @@ export class DashboardRepository {
         },
       };
     }
+  }
+
+  /**
+   * Two aggregates, no invoice rows shipped to the app. The balance subquery
+   * is the aging report's own per-invoice formula (total - wht - allocations,
+   * VOID excluded, positive balances only) expressed in SQL rather than
+   * imported, because `/modules/dashboard` may not import from
+   * `/modules/invoices` and the module's contract is that every dashboard
+   * query is an aggregate.
+   */
+  private async financeFigures(
+    tx: TenantTransaction,
+    today: string,
+    monthStart: string,
+  ): Promise<FinanceFigures> {
+    // A reversal is a negative payment row, so the month's sum nets itself.
+    const [revenue] = await tx
+      .select({ total: sum(payments.amountEtb) })
+      .from(payments)
+      .where(
+        and(
+          gte(payments.receivedAt, businessDayStart(monthStart)),
+          lt(payments.receivedAt, businessDayStart(nextMonthStart(monthStart))),
+        ),
+      );
+
+    const balances = tx
+      .select({
+        dueDate: invoices.dueDate,
+        balanceEtb:
+          sql<string>`${invoices.totalEtb} - ${invoices.whtEtb} - coalesce(sum(${paymentAllocations.amountEtb}), 0)`.as(
+            'balance_etb',
+          ),
+      })
+      .from(invoices)
+      .leftJoin(
+        paymentAllocations,
+        and(
+          eq(paymentAllocations.tenantId, invoices.tenantId),
+          eq(paymentAllocations.invoiceId, invoices.id),
+        ),
+      )
+      .where(ne(invoices.status, 'VOID'))
+      .groupBy(
+        invoices.tenantId,
+        invoices.id,
+        invoices.dueDate,
+        invoices.totalEtb,
+        invoices.whtEtb,
+      )
+      .as('balances');
+
+    // A null dueDate is never overdue — same rule as the aging report, where
+    // it lands in `current` rather than being aged from issuedAt.
+    const overdue = sql`${balances.dueDate} < ${today}::date`;
+
+    const [ar] = await tx
+      .select({
+        outstandingTotal: sql<string>`coalesce(sum(${balances.balanceEtb}), 0)`,
+        overdueTotal: sql<string>`coalesce(sum(${balances.balanceEtb}) filter (where ${overdue}), 0)`,
+        overdueCount: sql<string>`count(*) filter (where ${overdue})`,
+        outstandingCount: sql<string>`count(*)`,
+      })
+      .from(balances)
+      .where(sql`${balances.balanceEtb} > 0`);
+
+    // Ageing on the same balances subquery the totals above use, so the
+    // chart and the headline can never disagree. Day counts come off
+    // dueDate exactly as invoice-aging.ts defines them; a null dueDate is
+    // `current`, never aged.
+    const overdueDays = sql`(${today}::date - ${balances.dueDate})`;
+    const [buckets] = await tx
+      .select({
+        current: sql<string>`coalesce(sum(${balances.balanceEtb}) filter (where ${balances.dueDate} is null or ${overdueDays} <= 0), 0)`,
+        d1_30: sql<string>`coalesce(sum(${balances.balanceEtb}) filter (where ${overdueDays} between 1 and 30), 0)`,
+        d31_60: sql<string>`coalesce(sum(${balances.balanceEtb}) filter (where ${overdueDays} between 31 and 60), 0)`,
+        d61_90: sql<string>`coalesce(sum(${balances.balanceEtb}) filter (where ${overdueDays} between 61 and 90), 0)`,
+        d90_plus: sql<string>`coalesce(sum(${balances.balanceEtb}) filter (where ${overdueDays} > 90), 0)`,
+      })
+      .from(balances)
+      .where(sql`${balances.balanceEtb} > 0`);
+
+    // Twelve months of collections, bucketed in Addis local time rather than
+    // UTC — a payment taken at 01:00 Addis belongs to that day, not to the
+    // previous one. Grouped in SQL so no payment rows cross the wire.
+    const monthly = await tx
+      .select({
+        month: sql<string>`to_char(date_trunc('month', ${payments.receivedAt} at time zone ${BUSINESS_TIMEZONE}), 'YYYY-MM')`,
+        total: sql<string>`coalesce(sum(${payments.amountEtb}), 0)`,
+      })
+      .from(payments)
+      .where(gte(payments.receivedAt, businessDayStart(monthsBack(monthStart, 11))))
+      .groupBy(sql`1`)
+      .orderBy(sql`1`);
+
+    const byMonth = new Map(monthly.map((row) => [row.month, row.total]));
+
+    return {
+      revenueThisMonthEtb: money(revenue?.total ?? 0),
+      outstandingTotalEtb: money(ar?.outstandingTotal ?? 0),
+      overdueTotalEtb: money(ar?.overdueTotal ?? 0),
+      overdueInvoiceCount: Number(ar?.overdueCount ?? 0),
+      outstandingInvoiceCount: Number(ar?.outstandingCount ?? 0),
+      agingBuckets: {
+        currentEtb: money(buckets?.current ?? 0),
+        d1_30Etb: money(buckets?.d1_30 ?? 0),
+        d31_60Etb: money(buckets?.d31_60 ?? 0),
+        d61_90Etb: money(buckets?.d61_90 ?? 0),
+        d90PlusEtb: money(buckets?.d90_plus ?? 0),
+      },
+      // Always twelve entries, oldest first, zero-filled — a chart must not
+      // have to guess whether a missing month means "no data" or "no money".
+      collectionsByMonth: Array.from({ length: 12 }, (_unused, index) => {
+        const month = monthsBack(monthStart, 11 - index);
+        return { month: month.slice(0, 7), totalEtb: money(byMonth.get(month.slice(0, 7)) ?? 0) };
+      }),
+    };
   }
 
   private async serviceFigures(
