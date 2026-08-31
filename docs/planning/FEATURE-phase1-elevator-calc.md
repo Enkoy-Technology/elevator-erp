@@ -12,7 +12,7 @@ as `POST /v1/elevator-specs/calculate`, with a calculator screen in the admin UI
 
 ## Requirements
 - [ ] `ElevatorCalcService.calculateSpecs(input)` returns technical + pricing breakdown
-- [ ] Unit test: §4.2.4 worked example → `TOTAL_PRICE = 156882.63`
+- [ ] Unit test: §4.2.3 worked example → `TOTAL_PRICE = 9883125.00` *(was 156882.63 under the retired TAD multiplier model — see `docs/elevator-calc-formulas.md` §4.2)*
 - [ ] Boundary cases: min/max Q, v>2.5, MRL, HOSPITAL, INDUSTRIAL
 - [ ] `POST /elevator-specs/calculate` (authenticated, any role) — stateless
 - [ ] Admin UI page at `/calculator` unlocked in sidebar

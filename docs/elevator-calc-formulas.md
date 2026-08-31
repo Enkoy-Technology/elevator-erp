@@ -94,77 +94,137 @@ if MR:
 else (MRL): all dimensions = null
 ```
 
-## 4.2.1 Base Cost
+## 4.2 Pricing — product price list
 
-```text
-BASE_COST = Q_base × N_factor × v_factor × U_factor × D_factor × MR_MRL_factor
-```
+> **The TAD §4.2 multiplier model is retired.** Its `Q_base` matrix
+> (28,000–145,000) was denominated in **USD**; a July 2026 "currency fix"
+> relabelled it ETB without converting the numbers, which under-quoted every
+> machine by roughly 100×. Pricing now comes from the product owner's price
+> list below. Nothing in §4.1 (the EN 81 technical calculations) changed.
 
-```text
-Q_base        = lookup from base cost matrix (below)
-N_factor      = 1.0 + (N - 2) × 0.08
-v_factor      = 1.0 + max(0, (v - 1.0) × 0.15)
-U_factor      = 1.00 RESIDENTIAL | 1.15 COMMERCIAL | 1.25 HOSPITAL | 1.20 INDUSTRIAL
-D_factor      = 1.00 CENTER_OPEN | 1.12 TELESCOPIC | 0.95 SWING
-MR_MRL_factor = 1.00 MR | 0.92 MRL
-```
+### 4.2.1 Price list (ETB, before margin and before VAT)
 
-### Base Cost Lookup Matrix (ETB)
-
-| Capacity (kg) | Q_base | Capacity (kg) | Q_base |
+| Product | Base | Per stop above 10 | Per kg above 630 |
 |---|---|---|---|
-| 320 | 28,000 | 1600 | 58,000 |
-| 450 | 32,000 | 2000 | 68,000 |
-| 630 | 36,000 | 2500 | 82,000 |
-| 800 | 40,000 | 3000 | 95,000 |
-| 1000 | 45,000 | 4000 | 120,000 |
-| 1150 | 48,000 | 5000 | 145,000 |
-| 1350 | 52,000 | | |
+| `PASSENGER` (incl. hospital lifts) | tiered by stops, below | 80,000 | 1,000 |
+| `CAR_PLATFORM_LIFT` | 5,200,000 | — | — |
+| `ESCALATOR` | 6,000,000 | — | — |
 
-## 4.2.2 Component Costs
+**Passenger base tiers** — the base steps up with building height:
 
-| Component | Formula |
+| Stops (N) | Base |
 |---|---|
-| STOP_COST | `Q_base × 0.04 × (N - 2)` |
-| CAPACITY_MULTIPLIER | `1.0 + ((Q - 1000) / 1000) × 0.05`, clamped to `[0.8, 2.0]` |
-| SPEED_PREMIUM | Tiered: +3%/m/s above 1.0, +5%/m/s above 2.5, +8%/m/s above 4.0 |
-| DOOR_PREMIUM | TELESCOPIC +8%; CENTER_OPEN > 1000mm: +3% per 100mm over |
-| INSTALLATION_COST | `Q_base × 0.15 × (1.0 + (H/50) × 0.02) × [1.2 HOSPITAL \| 1.15 INDUSTRIAL]` |
-| FREIGHT_COST | `(shaft_width × shaft_depth × H / 1e9) × 500 + (counterweight_mass / 1000) × 200`, min 800 |
-
-## 4.2.3 Final Pricing
+| 2 – 19 | 7,000,000 |
+| 20 – 30 | 8,000,000 |
+| 31 and above | 11,000,000 |
 
 ```text
-EQUIPMENT_SUBTOTAL   = BASE_COST + STOP_COST + SPEED_PREMIUM + DOOR_PREMIUM
-TOTAL_BEFORE_MARGIN  = (EQUIPMENT_SUBTOTAL × CAPACITY_MULTIPLIER) + INSTALLATION_COST + FREIGHT_COST
+LIST_PRICE = base(N)
+           + max(0, N - 10) × rate_stop
+           + max(0, Q - 630) × rate_kg
+```
+
+- The reference machine is **10 stops at 630 kg**. Both adjustments **floor at
+  zero**: an under-spec machine still costs the base, it never prices below it.
+  (Confirmed with the product owner, 15 Aug 2026 — "does the price go down
+  below the reference point?" → "No".)
+- **The stop reference stays at 10 in every tier.** A 20-stop lift is
+  `8,000,000 + 10 × 80,000 = 8,800,000`, not 8,000,000 flat. The tier boundary
+  is where the base jumps, not where the per-stop count restarts. This is the
+  literal reading of "same formula, different base" — see the open question at
+  the end of this section.
+- `CAR_PLATFORM_LIFT` and `ESCALATOR` are **flat** — stops and capacity do not
+  move the price. Platform lifts are sold above 3 floors; that is a sales rule,
+  not a price break, so the engine does not gate on it.
+  *(Confirmed 31 Aug 2026. The product owner's note read "Escalator base
+  6,000,000 and others the same formula", which could have meant the stop and
+  capacity adjustments apply to the flat products too — a 12-stop 1000 kg
+  escalator would then be 6,530,000 rather than 6,000,000. Asked and answered:
+  flat means flat.)*
+- Hospital lifts price identically to passenger lifts. The distinction is
+  carried by `buildingUsage: 'HOSPITAL'`, which still raises car height to
+  2350 mm in §4.1.2.
+- Speed, door type, machine-room type, building usage and travel height no
+  longer affect price at all. Of those, only **speed, machine-room type and
+  building usage** still feed the §4.1 technical block. **`travelHeightM`,
+  `doorType` and `doorWidthMm` are accepted and validated but currently feed
+  nothing** — no §4.1 formula references them, and their pricing terms were
+  removed with the multiplier model. They are kept on the DTO because they
+  belong on the quotation record and on any future rope/model output.
+
+> **Open with the product owner.** The tier wording was *"Above 20-30 floor
+> base 8,000,000 and above starting from 31 and above base 11,000,000"*. Two
+> readings, and they differ by 800,000 ETB at 20 stops:
+>
+> | N | Implemented (reference stays 10) | Alternative (count restarts per tier) |
+> |---|---|---|
+> | 19 | 7,720,000 | 7,720,000 |
+> | 20 | **8,800,000** | 8,000,000 |
+> | 30 | 9,600,000 | 8,800,000 |
+> | 31 | **12,680,000** | 11,000,000 |
+>
+> Also assumed: the 20–30 band is inclusive of 20 (the phrase says "above 20"
+> but names the range 20–30), and the per-kg term applies unchanged in all
+> tiers since it describes the car, not the building.
+
+### 4.2.1a Terms in the client proposal that are deliberately NOT implemented
+
+The client's own proposal (*ERP SYSTEM SHINING STAR ELECTROMECHANICAL WORKS*,
+20 Jul 2026) states `Total Price` as a ten-term additive list. Four terms are
+implemented — Base, Capacity Adjustment, Stops Adjustment, Taxes. Six are not:
+
+| Proposal term | Status |
+|---|---|
+| Speed Adjustment | Dropped with the multiplier model (14 Aug 2026) |
+| Door Type Adjustment | Dropped with the multiplier model |
+| MR/MRL Adjustment | Dropped with the multiplier model |
+| Installation Cost | Dropped with the price list |
+| Transportation Cost | Dropped with the price list |
+| Optional Features | Never implemented at any commit |
+
+**Confirmed 31 Aug 2026: these stay out.** The product owner's ETB price list
+supersedes the proposal's formula. Installation and transport, when they apply,
+are quoted manually rather than derived. Re-opening any of them requires the
+product owner to supply a coefficient first — there is no defensible default.
+
+Two things in the proposal that the price list did **not** change, and which the
+implementation matches exactly:
+
+- `Additional Stops = (Stops − 10) × ETB 80,000` — carried over verbatim.
+- `Capacity Adjustment = ((KG − 630) ÷ 100) × ETB 100,000` — algebraically
+  identical to the implemented `(KG − 630) × 1,000` (÷100 then ×100,000 is
+  ×1,000, exact at every KG, no intermediate rounding). At Q = 1000 kg both
+  give 370,000.00.
+
+The proposal's `Base Price = ETB 5,000,000` is an explicitly labelled *example*
+and is superseded by the tiered bases above.
+
+### 4.2.2 Final Pricing
+
+```text
+TOTAL_BEFORE_MARGIN  = LIST_PRICE
 MARGIN_AMOUNT        = TOTAL_BEFORE_MARGIN × (margin_percent / 100)
 SUBTOTAL_WITH_MARGIN = TOTAL_BEFORE_MARGIN + MARGIN_AMOUNT
 TAX_AMOUNT           = SUBTOTAL_WITH_MARGIN × (tax_percent / 100)
 TOTAL_PRICE          = SUBTOTAL_WITH_MARGIN + TAX_AMOUNT
 ```
 
-## 4.2.4 Worked Example (unit-test fixture)
+On the quotations path `tax_percent` is ignored: `QuotationsService` resolves
+the statutory VAT rate from `RatesService` and recomputes the tax lines itself.
 
-Input: Q = 1000 kg, N = 12, H = 45 m, v = 1.6 m/s, MRL, CENTER_OPEN, Wd = 900 mm, COMMERCIAL, margin = 25%, tax = 5%.
+### 4.2.3 Worked Example (unit-test fixture)
+
+Input: `PASSENGER`, Q = 1000 kg, N = 12, margin = 25%, tax = 5%.
 
 ```text
-Q_base = 45,000
-N_factor = 1.0 + 10 × 0.08 = 1.80
-v_factor = 1.0 + 0.6 × 0.15 = 1.09
-U_factor = 1.15 ; D_factor = 1.00 ; MR_MRL_factor = 0.92
-BASE_COST = 45,000 × 1.80 × 1.09 × 1.15 × 1.00 × 0.92 = 93,034.62
-STOP_COST = 45,000 × 0.04 × 10 = 18,000.00
-CAPACITY_MULTIPLIER = 1.00
-SPEED_PREMIUM = 45,000 × 0.03 × 0.6 = 810.00
-DOOR_PREMIUM = 0.00
-INSTALLATION_COST = 45,000 × 0.15 × 1.018 = 6,885.00
-FREIGHT_COST = max(800, 118.80 + 90.00) = 800.00
-EQUIPMENT_SUBTOTAL = 111,844.62
-TOTAL_BEFORE_MARGIN = 111,844.62 × 1.00 + 6,885.00 + 800.00 = 119,529.62
-MARGIN_AMOUNT = 29,882.41
-SUBTOTAL_WITH_MARGIN = 149,412.03
-TAX_AMOUNT = 7,470.60
-TOTAL_PRICE = 156,882.63
+BASE_PRICE           = 7,000,000.00
+STOPS_ADJUSTMENT     = (12 - 10) × 80,000  =   160,000.00
+CAPACITY_ADJUSTMENT  = (1000 - 630) × 1,000 =   370,000.00
+TOTAL_BEFORE_MARGIN  = 7,530,000.00
+MARGIN_AMOUNT        = 1,882,500.00
+SUBTOTAL_WITH_MARGIN = 9,412,500.00
+TAX_AMOUNT           =   470,625.00
+TOTAL_PRICE          = 9,883,125.00
 ```
 
 ## Non-elevator formulas (referenced by other modules)

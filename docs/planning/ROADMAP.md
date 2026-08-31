@@ -34,7 +34,7 @@ Rule for each phase: write a plan in `docs/planning/FEATURE-*.md` (use `TEMPLATE
 - Editable pricing coefficients per tenant; spec persistence + templates.
 - Resolve the two flagged doc inconsistencies (shaft_depth, SLA) first.
 
-**Exit gate:** unit test asserts the §4.2.4 worked example → `TOTAL_PRICE = 156,882.63`, plus boundary cases (min/max Q, v>2.5, MRL, HOSPITAL, INDUSTRIAL).
+**Exit gate:** unit test asserts the §4.2.3 worked example → `TOTAL_PRICE = 9,883,125.00`, plus boundary cases (min/max Q, v>2.5, MRL, HOSPITAL, INDUSTRIAL). *(Superseded Aug 2026: the TAD multiplier model was retired for the product price list — see `docs/elevator-calc-formulas.md` §4.2.)*
 
 ---
 
