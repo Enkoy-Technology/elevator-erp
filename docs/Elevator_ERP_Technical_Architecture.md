@@ -373,21 +373,25 @@ motorPowerKw kW (Q * v * 9.81 * eff_factor) / (1000 * mech_efficiency)
 | ------------- | ------ | ------------------------------------ | --- |
 machineRoomDimensions mm Null if MRL; shaft_width + 600 x max(3000, shaft_depth + 1000) x 2500 if MR
 Calculation Output: Pricing Breakdown
-| Component | Formula |     |     |
-| --------- | ------- | --- | --- |
-baseCost Q_base * N_factor * v_factor * U_factor * D_factor * MR_MRL_factor
-| stopCost           | Q_base * 0.04 * (N - 2)                              |     |     |
-| ------------------ | ---------------------------------------------------- | --- | --- |
-| capacityMultiplier | 1.0 + ((Q - 1000) / 1000) * 0.05, clamped [0.8, 2.0] |     |     |
-speedPremium Tiered: +3% per m/s above 1.0, +5% above 2.5, +8% above 4.0
-doorPremium TELESCOPIC: +8%; CENTER_OPEN > 1000mm: +3% per 100mm over
 
-Component Formula
-installationCost Q_base * 0.15 * (1.0 + (H/50) * 0.02) * hospital(1.2) or industrial(1.15)
-freightCost Volume-based + weight-based, minimum 800 USD
-marginAmount (equipment_subtotal * capacity_multiplier + installation + freight) * margin_percent
-taxAmount (subtotal_before_tax + margin) * tax_percent
-totalPrice subtotal_before_tax + margin + tax
+> **RETIRED, August 2026.** The multiplier model this section described
+> (`Q_base * N_factor * v_factor * ...`, plus speed/door premiums,
+> installation and a USD-denominated freight minimum) was withdrawn: its
+> `Q_base` matrix was denominated in USD and a "currency fix" relabelled it
+> ETB without converting, under-quoting every machine by roughly 100x.
+> Pricing now comes from the product owner's own ETB price list.
+> **`docs/elevator-calc-formulas.md` §4.2 is the authority** — this section
+> is kept only so the change is traceable. Nothing in §4.1 (the EN 81
+> technical calculations above) changed.
+
+| Component | Formula |
+| --- | --- |
+| basePrice | Price-list base for the product type; PASSENGER steps by stop count |
+| stopsAdjustment | max(0, N - 10) * per-stop rate |
+| capacityAdjustment | max(0, Q - 630) * per-kg rate |
+| marginAmount | (basePrice + stopsAdjustment + capacityAdjustment) * margin_percent |
+| taxAmount | (total_before_margin + margin) * tax_percent |
+| totalPrice | total_before_margin + margin + tax |
 
 3.4 Module 3: Sales, Quotations & Duplicate Detection
 CRM  lifecycle  management  from  lead  acquisition  through  contract  execution.  Includes  algorithmic
