@@ -209,10 +209,53 @@ export class DocumentPdfService implements OnModuleDestroy {
       // timeout so a slow/dead tenant image URL can't pin a page open on the
       // shared browser and starve other tenants' renders.
       await page.setContent(html, { waitUntil: 'load', timeout: 15_000 });
+      // Lift the two bands the layout parked in <template> elements and
+      // hand them to Chromium as real page margin boxes. Templates get NO
+      // page CSS and default to ~10px Times, so each is wrapped in one
+      // inline-styled div; `width:100%` is required or Chromium renders
+      // them at zero width and they silently vanish.
+      // This callback is serialized and runs in the BROWSER, but it is
+      // compiled against the API's Node lib, which has no DOM types — hence
+      // the narrow structural cast rather than pulling "dom" into tsconfig
+      // for one function.
+      const bands = await page.evaluate(() => {
+        const { document: doc } = globalThis as unknown as {
+          document: { querySelector(selector: string): { innerHTML: string } | null };
+        };
+        const read = (id: string): string => doc.querySelector(`#${id}`)?.innerHTML ?? '';
+        return { head: read('page-head'), foot: read('page-foot') };
+      });
+
+      const bandStyle =
+        "width:100%;font-family:'Liberation Sans',Arial,sans-serif;font-size:8px;" +
+        '-webkit-print-color-adjust:exact;print-color-adjust:exact;';
+
+      const headerTemplate = bands.head
+        ? `<div style="${bandStyle}padding:6mm 10mm 0;">${bands.head}</div>`
+        : '<span></span>';
+      // The page counter is Chromium's own — these class names are the
+      // documented hook, not ours, and only work inside these templates.
+      const footerTemplate = bands.foot
+        ? `<div style="${bandStyle}padding:0 10mm 4mm;color:#57534e;">
+             <div style="border-top:1px solid #d6cfc4;padding-top:2mm;display:flex;justify-content:space-between;gap:8mm;">
+               <div style="flex:1;">${bands.foot}</div>
+               <div style="white-space:nowrap;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>
+             </div>
+           </div>`
+        : '<span></span>';
+
       const pdf = await page.pdf({
         format: 'A4',
         printBackground: true,
-        margin: { top: '12mm', bottom: '12mm', left: '10mm', right: '10mm' },
+        displayHeaderFooter: true,
+        headerTemplate,
+        footerTemplate,
+        // The top/bottom margins RESERVE the band space on every page —
+        // this is what stops page 2 sliding under the letterhead. They must
+        // stay larger than the tallest band the templates can render, and
+        // they must MATCH the @page rule in layout.ts, which otherwise wins
+        // and reserves less space than the bands actually occupy.
+        margin: { top: '34mm', bottom: '20mm', left: '10mm', right: '10mm' },
       });
       return Buffer.from(pdf);
     } finally {
