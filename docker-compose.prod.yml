@@ -142,10 +142,33 @@ services:
           cpus: '1'
           memory: 512M
 
-  # Task 3 (finance-exports-sms plan) owns the backup schedule/script itself
-  # — this service is deliberately left as a stub so that task only has to
-  # add a command/entrypoint, not stand up a service, wire the volume, or
-  # grant DB access. postgres:16-alpine already ships pg_dump.
+  # Nightly pg_dump (custom format, -Fc — restorable with pg_restore, see
+  # the runbook's restore drill) of the whole database, kept on the
+  # `backups` NAMED VOLUME — a SEPARATE volume from postgres's own
+  # `pgdata_prod` on purpose. THE OPERATOR MUST bind that volume to a
+  # SECOND PHYSICAL DISK (docker-compose.prod.yml's volumes: block below
+  # only names it; the runbook's Backups section has the exact steps) — a
+  # backup that lives on the same disk as the database it backs up dies in
+  # the same disk failure, which makes it a copy, not a backup.
+  #
+  # On-premises only, deliberately — do not "helpfully" point this at S3 or
+  # any other offsite/cloud target. Art 22 of Proclamation 1321/2024
+  # requires personal data collected in Ethiopia to stay on a server in
+  # Ethiopia, and docs/planning/DECISIONS-platform-and-ethiopian-compliance.md
+  # §8 (open question 6) records that whether Art 22 even permits an
+  # Ethiopian-primary-with-offshore-backup-replica is still unanswered by
+  # the ECA. Until that is answered in writing, in-country means THIS BOX'S
+  # second disk and nothing else.
+  #
+  # No cron package here (stock postgres:16-alpine, no custom Dockerfile —
+  # it already ships pg_dump, which is all this needs) — the loop below
+  # runs a backup immediately on container start and then every 24h it
+  # keeps running. Deliberately not a fixed clock-time schedule: this
+  # client's grid drops power ~39 times a month (see the x-logging comment
+  # above), so a rigid "only at 2am" cron entry would let a mid-day power
+  # cut skip an entire calendar day of backups — restarting (which power
+  # cuts cause, restart: unless-stopped) instead always produces a fresh
+  # one, so more outages means MORE backup coverage, never less.
   backup:
     image: postgres:16-alpine
     container_name: elevator-erp-backup
@@ -156,6 +179,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env — see docs/ops/deploy-runbook.md}
       POSTGRES_DB: ${POSTGRES_DB:-elevator_erp}
       PGHOST: postgres
+      # How many days of dumps to keep on the backups volume — bounds its
+      # own growth so it can never silently fill its disk unattended. 7 is
+      # sane for one small-office tenant; raise it only alongside more
+      # space on that disk.
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
     depends_on:
       postgres:
         condition: service_healthy
@@ -166,10 +194,34 @@ services:
         limits:
           cpus: '1'
           memory: 256M
-    # Placeholder command — Task 3 replaces this with the real backup
-    # schedule. Keeps the container alive (and restartable) without doing
-    # anything until then.
-    entrypoint: ['sleep', 'infinity']
+    # Overrides the image's own postgres-initialization entrypoint entirely
+    # (same reason the placeholder used `entrypoint: ['sleep', 'infinity']`
+    # before this) — this container only ever runs pg_dump against the
+    # ALREADY-running `postgres` service, it must never touch its own
+    # /var/lib/postgresql/data.
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        set -eu
+        run_backup() {
+          ts="$$(date -u +%Y%m%dT%H%M%SZ)"
+          dest="/backups/elevator_erp_$${ts}.dump"
+          tmp="$${dest}.tmp"
+          echo "[backup] $$(date -u -Iseconds) starting pg_dump -> $${dest}"
+          if PGPASSWORD="$$POSTGRES_PASSWORD" pg_dump -h "$$PGHOST" -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Fc -f "$$tmp"; then
+            mv "$$tmp" "$$dest"
+            echo "[backup] $$(date -u -Iseconds) OK $$(du -h "$$dest" | cut -f1) $${dest}"
+          else
+            rm -f "$$tmp"
+            echo "[backup] $$(date -u -Iseconds) FAILED pg_dump exited non-zero for $${dest} - see stderr above" >&2
+            return 1
+          fi
+          find /backups -maxdepth 1 -name 'elevator_erp_*.dump' -mtime "+$$BACKUP_RETENTION_DAYS" -print -delete | sed 's/^/[backup] pruned /'
+        }
+        while true; do
+          run_backup || echo "[backup] $$(date -u -Iseconds) run failed - will retry after the normal interval" >&2
+          sleep 86400
+        done
 
 volumes:
   pgdata_prod:
