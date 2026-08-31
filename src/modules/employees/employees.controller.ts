@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -8,9 +9,14 @@ import {
   Post,
   Query,
   Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -23,7 +29,18 @@ import { parseExportFormat } from '../../common/export/export-query.dto';
 import { type ColumnDef, writeCsv, writeXlsx } from '../../common/export/tabular';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { CreateEmployeeDto, UpdateEmployeeDto } from './dto/employee.dto';
+import { ImportEmployeesResultDto } from './dto/import-employees.dto';
+import { EmployeesImportService } from './employees-import.service';
 import { EmployeesService } from './employees.service';
+
+/**
+ * A staff list is a few dozen rows; 2 MB is already generous for one. The cap
+ * is enforced by multer before the body is buffered, so an oversized upload is
+ * rejected at the socket rather than parsed.
+ */
+const MAX_IMPORT_FILE_BYTES = 2 * 1024 * 1024;
+
+const IMPORT_EXTENSIONS = /\.(xlsx|csv)$/i;
 
 // No passwordHash/refreshTokenHash here — EmployeesRepository.list()/streamAll()
 // already select an explicit column set that never includes either.
@@ -43,7 +60,10 @@ export const EMPLOYEES_EXPORT_COLUMNS: ColumnDef[] = [
 @Controller('employees')
 @Roles('ADMIN')
 export class EmployeesController {
-  constructor(private readonly employeesService: EmployeesService) {}
+  constructor(
+    private readonly employeesService: EmployeesService,
+    private readonly employeesImportService: EmployeesImportService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -86,6 +106,63 @@ export class EmployeesController {
     @Body() dto: CreateEmployeeDto,
   ) {
     return this.employeesService.create(user, dto);
+  }
+
+  @Post('import')
+  @Roles('ADMIN')
+  @UseInterceptors(
+    // No `storage` option: multer's default IS memory storage, so the upload
+    // never touches disk. An explicit `memoryStorage()` would mean importing
+    // `multer` directly, which isn't a declared dependency here.
+    FileInterceptor('file', {
+      limits: { fileSize: MAX_IMPORT_FILE_BYTES, files: 1 },
+      fileFilter: (_req, file, cb) => {
+        cb(
+          IMPORT_EXTENSIONS.test(file.originalname)
+            ? null
+            : new BadRequestException(
+                `"${file.originalname}" is not a spreadsheet. Upload a .xlsx or .csv file.`,
+              ),
+          true,
+        );
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'The staff list, .xlsx or .csv.',
+        },
+        commit: {
+          type: 'string',
+          description:
+            'Send "true" to actually create the employees. Anything else (or absent) is a dry run that writes nothing.',
+        },
+      },
+    },
+  })
+  @ApiOperation({
+    summary:
+      'Import employees from a spreadsheet. Dry run by default — send commit=true to write.',
+  })
+  @ApiOkResponse({ type: ImportEmployeesResultDto })
+  import(
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body('commit') commit?: string,
+  ): Promise<ImportEmployeesResultDto> {
+    if (!file) {
+      throw new BadRequestException(
+        'No file uploaded. Attach the spreadsheet as the "file" field.',
+      );
+    }
+    return this.employeesImportService.import(user, file, commit === 'true');
   }
 
   @Patch(':id')
