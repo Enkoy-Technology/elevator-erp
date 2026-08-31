@@ -1,8 +1,9 @@
 import { ElevatorCalcService } from './elevator-calc.service';
 import type { CalcInput } from './types';
 
-/** §4.2.4 worked example fixture. */
+/** §4.1 technical fixture; pricing comes from the §4.2 product price list. */
 const WORKED_EXAMPLE: CalcInput = {
+  productType: 'PASSENGER',
   capacityKg: 1000,
   stops: 12,
   travelHeightM: 45,
@@ -18,7 +19,7 @@ const WORKED_EXAMPLE: CalcInput = {
 describe('ElevatorCalcService', () => {
   const service = new ElevatorCalcService();
 
-  describe('§4.2.4 worked example', () => {
+  describe('§4.2.3 worked example', () => {
     const result = service.calculateSpecs(WORKED_EXAMPLE);
 
     it('computes technical specs for the fixture', () => {
@@ -33,23 +34,127 @@ describe('ElevatorCalcService', () => {
       expect(result.technical.counterweightMassKg).toBe('450.00');
     });
 
-    it('matches the documented component costs that are formula-exact', () => {
-      expect(result.pricing.qBase).toBe('45000.00');
-      expect(result.pricing.stopCost).toBe('18000.00');
-      expect(result.pricing.capacityMultiplier).toBe('1.00');
-      expect(result.pricing.speedPremium).toBe('810.00');
-      expect(result.pricing.doorPremium).toBe('0.00');
-      // TAD prints 6,885.00 (= 45k×0.15×1.02); formula uses 1.018 → 6,871.50
-      expect(result.pricing.installationCost).toBe('6871.50');
-      expect(result.pricing.freightCost).toBe('800.00');
+    it('prices off the product price list, not the retired TAD matrix', () => {
+      // 12 stops, 1000 kg PASSENGER:
+      //   7,000,000 + (12-10)×80,000 + (1000-630)×1,000 = 7,530,000
+      expect(result.pricing.basePrice).toBe('7000000.00');
+      expect(result.pricing.stopsAdjustment).toBe('160000.00');
+      expect(result.pricing.capacityAdjustment).toBe('370000.00');
+      expect(result.pricing.totalBeforeMargin).toBe('7530000.00');
     });
 
-    it('produces TOTAL_PRICE from Decimal application of §4.2.1–4.2.3', () => {
-      // TAD printed BASE 93,034.62 and TOTAL 156,882.63 disagree with the
-      // stated factors (45000×1.80×1.09×1.15×0.92 = 93,410.82). We assert
-      // the formula-correct chain.
-      expect(result.pricing.baseCost).toBe('93410.82');
-      expect(result.pricing.totalPrice).toBe('157358.67');
+    it('applies margin then tax on top of the list price', () => {
+      // 7,530,000 × 1.25 = 9,412,500 ; × 1.05 = 9,883,125
+      expect(result.pricing.marginAmount).toBe('1882500.00');
+      expect(result.pricing.subtotalWithMargin).toBe('9412500.00');
+      expect(result.pricing.totalPrice).toBe('9883125.00');
+    });
+  });
+
+  describe('price list', () => {
+    it('floors both adjustments at the reference machine (10 stops, 630 kg)', () => {
+      const result = service.calculateSpecs({
+        ...WORKED_EXAMPLE,
+        stops: 5,
+        capacityKg: 450,
+        marginPercent: 0,
+        taxPercent: 0,
+      });
+      expect(result.pricing.stopsAdjustment).toBe('0.00');
+      expect(result.pricing.capacityAdjustment).toBe('0.00');
+      expect(result.pricing.totalPrice).toBe('7000000.00');
+    });
+
+    it('steps the passenger base up at 20 and 31 stops', () => {
+      // Held at 630 kg so the capacity term is zero and only the base moves.
+      const priceAt = (stops: number): string =>
+        service.calculateSpecs({
+          ...WORKED_EXAMPLE,
+          stops,
+          capacityKg: 630,
+          marginPercent: 0,
+          taxPercent: 0,
+        }).pricing.basePrice;
+
+      expect(priceAt(19)).toBe('7000000.00');
+      expect(priceAt(20)).toBe('8000000.00');
+      expect(priceAt(30)).toBe('8000000.00');
+      expect(priceAt(31)).toBe('11000000.00');
+    });
+
+    it('keeps the stop reference at 10 inside every base tier', () => {
+      const totalAt = (stops: number): string =>
+        service.calculateSpecs({
+          ...WORKED_EXAMPLE,
+          stops,
+          capacityKg: 630,
+          marginPercent: 0,
+          taxPercent: 0,
+        }).pricing.totalPrice;
+
+      // 8,000,000 + (20-10)×80,000
+      expect(totalAt(20)).toBe('8800000.00');
+      // 11,000,000 + (31-10)×80,000
+      expect(totalAt(31)).toBe('12680000.00');
+    });
+
+    it('does not tier platform lifts or escalators by stops', () => {
+      const totalAt = (productType: CalcInput['productType'], stops: number): string =>
+        service.calculateSpecs({
+          ...WORKED_EXAMPLE,
+          productType,
+          stops,
+          marginPercent: 0,
+          taxPercent: 0,
+        }).pricing.totalPrice;
+
+      expect(totalAt('CAR_PLATFORM_LIFT', 40)).toBe('5200000.00');
+      expect(totalAt('ESCALATOR', 40)).toBe('6000000.00');
+    });
+
+    it('prices a car platform lift flat, ignoring stops and capacity', () => {
+      const platformLift: CalcInput = {
+        ...WORKED_EXAMPLE,
+        productType: 'CAR_PLATFORM_LIFT',
+        marginPercent: 0,
+        taxPercent: 0,
+      };
+      const small = service.calculateSpecs({
+        ...platformLift,
+        stops: 4,
+        capacityKg: 630,
+      });
+      const big = service.calculateSpecs({
+        ...platformLift,
+        stops: 20,
+        capacityKg: 5000,
+      });
+      expect(small.pricing.totalPrice).toBe('5200000.00');
+      expect(big.pricing.totalPrice).toBe('5200000.00');
+    });
+
+    it('prices an escalator flat', () => {
+      const result = service.calculateSpecs({
+        ...WORKED_EXAMPLE,
+        productType: 'ESCALATOR',
+        marginPercent: 0,
+        taxPercent: 0,
+      });
+      expect(result.pricing.totalPrice).toBe('6000000.00');
+    });
+
+    it('does not vary price by speed, door, machine room or building usage', () => {
+      const plain = service.calculateSpecs({ ...WORKED_EXAMPLE });
+      const loaded = service.calculateSpecs({
+        ...WORKED_EXAMPLE,
+        speedMs: 6,
+        doorType: 'TELESCOPIC',
+        doorWidthMm: 1400,
+        machineRoomType: 'MR',
+        buildingUsage: 'HOSPITAL',
+        travelHeightM: 200,
+      });
+      expect(loaded.pricing.totalPrice).toBe(plain.pricing.totalPrice);
     });
   });
 
@@ -67,7 +172,6 @@ describe('ElevatorCalcService', () => {
         taxPercent: 0,
       });
       expect(result.technical.capacityPersons).toBe(4);
-      expect(result.pricing.qBase).toBe('28000.00');
       expect(result.technical.machineRoomWidthMm).toBeNull();
       expect(result.technical.overheadClearanceMm).toBe(
         4200 + 100 * 2 + 0 - 1500,
@@ -97,33 +201,39 @@ describe('ElevatorCalcService', () => {
       });
       expect(result.technical.guideRailSpec).toBe('T140-3/B');
     });
-    it('raises HOSPITAL car height and installation multiplier', () => {
-      const commercial = service.calculateSpecs(WORKED_EXAMPLE);
+    it('raises HOSPITAL car height', () => {
       const hospital = service.calculateSpecs({
         ...WORKED_EXAMPLE,
         buildingUsage: 'HOSPITAL',
       });
       expect(hospital.technical.carHeightMm).toBe(2350);
-      expect(Number(hospital.pricing.installationCost)).toBeGreaterThan(
-        Number(commercial.pricing.installationCost),
-      );
     });
 
-    it('clamps capacity multiplier at the low end for light cars', () => {
-      const result = service.calculateSpecs({
-        ...WORKED_EXAMPLE,
-        capacityKg: 320,
-      });
-      // 1 + ((320-1000)/1000)*0.05 = 0.966 → above 0.8 floor
-      expect(result.pricing.capacityMultiplier).toBe('0.97');
-    });
+    // §4.1 is EN 81 *lift* geometry. A flat-priced escalator or platform lift
+    // has no car, counterweight or guide rail, and the document renderers
+    // drop absent keys — so emitting nulls here is what keeps a lift's
+    // specification off an escalator quotation.
+    it.each(['CAR_PLATFORM_LIFT', 'ESCALATOR'] as const)(
+      'emits no lift geometry for %s, only the product type',
+      (productType) => {
+        const result = service.calculateSpecs({
+          ...WORKED_EXAMPLE,
+          productType,
+        });
 
-    it('applies TELESCOPIC door premium of 8% of Q_base', () => {
-      const result = service.calculateSpecs({
-        ...WORKED_EXAMPLE,
-        doorType: 'TELESCOPIC',
-      });
-      expect(result.pricing.doorPremium).toBe('3600.00');
+        expect(result.technical.productType).toBe(productType);
+        const { productType: _omitted, ...geometry } = result.technical;
+        expect(Object.values(geometry).every((v) => v === null)).toBe(true);
+        // Pricing is unaffected: flat, and still computed.
+        expect(result.pricing.totalBeforeMargin).not.toBe('0.00');
+      },
+    );
+
+    it('keeps the full lift geometry for PASSENGER', () => {
+      const result = service.calculateSpecs(WORKED_EXAMPLE);
+      expect(result.technical.productType).toBe('PASSENGER');
+      expect(result.technical.guideRailSpec).toBe('T89-1/B');
+      expect(result.technical.carWidthMm).toBe(1100);
     });
   });
 });
