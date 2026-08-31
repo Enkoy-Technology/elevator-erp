@@ -1,6 +1,10 @@
 import { Decimal } from 'decimal.js';
 
-import type { BuildingUsage, DoorType, MachineRoomType } from './types';
+import type {
+  BuildingUsage,
+  MachineRoomType,
+  ProductType,
+} from './types';
 
 Decimal.set({ precision: 40, rounding: Decimal.ROUND_HALF_UP });
 
@@ -12,50 +16,85 @@ const money = (value: Decimal): string =>
 const qty2 = (value: Decimal): string =>
   value.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2);
 
-const BASE_COST_MATRIX: ReadonlyArray<readonly [number, number]> = [
-  [320, 28_000],
-  [450, 32_000],
-  [630, 36_000],
-  [800, 40_000],
-  [1000, 45_000],
-  [1150, 48_000],
-  [1350, 52_000],
-  [1600, 58_000],
-  [2000, 68_000],
-  [2500, 82_000],
-  [3000, 95_000],
-  [4000, 120_000],
-  [5000, 145_000],
+/**
+ * Product owner's price list, in ETB, before margin and before VAT.
+ *
+ * The reference machine is 10 stops at 630 kg; a machine with more of either
+ * costs the per-unit rate on top. Platform lifts and escalators are flat —
+ * their escalation rates are zero, not missing.
+ *
+ * These are selling prices, not costs: they replace the TAD §4.2 multiplier
+ * model wholesale (that matrix was denominated in USD and was relabelled ETB
+ * without conversion, which under-quoted every machine by ~100x).
+ */
+/** Rows are ordered high-to-low; the first the machine reaches wins. */
+type BaseTier = { readonly fromStops: number; readonly base: string };
+
+/** Passenger/hospital base steps up with building height. */
+const PASSENGER_BASE_TIERS: readonly BaseTier[] = [
+  { fromStops: 31, base: '11000000' },
+  { fromStops: 20, base: '8000000' },
+  { fromStops: 0, base: '7000000' },
 ];
 
-/** §4.2.1 BASE_COST multipliers. */
-export const U_FACTOR: Record<BuildingUsage, string> = {
-  RESIDENTIAL: '1.00',
-  COMMERCIAL: '1.15',
-  HOSPITAL: '1.25',
-  INDUSTRIAL: '1.20',
-};
-
-export const D_FACTOR: Record<DoorType, string> = {
-  CENTER_OPEN: '1.00',
-  TELESCOPIC: '1.12',
-  SWING: '0.95',
-};
-
-export const MR_FACTOR: Record<MachineRoomType, string> = {
-  MR: '1.00',
-  MRL: '0.92',
-};
-
-export const lookupQBase = (capacityKg: number): Decimal => {
-  const exact = BASE_COST_MATRIX.find(([q]) => q === capacityKg);
-  if (exact) {
-    return D(exact[1]);
+const PRICE_LIST: Record<
+  ProductType,
+  {
+    baseTiers: readonly BaseTier[];
+    perStopAbove10: string;
+    perKgAbove630: string;
   }
-  // Nearest documented capacity at or below Q; clamp to matrix bounds.
-  const candidates = BASE_COST_MATRIX.filter(([q]) => q <= capacityKg);
-  const row = candidates.at(-1) ?? BASE_COST_MATRIX[0]!;
-  return D(row[1]);
+> = {
+  PASSENGER: {
+    baseTiers: PASSENGER_BASE_TIERS,
+    perStopAbove10: '80000',
+    perKgAbove630: '1000',
+  },
+  CAR_PLATFORM_LIFT: {
+    baseTiers: [{ fromStops: 0, base: '5200000' }],
+    perStopAbove10: '0',
+    perKgAbove630: '0',
+  },
+  ESCALATOR: {
+    baseTiers: [{ fromStops: 0, base: '6000000' }],
+    perStopAbove10: '0',
+    perKgAbove630: '0',
+  },
+};
+
+export const REFERENCE_STOPS = 10;
+export const REFERENCE_CAPACITY_KG = 630;
+
+/**
+ * `base(N) + max(0, N - 10) × rate_stop + max(0, Q - 630) × rate_kg`.
+ *
+ * Both adjustments floor at the reference point: an under-spec machine still
+ * costs the base, it never prices below it.
+ *
+ * The stop reference stays at 10 in every tier — a 20-stop passenger lift is
+ * 8,000,000 + 10 × 80,000, not 8,000,000 flat. That is the literal reading of
+ * "same formula, different base"; the tier boundary is where the base jumps,
+ * not where the per-stop count restarts.
+ */
+export const computeProductPrice = (
+  productType: ProductType,
+  stops: number,
+  capacityKg: number,
+): {
+  basePrice: Decimal;
+  stopsAdjustment: Decimal;
+  capacityAdjustment: Decimal;
+} => {
+  const rates = PRICE_LIST[productType];
+  // Every tier list ends at fromStops: 0, so one row always matches.
+  const tier = rates.baseTiers.find((t) => stops >= t.fromStops)!;
+  const stopsOver = Decimal.max(0, D(stops).minus(REFERENCE_STOPS));
+  const kgOver = Decimal.max(0, D(capacityKg).minus(REFERENCE_CAPACITY_KG));
+  return {
+    basePrice: D(tier.base),
+    stopsAdjustment: stopsOver.mul(rates.perStopAbove10),
+    capacityAdjustment: kgOver.mul(rates.perKgAbove630),
+  };
 };
 
 export const passengerCapacity = (capacityKg: number): number =>
@@ -174,70 +213,6 @@ export const computeMachineRoom = (
     depthMm: Math.max(3000, shaftDepthMm + 1000),
     heightMm: D(speedMs).gt('2.5') ? 2700 : 2500,
   };
-};
-
-/**
- * Tiered speed premium on Q_base:
- * +3%/m/s in (1.0, 2.5], +5%/m/s in (2.5, 4.0], +8%/m/s above 4.0.
- */
-export const computeSpeedPremium = (qBase: Decimal, speedMs: number): Decimal => {
-  const v = D(speedMs);
-  if (v.lte(1)) {
-    return D(0);
-  }
-  let premium = D(0);
-  const band1 = Decimal.min(v, D('2.5')).minus(1);
-  premium = premium.plus(qBase.mul('0.03').mul(Decimal.max(0, band1)));
-  if (v.gt('2.5')) {
-    const band2 = Decimal.min(v, D(4)).minus('2.5');
-    premium = premium.plus(qBase.mul('0.05').mul(Decimal.max(0, band2)));
-  }
-  if (v.gt(4)) {
-    premium = premium.plus(qBase.mul('0.08').mul(v.minus(4)));
-  }
-  return premium;
-};
-
-export const computeDoorPremium = (
-  qBase: Decimal,
-  doorType: DoorType,
-  doorWidthMm: number,
-): Decimal => {
-  if (doorType === 'TELESCOPIC') {
-    return qBase.mul('0.08');
-  }
-  if (doorType === 'CENTER_OPEN' && doorWidthMm > 1000) {
-    const steps = D(doorWidthMm - 1000).div(100).floor();
-    return qBase.mul('0.03').mul(steps);
-  }
-  return D(0);
-};
-
-export const computeInstallationCost = (
-  qBase: Decimal,
-  travelHeightM: number,
-  buildingUsage: BuildingUsage,
-): Decimal => {
-  const heightFactor = D(1).plus(D(travelHeightM).div(50).mul('0.02'));
-  let usageFactor = D(1);
-  if (buildingUsage === 'HOSPITAL') usageFactor = D('1.2');
-  if (buildingUsage === 'INDUSTRIAL') usageFactor = D('1.15');
-  return qBase.mul('0.15').mul(heightFactor).mul(usageFactor);
-};
-
-export const computeFreightCost = (
-  shaftWidthMm: number,
-  shaftDepthMm: number,
-  travelHeightM: number,
-  counterweightMassKg: Decimal,
-): Decimal => {
-  const volumeTerm = D(shaftWidthMm)
-    .mul(shaftDepthMm)
-    .mul(travelHeightM)
-    .div('1e9')
-    .mul(500);
-  const weightTerm = counterweightMassKg.div(1000).mul(200);
-  return Decimal.max(D(800), volumeTerm.plus(weightTerm));
 };
 
 export { money, qty2 };

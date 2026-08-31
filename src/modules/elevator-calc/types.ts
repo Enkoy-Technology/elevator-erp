@@ -12,7 +12,23 @@ export const BUILDING_USAGES = [
 ] as const;
 export type BuildingUsage = (typeof BUILDING_USAGES)[number];
 
+/**
+ * What is being sold. Drives pricing only — the technical block is still
+ * computed with the EN 81 lift formulas regardless.
+ *
+ * PASSENGER covers hospital lifts: the product owner prices them identically,
+ * and `buildingUsage: 'HOSPITAL'` already carries the distinction (taller car,
+ * and it is what the quote document reads).
+ */
+export const PRODUCT_TYPES = [
+  'PASSENGER',
+  'CAR_PLATFORM_LIFT',
+  'ESCALATOR',
+] as const;
+export type ProductType = (typeof PRODUCT_TYPES)[number];
+
 export interface CalcInput {
+  productType: ProductType;
   capacityKg: number;
   stops: number;
   travelHeightM: number;
@@ -25,18 +41,26 @@ export interface CalcInput {
   taxPercent: number;
 }
 
+/**
+ * Every field except `productType` is null for non-PASSENGER products: §4.1
+ * defines EN 81 *lift* geometry, and an escalator has no car, counterweight
+ * or guide rail. Nulling them here — at the one place that produces them —
+ * is what keeps a counterweight mass off an escalator quotation, since both
+ * document renderers and the calculator screen already drop absent keys.
+ */
 export interface TechnicalSpecs {
-  capacityPersons: number;
-  carWidthMm: number;
-  carDepthMm: number;
-  carHeightMm: number;
-  shaftWidthMm: number;
-  shaftDepthMm: number;
-  pitDepthMm: number;
-  overheadClearanceMm: number;
-  counterweightMassKg: string;
-  motorPowerKw: string;
-  guideRailSpec: string;
+  productType: ProductType;
+  capacityPersons: number | null;
+  carWidthMm: number | null;
+  carDepthMm: number | null;
+  carHeightMm: number | null;
+  shaftWidthMm: number | null;
+  shaftDepthMm: number | null;
+  pitDepthMm: number | null;
+  overheadClearanceMm: number | null;
+  counterweightMassKg: string | null;
+  motorPowerKw: string | null;
+  guideRailSpec: string | null;
   machineRoomWidthMm: number | null;
   machineRoomDepthMm: number | null;
   machineRoomHeightMm: number | null;
@@ -44,15 +68,9 @@ export interface TechnicalSpecs {
 
 /** Money fields serialized to 2-decimal strings (ETB). */
 export interface PricingBreakdown {
-  qBase: string;
-  baseCost: string;
-  stopCost: string;
-  capacityMultiplier: string;
-  speedPremium: string;
-  doorPremium: string;
-  installationCost: string;
-  freightCost: string;
-  equipmentSubtotal: string;
+  basePrice: string;
+  stopsAdjustment: string;
+  capacityAdjustment: string;
   totalBeforeMargin: string;
   marginAmount: string;
   subtotalWithMargin: string;
