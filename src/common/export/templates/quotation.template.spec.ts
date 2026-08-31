@@ -33,6 +33,28 @@ describe('buildQuotationHtml', () => {
     customerName: 'Acme Real Estate PLC',
   };
 
+  // The product type is the only technical row an escalator or platform-lift
+  // quote carries (the rest are null), so it has to survive the enum → label
+  // mapping and it has to be the row that names the machine.
+  it('names the product in words, and prints no lift geometry for a flat product', () => {
+    const html = buildQuotationHtml(
+      {
+        ...data,
+        technicalSpec: {
+          productType: 'ESCALATOR',
+          capacityPersons: null,
+          motorPowerKw: null,
+          guideRailSpec: null,
+        },
+      },
+      branding,
+    );
+    expect(html).toContain('Escalator');
+    expect(html).not.toContain('ESCALATOR');
+    expect(html).not.toContain('Guide rail');
+    expect(html).not.toContain('Motor power');
+  });
+
   it('embeds key quote fields, names, and totals', () => {
     const html = buildQuotationHtml(data, branding);
     expect(html).toContain('QTN-2026-ABCD1234');

@@ -68,6 +68,10 @@ const mockLaunch = () => {
     setRequestInterception: jest.fn(),
     on: jest.fn(),
     setContent: jest.fn().mockResolvedValue(undefined),
+    // The renderer lifts the pinned header/footer bands out of the page's
+    // <template> elements before calling pdf(); the real callback runs in
+    // the browser, so here it just returns the shape that call produces.
+    evaluate: jest.fn().mockResolvedValue({ head: '', foot: '' }),
     pdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-1.4')),
     close: jest.fn().mockResolvedValue(undefined),
   };

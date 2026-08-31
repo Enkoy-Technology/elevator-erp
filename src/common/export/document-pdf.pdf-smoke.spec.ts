@@ -213,4 +213,46 @@ describe('DocumentPdfService PDF smoke test (real Chromium)', () => {
       await parser.destroy();
     }
   });
+
+  /**
+   * The regression guard for the bug that prompted this design: the
+   * letterhead and the footer used to be the first and last blocks of the
+   * CONTENT flow, so on a short invoice the footer floated up under the
+   * totals, and on a long one page 2 had no letterhead at all. They are now
+   * drawn into Chromium's page margin boxes, which repeat on every page.
+   *
+   * Asserting on page COUNT and on the letterhead appearing once per page is
+   * what actually catches a regression here — a screenshot of page 1 looks
+   * identical either way.
+   */
+  it('repeats the letterhead and footer on every page of a long document', async () => {
+    const lines = Array.from({ length: 70 }, (_unused, index) => ({
+      description: `Line ${index + 1} — passenger elevator component, supply and install`,
+      quantity: '1',
+      unitPriceEtb: '12500.00',
+      lineTotalEtb: '12500.00',
+    }));
+
+    const pdf = await service.renderDocumentPdf(
+      'invoice',
+      { ...baseInvoiceData, invoiceNumber: 'INV-2026-LONG', lines },
+      invoiceBranding,
+    );
+
+    const parser = new PDFParse({ data: pdf });
+    try {
+      const { text, total } = await parser.getText();
+      expect(total).toBeGreaterThan(1);
+
+      // Once per page, not once per document.
+      const letterheads = text.split('Enkoy Elevators PLC').length - 1;
+      expect(letterheads).toBeGreaterThanOrEqual(total);
+
+      // Chromium's own page counter, proving the footer band rendered.
+      expect(text).toContain(`1 / ${total}`);
+      expect(text).toContain(`${total} / ${total}`);
+    } finally {
+      await parser.destroy();
+    }
+  });
 });
