@@ -6,7 +6,8 @@ NestJS 11 + TypeScript, Drizzle ORM, PostgreSQL 16 with RLS.
 
 ## Commands
 
-Dev (all-in-one): `pnpm run dev` — Docker Postgres, migrate, API (`:3002`) + admin UI (`:3003`)
+Dev (all-in-one): `pnpm run dev` — frees :3002/:3003 leftovers, Docker Postgres, migrate, API (`:3002`) + admin UI (`:3003`)
+Kill leftovers: `pnpm run kill` — stop leftover Nest/Next on 3002/3003 (`EADDRINUSE`)
 Infra only: `pnpm run infra:up` / `pnpm run infra:down`
 Build: `pnpm run build`
 Test: `pnpm test`
@@ -96,9 +97,10 @@ Never commit `.env` or any file containing secrets.
 
 ## Admin UI (`web/`)
 
-- List pages stay clean: header + search/filters + **paginated table**. No inline create forms above the list.
-- Create/edit opens in a **right-side overlay drawer** (primary button → drawer). Use shared `SideDrawer` / `Pagination`.
-- List APIs return `{ items, page, pageSize, total, totalPages }`. Query: `page` (1-based), `pageSize` (default 20, max 100).
+- List pages stay clean: header + toolbar + **paginated table**. No inline create forms above the list.
+- Create/edit is its **own route** (`/<module>/new`, `/<module>/[id]/edit`), built with shared `FormPage` / `FormSection` / `Field`. Not an overlay drawer — that convention was retired 31 Aug 2026. `SideDrawer` remains for short confirmations only.
+- Every list uses the shared `DataTable` (TanStack Table v8): sorting, row selection, empty state and the pager all live there. Do not hand-roll a `<table>`.
+- List APIs return `{ items, page, pageSize, total, totalPages }`. Query: `page` (1-based), `pageSize` (default 10, max 100; the UI offers 5/10/25/50/100).
 - See `.cursor/rules/admin-ui-patterns.mdc` for the full rule.
 
 ## Error Handling
