@@ -9,6 +9,7 @@ import {
 } from '../../common/pagination';
 import { customers, projects, quotations, type QuoteStatus } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
+import { autoAdvanceProject } from '../projects/project-auto-advance';
 import type { QuotationDocumentRow } from './quotation-document.mapper';
 
 export type QuotationRecord = typeof quotations.$inferSelect;
@@ -104,6 +105,13 @@ export class QuotationsRepository {
     });
   }
 
+  /**
+   * Inserts the quotation and moves its project to QUOTATION in the SAME
+   * transaction — quoting IS the event that defines the stage, so nobody has
+   * to record it a second time by hand. autoAdvanceProject is a silent no-op
+   * when the project is already at or past QUOTATION, or is CANCELLED, and
+   * never throws: a stage that cannot move must not fail the quotation.
+   */
   async create(
     tenantId: string,
     values: QuotationInsert,
@@ -113,6 +121,7 @@ export class QuotationsRepository {
       if (!row) {
         throw new Error('Failed to insert quotation');
       }
+      await autoAdvanceProject(tx, row.projectId, 'QUOTATION');
       return row;
     });
   }
