@@ -1,106 +1,71 @@
-import { Document, Paragraph, Table, TextRun } from 'docx';
+import type { Document, Paragraph, Table } from 'docx';
 
 import type { TenantBranding } from '../document-pdf.service';
-import { sanitizeHex } from './layout';
+import {
+  buildDocxDocument,
+  fullWidthTable,
+  grandRow,
+  heading,
+  partiesTable,
+  plateTable,
+  row,
+  signatureTable,
+  textBlock,
+} from './docx-layout';
 import { formatEtb } from './money-format';
 import type { ProformaTemplateData } from './proforma.template';
-import { fullWidthTable, heading, row } from './quotation.docx-template';
 import { fmtDate, TECH_ROWS } from './quotation.template';
 
 export { formatEtb };
 
 /**
  * Builds the proforma invoice as a native docx `Document` — mirrors
- * buildQuotationDocx's section shell (letterhead, meta, technical spec,
- * pricing, notes, footer) via the same row/table/heading helpers; only the
- * title, the identifying number, and the pricing block (taxable base / VAT
- * / total only — no margin, no cost itemization, see ProformaTemplateData's
- * own doc comment) differ. Logo-omission reasoning is the same as
- * buildQuotationDocx's own doc comment.
+ * buildQuotationDocx's section shell (letterhead, reference plate, party
+ * blocks, technical spec, pricing, notes, signature, footer) via the same
+ * docx-layout.ts helpers; only the title, the identifying number, and the
+ * pricing block (taxable base / VAT / total only — no margin, no cost
+ * itemization, see ProformaTemplateData's own doc comment) differ.
+ * Logo/stamp-omission reasoning is the same as buildQuotationDocx's.
  */
 export const buildProformaDocx = (data: object, branding: TenantBranding | null): Document => {
   const d = data as ProformaTemplateData;
   const tech = d.technicalSpec ?? {};
-  const primary = sanitizeHex(branding?.primaryColor);
+  const primary = branding?.primaryColor ?? null;
 
   const techRows = TECH_ROWS.filter((r) => tech[r.key] != null).map((r) =>
     row(r.label, `${String(tech[r.key])}${r.unit ? ` ${r.unit}` : ''}`),
   );
 
-  const phones = (branding?.phones ?? []).filter(Boolean).join(' · ');
-  const footerLine = [branding?.address, phones].filter(Boolean).join(' · ');
-
-  const body: (Paragraph | Table)[] = [
-    new Paragraph({
-      children: [
-        new TextRun({ text: branding?.name ?? '', bold: true, size: 32, color: primary }),
+  const children: (Paragraph | Table)[] = [
+    plateTable(
+      [
+        { label: 'Proforma No.', value: d.proformaNumber },
+        { label: 'Issued', value: fmtDate(d.issuedAt) },
+        { label: 'Valid Until', value: fmtDate(d.validUntil) },
+        { label: 'Status', value: d.status },
       ],
+      primary,
+    ),
+    partiesTable(branding, {
+      label: 'Prepared For',
+      lines: [d.customerName, `Project: ${d.projectName}`],
     }),
-    ...(branding?.slogan
-      ? [
-          new Paragraph({
-            spacing: { after: 200 },
-            children: [
-              new TextRun({ text: branding.slogan, italics: true, color: '666666', size: 20 }),
-            ],
-          }),
-        ]
-      : []),
-    new Paragraph({
-      spacing: { before: 120, after: 200 },
-      children: [
-        new TextRun({ text: 'PROFORMA INVOICE', bold: true, size: 32, color: primary }),
-        new TextRun({ text: `   ${d.status}`, bold: true, size: 20 }),
-      ],
-    }),
-    new Paragraph({
-      spacing: { after: 200 },
-      children: [
-        new TextRun(
-          `Proforma No.: ${d.proformaNumber}    Issued: ${fmtDate(d.issuedAt)}    Valid Until: ${fmtDate(d.validUntil)}`,
-        ),
-      ],
-    }),
-    heading('Prepared For', primary),
-    new Paragraph({ children: [new TextRun({ text: d.customerName, bold: true })] }),
-    new Paragraph({ children: [new TextRun(`Project: ${d.projectName}`)] }),
     heading('Technical Specification', primary),
-    fullWidthTable(techRows.length ? techRows : [row('See attached specification', '')]),
+    fullWidthTable(techRows.length ? techRows : [row('See attached specification', '—')]),
     heading('Pricing', primary),
     fullWidthTable([
       row('Supply and installation', formatEtb(d.subtotalEtb)),
       row(`VAT (${d.taxPercent ?? '0'}%)`, formatEtb(d.vatEtb)),
-      row('Total', formatEtb(d.totalEtb)),
+      grandRow('Total', formatEtb(d.totalEtb)),
     ]),
-    ...(d.notes
-      ? [heading('Notes', primary), new Paragraph({ children: [new TextRun(d.notes)] })]
-      : []),
-    new Paragraph({
-      spacing: { before: 400 },
-      children: [new TextRun({ text: footerLine, size: 18, color: '888888' })],
-    }),
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: `This proforma invoice is valid until ${fmtDate(d.validUntil)}. Prices in ETB.`,
-          size: 18,
-          color: '888888',
-        }),
-      ],
-    }),
+    ...(d.notes ? [heading('Notes', primary), textBlock(d.notes)] : []),
+    signatureTable(branding),
   ];
 
-  return new Document({
-    styles: {
-      default: {
-        document: {
-          run: {
-            font: { ascii: 'Arial', hAnsi: 'Arial', cs: 'Noto Sans Ethiopic' },
-            size: 22,
-          },
-        },
-      },
-    },
-    sections: [{ children: body }],
+  return buildDocxDocument({
+    branding,
+    documentTitle: 'PROFORMA INVOICE',
+    footerNote: `This proforma invoice is valid until ${fmtDate(d.validUntil)}. Prices in ETB.`,
+    children,
   });
 };
