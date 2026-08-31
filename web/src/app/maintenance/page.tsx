@@ -1,55 +1,95 @@
 'use client';
 
-import {
-  FormEvent,
-  useCallback,
-  useEffect,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import type { ColumnDef } from '@tanstack/react-table';
 
-import { btnPrimary, btnSecondary, fieldClass, labelClass } from '@/components/form-styles';
-import { Pagination } from '@/components/pagination';
-import { SideDrawer } from '@/components/side-drawer';
+import {
+  Ban,
+  Check,
+  CheckCircle2,
+  ClipboardCheck,
+  UserPlus,
+  X,
+} from 'lucide-react';
+
+import { btnPrimary } from '@/components/form-styles';
+import { DataTable } from '@/components/data-table';
+import { ListToolbar, RowAction, StatusPill } from '@/components/list-toolbar';
+import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
 import {
   ApiError,
-  BREAKDOWN_SEVERITIES,
-  createBreakdown,
-  createMaintenanceContract,
   getAccessToken,
+  getCurrentRole,
   listAssets,
   listBreakdowns,
-  listEmployees,
   listMaintenanceContracts,
-  logServiceVisit,
-  MAINTENANCE_RECURRENCES,
   updateBreakdown,
-  type Asset,
+  updateMaintenanceContract,
   type Breakdown,
   type BreakdownSeverity,
   type BreakdownStatus,
-  type Employee,
   type MaintenanceContract,
-  type MaintenanceRecurrence,
+  type UserRole,
   optional,
 } from '@/lib/api';
-
-const PAGE_SIZE = 20;
+import { csvRows, saveCsv } from '@/app/employees/csv';
 
 const todayIso = (): string => new Date().toISOString().slice(0, 10);
 
-/** Mirrors the API's advanceServiceDate: clamp instead of overflowing a short
- *  month (Jan 31 + 1 month must be Feb 28, not Mar 3). */
-const addMonthsIso = (iso: string, months: number): string => {
-  const [y, m, d] = iso.split('-').map(Number);
-  const date = new Date(Date.UTC(y, m - 1, 1));
-  date.setUTCMonth(date.getUTCMonth() + months);
-  const lastDay = new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
-  ).getUTCDate();
-  date.setUTCDate(Math.min(d, lastDay));
-  return date.toISOString().slice(0, 10);
+/** Bulk-bar button: matches the bar's own Clear control, not a page button. */
+const bulkBtn =
+  'rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium ' +
+  'text-slate-700 transition hover:border-slate-400 hover:bg-slate-50';
+
+/** CEO and ADMIN bypass every @Roles list via RolesGuard's SUPER_ROLES. */
+const allows = (role: UserRole | null, allowed: readonly UserRole[]): boolean =>
+  role !== null && (role === 'CEO' || role === 'ADMIN' || allowed.includes(role));
+
+/** Mirrors @Roles on PATCH /maintenance/contracts/:id. */
+const CONTRACT_WRITE_ROLES: readonly UserRole[] = [
+  'TECHNICAL_LEAD',
+  'FIELD_ENGINEER',
+  'DISPATCHER',
+  'SALES_MANAGER',
+];
+/** POST contracts/:id/visits and PATCH breakdowns/:id — no SALES_MANAGER. */
+const FIELD_WRITE_ROLES: readonly UserRole[] = [
+  'TECHNICAL_LEAD',
+  'FIELD_ENGINEER',
+  'DISPATCHER',
+];
+
+/** Severity is the response clock, so it reads as colour, not as text. */
+const SEVERITY_TONE: Record<
+  BreakdownSeverity,
+  'neutral' | 'active' | 'good' | 'warn' | 'danger'
+> = {
+  EMERGENCY: 'danger',
+  CRITICAL: 'danger',
+  HIGH: 'warn',
+  MEDIUM: 'neutral',
+  LOW: 'neutral',
+};
+
+const BREAKDOWN_STATUS_TONE: Record<
+  BreakdownStatus,
+  'neutral' | 'active' | 'good' | 'warn' | 'danger'
+> = {
+  OPEN: 'warn',
+  ASSIGNED: 'active',
+  DONE: 'good',
+};
+
+const CONTRACT_STATUS_TONE: Record<
+  MaintenanceContract['status'],
+  'neutral' | 'active' | 'good' | 'warn' | 'danger'
+> = {
+  ACTIVE: 'good',
+  PAUSED: 'warn',
+  ENDED: 'neutral',
 };
 
 export default function MaintenancePage() {
@@ -57,59 +97,46 @@ export default function MaintenancePage() {
   const [tab, setTab] = useState<'contracts' | 'breakdowns'>('contracts');
   const [contracts, setContracts] = useState<MaintenanceContract[]>([]);
   const [breakdowns, setBreakdowns] = useState<Breakdown[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
   const [assetMap, setAssetMap] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [role, setRole] = useState<UserRole | null>(null);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const [bulkNotice, setBulkNotice] = useState<string | null>(null);
+  // Which row is mid-confirm; one at a time.
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
-  const [contractDrawer, setContractDrawer] = useState(false);
-  const [visitDrawer, setVisitDrawer] = useState(false);
-  const [breakdownDrawer, setBreakdownDrawer] = useState(false);
-  const [visitContractId, setVisitContractId] = useState<string | null>(null);
-  const [visitNotes, setVisitNotes] = useState('');
-  const [formError, setFormError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const [assetId, setAssetId] = useState('');
-  const [recurrence, setRecurrence] =
-    useState<MaintenanceRecurrence>('MONTHLY');
-  const [startDate, setStartDate] = useState(todayIso());
-  const [nextServiceAt, setNextServiceAt] = useState(addMonthsIso(todayIso(), 1));
-  const [contractNotes, setContractNotes] = useState('');
-
-  const [bdAssetId, setBdAssetId] = useState('');
-  const [bdTitle, setBdTitle] = useState('');
-  const [bdDescription, setBdDescription] = useState('');
-  const [bdSeverity, setBdSeverity] = useState<BreakdownSeverity>('MEDIUM');
-  const [bdAssignee, setBdAssignee] = useState('');
+  const canWriteContracts = allows(role, CONTRACT_WRITE_ROLES);
+  const canWorkField = allows(role, FIELD_WRITE_ROLES);
 
   const refresh = useCallback(
-    async (nextTab: 'contracts' | 'breakdowns', nextPage: number) => {
+    async (
+      nextTab: 'contracts' | 'breakdowns',
+      nextPage: number,
+      nextPageSize: number,
+    ) => {
       setLoading(true);
       setError(null);
+      // The rows behind the selection are about to be replaced; a selection
+      // that outlives them would act on ids the user can no longer see.
+      setSelectedIds(new Set());
+      setConfirmId(null);
       try {
-        const [assetPage, employeePage] = await Promise.all([
-          optional(listAssets({ page: 1, pageSize: 100 })),
-          optional(listEmployees({ page: 1, pageSize: 100 })),
-        ]);
-        setAssets(assetPage.items);
-        setEmployees(employeePage.items);
+        const assetPage = await optional(listAssets({ page: 1, pageSize: 100 }));
         setAssetMap(
           Object.fromEntries(
             assetPage.items.map((a) => [a.id, a.name] as const),
           ),
         );
-        setAssetId((prev) => prev || assetPage.items[0]?.id || '');
-        setBdAssetId((prev) => prev || assetPage.items[0]?.id || '');
 
         if (nextTab === 'contracts') {
           const result = await listMaintenanceContracts({
             page: nextPage,
-            pageSize: PAGE_SIZE,
+            pageSize: nextPageSize,
           });
           setContracts(result.items);
           setPage(result.page);
@@ -118,7 +145,7 @@ export default function MaintenancePage() {
         } else {
           const result = await listBreakdowns({
             page: nextPage,
-            pageSize: PAGE_SIZE,
+            pageSize: nextPageSize,
           });
           setBreakdowns(result.items);
           setPage(result.page);
@@ -136,99 +163,33 @@ export default function MaintenancePage() {
     [],
   );
 
+  // Coming back from "Open breakdown" should land on the breakdowns tab, the
+  // way closing the old drawer did. The hash is the cheapest way to carry
+  // that across a real navigation.
+  useEffect(() => {
+    if (window.location.hash === '#breakdowns') {
+      setTab('breakdowns');
+    }
+  }, []);
+
   useEffect(() => {
     if (!getAccessToken()) {
       router.replace('/login');
       return;
     }
-    void refresh(tab, page);
-  }, [router, refresh, tab, page]);
+    setRole(getCurrentRole());
+    void refresh(tab, page, pageSize);
+  }, [router, refresh, tab, page, pageSize]);
 
   const switchTab = (next: 'contracts' | 'breakdowns') => {
     setPage(1);
+    setSelectedIds(new Set());
+    setBulkNotice(null);
     setTab(next);
   };
 
-  const onCreateContract = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!assetId) {
-      setFormError('Register an asset first.');
-      return;
-    }
-    setSubmitting(true);
-    setFormError(null);
-    try {
-      await createMaintenanceContract({
-        assetId,
-        recurrence,
-        startDate,
-        nextServiceAt,
-        notes: contractNotes || undefined,
-      });
-      setContractDrawer(false);
-      setPage(1);
-      await refresh('contracts', 1);
-    } catch (err) {
-      setFormError(
-        err instanceof ApiError ? err.message : 'Failed to create contract',
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const onLogVisit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!visitContractId) {
-      return;
-    }
-    setSubmitting(true);
-    setFormError(null);
-    try {
-      await logServiceVisit(visitContractId, {
-        notes: visitNotes || undefined,
-      });
-      setVisitDrawer(false);
-      setVisitContractId(null);
-      setVisitNotes('');
-      await refresh('contracts', page);
-    } catch (err) {
-      setFormError(
-        err instanceof ApiError ? err.message : 'Failed to log visit',
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const onCreateBreakdown = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!bdAssetId) {
-      setFormError('Register an asset first.');
-      return;
-    }
-    setSubmitting(true);
-    setFormError(null);
-    try {
-      await createBreakdown({
-        assetId: bdAssetId,
-        title: bdTitle,
-        description: bdDescription || undefined,
-        severity: bdSeverity,
-        assignedUserId: bdAssignee || undefined,
-      });
-      setBreakdownDrawer(false);
-      setTab('breakdowns');
-      setPage(1);
-      await refresh('breakdowns', 1);
-    } catch (err) {
-      setFormError(
-        err instanceof ApiError ? err.message : 'Failed to open breakdown',
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const assetName = (assetId: string): string =>
+    assetMap[assetId] ?? assetId.slice(0, 8);
 
   const onAdvanceBreakdown = async (
     item: Breakdown,
@@ -236,7 +197,7 @@ export default function MaintenancePage() {
   ) => {
     try {
       await updateBreakdown(item.id, { status });
-      await refresh('breakdowns', page);
+      await refresh('breakdowns', page, pageSize);
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : 'Failed to update breakdown',
@@ -244,526 +205,416 @@ export default function MaintenancePage() {
     }
   };
 
+  const endContract = async (contract: MaintenanceContract) => {
+    setConfirmId(null);
+    try {
+      await updateMaintenanceContract(contract.id, { status: 'ENDED' });
+      await refresh('contracts', page, pageSize);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : 'Failed to end contract',
+      );
+    }
+  };
+
+  const selectedContracts = contracts.filter((c) => selectedIds.has(c.id));
+  const selectedBreakdowns = breakdowns.filter((b) => selectedIds.has(b.id));
+
+  const exportContracts = () => {
+    saveCsv(
+      'maintenance-contracts-selected.csv',
+      csvRows([
+        ['Asset', 'Recurrence', 'Status', 'Next service', 'Last service'],
+        ...selectedContracts.map((c) => [
+          assetName(c.assetId),
+          c.recurrence,
+          c.status,
+          c.nextServiceAt,
+          c.lastServiceAt ?? '',
+        ]),
+      ]),
+    );
+  };
+
+  const exportBreakdowns = () => {
+    saveCsv(
+      'maintenance-breakdowns-selected.csv',
+      csvRows([
+        ['Title', 'Asset', 'Severity', 'Status', 'Opened'],
+        ...selectedBreakdowns.map((b) => [
+          b.title,
+          assetName(b.assetId),
+          b.severity,
+          b.status,
+          b.createdAt,
+        ]),
+      ]),
+    );
+  };
+
+  const endSelectedContracts = async () => {
+    const targets = selectedContracts.filter((c) => c.status !== 'ENDED');
+    if (targets.length === 0) {
+      setBulkNotice('Every selected contract has already ended.');
+      return;
+    }
+    if (
+      !window.confirm(
+        `End ${targets.length} contract(s)? They stop generating service visits.`,
+      )
+    ) {
+      return;
+    }
+    setBulkNotice(null);
+    // No bulk endpoint exists — this is N PATCHes, so it is NOT atomic and a
+    // partial failure is reported as one rather than dressed up as success.
+    const results = await Promise.allSettled(
+      targets.map((c) => updateMaintenanceContract(c.id, { status: 'ENDED' })),
+    );
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    setBulkNotice(
+      failed === 0
+        ? `Ended ${targets.length} contract(s).`
+        : `Ended ${targets.length - failed} of ${targets.length}. ${failed} failed and are still running — try those again.`,
+    );
+    await refresh('contracts', page, pageSize);
+  };
+
+  const completeSelectedBreakdowns = async () => {
+    const targets = selectedBreakdowns.filter((b) => b.status !== 'DONE');
+    if (targets.length === 0) {
+      setBulkNotice('Every selected ticket is already done.');
+      return;
+    }
+    if (!window.confirm(`Mark ${targets.length} ticket(s) done?`)) {
+      return;
+    }
+    setBulkNotice(null);
+    const results = await Promise.allSettled(
+      targets.map((b) => updateBreakdown(b.id, { status: 'DONE' })),
+    );
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    setBulkNotice(
+      failed === 0
+        ? `Closed ${targets.length} ticket(s).`
+        : `Closed ${targets.length - failed} of ${targets.length}. ${failed} failed and are still open — try those again.`,
+    );
+    await refresh('breakdowns', page, pageSize);
+  };
+
+  const today = todayIso();
+
+  const contractColumns: ColumnDef<MaintenanceContract, unknown>[] = [
+    {
+      id: 'asset',
+      header: 'Asset',
+      enableSorting: true,
+      accessorFn: (c) => assetMap[c.assetId] ?? c.assetId.slice(0, 8),
+      cell: ({ getValue }) => (
+        <span className="font-medium text-slate-900">{getValue<string>()}</span>
+      ),
+    },
+    { accessorKey: 'recurrence', header: 'Recurrence' },
+    {
+      id: 'nextServiceAt',
+      header: 'Next service',
+      cell: ({ row }) => {
+        // Overdue is the only thing on this page that needs chasing today.
+        const overdue =
+          row.original.status === 'ACTIVE' && row.original.nextServiceAt < today;
+        return (
+          <span className="flex items-center gap-2">
+            <span
+              className={`font-mono text-xs ${overdue ? 'font-semibold text-red-700' : 'text-slate-700'}`}
+            >
+              {row.original.nextServiceAt}
+            </span>
+            {overdue ? <StatusPill label="Overdue" tone="danger" /> : null}
+          </span>
+        );
+      },
+    },
+    {
+      id: 'lastServiceAt',
+      header: 'Last',
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-slate-600">
+          {row.original.lastServiceAt ?? '—'}
+        </span>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: ({ row }) => (
+        <StatusPill
+          label={row.original.status}
+          tone={CONTRACT_STATUS_TONE[row.original.status]}
+        />
+      ),
+    },
+    {
+      id: 'actions',
+      header: '',
+      meta: { align: 'right' },
+      cell: ({ row }) => {
+        const contract = row.original;
+        const label = assetName(contract.assetId);
+        return (
+          <div className="flex items-center justify-end gap-0.5">
+            {canWorkField && contract.status === 'ACTIVE' ? (
+              <RowAction
+                icon={ClipboardCheck}
+                label={`Log a service visit on ${label}`}
+                onClick={() =>
+                  router.push(`/maintenance/contracts/${contract.id}/visit`)
+                }
+              />
+            ) : null}
+            {/* A contract is never deleted — its visits are the service
+                history. Ending it is the destructive action that exists. */}
+            {canWriteContracts && contract.status !== 'ENDED' ? (
+              confirmId === contract.id ? (
+                <>
+                  <RowAction
+                    icon={Check}
+                    tone="danger"
+                    label={`Confirm ending the contract on ${label}`}
+                    onClick={() => void endContract(contract)}
+                  />
+                  <RowAction
+                    icon={X}
+                    label={`Keep the contract on ${label} running`}
+                    onClick={() => setConfirmId(null)}
+                  />
+                </>
+              ) : (
+                <RowAction
+                  icon={Ban}
+                  tone="danger"
+                  label={`End the contract on ${label}`}
+                  onClick={() => setConfirmId(contract.id)}
+                />
+              )
+            ) : null}
+          </div>
+        );
+      },
+    },
+  ];
+
+  const breakdownColumns: ColumnDef<Breakdown, unknown>[] = [
+    {
+      accessorKey: 'title',
+      header: 'Title',
+      enableSorting: true,
+      cell: ({ getValue }) => (
+        <span className="font-medium text-slate-900">{getValue<string>()}</span>
+      ),
+    },
+    {
+      id: 'asset',
+      header: 'Asset',
+      cell: ({ row }) => assetMap[row.original.assetId] ?? '—',
+    },
+    {
+      id: 'severity',
+      header: 'Severity',
+      cell: ({ row }) => (
+        <StatusPill
+          label={row.original.severity}
+          tone={SEVERITY_TONE[row.original.severity]}
+        />
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: ({ row }) => (
+        <StatusPill
+          label={row.original.status}
+          tone={BREAKDOWN_STATUS_TONE[row.original.status]}
+        />
+      ),
+    },
+    {
+      id: 'actions',
+      header: '',
+      meta: { align: 'right' },
+      // A ticket has no delete and no cancel in the API: DONE is the only
+      // way out, so these two are the whole set of real actions.
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-0.5">
+          {canWorkField && row.original.status === 'OPEN' ? (
+            <RowAction
+              icon={UserPlus}
+              label={`Assign ${row.original.title}`}
+              onClick={() => void onAdvanceBreakdown(row.original, 'ASSIGNED')}
+            />
+          ) : null}
+          {canWorkField && row.original.status !== 'DONE' ? (
+            <RowAction
+              icon={CheckCircle2}
+              label={`Mark ${row.original.title} done`}
+              onClick={() => void onAdvanceBreakdown(row.original, 'DONE')}
+            />
+          ) : null}
+        </div>
+      ),
+    },
+  ];
+
+  const tabClass = (active: boolean) =>
+    `rounded-lg px-3 py-1.5 text-sm font-medium ${
+      active ? 'bg-navy-800 text-white' : 'border border-slate-200 text-slate-600'
+    }`;
+
+  const pagination = {
+    page,
+    pageSize,
+    total,
+    totalPages,
+    onPageChange: setPage,
+    onPageSizeChange: (size: number) => {
+      setPageSize(size);
+      setPage(1);
+    },
+  };
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-slate-200 bg-white px-8 py-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h1 className="font-display text-lg font-semibold">
-                Maintenance
-              </h1>
-              <p className="text-sm text-slate-500">
-                Service contracts, visits, and breakdown follow-up
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {tab === 'contracts' ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFormError(null);
-                    setStartDate(todayIso());
-                    setNextServiceAt(addMonthsIso(todayIso(), 1));
-                    setRecurrence('MONTHLY');
-                    setContractNotes('');
-                    setContractDrawer(true);
-                  }}
-                  className={btnPrimary}
-                >
-                  New contract
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFormError(null);
-                    setBdTitle('');
-                    setBdDescription('');
-                    setBdSeverity('MEDIUM');
-                    setBdAssignee('');
-                    setBreakdownDrawer(true);
-                  }}
-                  className={btnPrimary}
-                >
-                  Open breakdown
-                </button>
-              )}
-            </div>
-          </div>
-        </header>
+        <PageHeader
+          eyebrow="Operations"
+          title="Maintenance"
+          description="Service contracts and the breakdowns they generate. Logging a visit rolls the contract to its next service date."
+          actions={
+            tab === 'contracts' ? (
+              <Link href="/maintenance/contracts/new" className={btnPrimary}>
+                New contract
+              </Link>
+            ) : (
+              <Link href="/maintenance/breakdowns/new" className={btnPrimary}>
+                Open breakdown
+              </Link>
+            )
+          }
+        />
 
-        <main className="flex-1 bg-slate-50 p-8">
+        <main className="flex-1 bg-slate-50 p-4 sm:p-8">
           {error ? (
             <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
             </p>
           ) : null}
 
-          <div className="mb-4 flex gap-2">
-            <button
-              type="button"
-              onClick={() => switchTab('contracts')}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-                tab === 'contracts'
-                  ? 'bg-navy-800 text-white'
-                  : 'border border-slate-200 text-slate-600'
-              }`}
-            >
-              Contracts
-            </button>
-            <button
-              type="button"
-              onClick={() => switchTab('breakdowns')}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-                tab === 'breakdowns'
-                  ? 'bg-navy-800 text-white'
-                  : 'border border-slate-200 text-slate-600'
-              }`}
-            >
-              Breakdowns
-            </button>
-          </div>
+          {/* Two different records, not two filters of one list — so this
+              stays a view switch and does not become a FilterSelect. */}
+          <ListToolbar
+            filters={
+              <div className="flex gap-2" role="tablist" aria-label="Maintenance view">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === 'contracts'}
+                  onClick={() => switchTab('contracts')}
+                  className={tabClass(tab === 'contracts')}
+                >
+                  Contracts
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === 'breakdowns'}
+                  onClick={() => switchTab('breakdowns')}
+                  className={tabClass(tab === 'breakdowns')}
+                >
+                  Breakdowns
+                </button>
+              </div>
+            }
+          />
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6">
-            {loading ? (
-              <p className="text-sm text-slate-500">Loading…</p>
-            ) : tab === 'contracts' ? (
-              contracts.length === 0 ? (
-                <p className="text-sm text-slate-500">
-                  No maintenance contracts yet.
-                </p>
-              ) : (
+          {bulkNotice ? (
+            <p className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+              {bulkNotice}
+            </p>
+          ) : null}
+
+          {tab === 'contracts' ? (
+            <DataTable
+              caption="Maintenance contracts"
+              columns={contractColumns}
+              rows={contracts}
+              getRowId={(c) => c.id}
+              loading={loading}
+              pagination={pagination}
+              selectable
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
+              getRowLabel={(c) => `the contract on ${assetName(c.assetId)}`}
+              bulkActions={
                 <>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[720px] text-left text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                          <th className="py-2 pr-4 font-semibold">Asset</th>
-                          <th className="py-2 pr-4 font-semibold">
-                            Recurrence
-                          </th>
-                          <th className="py-2 pr-4 font-semibold">
-                            Next service
-                          </th>
-                          <th className="py-2 pr-4 font-semibold">Last</th>
-                          <th className="py-2 pr-4 font-semibold">Status</th>
-                          <th className="py-2 font-semibold">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {contracts.map((c) => (
-                          <tr
-                            key={c.id}
-                            className="border-b border-slate-100 last:border-0"
-                          >
-                            <td className="py-3 pr-4 font-medium text-slate-900">
-                              {assetMap[c.assetId] ?? c.assetId.slice(0, 8)}
-                            </td>
-                            <td className="py-3 pr-4 text-slate-600">
-                              {c.recurrence}
-                            </td>
-                            <td className="py-3 pr-4 text-slate-600">
-                              {c.nextServiceAt}
-                            </td>
-                            <td className="py-3 pr-4 text-slate-600">
-                              {c.lastServiceAt ?? '—'}
-                            </td>
-                            <td className="py-3 pr-4 text-slate-600">
-                              {c.status}
-                            </td>
-                            <td className="py-3">
-                              {c.status === 'ACTIVE' ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setVisitContractId(c.id);
-                                    setVisitNotes('');
-                                    setFormError(null);
-                                    setVisitDrawer(true);
-                                  }}
-                                  className="text-sm font-semibold text-navy-800 hover:underline"
-                                >
-                                  Log visit
-                                </button>
-                              ) : (
-                                '—'
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <Pagination
-                    page={page}
-                    pageSize={PAGE_SIZE}
-                    total={total}
-                    totalPages={totalPages}
-                    onPageChange={setPage}
-                  />
+                  <button type="button" onClick={exportContracts} className={bulkBtn}>
+                    Export selected
+                  </button>
+                  {canWriteContracts ? (
+                    <button
+                      type="button"
+                      onClick={() => void endSelectedContracts()}
+                      className={bulkBtn}
+                    >
+                      End selected
+                    </button>
+                  ) : null}
                 </>
-              )
-            ) : breakdowns.length === 0 ? (
-              <p className="text-sm text-slate-500">No breakdown tickets.</p>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[720px] text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                        <th className="py-2 pr-4 font-semibold">Title</th>
-                        <th className="py-2 pr-4 font-semibold">Asset</th>
-                        <th className="py-2 pr-4 font-semibold">Severity</th>
-                        <th className="py-2 pr-4 font-semibold">Status</th>
-                        <th className="py-2 font-semibold">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {breakdowns.map((b) => (
-                        <tr
-                          key={b.id}
-                          className="border-b border-slate-100 last:border-0"
-                        >
-                          <td className="py-3 pr-4 font-medium text-slate-900">
-                            {b.title}
-                          </td>
-                          <td className="py-3 pr-4 text-slate-600">
-                            {assetMap[b.assetId] ?? '—'}
-                          </td>
-                          <td className="py-3 pr-4 text-slate-600">
-                            {b.severity}
-                          </td>
-                          <td className="py-3 pr-4 text-slate-600">
-                            {b.status}
-                          </td>
-                          <td className="py-3">
-                            <div className="flex flex-wrap gap-2">
-                              {b.status === 'OPEN' ? (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    void onAdvanceBreakdown(b, 'ASSIGNED')
-                                  }
-                                  className="text-sm font-semibold text-navy-800 hover:underline"
-                                >
-                                  Assign
-                                </button>
-                              ) : null}
-                              {b.status !== 'DONE' ? (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    void onAdvanceBreakdown(b, 'DONE')
-                                  }
-                                  className="text-sm font-semibold text-navy-800 hover:underline"
-                                >
-                                  Done
-                                </button>
-                              ) : null}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <Pagination
-                  page={page}
-                  pageSize={PAGE_SIZE}
-                  total={total}
-                  totalPages={totalPages}
-                  onPageChange={setPage}
-                />
-              </>
-            )}
-          </section>
+              }
+              empty={
+                <>
+                  No maintenance contracts yet. Register the equipment on Assets
+                  first, then start a contract with New contract above.
+                </>
+              }
+            />
+          ) : (
+            <DataTable
+              caption="Breakdown tickets"
+              columns={breakdownColumns}
+              rows={breakdowns}
+              getRowId={(b) => b.id}
+              loading={loading}
+              pagination={pagination}
+              selectable
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
+              getRowLabel={(b) => b.title}
+              bulkActions={
+                <>
+                  <button type="button" onClick={exportBreakdowns} className={bulkBtn}>
+                    Export selected
+                  </button>
+                  {canWorkField ? (
+                    <button
+                      type="button"
+                      onClick={() => void completeSelectedBreakdowns()}
+                      className={bulkBtn}
+                    >
+                      Mark selected done
+                    </button>
+                  ) : null}
+                </>
+              }
+              empty={
+                <>
+                  No breakdown tickets. Open one with Open breakdown above when a
+                  customer reports a fault — severity sets the response clock.
+                </>
+              }
+            />
+          )}
         </main>
       </div>
-
-      <SideDrawer
-        open={contractDrawer}
-        onClose={() => setContractDrawer(false)}
-        title="New maintenance contract"
-        description="Link a service schedule to a registered asset."
-        footer={
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setContractDrawer(false)}
-              className={`${btnSecondary} flex-1`}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="contract-form"
-              disabled={submitting}
-              className={`${btnPrimary} flex-1`}
-            >
-              {submitting ? 'Saving…' : 'Create'}
-            </button>
-          </div>
-        }
-      >
-        <form
-          id="contract-form"
-          onSubmit={(e) => void onCreateContract(e)}
-          className="space-y-4"
-        >
-          {formError ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {formError}
-            </p>
-          ) : null}
-          <div>
-            <label className={labelClass} htmlFor="assetId">
-              Asset
-            </label>
-            <select
-              id="assetId"
-              className={fieldClass}
-              value={assetId}
-              onChange={(e) => setAssetId(e.target.value)}
-            >
-              {assets.length === 0 ? (
-                <option value="">No assets</option>
-              ) : (
-                assets.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} ({a.category})
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="recurrence">
-              Recurrence
-            </label>
-            <select
-              id="recurrence"
-              className={fieldClass}
-              value={recurrence}
-              onChange={(e) =>
-                setRecurrence(e.target.value as MaintenanceRecurrence)
-              }
-            >
-              {MAINTENANCE_RECURRENCES.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="startDate">
-              Start date
-            </label>
-            <input
-              id="startDate"
-              type="date"
-              className={fieldClass}
-              required
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="nextServiceAt">
-              Next service
-            </label>
-            <input
-              id="nextServiceAt"
-              type="date"
-              className={fieldClass}
-              required
-              value={nextServiceAt}
-              onChange={(e) => setNextServiceAt(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="contractNotes">
-              Notes
-            </label>
-            <textarea
-              id="contractNotes"
-              className={fieldClass}
-              rows={3}
-              value={contractNotes}
-              onChange={(e) => setContractNotes(e.target.value)}
-            />
-          </div>
-        </form>
-      </SideDrawer>
-
-      <SideDrawer
-        open={visitDrawer}
-        onClose={() => setVisitDrawer(false)}
-        title="Log service visit"
-        description="Marks today as last service and advances the next date."
-        footer={
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setVisitDrawer(false)}
-              className={`${btnSecondary} flex-1`}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="visit-form"
-              disabled={submitting}
-              className={`${btnPrimary} flex-1`}
-            >
-              {submitting ? 'Saving…' : 'Log visit'}
-            </button>
-          </div>
-        }
-      >
-        <form
-          id="visit-form"
-          onSubmit={(e) => void onLogVisit(e)}
-          className="space-y-4"
-        >
-          {formError ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {formError}
-            </p>
-          ) : null}
-          <div>
-            <label className={labelClass} htmlFor="visitNotes">
-              Notes
-            </label>
-            <textarea
-              id="visitNotes"
-              className={fieldClass}
-              rows={4}
-              value={visitNotes}
-              onChange={(e) => setVisitNotes(e.target.value)}
-            />
-          </div>
-        </form>
-      </SideDrawer>
-
-      <SideDrawer
-        open={breakdownDrawer}
-        onClose={() => setBreakdownDrawer(false)}
-        title="Open breakdown"
-        description="Track a fault from open → assigned → done."
-        footer={
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setBreakdownDrawer(false)}
-              className={`${btnSecondary} flex-1`}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="breakdown-form"
-              disabled={submitting}
-              className={`${btnPrimary} flex-1`}
-            >
-              {submitting ? 'Saving…' : 'Open ticket'}
-            </button>
-          </div>
-        }
-      >
-        <form
-          id="breakdown-form"
-          onSubmit={(e) => void onCreateBreakdown(e)}
-          className="space-y-4"
-        >
-          {formError ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {formError}
-            </p>
-          ) : null}
-          <div>
-            <label className={labelClass} htmlFor="bdAssetId">
-              Asset
-            </label>
-            <select
-              id="bdAssetId"
-              className={fieldClass}
-              value={bdAssetId}
-              onChange={(e) => setBdAssetId(e.target.value)}
-            >
-              {assets.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="bdTitle">
-              Title
-            </label>
-            <input
-              id="bdTitle"
-              className={fieldClass}
-              required
-              minLength={2}
-              value={bdTitle}
-              onChange={(e) => setBdTitle(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="bdSeverity">
-              Severity
-            </label>
-            <select
-              id="bdSeverity"
-              className={fieldClass}
-              value={bdSeverity}
-              onChange={(e) =>
-                setBdSeverity(e.target.value as BreakdownSeverity)
-              }
-            >
-              {BREAKDOWN_SEVERITIES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="bdAssignee">
-              Assign to (optional)
-            </label>
-            <select
-              id="bdAssignee"
-              className={fieldClass}
-              value={bdAssignee}
-              onChange={(e) => setBdAssignee(e.target.value)}
-            >
-              <option value="">Unassigned</option>
-              {employees.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.fullName}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="bdDescription">
-              Description
-            </label>
-            <textarea
-              id="bdDescription"
-              className={fieldClass}
-              rows={3}
-              value={bdDescription}
-              onChange={(e) => setBdDescription(e.target.value)}
-            />
-          </div>
-        </form>
-      </SideDrawer>
     </div>
   );
 }

@@ -1,34 +1,32 @@
 'use client';
 
+import type { ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
-import {
-  FormEvent,
-  useCallback,
-  useEffect,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { btnPrimary, btnSecondary, fieldClass, labelClass } from '@/components/form-styles';
-import { Pagination } from '@/components/pagination';
-import { SideDrawer } from '@/components/side-drawer';
+import { MailOpen } from 'lucide-react';
+
+import { btnPrimary, btnSecondary } from '@/components/form-styles';
+import { DataTable } from '@/components/data-table';
+import {
+  FilterSelect,
+  ListToolbar,
+  RowAction,
+  StatusPill,
+} from '@/components/list-toolbar';
+import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
 import {
   ApiError,
-  createNotification,
   getAccessToken,
-  listEmployees,
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
-  NOTIFICATION_TYPES,
   type AppNotification,
-  type Employee,
   type NotificationType,
-  optional,
 } from '@/lib/api';
-
-const PAGE_SIZE = 20;
+import { csvRows, saveCsv } from '@/app/employees/csv';
 
 const TYPE_LABEL: Record<NotificationType, string> = {
   GENERAL: 'General',
@@ -36,6 +34,11 @@ const TYPE_LABEL: Record<NotificationType, string> = {
   ASSIGNMENT: 'Assignment',
   MAINTENANCE: 'Maintenance',
 };
+
+/** Bulk-bar button: matches the bar's own Clear control, not a page button. */
+const bulkBtn =
+  'rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium ' +
+  'text-slate-700 transition hover:border-slate-400 hover:bg-slate-50';
 
 const formatWhen = (iso: string): string => {
   const date = new Date(iso);
@@ -48,42 +51,34 @@ const formatWhen = (iso: string): string => {
 export default function NotificationsPage() {
   const router = useRouter();
   const [items, setItems] = useState<AppNotification[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [userId, setUserId] = useState('');
-  const [type, setType] = useState<NotificationType>('ASSIGNMENT');
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [linkPath, setLinkPath] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const [bulkNotice, setBulkNotice] = useState<string | null>(null);
 
   const refresh = useCallback(
-    async (nextPage: number, onlyUnread: boolean) => {
+    async (nextPage: number, onlyUnread: boolean, size: number) => {
       setLoading(true);
       setError(null);
+      // The rows behind the selection are about to be replaced; a selection
+      // that outlives them would act on ids the user can no longer see.
+      setSelectedIds(new Set());
       try {
-        const [notifPage, employeePage] = await Promise.all([
-          listNotifications({
-            unreadOnly: onlyUnread,
-            page: nextPage,
-            pageSize: PAGE_SIZE,
-          }),
-          optional(listEmployees({ page: 1, pageSize: 100 })),
-        ]);
+        const notifPage = await listNotifications({
+          unreadOnly: onlyUnread,
+          page: nextPage,
+          pageSize: size,
+        });
         setItems(notifPage.items);
         setPage(notifPage.page);
         setTotal(notifPage.total);
         setTotalPages(notifPage.totalPages);
-        setEmployees(employeePage.items);
-        setUserId((prev) => prev || employeePage.items[0]?.id || '');
       } catch (err) {
         setError(
           err instanceof ApiError
@@ -102,56 +97,13 @@ export default function NotificationsPage() {
       router.replace('/login');
       return;
     }
-    void refresh(page, unreadOnly);
-  }, [router, refresh, page, unreadOnly]);
-
-  const openDrawer = () => {
-    setType('ASSIGNMENT');
-    setTitle('');
-    setBody('');
-    setLinkPath('');
-    setFormError(null);
-    setUserId(employees[0]?.id || '');
-    setDrawerOpen(true);
-  };
-
-  const closeDrawer = () => {
-    setDrawerOpen(false);
-    setFormError(null);
-  };
-
-  const onSend = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!userId) {
-      setFormError('Add an employee first, then send a notice.');
-      return;
-    }
-    setSubmitting(true);
-    setFormError(null);
-    try {
-      await createNotification({
-        userId,
-        type,
-        title,
-        body: body || undefined,
-        linkPath: linkPath || undefined,
-      });
-      closeDrawer();
-      setPage(1);
-      await refresh(1, unreadOnly);
-    } catch (err) {
-      setFormError(
-        err instanceof ApiError ? err.message : 'Failed to send notice',
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    void refresh(page, unreadOnly, pageSize);
+  }, [router, refresh, page, unreadOnly, pageSize]);
 
   const onMarkRead = async (id: string) => {
     try {
       await markNotificationRead(id);
-      await refresh(page, unreadOnly);
+      await refresh(page, unreadOnly, pageSize);
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : 'Failed to mark as read',
@@ -163,7 +115,7 @@ export default function NotificationsPage() {
     setMarkingAll(true);
     try {
       await markAllNotificationsRead();
-      await refresh(page, unreadOnly);
+      await refresh(page, unreadOnly, pageSize);
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : 'Failed to mark all as read',
@@ -173,268 +125,214 @@ export default function NotificationsPage() {
     }
   };
 
+  const selected = items.filter((item) => selectedIds.has(item.id));
+
+  const exportSelected = () => {
+    saveCsv(
+      'notifications-selected.csv',
+      csvRows([
+        ['Type', 'Title', 'Body', 'Linked record', 'Received', 'State'],
+        ...selected.map((item) => [
+          TYPE_LABEL[item.type],
+          item.title,
+          item.body ?? '',
+          item.linkPath ?? '',
+          item.createdAt,
+          item.readAt ? 'Read' : 'New',
+        ]),
+      ]),
+    );
+  };
+
+  const markSelectedRead = async () => {
+    const targets = selected.filter((item) => !item.readAt);
+    if (targets.length === 0) {
+      setBulkNotice('Every selected notification has already been read.');
+      return;
+    }
+    setBulkNotice(null);
+    // No bulk endpoint for a subset — read-all is all-or-nothing — so this is
+    // N PATCHes and a partial failure is reported as one.
+    const results = await Promise.allSettled(
+      targets.map((item) => markNotificationRead(item.id)),
+    );
+    const failed = results.filter((result) => result.status === 'rejected').length;
+    setBulkNotice(
+      failed === 0
+        ? `Marked ${targets.length} notification(s) read.`
+        : `Marked ${targets.length - failed} of ${targets.length} read. ${failed} failed and are still unread — try those again.`,
+    );
+    await refresh(page, unreadOnly, pageSize);
+  };
+
+  const columns: ColumnDef<AppNotification, unknown>[] = [
+    {
+      id: 'type',
+      header: 'Type',
+      cell: ({ row }) => <StatusPill label={TYPE_LABEL[row.original.type]} />,
+    },
+    {
+      id: 'notice',
+      header: 'Notice',
+      cell: ({ row }) => (
+        <div className="min-w-[16rem] max-w-xl">
+          <p className={row.original.readAt ? 'text-slate-700' : 'font-semibold text-slate-900'}>
+            {row.original.title}
+          </p>
+          {row.original.body ? (
+            <p className="mt-0.5 text-xs text-slate-500">{row.original.body}</p>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      id: 'linkPath',
+      header: 'Linked record',
+      cell: ({ row }) =>
+        row.original.linkPath ? (
+          <Link
+            href={row.original.linkPath}
+            className="font-semibold text-navy-800 hover:underline"
+          >
+            {row.original.linkPath}
+          </Link>
+        ) : (
+          '\u2014'
+        ),
+    },
+    {
+      id: 'createdAt',
+      header: 'Received',
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap">{formatWhen(row.original.createdAt)}</span>
+      ),
+    },
+    {
+      id: 'readState',
+      header: 'State',
+      cell: ({ row }) =>
+        row.original.readAt ? (
+          <StatusPill label="Read" />
+        ) : (
+          <StatusPill label="New" tone="active" />
+        ),
+    },
+    {
+      id: 'actions',
+      header: '',
+      meta: { align: 'right' },
+      // A notification has neither a delete nor a dismiss endpoint — marking
+      // it read is the only thing the API lets this column do.
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-0.5">
+          {row.original.readAt ? null : (
+            <RowAction
+              icon={MailOpen}
+              label={`Mark “${row.original.title}” read`}
+              onClick={() => void onMarkRead(row.original.id)}
+            />
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-slate-200 bg-white px-8 py-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h1 className="font-display text-lg font-semibold">
-                Notifications
-              </h1>
-              <p className="text-sm text-slate-500">
-                In-app alerts and assignments
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
+        <PageHeader
+          eyebrow="Overview"
+          title="Notifications"
+          description="In-app alerts and work assigned to you. Anything with a link opens the record it came from."
+          actions={
+            <>
               <button
                 type="button"
                 onClick={() => void onMarkAll()}
                 disabled={markingAll}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-navy-600 hover:text-navy-800 disabled:opacity-60"
+                className={btnSecondary}
               >
                 {markingAll ? 'Marking…' : 'Mark all read'}
               </button>
-              <button
-                type="button"
-                onClick={openDrawer}
-                className={btnPrimary}
-              >
+              <Link href="/notifications/new" className={btnPrimary}>
                 Send notice
-              </button>
-            </div>
-          </div>
-        </header>
+              </Link>
+            </>
+          }
+        />
 
-        <main className="flex-1 bg-slate-50 p-8">
+        <main className="flex-1 bg-slate-50 p-4 sm:p-8">
           {error ? (
             <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
             </p>
           ) : null}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6">
-            <div className="mb-4 flex flex-wrap items-center gap-3">
-              <label className="flex items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={unreadOnly}
-                  onChange={(e) => {
-                    setPage(1);
-                    setUnreadOnly(e.target.checked);
-                  }}
-                />
-                Unread only
-              </label>
-              <span className="text-sm text-slate-500">{total} total</span>
-            </div>
+          <ListToolbar
+            filters={
+              <FilterSelect
+                label="Read state"
+                value={unreadOnly ? 'UNREAD' : ''}
+                onChange={(value) => {
+                  setPage(1);
+                  setUnreadOnly(value === 'UNREAD');
+                }}
+                options={[{ value: 'UNREAD', label: 'Unread only' }]}
+                allLabel="All notifications"
+              />
+            }
+          />
 
-            {loading ? (
-              <p className="text-sm text-slate-500">Loading…</p>
-            ) : items.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 px-6 py-12 text-center">
-                <p className="text-sm text-slate-500">
-                  {unreadOnly
-                    ? 'No unread notifications.'
-                    : 'No notifications yet.'}
-                </p>
-                <button
-                  type="button"
-                  onClick={openDrawer}
-                  className="mt-3 text-sm font-semibold text-navy-800 hover:underline"
-                >
-                  Send a notice to a colleague
-                </button>
-              </div>
-            ) : (
-              <>
-                <ul className="divide-y divide-slate-100">
-                  {items.map((item) => {
-                    const unread = !item.readAt;
-                    return (
-                      <li
-                        key={item.id}
-                        className={`flex flex-wrap items-start justify-between gap-3 py-4 ${
-                          unread ? 'bg-navy-50/40' : ''
-                        }`}
-                      >
-                        <div className="min-w-0 flex-1 px-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                              {TYPE_LABEL[item.type]}
-                            </span>
-                            {unread ? (
-                              <span className="text-[11px] font-semibold uppercase tracking-wide text-navy-800">
-                                New
-                              </span>
-                            ) : null}
-                            <span className="text-xs text-slate-400">
-                              {formatWhen(item.createdAt)}
-                            </span>
-                          </div>
-                          <p className="mt-1 font-medium text-slate-900">
-                            {item.title}
-                          </p>
-                          {item.body ? (
-                            <p className="mt-1 text-sm text-slate-600">
-                              {item.body}
-                            </p>
-                          ) : null}
-                          {item.linkPath ? (
-                            <Link
-                              href={item.linkPath}
-                              className="mt-2 inline-block text-sm font-semibold text-navy-800 hover:underline"
-                            >
-                              Open related page
-                            </Link>
-                          ) : null}
-                        </div>
-                        {unread ? (
-                          <button
-                            type="button"
-                            onClick={() => void onMarkRead(item.id)}
-                            className="shrink-0 text-sm font-semibold text-navy-800 hover:underline"
-                          >
-                            Mark read
-                          </button>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-                <Pagination
-                  page={page}
-                  pageSize={PAGE_SIZE}
-                  total={total}
-                  totalPages={totalPages}
-                  onPageChange={setPage}
-                />
-              </>
-            )}
-          </section>
-        </main>
-      </div>
-
-      <SideDrawer
-        open={drawerOpen}
-        onClose={closeDrawer}
-        title="Send notice"
-        description="Ping a colleague — they will see it in their inbox."
-        footer={
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={closeDrawer}
-              className={`${btnSecondary} flex-1`}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="notify-form"
-              disabled={submitting}
-              className={`${btnPrimary} flex-1`}
-            >
-              {submitting ? 'Sending…' : 'Send'}
-            </button>
-          </div>
-        }
-      >
-        <form
-          id="notify-form"
-          onSubmit={(e) => void onSend(e)}
-          className="space-y-4"
-        >
-          {formError ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {formError}
+          {bulkNotice ? (
+            <p className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+              {bulkNotice}
             </p>
           ) : null}
 
-          <div>
-            <label className={labelClass} htmlFor="userId">
-              Recipient
-            </label>
-            <select
-              id="userId"
-              className={fieldClass}
-              required
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-            >
-              {employees.length === 0 ? (
-                <option value="">No employees yet</option>
-              ) : (
-                employees.map((employee) => (
-                  <option key={employee.id} value={employee.id}>
-                    {employee.fullName} ({employee.role})
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-
-          <div>
-            <label className={labelClass} htmlFor="type">
-              Type
-            </label>
-            <select
-              id="type"
-              className={fieldClass}
-              value={type}
-              onChange={(e) => setType(e.target.value as NotificationType)}
-            >
-              {NOTIFICATION_TYPES.map((value) => (
-                <option key={value} value={value}>
-                  {TYPE_LABEL[value]}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className={labelClass} htmlFor="title">
-              Title
-            </label>
-            <input
-              id="title"
-              className={fieldClass}
-              required
-              minLength={2}
-              autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className={labelClass} htmlFor="body">
-              Message
-            </label>
-            <textarea
-              id="body"
-              className={fieldClass}
-              rows={3}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className={labelClass} htmlFor="linkPath">
-              Link (optional)
-            </label>
-            <input
-              id="linkPath"
-              className={fieldClass}
-              placeholder="/projects"
-              value={linkPath}
-              onChange={(e) => setLinkPath(e.target.value)}
-            />
-          </div>
-        </form>
-      </SideDrawer>
+          <DataTable
+            columns={columns}
+            rows={items}
+            getRowId={(item) => item.id}
+            loading={loading}
+            caption="Notifications"
+            selectable
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
+            getRowLabel={(item) => item.title}
+            bulkActions={
+              <>
+                <button type="button" onClick={exportSelected} className={bulkBtn}>
+                  Export selected
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void markSelectedRead()}
+                  className={bulkBtn}
+                >
+                  Mark selected read
+                </button>
+              </>
+            }
+            pagination={{
+              page,
+              pageSize,
+              total,
+              totalPages,
+              onPageChange: setPage,
+              onPageSizeChange: (size) => {
+                setPageSize(size);
+                setPage(1);
+              },
+            }}
+            empty={
+              unreadOnly
+                ? 'Nothing unread. Switch Read state to All notifications to see the earlier alerts.'
+                : 'No notifications yet. Send one to a colleague here \u2014 assignments raised elsewhere in the system also land on this screen.'
+            }
+          />
+        </main>
+      </div>
     </div>
   );
 }
