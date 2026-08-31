@@ -76,3 +76,30 @@ export const lineTotalEtb = (quantity: string, unitPriceEtb: string): string => 
   const roundedCents = remainder * 2n >= 1000n ? wholeCents + 1n : wholeCents;
   return fromCents(roundedCents);
 };
+
+/**
+ * Thousands separators for a plain quantity — a capacity in kg, a dimension
+ * in mm, a count. NOT for money: `formatEtb` owns that, because money also
+ * carries the currency suffix and a fixed 2 decimals.
+ *
+ * Kept here beside formatEtb rather than in its own module so there is one
+ * obvious place to look for "how do we print a number", which is what stops
+ * the next person hand-rolling a third one.
+ */
+export const formatNumber = (
+  value: number | string | null | undefined,
+  { decimals }: { decimals?: number } = {},
+): string => {
+  if (value === null || value === undefined || value === '') {
+    return '—';
+  }
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    // Server data we don't recognise is shown as-is rather than as "NaN".
+    return String(value);
+  }
+  return parsed.toLocaleString('en-US', {
+    minimumFractionDigits: decimals ?? 0,
+    maximumFractionDigits: decimals ?? (Number.isInteger(parsed) ? 0 : 2),
+  });
+};
