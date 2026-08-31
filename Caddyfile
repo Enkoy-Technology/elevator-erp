@@ -1,0 +1,46 @@
+# Reverse proxy for the internet-facing UAT deployment (docker-compose.uat.yml).
+# Not used by the LAN bundle, which serves plain HTTP on the local network.
+#
+# ONE origin for both services. The API and the admin UI are served from the
+# same hostname — /v1/* to the API, everything else to Next.js — rather than
+# from two subdomains. Three things fall out of that for free:
+#
+#  * NEXT_PUBLIC_API_URL is knowable before the web image is built. It is
+#    baked into the bundle AND into the CSP connect-src at BUILD time
+#    (web/Dockerfile refuses to build without it), so a two-hostname setup
+#    needs the API's final URL before the UI exists — the chicken-and-egg
+#    that makes this awkward on platforms that assign URLs at deploy time.
+#    Same origin means the value is just https://SITE_ADDRESS/v1.
+#  * No CORS. Browser and API share an origin, so the preflight path that
+#    silently breaks deployments is simply not on the map.
+#  * One certificate, one DNS record.
+
+{$SITE_ADDRESS} {
+	encode gzip
+
+	# NOT `handle_path` — that strips the matched prefix, and /v1 IS the
+	# API's own global prefix (main.ts setGlobalPrefix), not a routing
+	# artifact. Stripping it would turn /v1/auth/login into /auth/login and
+	# every route would 404.
+	handle /v1/* {
+		reverse_proxy api:3002
+	}
+
+	handle {
+		reverse_proxy web:3003
+	}
+
+	# The API sets its own security headers via helmet, and the Next.js app
+	# sets its own CSP in next.config.ts. Caddy deliberately adds no
+	# Content-Security-Policy of its own — two sources of CSP on one origin
+	# is how you get a policy nobody can reason about.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

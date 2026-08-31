@@ -1,0 +1,86 @@
+# Internet-facing UAT overlay — additive to docker-compose.prod.yml, which
+# stays untouched (that file is the verified LAN bundle; see its own header).
+# Run BOTH files together, prod first:
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.uat.yml up -d
+#
+# See docs/ops/deploy-runbook.md § "Internet-facing UAT deployment".
+#
+# What this overlay changes, and why each change is not optional once the
+# box has a public IP rather than a LAN address:
+#
+#  1. TLS, via Caddy. The login form posts a password. On plain HTTP that
+#     password crosses the internet in clear text and Chrome brands the page
+#     "Not secure" in front of the client. Caddy gets a real Let's Encrypt
+#     certificate automatically from SITE_ADDRESS — no certbot, no cron, no
+#     manual renewal.
+#
+#  2. api and web STOP publishing their own ports. docker-compose.prod.yml
+#     publishes 3002 and 3003 for the LAN, where that is exactly right. On a
+#     public IP those two lines would expose the API over plain HTTP on
+#     :3002 alongside the TLS one — every cookie and password readable, and
+#     the CSP/TLS work bypassed by anyone who types the port. Caddy becomes
+#     the only door: 80 and 443, nothing else. (`!override` replaces the
+#     inherited list instead of appending to it, which is what a bare `ports`
+#     key would do.)
+#
+#  3. shm_size on api. Docker's default /dev/shm is 64MB. Chromium uses
+#     shared memory for its renderer surfaces and crashes past that ceiling —
+#     the classic "Target closed"/"Page crashed" PDF failure that only shows
+#     up in containers, never on a developer laptop. 1GB of shm is the fix
+#     that keeps the sandbox intact; the usual --disable-dev-shm-usage flag
+#     is the same fix by weakening Chromium instead of by configuring Docker.
+#
+#  4. TRUST_PROXY_HOPS=1. There is now exactly one reverse proxy in front of
+#     the API. Left at its default 0 the whole internet shares one login
+#     throttle bucket, keyed on Caddy's address.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: elevator-erp-caddy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '5'
+    environment:
+      # The public hostname. Must already resolve to this box's IP before
+      # the first start, or Let's Encrypt cannot validate and Caddy serves
+      # its own self-signed certificate instead (browser warning).
+      SITE_ADDRESS: ${SITE_ADDRESS:?Set SITE_ADDRESS in .env — the public hostname, e.g. erp-demo.example.com}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Issued certificates and the ACME account key. Without this volume
+      # every container restart re-requests a certificate and walks into
+      # Let's Encrypt's rate limit (5 per hostname per week).
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 256M
+
+  api:
+    ports: !override []
+    shm_size: 1gb
+    environment:
+      NODE_ENV: production
+      TRUST_PROXY_HOPS: '1'
+
+  web:
+    ports: !override []
+
+volumes:
+  caddy_data:
+  caddy_config:
