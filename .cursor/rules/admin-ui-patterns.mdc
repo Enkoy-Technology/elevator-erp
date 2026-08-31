@@ -1,5 +1,5 @@
 ---
-description: Admin UI patterns — right-side create drawers and paginated tables
+description: Admin UI patterns — full-page create/edit forms and paginated tables
 globs: web/**/*.{tsx,ts}
 alwaysApply: false
 ---
@@ -9,17 +9,32 @@ alwaysApply: false
 ## Create / edit forms
 
 - Do **not** put create/edit forms inline above list pages.
-- Open forms in a **right-side overlay drawer** when the user clicks a primary action (e.g. "Create customer").
-- Drawer: backdrop click / Escape / close button dismisses; focus stays in the drawer while open.
-- Keep the list page clean: header + search/filters + table + pagination only.
+- Create/edit forms are **their own route**, not an overlay. Convention:
+  `/<module>/new` and `/<module>/[id]/edit`. The primary action navigates.
+- Build them with `FormPage` + `FormSection` + `Field` from
+  `web/src/components/form-page.tsx`. Single column; group with sections.
+- Cancel and the back link return to the list. Save returns to the list too.
+- Keep the list page clean: header + toolbar + table + pagination only.
+
+> Changed 31 Aug 2026, at the product owner's direction: forms used to open
+> in a right-side `SideDrawer`. `SideDrawer` still exists for short
+> confirmations that are not forms (e.g. "void this invoice — reason?"),
+> where a full page navigation costs more than it gives.
 
 ## Tables
 
 - Every data table must be **server-paginated** (page + pageSize query params).
-- Default page size: 20. Cap pageSize at 100 on the API.
+- Default page size: **10**. The rows-per-page control offers 5 / 10 / 25 /
+  50 / 100. Cap pageSize at 100 on the API — that cap is a trust boundary,
+  not a preference, and stays whatever the UI offers.
 - Show total count and Previous/Next (or page numbers) under the table.
 - Prefer list API shape: `{ items, page, pageSize, total, totalPages }`.
 
 ## Shared components
 
-Reuse `SideDrawer` and `Pagination` from `web/src/components/` instead of one-off markup.
+Reuse these instead of one-off markup:
+- `DataTable` — the ONE list view; it owns the header, sorting, empty state,
+  row selection and the pager. There is no other table in this app.
+- `FormPage` / `FormSection` / `Field` — every create/edit form.
+- `ListToolbar` / `FilterSelect` / `SearchField` / `StatusPill` / `RowAction`.
+- `SideDrawer` — short confirmations only, no longer the form pattern.
