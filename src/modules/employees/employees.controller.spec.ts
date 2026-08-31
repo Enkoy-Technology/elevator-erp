@@ -4,6 +4,7 @@ import {
   EMPLOYEES_EXPORT_COLUMNS,
   EmployeesController,
 } from './employees.controller';
+import type { EmployeesImportService } from './employees-import.service';
 import type { EmployeesService } from './employees.service';
 
 jest.mock('../../common/export/tabular');
@@ -26,6 +27,8 @@ describe('EmployeesController.list — format wiring', () => {
 
   const controller = new EmployeesController(
     service as unknown as EmployeesService,
+    // list()/export never reach the import service.
+    {} as unknown as EmployeesImportService,
   );
 
   beforeEach(() => {
