@@ -1,41 +1,48 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { ColumnDef } from '@tanstack/react-table';
 
+import { Ban, Undo2 } from 'lucide-react';
+
+import { DataTable } from '@/components/data-table';
 import {
-  btnDanger,
   btnGhost,
   btnPrimary,
   btnSecondary,
   fieldClass,
   labelClass,
+  metaLabelClass,
 } from '@/components/form-styles';
-import { Pagination } from '@/components/pagination';
+import {
+  FilterSelect,
+  ListToolbar,
+  RowAction,
+  SearchField,
+  StatusPill,
+} from '@/components/list-toolbar';
 import { SideDrawer } from '@/components/side-drawer';
 import { Sidebar } from '@/components/sidebar';
-import { formatEtb, isPositiveEtb, isZeroEtb, subtractEtb, sumEtb, lineTotalEtb } from '@/lib/money';
+import { formatEtb, isPositiveEtb, isZeroEtb, subtractEtb, sumEtb } from '@/lib/money';
 import {
   ApiError,
   allocatePayment,
-  createInvoice,
   downloadInvoiceDocument,
+  printInvoiceDocument,
+  printReceiptDocument,
   downloadPayments,
   downloadReceiptDocument,
   getAccessToken,
   getCurrentRole,
-  listBankAccounts,
   listCustomers,
   listInvoices,
   listPayments,
-  listProjects,
   optional,
   recordInvoiceWithholding,
-  recordPayment,
   reversePayment,
   voidInvoice,
-  type BankAccount,
   type Customer,
   type DocumentFormat,
   type Invoice,
@@ -44,11 +51,8 @@ import {
   type PaymentExportFormat,
   type PaymentListRow,
   type PaymentMethod,
-  type Project,
   type UserRole,
 } from '@/lib/api';
-
-const PAGE_SIZE = 20;
 
 type Tab = 'invoices' | 'payments';
 
@@ -59,12 +63,13 @@ const INVOICE_STATUS_LABEL: Record<InvoiceStatus, string> = {
   VOID: 'Void',
 };
 
-const INVOICE_STATUS_BADGE: Record<InvoiceStatus, string> = {
-  ISSUED: 'bg-amber-100 text-amber-700',
-  PARTIALLY_PAID: 'bg-sky-100 text-sky-700',
-  PAID: 'bg-emerald-100 text-emerald-700',
-  VOID: 'bg-slate-200 text-slate-500',
-};
+/** One tone vocabulary for the whole ERP — StatusPill owns the colours. */
+const INVOICE_STATUS_TONE = {
+  ISSUED: 'warn',
+  PARTIALLY_PAID: 'active',
+  PAID: 'good',
+  VOID: 'neutral',
+} as const satisfies Record<InvoiceStatus, string>;
 
 const INVOICE_FILTERS: readonly InvoiceStatus[] = [
   'ISSUED',
@@ -82,14 +87,110 @@ const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   OTHER: 'Other',
 };
 
-/** Rails that clear through a bank account — mirrors CreatePaymentDto's
- *  BankAccountRequiredConstraint (payments module). */
-const BANK_METHODS = new Set<PaymentMethod>([
-  'BANK_TRANSFER',
-  'CHEQUE',
-  'CBE_BIRR',
-  'TELEBIRR',
-]);
+const PAYMENT_METHOD_OPTIONS = (Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]).map(
+  (value) => ({ value, label: PAYMENT_METHOD_LABEL[value] }),
+);
+
+/**
+ * Print stays its own button (it is the action people actually reach for);
+ * the file formats collapse into one control so a row is not seven buttons
+ * wide. A native <select> on purpose: a CSS dropdown inside the table's
+ * overflow container would be clipped on the last rows, and the native
+ * picker is keyboard- and screen-reader-correct for free.
+ */
+const DownloadSelect = <T extends string>({
+  formats,
+  disabled,
+  onPick,
+  label,
+}: {
+  formats: readonly T[];
+  disabled: boolean;
+  onPick: (format: T) => void;
+  label: string;
+}) => (
+  <select
+    aria-label={label}
+    disabled={disabled}
+    value=""
+    onChange={(event) => {
+      const format = event.target.value;
+      if (format) {
+        onPick(format as T);
+      }
+    }}
+    className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    <option value="">Download…</option>
+    {formats.map((format) => (
+      <option key={format} value={format}>
+        {format.toUpperCase()}
+      </option>
+    ))}
+  </select>
+);
+
+/** A date bound in the toolbar, labelled the same way FilterSelect is. */
+const DateFilter = ({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) => {
+  const id = useId();
+  return (
+    <div className="min-w-[9.5rem]">
+      <label htmlFor={id} className={`mb-1 block font-semibold ${metaLabelClass}`}>
+        {label}
+      </label>
+      <input
+        id={id}
+        type="date"
+        className={fieldClass}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </div>
+  );
+};
+
+/**
+ * "Export selected" — a CSV of exactly the rows that are ticked, built from
+ * the page's already-loaded data. There is no "give me these ids" endpoint,
+ * and re-fetching rows the browser is already holding to produce them would
+ * be work for nothing. The toolbar's CSV/XLSX buttons are a different thing:
+ * those export the whole filtered set, server-side.
+ *
+ * ponytail: duplicated in the other list pages rather than lifted into
+ * @/lib/csv, because those files are being edited concurrently. Lift it into
+ * one module once they have landed.
+ */
+const downloadCsv = (
+  filename: string,
+  headers: readonly string[],
+  rows: readonly (readonly string[])[],
+): void => {
+  // Quote every cell, and neutralise a leading =/+/-/@ so that a crafted
+  // value (a customer name, a void reason) opens as text in a spreadsheet
+  // rather than as a formula.
+  const cell = (value: string): string =>
+    `"${(/^[=+\-@\t\r]/.test(value) ? `'${value}` : value).replace(/"/g, '""')}"`;
+  const csv = [headers, ...rows].map((row) => row.map(cell).join(',')).join('\r\n');
+  // BOM: Excel needs it to read UTF-8 (Amharic names) instead of mojibake.
+  const url = URL.createObjectURL(
+    new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }),
+  );
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+};
 
 /** Invoices a payment can still be allocated against. */
 const OPEN_STATUSES = new Set<InvoiceStatus>(['ISSUED', 'PARTIALLY_PAID']);
@@ -110,14 +211,6 @@ function outstandingDisplay(invoice: InvoiceListRow): string {
   return formatEtb(invoice.outstandingEtb);
 }
 
-interface LineDraft {
-  description: string;
-  quantity: string;
-  unitPriceEtb: string;
-}
-
-const EMPTY_LINE: LineDraft = { description: '', quantity: '1', unitPriceEtb: '0.00' };
-
 interface AllocationDraft {
   invoiceId: string;
   invoiceNumber: string;
@@ -126,15 +219,12 @@ interface AllocationDraft {
   amountEtb: string;
 }
 
-function toAllocationDrafts(
-  invoices: InvoiceListRow[],
-  prefill: { invoiceId: string; amountEtb: string } | null,
-): AllocationDraft[] {
+function toAllocationDrafts(invoices: InvoiceListRow[]): AllocationDraft[] {
   return invoices.map((invoice) => ({
     invoiceId: invoice.id,
     invoiceNumber: invoice.invoiceNumber,
     maxEtb: invoice.outstandingEtb,
-    amountEtb: prefill && prefill.invoiceId === invoice.id ? prefill.amountEtb : '',
+    amountEtb: '',
   }));
 }
 
@@ -145,6 +235,7 @@ export default function InvoicesPage() {
 
   const [invoices, setInvoices] = useState<InvoiceListRow[]>([]);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | ''>('');
@@ -154,13 +245,12 @@ export default function InvoicesPage() {
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerMap, setCustomerMap] = useState<Record<string, string>>({});
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
 
   // --- Payments tab: paginated from GET /payments (persists across reloads,
   // unlike the earlier session-local placeholder). ---
   const [payments, setPayments] = useState<PaymentListRow[]>([]);
   const [paymentsPage, setPaymentsPage] = useState(1);
+  const [paymentsPageSize, setPaymentsPageSize] = useState(10);
   const [paymentsTotal, setPaymentsTotal] = useState(0);
   const [paymentsTotalPages, setPaymentsTotalPages] = useState(0);
   const [paymentsLoading, setPaymentsLoading] = useState(true);
@@ -175,14 +265,11 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  // --- Create standalone invoice drawer ---
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createCustomerId, setCreateCustomerId] = useState('');
-  const [createProjectId, setCreateProjectId] = useState('');
-  const [createDueDate, setCreateDueDate] = useState('');
-  const [lines, setLines] = useState<LineDraft[]>([{ ...EMPTY_LINE }]);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [createSubmitting, setCreateSubmitting] = useState(false);
+  // Bulk selection, one set per tab. Cleared whenever the rows underneath it
+  // change (see refresh/refreshPayments) — an id whose row is no longer
+  // loaded cannot be exported, so keeping it would silently drop it.
+  const [selectedInvoices, setSelectedInvoices] = useState<ReadonlySet<string>>(new Set());
+  const [selectedPayments, setSelectedPayments] = useState<ReadonlySet<string>>(new Set());
 
   // --- Withholding drawer ---
   const [withholdTarget, setWithholdTarget] = useState<Invoice | null>(null);
@@ -190,20 +277,6 @@ export default function InvoicesPage() {
   const [withholdVoucher, setWithholdVoucher] = useState('');
   const [withholdError, setWithholdError] = useState<string | null>(null);
   const [withholdSubmitting, setWithholdSubmitting] = useState(false);
-
-  // --- Record payment drawer (reachable from both tabs) ---
-  const [paymentOpen, setPaymentOpen] = useState(false);
-  const [paymentCustomerId, setPaymentCustomerId] = useState('');
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
-  const [paymentBankAccountId, setPaymentBankAccountId] = useState('');
-  const [paymentReceivedAt, setPaymentReceivedAt] = useState('');
-  const [paymentReference, setPaymentReference] = useState('');
-  const [paymentNote, setPaymentNote] = useState('');
-  const [paymentAllocations, setPaymentAllocations] = useState<AllocationDraft[]>([]);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
-  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
-  const paymentPrefillRef = useRef<{ invoiceId: string; amountEtb: string } | null>(null);
 
   // --- Allocate (existing payment) drawer ---
   const [allocateTarget, setAllocateTarget] = useState<PaymentListRow | null>(null);
@@ -218,9 +291,11 @@ export default function InvoicesPage() {
       status: InvoiceStatus | '',
       customerId: string,
       query: string,
+      size: number,
     ) => {
       setLoading(true);
       setError(null);
+      setSelectedInvoices(new Set());
       try {
         const [customerPage, result] = await Promise.all([
           optional(listCustomers({ page: 1, pageSize: 100 })),
@@ -229,7 +304,7 @@ export default function InvoicesPage() {
             customerId: customerId || undefined,
             q: query || undefined,
             page: nextPage,
-            pageSize: PAGE_SIZE,
+            pageSize: size,
           }),
         ]);
         setCustomers(customerPage.items);
@@ -257,9 +332,11 @@ export default function InvoicesPage() {
       from: string,
       to: string,
       query: string,
+      size: number,
     ) => {
       setPaymentsLoading(true);
       setError(null);
+      setSelectedPayments(new Set());
       try {
         const result = await listPayments({
           customerId: customerId || undefined,
@@ -268,7 +345,7 @@ export default function InvoicesPage() {
           to: to || undefined,
           q: query || undefined,
           page: nextPage,
-          pageSize: PAGE_SIZE,
+          pageSize: size,
         });
         setPayments(result.items);
         setPaymentsPage(result.page);
@@ -287,7 +364,7 @@ export default function InvoicesPage() {
   const refreshAfterPaymentMutation = useCallback(
     () =>
       Promise.all([
-        refresh(page, statusFilter, customerFilter, q),
+        refresh(page, statusFilter, customerFilter, q, pageSize),
         refreshPayments(
           paymentsPage,
           paymentsCustomerFilter,
@@ -295,6 +372,7 @@ export default function InvoicesPage() {
           paymentsFrom,
           paymentsTo,
           paymentsQ,
+          paymentsPageSize,
         ),
       ]),
     [
@@ -303,6 +381,7 @@ export default function InvoicesPage() {
       statusFilter,
       customerFilter,
       q,
+      pageSize,
       refreshPayments,
       paymentsPage,
       paymentsCustomerFilter,
@@ -310,6 +389,7 @@ export default function InvoicesPage() {
       paymentsFrom,
       paymentsTo,
       paymentsQ,
+      paymentsPageSize,
     ],
   );
 
@@ -322,19 +402,11 @@ export default function InvoicesPage() {
     if (new URLSearchParams(window.location.search).get('tab') === 'payments') {
       setTab('payments');
     }
-    void (async () => {
-      const [projectPage, bankPage] = await Promise.all([
-        optional(listProjects({ page: 1, pageSize: 100 })),
-        optional(listBankAccounts({ page: 1, pageSize: 100 })),
-      ]);
-      setProjects(projectPage.items);
-      setBankAccounts(bankPage.items.filter((b) => b.isActive));
-    })();
   }, [router]);
 
   useEffect(() => {
-    void refresh(page, statusFilter, customerFilter, q);
-  }, [refresh, page, statusFilter, customerFilter, q]);
+    void refresh(page, statusFilter, customerFilter, q, pageSize);
+  }, [refresh, page, statusFilter, customerFilter, q, pageSize]);
 
   useEffect(() => {
     void refreshPayments(
@@ -344,6 +416,7 @@ export default function InvoicesPage() {
       paymentsFrom,
       paymentsTo,
       paymentsQ,
+      paymentsPageSize,
     );
   }, [
     refreshPayments,
@@ -353,6 +426,7 @@ export default function InvoicesPage() {
     paymentsFrom,
     paymentsTo,
     paymentsQ,
+    paymentsPageSize,
   ]);
 
   // A payment is "already reversed" when some OTHER row on the currently
@@ -376,35 +450,6 @@ export default function InvoicesPage() {
     [payments],
   );
 
-  // Fetch the selected customer's open (ISSUED/PARTIALLY_PAID) invoices for
-  // the record-payment drawer's allocation section whenever the drawer is
-  // open and a customer is picked. Uses a ref (not state) for the one-shot
-  // prefill so this effect's own deps stay just [paymentOpen, paymentCustomerId]
-  // — otherwise clearing the prefill after consuming it would re-trigger the
-  // fetch and wipe out anything the user had already typed.
-  useEffect(() => {
-    if (!paymentOpen || !paymentCustomerId) {
-      setPaymentAllocations([]);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      const result = await optional(
-        listInvoices({ customerId: paymentCustomerId, pageSize: 100 }),
-      );
-      if (cancelled) {
-        return;
-      }
-      const open = result.items.filter((i) => OPEN_STATUSES.has(i.status));
-      const prefill = paymentPrefillRef.current;
-      paymentPrefillRef.current = null;
-      setPaymentAllocations(toAllocationDrafts(open, prefill));
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [paymentOpen, paymentCustomerId]);
-
   const switchTab = (next: Tab) => {
     setTab(next);
     setError(null);
@@ -423,10 +468,12 @@ export default function InvoicesPage() {
     setCustomerFilter(next);
   };
 
-  const onSearch = (event: FormEvent) => {
-    event.preventDefault();
+  // SearchField's clear affordance calls onChange('') and onSubmit() in the
+  // same tick, so reading `qInput` in the submit handler would search the
+  // pre-clear value. The ref is what the submit actually reads.
+  const runSearch = (term: string) => {
     setPage(1);
-    setQ(qInput.trim());
+    setQ(term.trim());
   };
 
   const setPaymentsCustomer = (next: string) => {
@@ -449,10 +496,9 @@ export default function InvoicesPage() {
     setPaymentsTo(next);
   };
 
-  const onPaymentsSearch = (event: FormEvent) => {
-    event.preventDefault();
+  const runPaymentsSearch = (term: string) => {
     setPaymentsPage(1);
-    setPaymentsQ(paymentsQInput.trim());
+    setPaymentsQ(term.trim());
   };
 
   const onDownloadPayments = async (format: PaymentExportFormat) => {
@@ -472,69 +518,19 @@ export default function InvoicesPage() {
 
   const canWrite = canManageFinance(role);
 
-  // ---- Create standalone invoice ----
-
-  const openCreate = () => {
-    setCreateCustomerId('');
-    setCreateProjectId('');
-    setCreateDueDate('');
-    setLines([{ ...EMPTY_LINE }]);
-    setCreateError(null);
-    setCreateOpen(true);
-  };
-
-  const closeCreate = () => {
-    setCreateOpen(false);
-    setCreateError(null);
-  };
-
-  const setLineField = (index: number, field: keyof LineDraft, value: string) => {
-    setLines((prev) =>
-      prev.map((line, i) => (i === index ? { ...line, [field]: value } : line)),
-    );
-  };
-
-  const addLine = () => setLines((prev) => [...prev, { ...EMPTY_LINE }]);
-  const removeLine = (index: number) =>
-    setLines((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
-
-  const draftTotal = sumEtb(
-    lines
-      .filter((l) => l.quantity && l.unitPriceEtb)
-      .map((l) => lineTotalEtb(l.quantity, l.unitPriceEtb)),
-  );
-
-  const onCreate = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!createCustomerId) {
-      setCreateError('Pick a customer first.');
-      return;
-    }
-    const cleanLines = lines
-      .map((l) => ({ ...l, description: l.description.trim() }))
-      .filter((l) => l.description.length > 0);
-    if (cleanLines.length === 0) {
-      setCreateError('Add at least one line with a description.');
-      return;
-    }
-    setCreateSubmitting(true);
-    setCreateError(null);
-    try {
-      await createInvoice({
-        customerId: createCustomerId,
-        projectId: createProjectId || undefined,
-        lines: cleanLines,
-        dueDate: createDueDate || undefined,
-      });
-      closeCreate();
-      setPage(1);
-      await refresh(1, statusFilter, customerFilter, q);
-    } catch (err) {
-      setCreateError(err instanceof ApiError ? err.message : 'Failed to create invoice');
-    } finally {
-      setCreateSubmitting(false);
-    }
-  };
+  /**
+   * "Pay this invoice in full" prefill for the record-payment route. It rides
+   * in the URL rather than in-memory state so the form survives a reload and
+   * a shared link, which the old drawer's ref could not.
+   */
+  const paymentHrefForInvoice = (invoice: InvoiceListRow): string =>
+    `/invoices/payments/new?${new URLSearchParams({
+      customerId: invoice.customerId,
+      invoiceId: invoice.id,
+      // Exact for both ISSUED and PARTIALLY_PAID — outstandingEtb is
+      // server-computed for every status.
+      amountEtb: invoice.outstandingEtb,
+    }).toString()}`;
 
   // ---- Void ----
 
@@ -552,7 +548,7 @@ export default function InvoicesPage() {
     setError(null);
     try {
       await voidInvoice(invoice.id, reason);
-      await refresh(page, statusFilter, customerFilter, q);
+      await refresh(page, statusFilter, customerFilter, q, pageSize);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to void invoice');
     } finally {
@@ -591,101 +587,13 @@ export default function InvoicesPage() {
         voucherRef: withholdVoucher || undefined,
       });
       closeWithhold();
-      await refresh(page, statusFilter, customerFilter, q);
+      await refresh(page, statusFilter, customerFilter, q, pageSize);
     } catch (err) {
       setWithholdError(
         err instanceof ApiError ? err.message : 'Failed to record withholding',
       );
     } finally {
       setWithholdSubmitting(false);
-    }
-  };
-
-  // ---- Record payment (both tabs) ----
-
-  const resetPaymentForm = () => {
-    setPaymentAmount('');
-    setPaymentMethod('CASH');
-    setPaymentBankAccountId('');
-    setPaymentReceivedAt('');
-    setPaymentReference('');
-    setPaymentNote('');
-    setPaymentAllocations([]);
-    setPaymentError(null);
-  };
-
-  const openPaymentGeneral = () => {
-    resetPaymentForm();
-    setPaymentCustomerId('');
-    paymentPrefillRef.current = null;
-    setPaymentOpen(true);
-  };
-
-  const openPaymentForInvoice = (invoice: InvoiceListRow) => {
-    resetPaymentForm();
-    setPaymentCustomerId(invoice.customerId);
-    // Prefill both the payment amount and its allocation for the common
-    // "pay this invoice in full" case — the user can still lower either one
-    // (e.g. a partial payment) before submitting. Exact for both ISSUED and
-    // PARTIALLY_PAID now that outstandingEtb is server-computed for every
-    // status (canPay only shows this action for those two statuses anyway).
-    const remaining = invoice.outstandingEtb;
-    setPaymentAmount(remaining);
-    paymentPrefillRef.current = { invoiceId: invoice.id, amountEtb: remaining };
-    setPaymentOpen(true);
-  };
-
-  const closePayment = () => {
-    setPaymentOpen(false);
-    setPaymentError(null);
-  };
-
-  const setAllocationAmount = (invoiceId: string, amountEtb: string) => {
-    setPaymentAllocations((prev) =>
-      prev.map((a) => (a.invoiceId === invoiceId ? { ...a, amountEtb } : a)),
-    );
-  };
-
-  const onSubmitPayment = async (event: FormEvent) => {
-    event.preventDefault();
-    setPaymentError(null);
-    if (!paymentCustomerId) {
-      setPaymentError('Pick a customer first.');
-      return;
-    }
-    if (BANK_METHODS.has(paymentMethod) && !paymentBankAccountId) {
-      setPaymentError(`${PAYMENT_METHOD_LABEL[paymentMethod]} requires a bank account.`);
-      return;
-    }
-    const entered = paymentAllocations.filter((a) => isPositiveEtb(a.amountEtb || '0'));
-    const allocatedTotal = sumEtb(entered.map((a) => a.amountEtb));
-    // Mirrors PaymentsRepository.guardAndInsertAllocation's payment-total
-    // check (Σ allocations <= payment.amountEtb) — the server is still the
-    // authority, this just surfaces the same error before the round trip.
-    if (isPositiveEtb(subtractEtb(allocatedTotal, paymentAmount || '0'))) {
-      setPaymentError(
-        `Allocations total ${formatEtb(allocatedTotal)}, which exceeds the payment amount of ${formatEtb(paymentAmount || '0.00')}.`,
-      );
-      return;
-    }
-    setPaymentSubmitting(true);
-    try {
-      await recordPayment({
-        customerId: paymentCustomerId,
-        amountEtb: paymentAmount,
-        method: paymentMethod,
-        receivedAt: paymentReceivedAt || undefined,
-        bankAccountId: BANK_METHODS.has(paymentMethod) ? paymentBankAccountId : undefined,
-        reference: paymentReference || undefined,
-        note: paymentNote || undefined,
-        allocations: entered.map((a) => ({ invoiceId: a.invoiceId, amountEtb: a.amountEtb })),
-      });
-      closePayment();
-      await refreshAfterPaymentMutation();
-    } catch (err) {
-      setPaymentError(err instanceof ApiError ? err.message : 'Failed to record payment');
-    } finally {
-      setPaymentSubmitting(false);
     }
   };
 
@@ -715,7 +623,7 @@ export default function InvoicesPage() {
       // Add a payment-detail endpoint if that duplicate-row nuisance turns
       // out to matter in practice.
       const open = result.items.filter((i) => OPEN_STATUSES.has(i.status));
-      setAllocateDrafts(toAllocationDrafts(open, null));
+      setAllocateDrafts(toAllocationDrafts(open));
     })();
   };
 
@@ -835,22 +743,82 @@ export default function InvoicesPage() {
     }
   };
 
+  const onPrintInvoice = async (invoice: Invoice) => {
+    setBusyId(invoice.id);
+    setError(null);
+    try {
+      await printInvoiceDocument(invoice.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Print failed');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const onPrintReceipt = async (payment: PaymentListRow) => {
+    setBusyId(payment.id);
+    setError(null);
+    try {
+      await printReceiptDocument(payment.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Print failed');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  // Money goes out as the raw decimal string, not formatEtb's display form —
+  // a spreadsheet has to be able to sum the column.
+  const exportSelectedInvoices = () => {
+    const rows = invoices.filter((invoice) => selectedInvoices.has(invoice.id));
+    downloadCsv(
+      'invoices.csv',
+      ['Number', 'Customer', 'Issued', 'Due', 'Total ETB', 'Withheld ETB', 'Outstanding ETB', 'Status'],
+      rows.map((invoice) => [
+        invoice.invoiceNumber,
+        customerMap[invoice.customerId] ?? invoice.customerId,
+        invoice.issuedAt.slice(0, 10),
+        invoice.dueDate ?? '',
+        invoice.totalEtb,
+        invoice.whtEtb,
+        invoice.outstandingEtb,
+        INVOICE_STATUS_LABEL[invoice.status],
+      ]),
+    );
+  };
+
+  const exportSelectedPayments = () => {
+    const rows = payments.filter((payment) => selectedPayments.has(payment.id));
+    downloadCsv(
+      'payments.csv',
+      ['Receipt', 'Customer', 'Received', 'Method', 'Amount ETB', 'Allocated ETB', 'Unallocated ETB', 'Reversal'],
+      rows.map((payment) => [
+        payment.receiptNumber,
+        payment.customerName ?? payment.customerId,
+        payment.receivedAt.slice(0, 10),
+        PAYMENT_METHOD_LABEL[payment.method],
+        payment.amountEtb,
+        payment.allocatedEtb,
+        subtractEtb(payment.amountEtb, payment.allocatedEtb),
+        payment.reversalOfPaymentId ? 'Yes' : 'No',
+      ]),
+    );
+  };
+
   const renderInvoiceActions = (invoice: InvoiceListRow) => {
     const busy = busyId === invoice.id;
     const canVoid = invoice.status === 'ISSUED' && isZeroEtb(invoice.whtEtb);
     const canPay = OPEN_STATUSES.has(invoice.status);
     const canWithhold = invoice.status !== 'VOID';
     return (
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center justify-end gap-1.5">
         {canWrite && canPay ? (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => openPaymentForInvoice(invoice)}
+          <Link
+            href={paymentHrefForInvoice(invoice)}
             className={`${btnPrimary} px-2.5 py-1 text-xs`}
           >
             Record payment
-          </button>
+          </Link>
         ) : null}
         {canWrite && canWithhold ? (
           <button
@@ -862,29 +830,34 @@ export default function InvoicesPage() {
             Withholding
           </button>
         ) : null}
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void onPrintInvoice(invoice)}
+          title="Print the PDF"
+          className={`${btnSecondary} px-2.5 py-1 text-xs`}
+        >
+          Print
+        </button>
+        <DownloadSelect
+          formats={['pdf', 'docx', 'xlsx'] as const}
+          disabled={busy}
+          onPick={(format) => void onDownloadInvoice(invoice, format)}
+          label={`Download ${invoice.invoiceNumber}`}
+        />
+        {/* Void is an invoice's destructive equivalent — the ledger is
+            append-only, so an invoice is never deleted. Its mandatory reason
+            prompt is the confirmation step; a second confirm on top would
+            just be a click to dismiss. */}
         {canWrite && canVoid ? (
-          <button
-            type="button"
+          <RowAction
+            icon={Ban}
+            tone="danger"
             disabled={busy}
+            label={`Void ${invoice.invoiceNumber}`}
             onClick={() => void onVoid(invoice)}
-            className={`${btnDanger} px-2.5 py-1 text-xs`}
-          >
-            Void
-          </button>
+          />
         ) : null}
-        <div className="flex items-center gap-1">
-          {(['pdf', 'docx', 'xlsx'] as const).map((format) => (
-            <button
-              key={format}
-              type="button"
-              disabled={busy}
-              onClick={() => void onDownloadInvoice(invoice, format)}
-              className={`${btnGhost} px-2 py-1 text-xs uppercase`}
-            >
-              {format}
-            </button>
-          ))}
-        </div>
       </div>
     );
   };
@@ -906,7 +879,7 @@ export default function InvoicesPage() {
       !reversedIds.has(payment.id);
     const canReverse = !payment.reversalOfPaymentId && !reversedIds.has(payment.id);
     return (
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center justify-end gap-1.5">
         {canWrite && canAllocate ? (
           <button
             type="button"
@@ -917,32 +890,151 @@ export default function InvoicesPage() {
             Allocate
           </button>
         ) : null}
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void onPrintReceipt(payment)}
+          title="Print the PDF"
+          className={`${btnSecondary} px-2.5 py-1 text-xs`}
+        >
+          Print
+        </button>
+        <DownloadSelect
+          formats={['pdf', 'docx'] as const}
+          disabled={busy}
+          onPick={(format) => void onDownloadReceipt(payment, format)}
+          label={`Download receipt ${payment.receiptNumber}`}
+        />
+        {/* Reverse is a payment's destructive equivalent — it posts a mirror
+            entry rather than deleting anything. Its mandatory reason prompt
+            is the confirmation step. */}
         {canWrite && canReverse ? (
-          <button
-            type="button"
+          <RowAction
+            icon={Undo2}
+            tone="danger"
             disabled={busy}
+            label={`Reverse receipt ${payment.receiptNumber}`}
             onClick={() => void onReverse(payment)}
-            className={`${btnDanger} px-2.5 py-1 text-xs`}
-          >
-            Reverse
-          </button>
+          />
         ) : null}
-        <div className="flex items-center gap-1">
-          {(['pdf', 'docx'] as const).map((format) => (
-            <button
-              key={format}
-              type="button"
-              disabled={busy}
-              onClick={() => void onDownloadReceipt(payment, format)}
-              className={`${btnGhost} px-2 py-1 text-xs uppercase`}
-            >
-              {format}
-            </button>
-          ))}
-        </div>
       </div>
     );
   };
+
+  const invoiceColumns: ColumnDef<InvoiceListRow, unknown>[] = [
+    {
+      accessorKey: 'invoiceNumber',
+      header: 'Number',
+      enableSorting: true,
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-slate-900">{row.original.invoiceNumber}</span>
+      ),
+    },
+    {
+      id: 'customer',
+      header: 'Customer',
+      enableSorting: true,
+      accessorFn: (row) => customerMap[row.customerId] ?? row.customerId.slice(0, 8),
+      cell: (cell) => cell.getValue<string>(),
+    },
+    {
+      id: 'issued',
+      header: 'Issued',
+      cell: ({ row }) => row.original.issuedAt.slice(0, 10),
+    },
+    {
+      id: 'due',
+      header: 'Due',
+      cell: ({ row }) => row.original.dueDate ?? '—',
+    },
+    {
+      id: 'total',
+      header: 'Total',
+      meta: { align: 'right' },
+      cell: ({ row }) => (
+        <span className="font-semibold text-navy-800">{formatEtb(row.original.totalEtb)}</span>
+      ),
+    },
+    {
+      id: 'outstanding',
+      header: 'Outstanding',
+      meta: { align: 'right' },
+      cell: ({ row }) => outstandingDisplay(row.original),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: ({ row }) => (
+        <StatusPill
+          label={INVOICE_STATUS_LABEL[row.original.status]}
+          tone={INVOICE_STATUS_TONE[row.original.status]}
+        />
+      ),
+    },
+    {
+      id: 'actions',
+      header: '',
+      meta: { align: 'right' },
+      cell: ({ row }) => renderInvoiceActions(row.original),
+    },
+  ];
+
+  const paymentColumns: ColumnDef<PaymentListRow, unknown>[] = [
+    {
+      accessorKey: 'receiptNumber',
+      header: 'Receipt',
+      enableSorting: true,
+      cell: ({ row }) => (
+        <span className="flex items-center gap-1.5">
+          <span className="font-mono text-xs text-slate-900">{row.original.receiptNumber}</span>
+          {row.original.reversalOfPaymentId ? <StatusPill label="Reversal" /> : null}
+        </span>
+      ),
+    },
+    {
+      id: 'customer',
+      header: 'Customer',
+      enableSorting: true,
+      accessorFn: (row) => row.customerName ?? row.customerId.slice(0, 8),
+      cell: (cell) => cell.getValue<string>(),
+    },
+    {
+      id: 'received',
+      header: 'Received',
+      cell: ({ row }) => row.original.receivedAt.slice(0, 10),
+    },
+    {
+      id: 'method',
+      header: 'Method',
+      cell: ({ row }) => PAYMENT_METHOD_LABEL[row.original.method],
+    },
+    {
+      id: 'amount',
+      header: 'Amount',
+      meta: { align: 'right' },
+      cell: ({ row }) => (
+        <span className="font-semibold text-navy-800">{formatEtb(row.original.amountEtb)}</span>
+      ),
+    },
+    {
+      id: 'allocated',
+      header: 'Allocated',
+      meta: { align: 'right' },
+      cell: ({ row }) => formatEtb(row.original.allocatedEtb),
+    },
+    {
+      id: 'unallocated',
+      header: 'Unallocated',
+      meta: { align: 'right' },
+      cell: ({ row }) => formatEtb(subtractEtb(row.original.amountEtb, row.original.allocatedEtb)),
+    },
+    {
+      id: 'actions',
+      header: '',
+      meta: { align: 'right' },
+      cell: ({ row }) => renderPaymentActions(row.original),
+    },
+  ];
 
   return (
     <div className="flex min-h-screen">
@@ -961,18 +1053,18 @@ export default function InvoicesPage() {
                 Receivables
               </Link>
               {canWrite && tab === 'payments' ? (
-                <button type="button" onClick={openPaymentGeneral} className={btnPrimary}>
+                <Link href="/invoices/payments/new" className={btnPrimary}>
                   Record payment
-                </button>
+                </Link>
               ) : null}
               {canWrite && tab === 'invoices' ? (
                 <>
-                  <button type="button" onClick={openPaymentGeneral} className={btnSecondary}>
+                  <Link href="/invoices/payments/new" className={btnSecondary}>
                     Record payment
-                  </button>
-                  <button type="button" onClick={openCreate} className={btnPrimary}>
+                  </Link>
+                  <Link href="/invoices/new" className={btnPrimary}>
                     Create invoice
-                  </button>
+                  </Link>
                 </>
               ) : null}
             </div>
@@ -1011,413 +1103,157 @@ export default function InvoicesPage() {
             </button>
           </div>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6">
+          <section>
             {tab === 'invoices' ? (
               <>
-                <div className="mb-4 flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Filter
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setStatus('')}
-                    className={
-                      statusFilter === ''
-                        ? 'rounded-lg bg-navy-800 px-3 py-1 text-xs font-medium text-white'
-                        : 'rounded-lg border border-slate-200 px-3 py-1 text-xs text-slate-600'
-                    }
-                  >
-                    All
-                  </button>
-                  {INVOICE_FILTERS.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setStatus(s)}
-                      className={
-                        statusFilter === s
-                          ? 'rounded-lg bg-navy-800 px-3 py-1 text-xs font-medium text-white'
-                          : 'rounded-lg border border-slate-200 px-3 py-1 text-xs text-slate-600'
-                      }
-                    >
-                      {INVOICE_STATUS_LABEL[s]}
-                    </button>
-                  ))}
-                  <select
-                    className={`${fieldClass} ml-auto w-48`}
-                    value={customerFilter}
-                    onChange={(e) => setCustomer(e.target.value)}
-                  >
-                    <option value="">All customers</option>
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                  <form onSubmit={onSearch} className="flex items-center gap-2">
-                    <input
-                      className={`${fieldClass} w-40`}
-                      placeholder="Invoice number"
+                <ListToolbar
+                  search={
+                    <SearchField
                       value={qInput}
-                      onChange={(e) => setQInput(e.target.value)}
+                      onChange={setQInput}
+                      onSubmit={runSearch}
+                      placeholder="Invoice number"
                     />
-                    <button type="submit" className={`${btnSecondary} px-3 py-1.5 text-xs`}>
-                      Search
+                  }
+                  filters={
+                    <>
+                      <FilterSelect
+                        label="Status"
+                        value={statusFilter}
+                        onChange={setStatus}
+                        options={INVOICE_FILTERS.map((s) => ({
+                          value: s,
+                          label: INVOICE_STATUS_LABEL[s],
+                        }))}
+                        allLabel="All statuses"
+                      />
+                      <FilterSelect
+                        label="Customer"
+                        value={customerFilter}
+                        onChange={setCustomer}
+                        options={customers.map((c) => ({ value: c.id, label: c.name }))}
+                        allLabel="All customers"
+                      />
+                    </>
+                  }
+                />
+                <DataTable
+                  columns={invoiceColumns}
+                  rows={invoices}
+                  getRowId={(invoice) => invoice.id}
+                  getRowLabel={(invoice) => invoice.invoiceNumber}
+                  selectable
+                  selectedIds={selectedInvoices}
+                  onSelectionChange={setSelectedInvoices}
+                  // Export only. Voiding five invoices from a checkbox is not
+                  // something this product should make easy — a void carries a
+                  // mandatory per-invoice reason, one at a time, on purpose.
+                  bulkActions={
+                    <button
+                      type="button"
+                      onClick={exportSelectedInvoices}
+                      className={`${btnSecondary} px-2.5 py-1 text-xs`}
+                    >
+                      Export selected
                     </button>
-                  </form>
-                </div>
-
-                {loading ? (
-                  <p className="text-sm text-slate-500">Loading…</p>
-                ) : invoices.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-200 px-6 py-12 text-center">
-                    <p className="text-sm text-slate-500">No invoices yet.</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[960px] text-left text-sm">
-                        <thead>
-                          <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                            <th className="py-2 pr-4 font-semibold">Number</th>
-                            <th className="py-2 pr-4 font-semibold">Customer</th>
-                            <th className="py-2 pr-4 font-semibold">Issued</th>
-                            <th className="py-2 pr-4 font-semibold">Due</th>
-                            <th className="py-2 pr-4 font-semibold">Total</th>
-                            <th className="py-2 pr-4 font-semibold">Outstanding</th>
-                            <th className="py-2 pr-4 font-semibold">Status</th>
-                            <th className="py-2 font-semibold">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {invoices.map((inv) => (
-                            <tr key={inv.id} className="border-b border-slate-100 last:border-0">
-                              <td className="py-3 pr-4 font-mono text-xs text-slate-900">
-                                {inv.invoiceNumber}
-                              </td>
-                              <td className="py-3 pr-4 text-slate-600">
-                                {customerMap[inv.customerId] ?? inv.customerId.slice(0, 8)}
-                              </td>
-                              <td className="py-3 pr-4 text-slate-600">
-                                {inv.issuedAt.slice(0, 10)}
-                              </td>
-                              <td className="py-3 pr-4 text-slate-600">
-                                {inv.dueDate ?? '—'}
-                              </td>
-                              <td className="py-3 pr-4 font-semibold text-navy-800">
-                                {formatEtb(inv.totalEtb)}
-                              </td>
-                              <td className="py-3 pr-4 text-slate-600">
-                                {outstandingDisplay(inv)}
-                              </td>
-                              <td className="py-3 pr-4">
-                                <span
-                                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${INVOICE_STATUS_BADGE[inv.status]}`}
-                                >
-                                  {INVOICE_STATUS_LABEL[inv.status]}
-                                </span>
-                              </td>
-                              <td className="py-3">{renderInvoiceActions(inv)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <Pagination
-                      page={page}
-                      pageSize={PAGE_SIZE}
-                      total={total}
-                      totalPages={totalPages}
-                      onPageChange={setPage}
-                    />
-                  </>
-                )}
+                  }
+                  loading={loading}
+                  caption="Invoices"
+                  pagination={{
+                    page,
+                    pageSize,
+                    total,
+                    totalPages,
+                    onPageChange: setPage,
+                    onPageSizeChange: (size) => {
+                      setPageSize(size);
+                      setPage(1);
+                    },
+                  }}
+                  empty={
+                    <>No invoices here. Issue one from an approved proforma, or create a standalone invoice.</>
+                  }
+                />
               </>
             ) : (
               <>
-                <div className="mb-4 flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Filter
-                  </span>
-                  <select
-                    className={`${fieldClass} w-48`}
-                    value={paymentsCustomerFilter}
-                    onChange={(e) => setPaymentsCustomer(e.target.value)}
-                  >
-                    <option value="">All customers</option>
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className={`${fieldClass} w-40`}
-                    value={paymentsMethodFilter}
-                    onChange={(e) =>
-                      setPaymentsMethodFilterAndReset(e.target.value as PaymentMethod | '')
-                    }
-                  >
-                    <option value="">All methods</option>
-                    {Object.entries(PAYMENT_METHOD_LABEL).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="date"
-                    aria-label="From"
-                    className={`${fieldClass} w-40`}
-                    value={paymentsFrom}
-                    onChange={(e) => setPaymentsFromDate(e.target.value)}
-                  />
-                  <input
-                    type="date"
-                    aria-label="To"
-                    className={`${fieldClass} w-40`}
-                    value={paymentsTo}
-                    onChange={(e) => setPaymentsToDate(e.target.value)}
-                  />
-                  <form onSubmit={onPaymentsSearch} className="flex items-center gap-2">
-                    <input
-                      className={`${fieldClass} w-40`}
-                      placeholder="Receipt number"
+                <ListToolbar
+                  search={
+                    <SearchField
                       value={paymentsQInput}
-                      onChange={(e) => setPaymentsQInput(e.target.value)}
+                      onChange={setPaymentsQInput}
+                      onSubmit={runPaymentsSearch}
+                      placeholder="Receipt number"
                     />
-                    <button type="submit" className={`${btnSecondary} px-3 py-1.5 text-xs`}>
-                      Search
+                  }
+                  filters={
+                    <>
+                      <FilterSelect
+                        label="Customer"
+                        value={paymentsCustomerFilter}
+                        onChange={setPaymentsCustomer}
+                        options={customers.map((c) => ({ value: c.id, label: c.name }))}
+                        allLabel="All customers"
+                      />
+                      <FilterSelect
+                        label="Method"
+                        value={paymentsMethodFilter}
+                        onChange={setPaymentsMethodFilterAndReset}
+                        options={PAYMENT_METHOD_OPTIONS}
+                        allLabel="All methods"
+                      />
+                      <DateFilter label="From" value={paymentsFrom} onChange={setPaymentsFromDate} />
+                      <DateFilter label="To" value={paymentsTo} onChange={setPaymentsToDate} />
+                    </>
+                  }
+                  actions={(['csv', 'xlsx'] as const).map((format) => (
+                    <button
+                      key={format}
+                      type="button"
+                      onClick={() => void onDownloadPayments(format)}
+                      className={`${btnGhost} px-2.5 py-1.5 text-xs uppercase`}
+                    >
+                      {format}
                     </button>
-                  </form>
-                  <div className="ml-auto flex items-center gap-1">
-                    {(['csv', 'xlsx'] as const).map((format) => (
-                      <button
-                        key={format}
-                        type="button"
-                        onClick={() => void onDownloadPayments(format)}
-                        className={`${btnGhost} px-2 py-1 text-xs uppercase`}
-                      >
-                        {format}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {paymentsLoading ? (
-                  <p className="text-sm text-slate-500">Loading…</p>
-                ) : payments.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-200 px-6 py-12 text-center">
-                    <p className="text-sm text-slate-500">No payments found.</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[880px] text-left text-sm">
-                        <thead>
-                          <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                            <th className="py-2 pr-4 font-semibold">Receipt</th>
-                            <th className="py-2 pr-4 font-semibold">Customer</th>
-                            <th className="py-2 pr-4 font-semibold">Received</th>
-                            <th className="py-2 pr-4 font-semibold">Method</th>
-                            <th className="py-2 pr-4 font-semibold">Amount</th>
-                            <th className="py-2 pr-4 font-semibold">Allocated</th>
-                            <th className="py-2 pr-4 font-semibold">Unallocated</th>
-                            <th className="py-2 font-semibold">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {payments.map((p) => (
-                            <tr key={p.id} className="border-b border-slate-100 last:border-0">
-                              <td className="py-3 pr-4 font-mono text-xs text-slate-900">
-                                {p.receiptNumber}
-                                {p.reversalOfPaymentId ? (
-                                  <span className="ml-1 rounded-full bg-slate-200 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-slate-600">
-                                    Reversal
-                                  </span>
-                                ) : null}
-                              </td>
-                              <td className="py-3 pr-4 text-slate-600">
-                                {p.customerName ?? p.customerId.slice(0, 8)}
-                              </td>
-                              <td className="py-3 pr-4 text-slate-600">
-                                {p.receivedAt.slice(0, 10)}
-                              </td>
-                              <td className="py-3 pr-4 text-slate-600">
-                                {PAYMENT_METHOD_LABEL[p.method]}
-                              </td>
-                              <td className="py-3 pr-4 font-semibold text-navy-800">
-                                {formatEtb(p.amountEtb)}
-                              </td>
-                              <td className="py-3 pr-4 text-slate-600">
-                                {formatEtb(p.allocatedEtb)}
-                              </td>
-                              <td className="py-3 pr-4 text-slate-600">
-                                {formatEtb(subtractEtb(p.amountEtb, p.allocatedEtb))}
-                              </td>
-                              <td className="py-3">{renderPaymentActions(p)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <Pagination
-                      page={paymentsPage}
-                      pageSize={PAGE_SIZE}
-                      total={paymentsTotal}
-                      totalPages={paymentsTotalPages}
-                      onPageChange={setPaymentsPage}
-                    />
-                  </>
-                )}
+                  ))}
+                />
+                <DataTable
+                  columns={paymentColumns}
+                  rows={payments}
+                  getRowId={(payment) => payment.id}
+                  getRowLabel={(payment) => `receipt ${payment.receiptNumber}`}
+                  selectable
+                  selectedIds={selectedPayments}
+                  onSelectionChange={setSelectedPayments}
+                  bulkActions={
+                    <button
+                      type="button"
+                      onClick={exportSelectedPayments}
+                      className={`${btnSecondary} px-2.5 py-1 text-xs`}
+                    >
+                      Export selected
+                    </button>
+                  }
+                  loading={paymentsLoading}
+                  caption="Payments"
+                  pagination={{
+                    page: paymentsPage,
+                    pageSize: paymentsPageSize,
+                    total: paymentsTotal,
+                    totalPages: paymentsTotalPages,
+                    onPageChange: setPaymentsPage,
+                    onPageSizeChange: (size) => {
+                      setPaymentsPageSize(size);
+                      setPaymentsPage(1);
+                    },
+                  }}
+                  empty={<>No payments match these filters. Record one to see it here.</>}
+                />
               </>
             )}
           </section>
         </main>
       </div>
-
-      {/* Create standalone invoice */}
-      <SideDrawer
-        open={createOpen}
-        onClose={closeCreate}
-        title="Create invoice"
-        description="Standalone billing (e.g. maintenance) — the server recomputes VAT and the total from these lines."
-        footer={
-          <div className="flex gap-2">
-            <button type="button" onClick={closeCreate} className={`${btnSecondary} flex-1`}>
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="create-invoice-form"
-              disabled={createSubmitting}
-              className={`${btnPrimary} flex-1`}
-            >
-              {createSubmitting ? 'Creating…' : 'Create invoice'}
-            </button>
-          </div>
-        }
-      >
-        <form id="create-invoice-form" onSubmit={(e) => void onCreate(e)} className="space-y-4">
-          {createError ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {createError}
-            </p>
-          ) : null}
-          <div>
-            <label className={labelClass} htmlFor="inv-customer">
-              Customer
-            </label>
-            <select
-              id="inv-customer"
-              className={fieldClass}
-              required
-              value={createCustomerId}
-              onChange={(e) => setCreateCustomerId(e.target.value)}
-            >
-              <option value="">Select a customer</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="inv-project">
-              Project (optional)
-            </label>
-            <select
-              id="inv-project"
-              className={fieldClass}
-              value={createProjectId}
-              onChange={(e) => setCreateProjectId(e.target.value)}
-            >
-              <option value="">No project</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="inv-due">
-              Due date (optional)
-            </label>
-            <input
-              id="inv-due"
-              type="date"
-              className={fieldClass}
-              value={createDueDate}
-              onChange={(e) => setCreateDueDate(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <div className="mb-1 flex items-center justify-between">
-              <span className={labelClass}>Lines</span>
-              <button
-                type="button"
-                onClick={addLine}
-                className="text-xs font-semibold text-navy-800 hover:underline"
-              >
-                + Add line
-              </button>
-            </div>
-            <div className="space-y-2">
-              {lines.map((line, index) => (
-                <div key={index} className="rounded-lg border border-slate-200 p-3">
-                  <input
-                    className={`${fieldClass} mb-2`}
-                    placeholder="Description"
-                    value={line.description}
-                    onChange={(e) => setLineField(index, 'description', e.target.value)}
-                  />
-                  <div className="grid grid-cols-3 gap-2">
-                    <input
-                      type="number"
-                      step="0.001"
-                      min="0"
-                      className={fieldClass}
-                      placeholder="Qty"
-                      value={line.quantity}
-                      onChange={(e) => setLineField(index, 'quantity', e.target.value)}
-                    />
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      className={fieldClass}
-                      placeholder="Unit price"
-                      value={line.unitPriceEtb}
-                      onChange={(e) => setLineField(index, 'unitPriceEtb', e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      disabled={lines.length === 1}
-                      onClick={() => removeLine(index)}
-                      className={`${btnGhost} justify-self-end px-2 text-xs disabled:opacity-30`}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            Estimated total (excl. VAT):{' '}
-            <span className="font-semibold text-navy-800">{formatEtb(draftTotal)}</span>
-            <br />
-            <span className="text-xs text-slate-400">
-              Display-only — the server computes VAT and the real total.
-            </span>
-          </p>
-        </form>
-      </SideDrawer>
 
       {/* Record withholding */}
       <SideDrawer
@@ -1475,183 +1311,6 @@ export default function InvoicesPage() {
               onChange={(e) => setWithholdVoucher(e.target.value)}
             />
           </div>
-        </form>
-      </SideDrawer>
-
-      {/* Record payment */}
-      <SideDrawer
-        open={paymentOpen}
-        onClose={closePayment}
-        title="Record payment"
-        description="Optionally allocate it against this customer's open invoices in the same step."
-        footer={
-          <div className="flex gap-2">
-            <button type="button" onClick={closePayment} className={`${btnSecondary} flex-1`}>
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="payment-form"
-              disabled={paymentSubmitting}
-              className={`${btnPrimary} flex-1`}
-            >
-              {paymentSubmitting ? 'Saving…' : 'Record payment'}
-            </button>
-          </div>
-        }
-      >
-        <form id="payment-form" onSubmit={(e) => void onSubmitPayment(e)} className="space-y-4">
-          {paymentError ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {paymentError}
-            </p>
-          ) : null}
-          <div>
-            <label className={labelClass} htmlFor="pay-customer">
-              Customer
-            </label>
-            <select
-              id="pay-customer"
-              className={fieldClass}
-              required
-              value={paymentCustomerId}
-              onChange={(e) => setPaymentCustomerId(e.target.value)}
-            >
-              <option value="">Select a customer</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass} htmlFor="pay-amount">
-                Amount (ETB)
-              </label>
-              <input
-                id="pay-amount"
-                type="number"
-                step="0.01"
-                min="0.01"
-                className={fieldClass}
-                required
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={labelClass} htmlFor="pay-method">
-                Method
-              </label>
-              <select
-                id="pay-method"
-                className={fieldClass}
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-              >
-                {Object.entries(PAYMENT_METHOD_LABEL).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          {BANK_METHODS.has(paymentMethod) ? (
-            <div>
-              <label className={labelClass} htmlFor="pay-bank">
-                Bank account
-              </label>
-              <select
-                id="pay-bank"
-                className={fieldClass}
-                required
-                value={paymentBankAccountId}
-                onChange={(e) => setPaymentBankAccountId(e.target.value)}
-              >
-                <option value="">Select an account</option>
-                {bankAccounts.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} — {b.bankName}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass} htmlFor="pay-received">
-                Received (optional)
-              </label>
-              <input
-                id="pay-received"
-                type="date"
-                className={fieldClass}
-                value={paymentReceivedAt}
-                onChange={(e) => setPaymentReceivedAt(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={labelClass} htmlFor="pay-reference">
-                Reference (optional)
-              </label>
-              <input
-                id="pay-reference"
-                className={fieldClass}
-                value={paymentReference}
-                onChange={(e) => setPaymentReference(e.target.value)}
-              />
-            </div>
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="pay-note">
-              Note (optional)
-            </label>
-            <textarea
-              id="pay-note"
-              className={fieldClass}
-              rows={2}
-              value={paymentNote}
-              onChange={(e) => setPaymentNote(e.target.value)}
-            />
-          </div>
-
-          {paymentCustomerId ? (
-            <div>
-              <span className={labelClass}>Allocate (optional)</span>
-              {paymentAllocations.length === 0 ? (
-                <p className="text-xs text-slate-400">
-                  This customer has no open invoices.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {paymentAllocations.map((a) => (
-                    <div key={a.invoiceId} className="flex items-center gap-2">
-                      <span className="flex-1 font-mono text-xs text-slate-600">
-                        {a.invoiceNumber}
-                        {a.maxEtb ? (
-                          <span className="ml-1 text-slate-400">
-                            (up to {formatEtb(a.maxEtb)})
-                          </span>
-                        ) : null}
-                      </span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max={a.maxEtb || undefined}
-                        className={`${fieldClass} w-32`}
-                        value={a.amountEtb}
-                        onChange={(e) => setAllocationAmount(a.invoiceId, e.target.value)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : null}
         </form>
       </SideDrawer>
 
