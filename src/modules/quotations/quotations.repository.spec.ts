@@ -137,3 +137,81 @@ describe('QuotationsRepository.findByIdForDocument — joined customer/project n
     ).resolves.toBeNull();
   });
 });
+
+describe('QuotationsRepository.create — project stage auto-advance', () => {
+  const PROJECT_ID = '55555555-5555-5555-5555-555555555555';
+  const insertedQuote = {
+    id: QUOTE_ID,
+    projectId: PROJECT_ID,
+    status: 'DRAFT',
+  };
+
+  /** insert().values().returning() + the select/update chains
+   * autoAdvanceProject drives, all on one fake tx. */
+  const makeTx = (projectRows: unknown[]) => {
+    const insertChain: Record<string, jest.Mock> = {};
+    insertChain.values = jest.fn(() => insertChain);
+    insertChain.returning = jest.fn(() => Promise.resolve([insertedQuote]));
+
+    const selectChain: Record<string, jest.Mock> = {};
+    selectChain.from = jest.fn(() => selectChain);
+    selectChain.where = jest.fn(() => selectChain);
+    selectChain.limit = jest.fn(() => Promise.resolve(projectRows));
+
+    const setValues: unknown[] = [];
+    const updateChain: Record<string, jest.Mock> = {};
+    updateChain.set = jest.fn((v: unknown) => {
+      setValues.push(v);
+      return updateChain;
+    });
+    updateChain.where = jest.fn(() => Promise.resolve([]));
+
+    const update = jest.fn(() => updateChain);
+    const tx = {
+      insert: jest.fn(() => insertChain),
+      select: jest.fn(() => selectChain),
+      update,
+    };
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (t: unknown) => Promise<unknown>) => fn(tx),
+    );
+    return { withTenant, update, setValues };
+  };
+
+  it('advances the project to QUOTATION inside the insert transaction', async () => {
+    const { withTenant, update, setValues } = makeTx([{ status: 'LEAD' }]);
+    const repo = new QuotationsRepository({ withTenant } as never);
+
+    await expect(
+      repo.create(TENANT_ID, { projectId: PROJECT_ID } as never),
+    ).resolves.toEqual(insertedQuote);
+
+    // One withTenant call => insert and stage move share a transaction, so a
+    // quotation can never commit next to a project that failed to advance.
+    expect(withTenant).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(setValues[0]).toMatchObject({ status: 'QUOTATION' });
+  });
+
+  it('still returns the quotation when the stage cannot move (CANCELLED project)', async () => {
+    const { withTenant, update } = makeTx([{ status: 'CANCELLED' }]);
+    const repo = new QuotationsRepository({ withTenant } as never);
+
+    await expect(
+      repo.create(TENANT_ID, { projectId: PROJECT_ID } as never),
+    ).resolves.toEqual(insertedQuote);
+
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('still returns the quotation when the project is already past QUOTATION', async () => {
+    const { withTenant, update } = makeTx([{ status: 'CONTRACT' }]);
+    const repo = new QuotationsRepository({ withTenant } as never);
+
+    await expect(
+      repo.create(TENANT_ID, { projectId: PROJECT_ID } as never),
+    ).resolves.toEqual(insertedQuote);
+
+    expect(update).not.toHaveBeenCalled();
+  });
+});

@@ -1,9 +1,11 @@
 /**
  * Task 2: the end-to-end happy path this task exists for — an approved
  * quotation converts to an issued proforma with a real gapless number, and
- * that proforma is what then unblocks the project's QUOTATION -> PROFORMA
- * transition (the DAG gate in ProjectsService.updateStatus /
- * ProjectsRepository.hasIssuedProforma).
+ * issuing it moves the project QUOTATION -> PROFORMA in that same
+ * transaction (autoAdvanceProject). The manual path's DAG gate
+ * (ProjectsService.updateStatus / ProjectsRepository.hasIssuedProforma)
+ * still blocks before any proforma exists — it is just no longer the way
+ * the stage normally gets set.
  *
  * The quotation itself is seeded directly via SQL (its own creation flow —
  * calc + VAT resolution — is exercised by quotations.service.spec.ts, not
@@ -265,13 +267,19 @@ describe('Quotation -> proforma -> project DAG happy path', () => {
       invoicesRepo.issueFromProforma(tenantId, userId, proforma.id, null),
     ).rejects.toMatchObject({ status: 409 });
 
-    // project transitions QUOTATION -> PROFORMA now that an issued proforma exists
-    const project = await projectsService.updateStatus(
-      user,
-      projectId,
-      'PROFORMA',
-    );
+    // The project already moved QUOTATION -> PROFORMA, inside issue()'s own
+    // transaction (autoAdvanceProject): the stage is a consequence of
+    // issuing the proforma, not a second thing a sales manager has to
+    // record. The manual path's DAG gate above still stands — nobody
+    // normally has to use it.
+    const project = await projectsService.getById(user, projectId);
     expect(project.status).toBe('PROFORMA');
+
+    // ...and re-declaring the stage by hand is now simply an illegal
+    // transition (PROFORMA -> PROFORMA), never a silent second move.
+    await expect(
+      projectsService.updateStatus(user, projectId, 'PROFORMA'),
+    ).rejects.toMatchObject({ status: 409 });
   });
 
   it('a non-zero-margin quotation converts with subtotalEtb (taxable base) + vatEtb = totalEtb exactly, even when subtotalEtb+marginAmountEtb would be a cent short', async () => {
