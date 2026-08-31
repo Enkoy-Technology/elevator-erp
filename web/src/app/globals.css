@@ -63,3 +63,142 @@ body {
     border-radius: 2px;
   }
 }
+
+/* Printing the app's own screens. Ctrl+P on a list or an open drawer should
+   give a working sheet of paper: the chrome goes, the record stays. Per-element
+   exceptions belong on the element as Tailwind's `print:` variant; everything
+   structural lives here. */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  /* Letterhead. `data-print-date` is stamped on <body> by web/src/lib/api.ts —
+     CSS has no clock. */
+  body::before {
+    content: 'Shining Star Electromechanical Works — ' attr(data-print-date);
+    display: block;
+    margin-bottom: 8mm;
+    padding-bottom: 2mm;
+    border-bottom: 1px solid #000;
+    font-family: var(--font-display);
+    font-size: 11pt;
+    font-weight: 600;
+  }
+
+  /* Navigation and controls are not part of the document. The drawer's own
+     <aside role="dialog"> is content, so it stays. */
+  aside:not([role='dialog']),
+  button,
+  [role='button'],
+  select {
+    display: none !important;
+  }
+
+  /* Paper is white; screen depth (tints, shadows, blur) does not survive it. */
+  *,
+  *::before,
+  *::after {
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    text-shadow: none !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #000;
+    /* The drawer pins body overflow while it is open. */
+    overflow: visible !important;
+  }
+
+  /* Nothing scrolls or is clipped on paper — including truncated cells. */
+  [class*='overflow-'],
+  [class*='max-h-'],
+  [class*='max-w-'],
+  .truncate,
+  th,
+  td {
+    overflow: visible !important;
+    max-width: none !important;
+    max-height: none !important;
+    white-space: normal !important;
+    text-overflow: clip !important;
+  }
+
+  [class*='min-h-screen'],
+  [class*='h-screen'] {
+    min-height: 0 !important;
+    height: auto !important;
+  }
+
+  /* Keep the rules — a table without them is unreadable once the tints go. */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  th,
+  td {
+    padding: 4pt 6pt !important;
+    border-bottom: 1px solid #b3b3b3 !important;
+    color: #000;
+  }
+
+  thead th {
+    border-bottom: 1.5px solid #000 !important;
+  }
+
+  /* Repeat column headings on every sheet; never split a row across sheets. */
+  thead {
+    display: table-header-group;
+  }
+
+  tr,
+  img {
+    break-inside: avoid;
+  }
+
+  /* An open drawer is what the user meant to print: flatten it onto the page
+     and drop the list behind it. */
+  .fixed {
+    position: static !important;
+  }
+
+  body:has([role='dialog']) main {
+    display: none !important;
+  }
+
+  [role='presentation']:has([role='dialog']) {
+    display: block !important;
+  }
+
+  [role='dialog'] {
+    width: 100% !important;
+    height: auto !important;
+    border: 0 !important;
+  }
+}
+
+/* Data-visualisation tokens.
+   Ordinal ramp in the brand hue, light→dark, validated with the dataviz
+   skill's checker (`validate_palette.js --ordinal --surface #ffffff`):
+   monotone lightness, adjacent ΔL ≥ 0.06, light end 2.11:1 on white,
+   single hue (3° spread). Charts here are single-series, so this is a
+   sequential/ordinal problem — there is deliberately no categorical
+   palette, and no series is ever coloured by rank.
+   Status steps are the reserved set: never reused as a series colour, and
+   always shipped with a label rather than carrying meaning by hue alone. */
+@theme {
+  --color-viz-1: #fb9d19;
+  --color-viz-2: #d9820a;
+  --color-viz-3: #b36a05;
+  --color-viz-4: #8a5100;
+  --color-viz-5: #5e3700;
+
+  --color-status-good: #0ca30c;
+  --color-status-warning: #fab219;
+  --color-status-serious: #ec835a;
+  --color-status-critical: #d03b3b;
+}
