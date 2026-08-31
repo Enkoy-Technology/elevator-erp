@@ -3,8 +3,12 @@
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { ColumnDef } from '@tanstack/react-table';
 
-import { btnGhost, btnPrimary, fieldClass, labelClass } from '@/components/form-styles';
+import { btnGhost, btnPrimary, fieldClass, metaLabelClass } from '@/components/form-styles';
+import { DataTable } from '@/components/data-table';
+import { FilterSelect, ListToolbar, StatusPill } from '@/components/list-toolbar';
+import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
 import { formatEtb, isZeroEtb, sumEtb } from '@/lib/money';
 import {
@@ -20,6 +24,7 @@ import {
   type Customer,
   type CustomerStatement,
   type ReportFormat,
+  type StatementRow,
   type StatementRowKind,
 } from '@/lib/api';
 
@@ -30,6 +35,89 @@ const STATEMENT_ROW_LABEL: Record<StatementRowKind, string> = {
   payment: 'Payment',
   withholding: 'Withholding',
 };
+
+const STATEMENT_ROW_TONE: Record<StatementRowKind, 'neutral' | 'good' | 'warn'> = {
+  invoice: 'neutral',
+  payment: 'good',
+  withholding: 'warn',
+};
+
+/** The money columns of the ageing report, in report order. One list drives
+ *  both the table columns and the totals band so they can never disagree. */
+type AgingMoneyKey = 'current' | 'd1_30' | 'd31_60' | 'd61_90' | 'd90_plus' | 'total';
+
+const AGING_BUCKETS = [
+  { key: 'current', label: 'Current' },
+  { key: 'd1_30', label: '1-30' },
+  { key: 'd31_60', label: '31-60' },
+  { key: 'd61_90', label: '61-90' },
+  { key: 'd90_plus', label: '90+' },
+  { key: 'total', label: 'Total' },
+] as const satisfies readonly { key: AgingMoneyKey; label: string }[];
+
+const agingColumns: ColumnDef<AgingRow, unknown>[] = [
+  {
+    id: 'customer',
+    header: 'Customer',
+    enableSorting: true,
+    accessorFn: (row) => row.customerName ?? row.customerId.slice(0, 8),
+    cell: (cell) => <span className="font-medium text-slate-900">{cell.getValue<string>()}</span>,
+  },
+  ...AGING_BUCKETS.map<ColumnDef<AgingRow, unknown>>(({ key, label }) => ({
+    id: key,
+    header: label,
+    meta: { align: 'right' },
+    cell: ({ row }) =>
+      key === 'total' ? (
+        <span className="font-semibold text-navy-800">{formatEtb(row.original.total)}</span>
+      ) : (
+        formatEtb(row.original[key])
+      ),
+  })),
+];
+
+const statementColumns: ColumnDef<StatementRow, unknown>[] = [
+  {
+    id: 'date',
+    header: 'Date',
+    cell: ({ row }) => <span className="font-mono text-xs">{row.original.date}</span>,
+  },
+  {
+    id: 'kind',
+    header: 'Type',
+    cell: ({ row }) => (
+      <StatusPill
+        label={STATEMENT_ROW_LABEL[row.original.kind]}
+        tone={STATEMENT_ROW_TONE[row.original.kind]}
+      />
+    ),
+  },
+  {
+    id: 'reference',
+    header: 'Reference',
+    cell: ({ row }) => (
+      <span className="font-mono text-xs text-slate-900">{row.original.reference}</span>
+    ),
+  },
+  {
+    id: 'debit',
+    header: 'Debit',
+    meta: { align: 'right' },
+    cell: ({ row }) => (isZeroEtb(row.original.debit) ? '—' : formatEtb(row.original.debit)),
+  },
+  {
+    id: 'credit',
+    header: 'Credit',
+    meta: { align: 'right' },
+    cell: ({ row }) => (isZeroEtb(row.original.credit) ? '—' : formatEtb(row.original.credit)),
+  },
+  {
+    id: 'balance',
+    header: 'Balance',
+    meta: { align: 'right' },
+    cell: ({ row }) => <span className="font-semibold text-navy-800">{formatEtb(row.original.balance)}</span>,
+  },
+];
 
 // Local-calendar date, not UTC: toISOString() on a Date built from local
 // y/m/d fields shifts to the previous day for any positive UTC offset
@@ -48,6 +136,9 @@ const firstOfMonthIso = (): string => {
 };
 
 const REPORT_FORMATS: readonly ReportFormat[] = ['csv', 'xlsx', 'pdf'];
+
+/** Date field styled to sit level with a FilterSelect in the toolbar. */
+const dateLabelClass = `mb-1 block font-semibold ${metaLabelClass}`;
 
 export default function ReceivablesPage() {
   const router = useRouter();
@@ -159,310 +250,200 @@ export default function ReceivablesPage() {
     }
   };
 
-  const agingTotals = {
-    current: sumEtb(aging.map((row) => row.current)),
-    d1_30: sumEtb(aging.map((row) => row.d1_30)),
-    d31_60: sumEtb(aging.map((row) => row.d31_60)),
-    d61_90: sumEtb(aging.map((row) => row.d61_90)),
-    d90_plus: sumEtb(aging.map((row) => row.d90_plus)),
-    total: sumEtb(aging.map((row) => row.total)),
-  };
+  const agingTotals = AGING_BUCKETS.map(({ key, label }) => ({
+    label,
+    value: sumEtb(aging.map((row) => row[key])),
+  }));
+
+  const reportSelect = (
+    <FilterSelect<'statement'>
+      label="Report"
+      value={view === 'statement' ? 'statement' : ''}
+      onChange={(next) => switchView(next === 'statement' ? 'statement' : 'aging')}
+      options={[{ value: 'statement', label: 'Customer statement' }]}
+      allLabel="Ageing"
+    />
+  );
+
+  const downloadButtons = (
+    downloading: boolean,
+    disabled: boolean,
+    onDownload: (format: ReportFormat) => void,
+  ) => (
+    <div className="flex items-center gap-1">
+      <span className={metaLabelClass}>Export</span>
+      {REPORT_FORMATS.map((format) => (
+        <button
+          key={format}
+          type="button"
+          disabled={downloading || disabled}
+          onClick={() => onDownload(format)}
+          className={`${btnGhost} px-2 py-1 text-xs uppercase`}
+        >
+          {format}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <div className="flex min-h-screen">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-slate-200 bg-white px-8 py-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h1 className="font-display text-lg font-semibold">Receivables</h1>
-              <p className="text-sm text-slate-500">
-                Aging and customer statements (amounts in ETB, read-only)
+        <PageHeader
+          eyebrow="Money"
+          title="Receivables"
+          description="What every customer owes, by age, and the statement behind it. Read-only — money moves on Invoices."
+          actions={
+            <Link href="/invoices" className={btnGhost}>
+              Invoices
+            </Link>
+          }
+        />
+
+        <main className="flex-1 bg-slate-50 p-4 sm:p-8 print:bg-white print:p-0">
+          {view === 'aging' ? (
+            <>
+              {agingError ? (
+                <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {agingError}
+                </p>
+              ) : null}
+
+              <ListToolbar
+                filters={reportSelect}
+                actions={downloadButtons(agingDownloading, aging.length === 0, (format) =>
+                  void onDownloadAging(format),
+                )}
+              />
+
+              <p className="mb-4 text-xs text-slate-500 print:hidden">
+                Per-invoice outstanding by customer, as of today. Excludes unapplied cash — see a
+                customer&apos;s own net balance for that.
               </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <Link href="/invoices" className={btnGhost}>
-                Invoices
-              </Link>
-            </div>
-          </div>
-        </header>
 
-        <main className="flex-1 bg-slate-50 p-8">
-          <div className="mb-4 flex gap-2">
-            <button
-              type="button"
-              onClick={() => switchView('aging')}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-                view === 'aging'
-                  ? 'bg-navy-800 text-white'
-                  : 'border border-slate-200 text-slate-600'
-              }`}
-            >
-              Aging
-            </button>
-            <button
-              type="button"
-              onClick={() => switchView('statement')}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-                view === 'statement'
-                  ? 'bg-navy-800 text-white'
-                  : 'border border-slate-200 text-slate-600'
-              }`}
-            >
-              Statement
-            </button>
-          </div>
+              {aging.length > 0 ? (
+                <dl className="mb-4 flex flex-wrap gap-x-10 gap-y-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  {agingTotals.map(({ label, value }) => (
+                    <div key={label}>
+                      <dt className={metaLabelClass}>{label}</dt>
+                      <dd className="font-display text-base font-semibold tabular-nums text-slate-900">
+                        {formatEtb(value)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6">
-            {view === 'aging' ? (
-              <>
-                {agingError ? (
-                  <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {agingError}
-                  </p>
-                ) : null}
-                <div className="mb-4 flex items-center justify-between">
-                  <p className="text-xs text-slate-500">
-                    Per-invoice outstanding by customer, as of today. Excludes
-                    unapplied cash — see a customer&apos;s own net balance for that.
-                  </p>
-                  <div className="flex items-center gap-1">
-                    {REPORT_FORMATS.map((format) => (
-                      <button
-                        key={format}
-                        type="button"
-                        disabled={agingDownloading || aging.length === 0}
-                        onClick={() => void onDownloadAging(format)}
-                        className={`${btnGhost} px-2 py-1 text-xs uppercase`}
-                      >
-                        {format}
+              <DataTable
+                caption="Receivables ageing"
+                columns={agingColumns}
+                rows={aging}
+                getRowId={(row) => row.customerId}
+                loading={agingLoading}
+                empty={
+                  <>
+                    No customer has an outstanding balance. Anything unpaid appears here the moment
+                    an invoice on Invoices passes its due date.
+                  </>
+                }
+              />
+            </>
+          ) : (
+            <>
+              {statementError ? (
+                <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {statementError}
+                </p>
+              ) : null}
+
+              <form onSubmit={onSubmitStatement}>
+                <ListToolbar
+                  filters={
+                    <>
+                      {reportSelect}
+                      <FilterSelect
+                        label="Customer"
+                        value={statementCustomerId}
+                        onChange={setStatementCustomerId}
+                        options={customers.map((c) => ({ value: c.id, label: c.name }))}
+                        allLabel="Select a customer"
+                      />
+                      <div>
+                        <label className={dateLabelClass} htmlFor="stmt-from">
+                          From
+                        </label>
+                        <input
+                          id="stmt-from"
+                          type="date"
+                          className={fieldClass}
+                          required
+                          value={statementFrom}
+                          onChange={(e) => setStatementFrom(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className={dateLabelClass} htmlFor="stmt-to">
+                          To
+                        </label>
+                        <input
+                          id="stmt-to"
+                          type="date"
+                          className={fieldClass}
+                          required
+                          value={statementTo}
+                          onChange={(e) => setStatementTo(e.target.value)}
+                        />
+                      </div>
+                      <button type="submit" className={btnPrimary} disabled={!statementCustomerId}>
+                        Load
                       </button>
-                    ))}
+                    </>
+                  }
+                  actions={downloadButtons(statementDownloading, !statement, (format) =>
+                    void onDownloadStatement(format),
+                  )}
+                />
+              </form>
+
+              {statement ? (
+                <div className="mb-4 flex flex-wrap gap-10 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <div>
+                    <p className={metaLabelClass}>Opening balance</p>
+                    <p className="font-display text-xl font-semibold tabular-nums text-slate-900">
+                      {formatEtb(statement.openingBalance)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className={metaLabelClass}>Closing balance</p>
+                    <p className="font-display text-2xl font-semibold tabular-nums text-slate-900">
+                      {formatEtb(statement.closingBalance)}
+                    </p>
                   </div>
                 </div>
+              ) : null}
 
-                {agingLoading ? (
-                  <p className="text-sm text-slate-500">Loading…</p>
-                ) : aging.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-200 px-6 py-12 text-center">
-                    <p className="text-sm text-slate-500">
-                      No customer has an outstanding balance.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[880px] text-left text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                          <th className="py-2 pr-4 font-semibold">Customer</th>
-                          <th className="py-2 pr-4 text-right font-semibold">Current</th>
-                          <th className="py-2 pr-4 text-right font-semibold">1-30</th>
-                          <th className="py-2 pr-4 text-right font-semibold">31-60</th>
-                          <th className="py-2 pr-4 text-right font-semibold">61-90</th>
-                          <th className="py-2 pr-4 text-right font-semibold">90+</th>
-                          <th className="py-2 text-right font-semibold">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {aging.map((row) => (
-                          <tr key={row.customerId} className="border-b border-slate-100 last:border-0">
-                            <td className="py-3 pr-4 text-slate-900">
-                              {row.customerName ?? row.customerId.slice(0, 8)}
-                            </td>
-                            <td className="py-3 pr-4 text-right text-slate-600">
-                              {formatEtb(row.current)}
-                            </td>
-                            <td className="py-3 pr-4 text-right text-slate-600">
-                              {formatEtb(row.d1_30)}
-                            </td>
-                            <td className="py-3 pr-4 text-right text-slate-600">
-                              {formatEtb(row.d31_60)}
-                            </td>
-                            <td className="py-3 pr-4 text-right text-slate-600">
-                              {formatEtb(row.d61_90)}
-                            </td>
-                            <td className="py-3 pr-4 text-right text-slate-600">
-                              {formatEtb(row.d90_plus)}
-                            </td>
-                            <td className="py-3 text-right font-semibold text-navy-800">
-                              {formatEtb(row.total)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="border-t-2 border-slate-200 text-sm font-semibold text-navy-800">
-                          <td className="py-3 pr-4">Total</td>
-                          <td className="py-3 pr-4 text-right">
-                            {formatEtb(agingTotals.current)}
-                          </td>
-                          <td className="py-3 pr-4 text-right">
-                            {formatEtb(agingTotals.d1_30)}
-                          </td>
-                          <td className="py-3 pr-4 text-right">
-                            {formatEtb(agingTotals.d31_60)}
-                          </td>
-                          <td className="py-3 pr-4 text-right">
-                            {formatEtb(agingTotals.d61_90)}
-                          </td>
-                          <td className="py-3 pr-4 text-right">
-                            {formatEtb(agingTotals.d90_plus)}
-                          </td>
-                          <td className="py-3 text-right">
-                            {formatEtb(agingTotals.total)}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                {statementError ? (
-                  <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {statementError}
-                  </p>
-                ) : null}
-                <form
-                  onSubmit={onSubmitStatement}
-                  className="mb-4 flex flex-wrap items-end gap-3"
-                >
-                  <div className="min-w-[220px] flex-1">
-                    <label className={labelClass} htmlFor="stmt-customer">
-                      Customer
-                    </label>
-                    <select
-                      id="stmt-customer"
-                      className={fieldClass}
-                      required
-                      value={statementCustomerId}
-                      onChange={(e) => setStatementCustomerId(e.target.value)}
-                    >
-                      <option value="">Select a customer</option>
-                      {customers.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelClass} htmlFor="stmt-from">
-                      From
-                    </label>
-                    <input
-                      id="stmt-from"
-                      type="date"
-                      className={fieldClass}
-                      required
-                      value={statementFrom}
-                      onChange={(e) => setStatementFrom(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass} htmlFor="stmt-to">
-                      To
-                    </label>
-                    <input
-                      id="stmt-to"
-                      type="date"
-                      className={fieldClass}
-                      required
-                      value={statementTo}
-                      onChange={(e) => setStatementTo(e.target.value)}
-                    />
-                  </div>
-                  <button type="submit" className={btnPrimary}>
-                    Load
-                  </button>
-                  <div className="ml-auto flex items-center gap-1">
-                    {REPORT_FORMATS.map((format) => (
-                      <button
-                        key={format}
-                        type="button"
-                        disabled={statementDownloading || !statement}
-                        onClick={() => void onDownloadStatement(format)}
-                        className={`${btnGhost} px-2 py-1 text-xs uppercase`}
-                      >
-                        {format}
-                      </button>
-                    ))}
-                  </div>
-                </form>
-
-                {statementLoading ? (
-                  <p className="text-sm text-slate-500">Loading…</p>
-                ) : !statement ? (
-                  <div className="rounded-xl border border-dashed border-slate-200 px-6 py-12 text-center">
-                    <p className="text-sm text-slate-500">
-                      Pick a customer and a date range to load a statement.
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="mb-3 flex flex-wrap gap-6 text-sm">
-                      <p>
-                        Opening balance:{' '}
-                        <span className="font-semibold text-navy-800">
-                          {formatEtb(statement.openingBalance)}
-                        </span>
-                      </p>
-                      <p>
-                        Closing balance:{' '}
-                        <span className="font-semibold text-navy-800">
-                          {formatEtb(statement.closingBalance)}
-                        </span>
-                      </p>
-                    </div>
-                    {statement.rows.length === 0 ? (
-                      <p className="py-6 text-sm text-slate-500">
-                        No activity in this date range.
-                      </p>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full min-w-[720px] text-left text-sm">
-                          <thead>
-                            <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                              <th className="py-2 pr-4 font-semibold">Date</th>
-                              <th className="py-2 pr-4 font-semibold">Type</th>
-                              <th className="py-2 pr-4 font-semibold">Reference</th>
-                              <th className="py-2 pr-4 text-right font-semibold">Debit</th>
-                              <th className="py-2 pr-4 text-right font-semibold">Credit</th>
-                              <th className="py-2 text-right font-semibold">Balance</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {statement.rows.map((row) => (
-                              <tr key={row.id} className="border-b border-slate-100 last:border-0">
-                                <td className="py-3 pr-4 text-slate-600">{row.date}</td>
-                                <td className="py-3 pr-4 text-slate-600">
-                                  {STATEMENT_ROW_LABEL[row.kind]}
-                                </td>
-                                <td className="py-3 pr-4 font-mono text-xs text-slate-900">
-                                  {row.reference}
-                                </td>
-                                <td className="py-3 pr-4 text-right text-slate-600">
-                                  {isZeroEtb(row.debit) ? '—' : formatEtb(row.debit)}
-                                </td>
-                                <td className="py-3 pr-4 text-right text-slate-600">
-                                  {isZeroEtb(row.credit) ? '—' : formatEtb(row.credit)}
-                                </td>
-                                <td className="py-3 text-right font-semibold text-navy-800">
-                                  {formatEtb(row.balance)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-          </section>
+              <DataTable
+                caption={
+                  statement ? `Statement — ${statement.customerName}` : 'Customer statement'
+                }
+                columns={statementColumns}
+                rows={statement?.rows ?? []}
+                getRowId={(row) => row.id}
+                loading={statementLoading}
+                empty={
+                  statement ? (
+                    <>
+                      No invoices or payments for this customer in that range. Widen the dates and
+                      load again.
+                    </>
+                  ) : (
+                    <>Pick a customer and a date range above, then choose Load to build the statement.</>
+                  )
+                }
+              />
+            </>
+          )}
         </main>
       </div>
     </div>

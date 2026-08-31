@@ -1,10 +1,18 @@
 'use client';
 
+import type { ColumnDef } from '@tanstack/react-table';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { btnGhost, btnPrimary, fieldClass } from '@/components/form-styles';
-import { Pagination } from '@/components/pagination';
+import {
+  btnGhost,
+  btnSecondary,
+  fieldClass,
+  metaLabelClass,
+} from '@/components/form-styles';
+import { DataTable } from '@/components/data-table';
+import { FilterSelect, ListToolbar, StatusPill } from '@/components/list-toolbar';
+import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
 import {
   ApiError,
@@ -22,8 +30,8 @@ import {
   type TenantSettings,
   type UserRole,
 } from '@/lib/api';
+import { formatNumber } from '@/lib/money';
 
-const PAGE_SIZE = 20;
 
 const STATUS_LABEL: Record<MessageStatus, string> = {
   QUEUED: 'Queued',
@@ -32,11 +40,12 @@ const STATUS_LABEL: Record<MessageStatus, string> = {
   FAILED: 'Failed',
 };
 
-const STATUS_BADGE: Record<MessageStatus, string> = {
-  QUEUED: 'bg-amber-100 text-amber-700',
-  SENDING: 'bg-sky-100 text-sky-700',
-  SENT: 'bg-emerald-100 text-emerald-700',
-  FAILED: 'bg-red-100 text-red-700',
+/** One place decides what a delivery status looks like; StatusPill owns the paint. */
+const STATUS_TONE: Record<MessageStatus, 'neutral' | 'active' | 'good' | 'warn' | 'danger'> = {
+  QUEUED: 'warn',
+  SENDING: 'active',
+  SENT: 'good',
+  FAILED: 'danger',
 };
 
 const STATUS_FILTERS: readonly MessageStatus[] = ['QUEUED', 'SENDING', 'SENT', 'FAILED'];
@@ -53,6 +62,39 @@ const CHANNEL_FILTERS: readonly MessageChannel[] = ['SMS', 'EMAIL'];
  *  same roles — this only guards the Retry button's own render. */
 const canRetry = (role: UserRole | null): boolean =>
   role === 'ADMIN' || role === 'CEO';
+
+/**
+ * "Export selected" — a CSV of exactly the rows that are ticked, built from
+ * the page's already-loaded data. The toolbar's CSV/XLSX buttons are a
+ * different thing: those export the whole filtered set, server-side.
+ *
+ * ponytail: duplicated in the other list pages rather than lifted into
+ * @/lib/csv, because those files are being edited concurrently. Lift it into
+ * one module once they have landed.
+ */
+const downloadCsv = (
+  filename: string,
+  headers: readonly string[],
+  rows: readonly (readonly string[])[],
+): void => {
+  // Quote every cell, and neutralise a leading =/+/-/@ so that a crafted
+  // value (a message body, a provider error) opens as text in a spreadsheet
+  // rather than as a formula.
+  const cell = (value: string): string =>
+    `"${(/^[=+\-@\t\r]/.test(value) ? `'${value}` : value).replace(/"/g, '""')}"`;
+  const csv = [headers, ...rows].map((row) => row.map(cell).join(',')).join('\r\n');
+  // BOM: Excel needs it to read UTF-8 (Amharic message bodies) correctly.
+  const url = URL.createObjectURL(
+    new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }),
+  );
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+};
 
 const formatWhen = (iso: string | null): string => {
   if (!iso) {
@@ -90,6 +132,7 @@ export default function MessagesPage() {
 
   const [items, setItems] = useState<OutboundMessage[]>([]);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [statusFilter, setStatusFilter] = useState<MessageStatus | ''>('');
@@ -103,6 +146,9 @@ export default function MessagesPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Cleared whenever the rows underneath it change (see refresh) — an id
+  // whose row is no longer loaded cannot be exported.
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
   const refresh = useCallback(
     async (
@@ -111,9 +157,11 @@ export default function MessagesPage() {
       channel: MessageChannel | '',
       from: string,
       to: string,
+      size: number,
     ) => {
       setLoading(true);
       setError(null);
+      setSelected(new Set());
       try {
         const result = await listOutbox({
           status: status || undefined,
@@ -121,7 +169,7 @@ export default function MessagesPage() {
           from: from || undefined,
           to: to || undefined,
           page: nextPage,
-          pageSize: PAGE_SIZE,
+          pageSize: size,
         });
         setItems(result.items);
         setPage(result.page);
@@ -158,8 +206,8 @@ export default function MessagesPage() {
   }, [router]);
 
   useEffect(() => {
-    void refresh(page, statusFilter, channelFilter, fromDate, toDate);
-  }, [refresh, page, statusFilter, channelFilter, fromDate, toDate]);
+    void refresh(page, statusFilter, channelFilter, fromDate, toDate, pageSize);
+  }, [refresh, page, statusFilter, channelFilter, fromDate, toDate, pageSize]);
 
   const setStatus = (next: MessageStatus | '') => {
     setPage(1);
@@ -186,7 +234,7 @@ export default function MessagesPage() {
     setError(null);
     try {
       await retryOutboxMessage(message.id);
-      await refresh(page, statusFilter, channelFilter, fromDate, toDate);
+      await refresh(page, statusFilter, channelFilter, fromDate, toDate, pageSize);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to retry message');
     } finally {
@@ -208,6 +256,42 @@ export default function MessagesPage() {
     }
   };
 
+  // An outbound message log is a record of what was already sent: there is
+  // nothing on it to edit and nothing to delete, so the only bulk operation
+  // it can honestly offer is taking a copy of the rows away with you.
+  const exportSelected = () => {
+    const rows = items.filter((message) => selected.has(message.id));
+    downloadCsv(
+      'messages.csv',
+      [
+        'Created',
+        'Sent',
+        'Channel',
+        'Recipient',
+        'Body',
+        'Segments',
+        'Status',
+        'Attempts',
+        'Provider',
+        'Subject',
+        'Last error',
+      ],
+      rows.map((message) => [
+        message.createdAt,
+        message.sentAt ?? '',
+        CHANNEL_LABEL[message.channel],
+        message.recipient,
+        message.body,
+        String(message.segments),
+        STATUS_LABEL[message.status],
+        String(message.attempts),
+        message.providerName ?? '',
+        message.subjectKind ?? '',
+        message.lastError ?? '',
+      ]),
+    );
+  };
+
   const isLive = provider !== null && provider !== 'noop';
   const canWrite = canRetry(role);
 
@@ -226,22 +310,111 @@ export default function MessagesPage() {
     (maintenanceInvalidPhone ?? 0) +
     (paymentInvalidPhone ?? 0);
 
+  const columns: ColumnDef<OutboundMessage, unknown>[] = [
+    { id: 'createdAt', header: 'Created', cell: ({ row }) => formatWhen(row.original.createdAt) },
+    { id: 'sentAt', header: 'Sent', cell: ({ row }) => formatWhen(row.original.sentAt) },
+    { id: 'channel', header: 'Channel', cell: ({ row }) => CHANNEL_LABEL[row.original.channel] },
+    {
+      id: 'recipient',
+      header: 'Recipient',
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-slate-900">{row.original.recipient}</span>
+      ),
+    },
+    {
+      id: 'body',
+      header: 'Body',
+      cell: ({ row }) => (
+        <span className="block max-w-[220px] truncate text-xs text-slate-600" title={row.original.body}>
+          {row.original.body}
+        </span>
+      ),
+    },
+    {
+      id: 'segments',
+      header: 'Segments',
+      meta: { align: 'right' },
+      cell: ({ row }) => (
+        <span
+          className={row.original.segments > 2 ? 'font-semibold text-amber-700' : undefined}
+          title={
+            row.original.segments > 2
+              ? 'More than 2 segments \u2014 each one beyond the first is a full extra charge.'
+              : undefined
+          }
+        >
+          {formatNumber(row.original.segments)}
+        </span>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: ({ row }) => (
+        <StatusPill label={STATUS_LABEL[row.original.status]} tone={STATUS_TONE[row.original.status]} />
+      ),
+    },
+    {
+      id: 'attempts',
+      header: 'Attempts',
+      meta: { align: 'right' },
+      cell: ({ row }) => formatNumber(row.original.attempts),
+    },
+    { id: 'providerName', header: 'Provider', cell: ({ row }) => row.original.providerName ?? '\u2014' },
+    {
+      id: 'subject',
+      header: 'Subject',
+      cell: ({ row }) => {
+        const link = subjectLink(row.original.subjectKind, row.original.subjectId);
+        if (!row.original.subjectKind) {
+          return '\u2014';
+        }
+        return link ? (
+          <a href={link} className="font-semibold text-navy-800 hover:underline">
+            {row.original.subjectKind}
+          </a>
+        ) : (
+          row.original.subjectKind
+        );
+      },
+    },
+    {
+      id: 'actions',
+      header: 'Error / Actions',
+      meta: { align: 'right' },
+      cell: ({ row }) => (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {row.original.status === 'FAILED' && row.original.lastError ? (
+            <span className="max-w-xs truncate text-xs text-red-700" title={row.original.lastError}>
+              {row.original.lastError}
+            </span>
+          ) : null}
+          {canWrite && row.original.status === 'FAILED' ? (
+            <button
+              type="button"
+              disabled={busyId === row.original.id}
+              onClick={() => void onRetry(row.original)}
+              className={`${btnSecondary} px-2.5 py-1 text-xs`}
+            >
+              {busyId === row.original.id ? 'Retrying\u2026' : 'Retry'}
+            </button>
+          ) : null}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-slate-200 bg-white px-8 py-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h1 className="font-display text-lg font-semibold">Messages</h1>
-              <p className="text-sm text-slate-500">
-                SMS delivery log — did the message actually go out?
-              </p>
-            </div>
-          </div>
-        </header>
+        <PageHeader
+          eyebrow="Money"
+          title="Messages"
+          description="The SMS delivery log: what was sent, what it cost in segments, and what failed. Retry a failure from its row."
+        />
 
-        <main className="flex-1 bg-slate-50 p-8">
+        <main className="flex-1 bg-slate-50 p-4 sm:p-8">
           {error ? (
             <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
@@ -268,235 +441,109 @@ export default function MessagesPage() {
           {hasSkipData && totalSkipped > 0 ? (
             <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               <span className="font-semibold">
-                {totalSkipped} reminder{totalSkipped === 1 ? '' : 's'} not sent — no consent on
+                {formatNumber(totalSkipped)} reminder{totalSkipped === 1 ? '' : 's'} not sent — no consent on
                 file or an invalid phone number.
               </span>{' '}
-              Maintenance reminders: {maintenanceSkipped ?? '—'} skipped for consent,{' '}
-              {maintenanceInvalidPhone ?? '—'} skipped for an invalid phone (last run{' '}
+              Maintenance reminders: {formatNumber(maintenanceSkipped)} skipped for consent,{' '}
+              {formatNumber(maintenanceInvalidPhone)} skipped for an invalid phone (last run{' '}
               {formatWhen(settings?.maintenanceReminderConsentSkippedLastRunAt ?? null)}).
-              Payment reminders: {paymentSkipped ?? '—'} skipped for consent,{' '}
-              {paymentInvalidPhone ?? '—'} skipped for an invalid phone (last run{' '}
+              Payment reminders: {formatNumber(paymentSkipped)} skipped for consent,{' '}
+              {formatNumber(paymentInvalidPhone)} skipped for an invalid phone (last run{' '}
               {formatWhen(settings?.paymentReminderConsentSkippedLastRunAt ?? null)}). Record
               consent, or fix the phone number, on the customer or employee record to resume
               sending.
             </p>
           ) : null}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6">
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Status
-              </span>
-              <button
-                type="button"
-                onClick={() => setStatus('')}
-                className={
-                  statusFilter === ''
-                    ? 'rounded-lg bg-navy-800 px-3 py-1 text-xs font-medium text-white'
-                    : 'rounded-lg border border-slate-200 px-3 py-1 text-xs text-slate-600'
-                }
-              >
-                All
-              </button>
-              {STATUS_FILTERS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setStatus(s)}
-                  className={
-                    statusFilter === s
-                      ? 'rounded-lg bg-navy-800 px-3 py-1 text-xs font-medium text-white'
-                      : 'rounded-lg border border-slate-200 px-3 py-1 text-xs text-slate-600'
-                  }
-                >
-                  {STATUS_LABEL[s]}
-                </button>
-              ))}
-              <span className="ml-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Channel
-              </span>
-              <button
-                type="button"
-                onClick={() => setChannel('')}
-                className={
-                  channelFilter === ''
-                    ? 'rounded-lg bg-navy-800 px-3 py-1 text-xs font-medium text-white'
-                    : 'rounded-lg border border-slate-200 px-3 py-1 text-xs text-slate-600'
-                }
-              >
-                All
-              </button>
-              {CHANNEL_FILTERS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setChannel(c)}
-                  className={
-                    channelFilter === c
-                      ? 'rounded-lg bg-navy-800 px-3 py-1 text-xs font-medium text-white'
-                      : 'rounded-lg border border-slate-200 px-3 py-1 text-xs text-slate-600'
-                  }
-                >
-                  {CHANNEL_LABEL[c]}
-                </button>
-              ))}
-              <input
-                type="date"
-                aria-label="From"
-                className={`${fieldClass} w-40`}
-                value={fromDate}
-                onChange={(e) => setFrom(e.target.value)}
-              />
-              <input
-                type="date"
-                aria-label="To"
-                className={`${fieldClass} w-40`}
-                value={toDate}
-                onChange={(e) => setTo(e.target.value)}
-              />
-              <div className="ml-auto flex items-center gap-1">
-                {(['csv', 'xlsx'] as const).map((format) => (
-                  <button
-                    key={format}
-                    type="button"
-                    onClick={() => void onDownload(format)}
-                    className={`${btnGhost} px-2 py-1 text-xs uppercase`}
-                  >
-                    {format}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {loading ? (
-              <p className="text-sm text-slate-500">Loading…</p>
-            ) : items.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 px-6 py-12 text-center">
-                <p className="text-sm text-slate-500">No messages match these filters.</p>
-              </div>
-            ) : (
+          <ListToolbar
+            filters={
               <>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1400px] text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                        <th className="py-2 pr-4 font-semibold">Created</th>
-                        <th className="py-2 pr-4 font-semibold">Sent</th>
-                        <th className="py-2 pr-4 font-semibold">Channel</th>
-                        <th className="py-2 pr-4 font-semibold">Recipient</th>
-                        <th className="py-2 pr-4 font-semibold">Body</th>
-                        <th className="py-2 pr-4 font-semibold">Segments</th>
-                        <th className="py-2 pr-4 font-semibold">Status</th>
-                        <th className="py-2 pr-4 font-semibold">Attempts</th>
-                        <th className="py-2 pr-4 font-semibold">Provider</th>
-                        <th className="py-2 pr-4 font-semibold">Subject</th>
-                        <th className="py-2 font-semibold">Error / Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((m) => {
-                        const link = subjectLink(m.subjectKind, m.subjectId);
-                        return (
-                          <tr key={m.id} className="border-b border-slate-100 last:border-0">
-                            <td className="py-3 pr-4 text-slate-600">
-                              {formatWhen(m.createdAt)}
-                            </td>
-                            <td className="py-3 pr-4 text-slate-600">{formatWhen(m.sentAt)}</td>
-                            <td className="py-3 pr-4 text-slate-600">
-                              {CHANNEL_LABEL[m.channel]}
-                            </td>
-                            <td className="py-3 pr-4 font-mono text-xs text-slate-900">
-                              {m.recipient}
-                            </td>
-                            <td className="py-3 pr-4">
-                              <span
-                                className="block max-w-[220px] truncate text-xs text-slate-600"
-                                title={m.body}
-                              >
-                                {m.body}
-                              </span>
-                            </td>
-                            <td className="py-3 pr-4 text-slate-600">
-                              <span
-                                className={
-                                  m.segments > 2
-                                    ? 'font-semibold text-amber-700'
-                                    : undefined
-                                }
-                                title={
-                                  m.segments > 2
-                                    ? 'More than 2 segments — each one beyond the first is a full extra charge.'
-                                    : undefined
-                                }
-                              >
-                                {m.segments}
-                              </span>
-                            </td>
-                            <td className="py-3 pr-4">
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${STATUS_BADGE[m.status]}`}
-                              >
-                                {STATUS_LABEL[m.status]}
-                              </span>
-                            </td>
-                            <td className="py-3 pr-4 text-slate-600">{m.attempts}</td>
-                            <td className="py-3 pr-4 text-slate-600">
-                              {m.providerName ?? '—'}
-                            </td>
-                            <td className="py-3 pr-4 text-slate-600">
-                              {m.subjectKind ? (
-                                link ? (
-                                  <a
-                                    href={link}
-                                    className="font-semibold text-navy-800 hover:underline"
-                                  >
-                                    {m.subjectKind}
-                                  </a>
-                                ) : (
-                                  m.subjectKind
-                                )
-                              ) : (
-                                '—'
-                              )}
-                            </td>
-                            <td className="py-3">
-                              <div className="flex flex-wrap items-start gap-2">
-                                {m.status === 'FAILED' && m.lastError ? (
-                                  <span
-                                    className="max-w-xs truncate text-xs text-red-700"
-                                    title={m.lastError}
-                                  >
-                                    {m.lastError}
-                                  </span>
-                                ) : null}
-                                {canWrite && m.status === 'FAILED' ? (
-                                  <button
-                                    type="button"
-                                    disabled={busyId === m.id}
-                                    onClick={() => void onRetry(m)}
-                                    className={`${btnPrimary} px-2.5 py-1 text-xs`}
-                                  >
-                                    {busyId === m.id ? 'Retrying…' : 'Retry'}
-                                  </button>
-                                ) : null}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                <Pagination
-                  page={page}
-                  pageSize={PAGE_SIZE}
-                  total={total}
-                  totalPages={totalPages}
-                  onPageChange={setPage}
+                <FilterSelect
+                  label="Status"
+                  value={statusFilter}
+                  onChange={setStatus}
+                  options={STATUS_FILTERS.map((s) => ({ value: s, label: STATUS_LABEL[s] }))}
+                  allLabel="All statuses"
                 />
+                <FilterSelect
+                  label="Channel"
+                  value={channelFilter}
+                  onChange={setChannel}
+                  options={CHANNEL_FILTERS.map((c) => ({ value: c, label: CHANNEL_LABEL[c] }))}
+                  allLabel="All channels"
+                />
+                <div>
+                  <label className={`mb-1 block ${metaLabelClass} font-semibold`} htmlFor="from-date">
+                    From
+                  </label>
+                  <input
+                    id="from-date"
+                    type="date"
+                    className={`${fieldClass} w-40`}
+                    value={fromDate}
+                    onChange={(e) => setFrom(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={`mb-1 block ${metaLabelClass} font-semibold`} htmlFor="to-date">
+                    To
+                  </label>
+                  <input
+                    id="to-date"
+                    type="date"
+                    className={`${fieldClass} w-40`}
+                    value={toDate}
+                    onChange={(e) => setTo(e.target.value)}
+                  />
+                </div>
               </>
-            )}
-          </section>
+            }
+            actions={(['csv', 'xlsx'] as const).map((format) => (
+              <button
+                key={format}
+                type="button"
+                onClick={() => void onDownload(format)}
+                className={`${btnGhost} px-2 py-1 text-xs uppercase`}
+              >
+                {format}
+              </button>
+            ))}
+          />
+
+          <DataTable
+            columns={columns}
+            rows={items}
+            getRowId={(message) => message.id}
+            getRowLabel={(message) =>
+              `${CHANNEL_LABEL[message.channel]} to ${message.recipient}`
+            }
+            selectable
+            selectedIds={selected}
+            onSelectionChange={setSelected}
+            bulkActions={
+              <button
+                type="button"
+                onClick={exportSelected}
+                className={`${btnSecondary} px-2.5 py-1 text-xs`}
+              >
+                Export selected
+              </button>
+            }
+            loading={loading}
+            caption="Message log"
+            pagination={{
+              page,
+              pageSize,
+              total,
+              totalPages,
+              onPageChange: setPage,
+              onPageSizeChange: (size) => {
+                setPageSize(size);
+                setPage(1);
+              },
+            }}
+            empty="No messages match these filters. Set Status to All statuses and widen the date range \u2014 reminders only appear here once a scheduled run has sent them."
+          />
         </main>
       </div>
     </div>
