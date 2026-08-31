@@ -6,6 +6,8 @@ import { TenantDbService } from '../../database/tenant-db.service';
 import type { UpdateSettingsDto } from './dto/update-settings.dto';
 
 export type SettingsRecord = typeof tenantBranding.$inferSelect & {
+  /** Company name — the letterhead on every branded document. */
+  name: string;
   fiscalYearStart: string;
   maintenanceReminderDays: number;
   paymentReminderOffsetDays: number[];
@@ -30,6 +32,7 @@ export type SettingsRecord = typeof tenantBranding.$inferSelect & {
 };
 
 const TENANT_SETTINGS_COLUMNS = {
+  name: tenants.name,
   fiscalYearStart: tenants.fiscalYearStart,
   maintenanceReminderDays: tenants.maintenanceReminderDays,
   paymentReminderOffsetDays: tenants.paymentReminderOffsetDays,
@@ -82,6 +85,7 @@ export class SettingsRepository {
           ...(dto.secondaryColorHex !== undefined
             ? { secondaryColorHex: dto.secondaryColorHex }
             : {}),
+          ...(dto.slogan !== undefined ? { slogan: dto.slogan } : {}),
           ...(dto.logoUrl !== undefined ? { logoUrl: dto.logoUrl } : {}),
           ...(dto.stampUrl !== undefined ? { stampUrl: dto.stampUrl } : {}),
           ...(dto.officialAddress !== undefined
@@ -108,6 +112,7 @@ export class SettingsRepository {
       // flows also read) when this PATCH actually changes something on it —
       // a branding-only update has no business bumping it.
       const touchesTenant =
+        dto.name !== undefined ||
         dto.fiscalYearStart !== undefined ||
         dto.maintenanceReminderDays !== undefined ||
         dto.paymentReminderOffsetDays !== undefined;
@@ -115,6 +120,7 @@ export class SettingsRepository {
         ? await tx
             .update(tenants)
             .set({
+              ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
               ...(dto.fiscalYearStart !== undefined
                 ? { fiscalYearStart: dto.fiscalYearStart }
                 : {}),

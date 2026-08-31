@@ -43,6 +43,23 @@ class IsValidFiscalYearBoundaryConstraint
 }
 
 export class UpdateSettingsDto {
+  // The company name on every branded document letterhead. Without this the
+  // only way to name the tenant is the seeder, so a real deployment printed
+  // quotations headed with whatever name it was provisioned under.
+  @ApiPropertyOptional({ example: 'Shining Star Electromechanical Works' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  @Matches(/\S/, { message: 'name must not be blank' })
+  name?: string;
+
+  // Printed under the company name on every branded document.
+  @ApiPropertyOptional({ example: 'Star of Elevation' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  slogan?: string;
+
   @ApiPropertyOptional({ example: '#1B2A4A' })
   @IsOptional()
   @IsString()
