@@ -78,6 +78,20 @@ COPY --from=build --chown=nodeapp:nodeapp /app/dist ./dist
 COPY --from=build --chown=nodeapp:nodeapp /app/node_modules ./node_modules
 COPY --from=build --chown=nodeapp:nodeapp /app/package.json ./package.json
 
+# The migration .sql files, at the path migrate.ts already asks for
+# (`migrationsFolder: 'src/database/migrations'`) — hence a `src/` directory
+# in a runtime image, which otherwise looks like a mistake. `nest build`
+# emits dist/database/migrate.js but copies no non-TypeScript assets, so
+# without this the compiled migrator is present and has nothing to run.
+#
+# This is what lets migrations run from THIS image:
+#   docker compose run --rm --entrypoint node api dist/database/migrate.js
+# rather than from a separate container mounting a node_modules tree built
+# on the operator's laptop — which fails outright when that laptop is a Mac
+# and this container is Linux, because tsx/esbuild ship per-platform native
+# binaries. Same reason bootstrap-tenant and seed-rates run from here.
+COPY --from=build --chown=nodeapp:nodeapp /app/src/database/migrations ./src/database/migrations
+
 USER nodeapp
 EXPOSE 3002
 
