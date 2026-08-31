@@ -82,7 +82,10 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
     const select = jest
       .fn()
       .mockReturnValueOnce(makeSelectChain([{ id: RATE_VERSION_ID }]))
-      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      // 3rd select: autoAdvanceProject reading the project's current stage,
+      // inside this same transaction (QUOTATION -> PROFORMA).
+      .mockReturnValue(makeSelectChain([{ status: 'QUOTATION' }]));
     let insertedProforma: Record<string, unknown> = {};
     const seqChain = makeSeqInsertChain([{ lastValue: 1 }]);
     const proformaChain = makeProformaInsertChain(
@@ -205,7 +208,10 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
     const select = jest
       .fn()
       .mockReturnValueOnce(makeSelectChain([{ id: RATE_VERSION_ID }]))
-      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      // 3rd select: autoAdvanceProject reading the project's current stage,
+      // inside this same transaction (QUOTATION -> PROFORMA).
+      .mockReturnValue(makeSelectChain([{ status: 'QUOTATION' }]));
     let insertedProforma: Record<string, unknown> = {};
     const insert = jest
       .fn()
@@ -238,7 +244,10 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
     const select = jest
       .fn()
       .mockReturnValueOnce(makeSelectChain([{ id: RATE_VERSION_ID }]))
-      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      // 3rd select: autoAdvanceProject reading the project's current stage,
+      // inside this same transaction (QUOTATION -> PROFORMA).
+      .mockReturnValue(makeSelectChain([{ status: 'QUOTATION' }]));
     // The documentSequences claim (step 3) runs before the subtotalEtb
     // derivation (step 4) that's actually under test here, so it still
     // needs a working insert chain — only the proforma insert (step 4)
@@ -264,7 +273,10 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
     const select = jest
       .fn()
       .mockReturnValueOnce(makeSelectChain([{ id: RATE_VERSION_ID }]))
-      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]));
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      // 3rd select: autoAdvanceProject reading the project's current stage,
+      // inside this same transaction (QUOTATION -> PROFORMA).
+      .mockReturnValue(makeSelectChain([{ status: 'QUOTATION' }]));
     const insert = jest.fn(() => makeSeqInsertChain([{ lastValue: 1 }]));
     const withTenant = jest.fn(
       async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
@@ -399,4 +411,63 @@ describe('ProformasRepository.findByIdForDocument — joined display names + the
       repo.findByIdForDocument(TENANT_ID, PROFORMA_ID),
     ).resolves.toBeNull();
   });
+});
+
+describe('ProformasRepository.issue — project stage auto-advance', () => {
+  /** issue()'s full happy-path tx, with the project sitting at `projectStatus`. */
+  const runIssue = async (projectStatus: string) => {
+    const setValues: Record<string, unknown>[] = [];
+    const update = jest.fn(() => {
+      const chain: Record<string, jest.Mock> = {};
+      chain.set = jest.fn((v: Record<string, unknown>) => {
+        setValues.push(v);
+        return chain;
+      });
+      chain.where = jest.fn(() => chain);
+      chain.returning = jest.fn(() => Promise.resolve([quoteRow]));
+      return chain;
+    });
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ id: RATE_VERSION_ID }]))
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      .mockReturnValue(makeSelectChain([{ status: projectStatus }]));
+    const insert = jest
+      .fn()
+      .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
+      .mockReturnValueOnce(
+        makeProformaInsertChain(() => {}, [{ id: 'pf-1', projectId: PROJECT_ID }]),
+      );
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ update, select, insert }),
+    );
+    const repo = new ProformasRepository({ withTenant } as never);
+    const row = await repo.issue(TENANT_ID, USER_ID, QUOTE_ID, null);
+    return { row, setValues, withTenant };
+  };
+
+  it('advances the project to PROFORMA in the issue transaction', async () => {
+    const { setValues, withTenant } = await runIssue('QUOTATION');
+
+    // One transaction for the quotation CAS, the proforma insert and the
+    // stage move together — an issued proforma can never commit next to a
+    // project that failed to advance.
+    expect(withTenant).toHaveBeenCalledTimes(1);
+    expect(setValues).toContainEqual(
+      expect.objectContaining({ status: 'PROFORMA' }),
+    );
+  });
+
+  it.each(['CONTRACT', 'COMPLETED', 'CANCELLED'])(
+    'still issues the proforma when the project is %s and the stage cannot move',
+    async (projectStatus) => {
+      const { row, setValues } = await runIssue(projectStatus);
+
+      expect(row).toMatchObject({ id: 'pf-1' });
+      expect(setValues).not.toContainEqual(
+        expect.objectContaining({ status: 'PROFORMA' }),
+      );
+    },
+  );
 });
