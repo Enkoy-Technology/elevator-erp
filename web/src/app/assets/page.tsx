@@ -1,76 +1,84 @@
 'use client';
 
-import {
-  FormEvent,
-  useCallback,
-  useEffect,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { ColumnDef } from '@tanstack/react-table';
 
-import { btnPrimary, btnSecondary, fieldClass, labelClass } from '@/components/form-styles';
-import { Pagination } from '@/components/pagination';
-import { SideDrawer } from '@/components/side-drawer';
+import { btnPrimary, btnSecondary } from '@/components/form-styles';
+import { DataTable } from '@/components/data-table';
+import { FilterSelect, ListToolbar, RowAction, SearchField, StatusPill } from '@/components/list-toolbar';
+import { Check, Pencil, Trash2, X } from 'lucide-react';
+import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
+import { csvRows, saveCsv } from '@/app/employees/csv';
 import {
   ApiError,
+  apiFetch,
   ASSET_CATEGORIES,
-  ASSET_STATUSES,
-  createAsset,
   getAccessToken,
+  getCurrentRole,
   listAssets,
   listCustomers,
-  updateAsset,
+  optional,
   type Asset,
   type AssetCategory,
-  type AssetStatus,
-  type Customer,
-  optional,
+  type UserRole,
 } from '@/lib/api';
+import {
+  ASSET_CATEGORY_LABEL,
+  ASSET_STATUS_LABEL,
+  ASSET_STATUS_TONE,
+} from './labels';
 
-const PAGE_SIZE = 20;
+/** DELETE /assets/:id — a soft delete on the server, the only other real
+ *  delete in the product besides customers. */
+const deleteAsset = (id: string): Promise<void> =>
+  apiFetch<void>(`/assets/${id}`, { method: 'DELETE' });
 
-const CATEGORY_LABEL: Record<AssetCategory, string> = {
-  ELEVATOR: 'Elevator',
-  ESCALATOR: 'Escalator',
-  STAIRS: 'Stairs',
-  OTHER: 'Other',
-};
+/** Mirrors @Roles('SALES_MANAGER', 'TECHNICAL_LEAD') on the assets
+ *  PATCH/DELETE routes; CEO and ADMIN bypass via RolesGuard's SUPER_ROLES. */
+const canWriteAssets = (role: UserRole | null): boolean =>
+  role === 'SALES_MANAGER' ||
+  role === 'TECHNICAL_LEAD' ||
+  role === 'CEO' ||
+  role === 'ADMIN';
 
-const STATUS_LABEL: Record<AssetStatus, string> = {
-  ACTIVE: 'Active',
-  INACTIVE: 'Inactive',
-  DECOMMISSIONED: 'Decommissioned',
-};
+const CSV_HEADERS = [
+  'Name',
+  'Serial number',
+  'Category',
+  'Customer',
+  'Building',
+  'Status',
+] as const;
 
 export default function AssetsPage() {
   const router = useRouter();
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerMap, setCustomerMap] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<AssetCategory | ''>('');
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [customerId, setCustomerId] = useState('');
-  const [category, setCategory] = useState<AssetCategory>('ELEVATOR');
-  const [name, setName] = useState('');
-  const [buildingName, setBuildingName] = useState('');
-  const [serialNumber, setSerialNumber] = useState('');
-  const [locationNotes, setLocationNotes] = useState('');
-  const [status, setStatus] = useState<AssetStatus>('ACTIVE');
-  const [notes, setNotes] = useState('');
+  const [role, setRole] = useState<UserRole | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  /** The row whose Delete is armed. Confirm swaps the icons in place. */
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const canWrite = canWriteAssets(role);
 
   const refresh = useCallback(
-    async (nextPage: number, q: string, categoryValue: AssetCategory | '') => {
+    async (
+      nextPage: number,
+      size: number,
+      q: string,
+      categoryValue: AssetCategory | '',
+    ) => {
       setLoading(true);
       setError(null);
       try {
@@ -79,7 +87,7 @@ export default function AssetsPage() {
             q,
             category: categoryValue || undefined,
             page: nextPage,
-            pageSize: PAGE_SIZE,
+            pageSize: size,
           }),
           optional(listCustomers({ page: 1, pageSize: 100 })),
         ]);
@@ -87,13 +95,15 @@ export default function AssetsPage() {
         setPage(assetPage.page);
         setTotal(assetPage.total);
         setTotalPages(assetPage.totalPages);
-        setCustomers(customerPage.items);
         setCustomerMap(
           Object.fromEntries(
             customerPage.items.map((c) => [c.id, c.name] as const),
           ),
         );
-        setCustomerId((prev) => prev || customerPage.items[0]?.id || '');
+        // The rows just changed underneath the selection; keeping it would
+        // point a bulk action at records nobody can see.
+        setSelected(new Set());
+        setConfirmingId(null);
       } catch (err) {
         setError(
           err instanceof ApiError ? err.message : 'Failed to load assets',
@@ -110,419 +120,275 @@ export default function AssetsPage() {
       router.replace('/login');
       return;
     }
-    void refresh(page, search, categoryFilter);
-  }, [router, refresh, page, search, categoryFilter]);
+    setRole(getCurrentRole());
+    void refresh(page, pageSize, search, categoryFilter);
+  }, [router, refresh, page, pageSize, search, categoryFilter]);
 
-  const onSearch = (event: FormEvent) => {
-    event.preventDefault();
+  const onSearch = () => {
     setPage(1);
     setSearch(searchInput.trim());
   };
 
-  const resetForm = () => {
-    setEditId(null);
-    setCategory('ELEVATOR');
-    setName('');
-    setBuildingName('');
-    setSerialNumber('');
-    setLocationNotes('');
-    setStatus('ACTIVE');
-    setNotes('');
-    setFormError(null);
-    setCustomerId(customers[0]?.id || '');
-  };
-
-  const openCreate = () => {
-    resetForm();
-    setDrawerOpen(true);
-  };
-
-  const openEdit = (asset: Asset) => {
-    setEditId(asset.id);
-    setCustomerId(asset.customerId);
-    setCategory(asset.category);
-    setName(asset.name);
-    setBuildingName(asset.buildingName ?? '');
-    setSerialNumber(asset.serialNumber ?? '');
-    setLocationNotes(asset.locationNotes ?? '');
-    setStatus(asset.status);
-    setNotes(asset.notes ?? '');
-    setFormError(null);
-    setDrawerOpen(true);
-  };
-
-  const closeDrawer = () => {
-    setDrawerOpen(false);
-    setFormError(null);
-  };
-
-  const onSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!editId && !customerId) {
-      setFormError('Create a customer first, then register an asset.');
-      return;
-    }
-    setSubmitting(true);
-    setFormError(null);
+  const onDelete = async (asset: Asset) => {
+    setBusy(true);
+    setError(null);
     try {
-      if (editId) {
-        await updateAsset(editId, {
-          category,
-          name,
-          buildingName: buildingName || null,
-          serialNumber: serialNumber || null,
-          locationNotes: locationNotes || null,
-          status,
-          notes: notes || null,
-        });
-      } else {
-        await createAsset({
-          customerId,
-          category,
-          name,
-          buildingName: buildingName || undefined,
-          serialNumber: serialNumber || undefined,
-          locationNotes: locationNotes || undefined,
-          notes: notes || undefined,
-        });
-      }
-      closeDrawer();
-      setPage(1);
-      setSearch('');
-      setSearchInput('');
-      setCategoryFilter('');
-      await refresh(1, '', '');
+      await deleteAsset(asset.id);
+      setConfirmingId(null);
+      await refresh(page, pageSize, search, categoryFilter);
     } catch (err) {
-      setFormError(
-        err instanceof ApiError ? err.message : 'Failed to save asset',
+      setError(
+        err instanceof ApiError ? err.message : `Could not delete ${asset.name}`,
       );
     } finally {
-      setSubmitting(false);
+      setBusy(false);
     }
   };
+
+  const onBulkDelete = async () => {
+    const ids = [...selected];
+    if (
+      !window.confirm(
+        `Delete ${ids.length} asset${ids.length === 1 ? '' : 's'}? Contracts and work orders referencing them stay put.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    // No bulk endpoint exists, so this is N calls. Report the real tally
+    // rather than pretending the loop was one atomic delete.
+    const results = await Promise.allSettled(ids.map((id) => deleteAsset(id)));
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    setBusy(false);
+    await refresh(page, pageSize, search, categoryFilter);
+    if (failed > 0) {
+      setError(
+        `Deleted ${ids.length - failed} of ${ids.length}. ${failed} could not be deleted.`,
+      );
+    }
+  };
+
+  const onExportSelected = () => {
+    const rows = assets.filter((a) => selected.has(a.id));
+    saveCsv(
+      'assets.csv',
+      csvRows([
+        CSV_HEADERS,
+        ...rows.map((a) => [
+          a.name,
+          a.serialNumber ?? '',
+          ASSET_CATEGORY_LABEL[a.category],
+          customerMap[a.customerId] ?? '',
+          a.buildingName ?? '',
+          ASSET_STATUS_LABEL[a.status],
+        ]),
+      ]),
+    );
+  };
+
+  const columns: ColumnDef<Asset, unknown>[] = [
+    {
+      accessorKey: 'name',
+      header: 'Name',
+      enableSorting: true,
+      cell: ({ row }) => (
+        <>
+          <span className="font-medium text-slate-900">{row.original.name}</span>
+          {row.original.serialNumber ? (
+            <span className="mt-0.5 block font-mono text-xs font-normal text-slate-500">
+              {row.original.serialNumber}
+            </span>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      id: 'category',
+      header: 'Category',
+      cell: ({ row }) => ASSET_CATEGORY_LABEL[row.original.category],
+    },
+    {
+      id: 'customer',
+      header: 'Customer',
+      cell: ({ row }) => customerMap[row.original.customerId] ?? '—',
+    },
+    {
+      id: 'building',
+      header: 'Building',
+      cell: ({ row }) => row.original.buildingName ?? '—',
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: ({ row }) => (
+        <StatusPill
+          label={ASSET_STATUS_LABEL[row.original.status]}
+          tone={ASSET_STATUS_TONE[row.original.status]}
+        />
+      ),
+    },
+    ...(canWrite
+      ? ([
+          {
+            id: 'actions',
+            header: '',
+            meta: { align: 'right' },
+            cell: ({ row }) => {
+              const asset = row.original;
+              return (
+                <div className="flex items-center justify-end gap-0.5">
+                  {confirmingId === asset.id ? (
+                    <>
+                      <RowAction
+                        icon={Check}
+                        tone="danger"
+                        disabled={busy}
+                        label={`Confirm deleting ${asset.name}`}
+                        onClick={() => void onDelete(asset)}
+                      />
+                      <RowAction
+                        icon={X}
+                        disabled={busy}
+                        label={`Keep ${asset.name}`}
+                        onClick={() => setConfirmingId(null)}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <RowAction
+                        icon={Pencil}
+                        label={`Edit ${asset.name}`}
+                        onClick={() => router.push(`/assets/${asset.id}/edit`)}
+                      />
+                      <RowAction
+                        icon={Trash2}
+                        tone="danger"
+                        label={`Delete ${asset.name}`}
+                        onClick={() => setConfirmingId(asset.id)}
+                      />
+                    </>
+                  )}
+                </div>
+              );
+            },
+          },
+        ] satisfies ColumnDef<Asset, unknown>[])
+      : []),
+  ];
 
   return (
     <div className="flex min-h-screen">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-slate-200 bg-white px-8 py-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h1 className="font-display text-lg font-semibold">Assets</h1>
-              <p className="text-sm text-slate-500">
-                Register elevators, stairs, and other equipment by customer
-              </p>
-            </div>
+        <PageHeader
+          eyebrow="Operations"
+          title="Assets"
+          description="Every elevator, escalator and machine under contract, registered against the customer that owns it."
+          actions={
             <button
               type="button"
-              onClick={openCreate}
+              onClick={() => router.push('/assets/new')}
               className={btnPrimary}
             >
               Register asset
             </button>
-          </div>
-        </header>
+          }
+        />
 
-        <main className="flex-1 bg-slate-50 p-8">
+        <main className="flex-1 bg-slate-50 p-4 sm:p-8">
           {error ? (
             <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
             </p>
           ) : null}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6">
-            <form
-              onSubmit={onSearch}
-              className="mb-4 flex flex-wrap items-end gap-3"
-            >
-              <div className="min-w-[200px] flex-1">
-                <label className={labelClass} htmlFor="search">
-                  Search
-                </label>
-                <input
-                  id="search"
-                  className={fieldClass}
-                  placeholder="Name, serial, or building"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                />
-              </div>
-              <div className="min-w-[160px]">
-                <label className={labelClass} htmlFor="categoryFilter">
-                  Category
-                </label>
-                <select
-                  id="categoryFilter"
-                  className={fieldClass}
-                  value={categoryFilter}
-                  onChange={(e) => {
-                    setPage(1);
-                    setCategoryFilter(
-                      e.target.value as AssetCategory | '',
-                    );
-                  }}
-                >
-                  <option value="">All</option>
-                  {ASSET_CATEGORIES.map((value) => (
-                    <option key={value} value={value}>
-                      {CATEGORY_LABEL[value]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button
-                type="submit"
-                className={btnSecondary}
-              >
+          <ListToolbar
+            search={
+              <SearchField
+                value={searchInput}
+                onChange={setSearchInput}
+                onSubmit={onSearch}
+                placeholder="Name, serial, or building"
+              />
+            }
+            filters={
+              <FilterSelect
+                label="Category"
+                value={categoryFilter}
+                onChange={(value) => {
+                  setPage(1);
+                  setCategoryFilter(value);
+                }}
+                options={ASSET_CATEGORIES.map((value) => ({
+                  value,
+                  label: ASSET_CATEGORY_LABEL[value],
+                }))}
+                allLabel="All categories"
+              />
+            }
+            actions={
+              <button type="button" onClick={onSearch} className={btnSecondary}>
                 Search
               </button>
-            </form>
+            }
+          />
 
-            {loading ? (
-              <p className="text-sm text-slate-500">Loading…</p>
-            ) : assets.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 px-6 py-12 text-center">
-                <p className="text-sm text-slate-500">No assets yet.</p>
+          <DataTable
+            caption="Assets"
+            columns={columns}
+            rows={assets}
+            getRowId={(asset) => asset.id}
+            getRowLabel={(asset) => asset.name}
+            loading={loading}
+            selectable
+            selectedIds={selected}
+            onSelectionChange={setSelected}
+            bulkActions={
+              <>
                 <button
                   type="button"
-                  onClick={openCreate}
-                  className="mt-3 text-sm font-semibold text-navy-800 hover:underline"
+                  onClick={onExportSelected}
+                  className={`${btnSecondary} px-2.5 py-1 text-xs`}
                 >
-                  Register your first asset
+                  Export selected
                 </button>
-              </div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[720px] text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                        <th className="py-2 pr-4 font-semibold">Name</th>
-                        <th className="py-2 pr-4 font-semibold">Category</th>
-                        <th className="py-2 pr-4 font-semibold">Customer</th>
-                        <th className="py-2 pr-4 font-semibold">Building</th>
-                        <th className="py-2 pr-4 font-semibold">Status</th>
-                        <th className="py-2 font-semibold">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {assets.map((asset) => (
-                        <tr
-                          key={asset.id}
-                          className="border-b border-slate-100 last:border-0"
-                        >
-                          <td className="py-3 pr-4 font-medium text-slate-900">
-                            {asset.name}
-                            {asset.serialNumber ? (
-                              <span className="mt-0.5 block text-xs font-normal text-slate-500">
-                                {asset.serialNumber}
-                              </span>
-                            ) : null}
-                          </td>
-                          <td className="py-3 pr-4 text-slate-600">
-                            {CATEGORY_LABEL[asset.category]}
-                          </td>
-                          <td className="py-3 pr-4 text-slate-600">
-                            {customerMap[asset.customerId] ?? '—'}
-                          </td>
-                          <td className="py-3 pr-4 text-slate-600">
-                            {asset.buildingName ?? '—'}
-                          </td>
-                          <td className="py-3 pr-4 text-slate-600">
-                            {STATUS_LABEL[asset.status]}
-                          </td>
-                          <td className="py-3">
-                            <button
-                              type="button"
-                              onClick={() => openEdit(asset)}
-                              className="text-sm font-semibold text-navy-800 hover:underline"
-                            >
-                              Edit
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <Pagination
-                  page={page}
-                  pageSize={PAGE_SIZE}
-                  total={total}
-                  totalPages={totalPages}
-                  onPageChange={setPage}
-                />
+                {canWrite ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void onBulkDelete()}
+                    className={`${btnSecondary} px-2.5 py-1 text-xs text-red-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700`}
+                  >
+                    Delete selected
+                  </button>
+                ) : null}
               </>
-            )}
-          </section>
+            }
+            pagination={{
+              page,
+              pageSize,
+              total,
+              totalPages,
+              onPageChange: setPage,
+              onPageSizeChange: (size) => {
+                setPageSize(size);
+                setPage(1);
+              },
+            }}
+            empty={
+              search || categoryFilter ? (
+                <>No asset matches these filters. Clear the search and set Category to All categories.</>
+              ) : (
+                <>
+                  No assets registered. Register the equipment here first — a
+                  maintenance contract on Maintenance needs an asset to attach to.
+                </>
+              )
+            }
+          />
         </main>
       </div>
-
-      <SideDrawer
-        open={drawerOpen}
-        onClose={closeDrawer}
-        title={editId ? 'Edit asset' : 'Register asset'}
-        description="Link equipment to a customer. Categories: elevator, stairs, or other."
-        footer={
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={closeDrawer}
-              className={`${btnSecondary} flex-1`}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="asset-form"
-              disabled={submitting}
-              className={`${btnPrimary} flex-1`}
-            >
-              {submitting ? 'Saving…' : editId ? 'Save changes' : 'Register'}
-            </button>
-          </div>
-        }
-      >
-        <form
-          id="asset-form"
-          onSubmit={(e) => void onSubmit(e)}
-          className="space-y-4"
-        >
-          {formError ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {formError}
-            </p>
-          ) : null}
-
-          {!editId ? (
-            <div>
-              <label className={labelClass} htmlFor="customerId">
-                Customer
-              </label>
-              <select
-                id="customerId"
-                className={fieldClass}
-                required
-                value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
-              >
-                {customers.length === 0 ? (
-                  <option value="">No customers yet</option>
-                ) : (
-                  customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
-          ) : null}
-
-          <div>
-            <label className={labelClass} htmlFor="category">
-              Category
-            </label>
-            <select
-              id="category"
-              className={fieldClass}
-              value={category}
-              onChange={(e) => setCategory(e.target.value as AssetCategory)}
-            >
-              {ASSET_CATEGORIES.map((value) => (
-                <option key={value} value={value}>
-                  {CATEGORY_LABEL[value]}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className={labelClass} htmlFor="name">
-              Name
-            </label>
-            <input
-              id="name"
-              className={fieldClass}
-              required
-              minLength={2}
-              autoFocus
-              placeholder="Lift A — Lobby"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className={labelClass} htmlFor="buildingName">
-              Building
-            </label>
-            <input
-              id="buildingName"
-              className={fieldClass}
-              value={buildingName}
-              onChange={(e) => setBuildingName(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className={labelClass} htmlFor="serialNumber">
-              Serial number
-            </label>
-            <input
-              id="serialNumber"
-              className={fieldClass}
-              value={serialNumber}
-              onChange={(e) => setSerialNumber(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className={labelClass} htmlFor="locationNotes">
-              Location notes
-            </label>
-            <input
-              id="locationNotes"
-              className={fieldClass}
-              value={locationNotes}
-              onChange={(e) => setLocationNotes(e.target.value)}
-            />
-          </div>
-
-          {editId ? (
-            <div>
-              <label className={labelClass} htmlFor="status">
-                Status
-              </label>
-              <select
-                id="status"
-                className={fieldClass}
-                value={status}
-                onChange={(e) => setStatus(e.target.value as AssetStatus)}
-              >
-                {ASSET_STATUSES.map((value) => (
-                  <option key={value} value={value}>
-                    {STATUS_LABEL[value]}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
-
-          <div>
-            <label className={labelClass} htmlFor="notes">
-              Notes
-            </label>
-            <textarea
-              id="notes"
-              className={fieldClass}
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
-        </form>
-      </SideDrawer>
     </div>
   );
 }

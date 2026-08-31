@@ -1,98 +1,90 @@
 'use client';
 
 import Link from 'next/link';
-import {
-  FormEvent,
-  useCallback,
-  useEffect,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { btnDanger, btnGhost, btnPrimary, btnSecondary, fieldClass, labelClass } from '@/components/form-styles';
-import { Pagination } from '@/components/pagination';
-import { SideDrawer } from '@/components/side-drawer';
+import type { ColumnDef } from '@tanstack/react-table';
+
+import { btnGhost, btnPrimary, btnSecondary } from '@/components/form-styles';
+import { DataTable } from '@/components/data-table';
+import { ListToolbar, RowAction, SearchField } from '@/components/list-toolbar';
+import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
+import { csvRows, saveCsv } from '@/app/employees/csv';
 import {
   ApiError,
-  checkCustomerDuplicate,
-  createCustomer,
   deleteCustomer,
   getAccessToken,
   getCurrentRole,
   listCustomers,
-  updateCustomer,
   type Customer,
-  type CustomerType,
-  type SimilarCustomer,
   type UserRole,
 } from '@/lib/api';
-
-const PAGE_SIZE = 20;
+import { formatEtb } from '@/lib/money';
+import { Check, Pencil, Trash2, X } from 'lucide-react';
 
 /** Mirrors @Roles('SALES_MANAGER') on the customers PATCH/DELETE routes;
  *  CEO and ADMIN bypass via RolesGuard's SUPER_ROLES. */
 const canWriteCustomers = (role: UserRole | null): boolean =>
   role === 'SALES_MANAGER' || role === 'CEO' || role === 'ADMIN';
 
+const CSV_HEADERS = [
+  'Name',
+  'Type',
+  'City',
+  'Email',
+  'Phone',
+  'Net balance (ETB)',
+] as const;
+
 export default function CustomersPage() {
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [role, setRole] = useState<UserRole | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [city, setCity] = useState('Addis Ababa');
-  const [customerType, setCustomerType] =
-    useState<CustomerType>('COMMERCIAL');
-  const [smsConsentGiven, setSmsConsentGiven] = useState(false);
-  // What's actually on the record right now — the baseline the checkbox
-  // started from, so onSubmit can tell "the operator toggled this" apart
-  // from "unrelated edit, leave the consent timestamp alone" (see onSubmit).
-  const [initialSmsConsentGiven, setInitialSmsConsentGiven] = useState(false);
-  const [smsConsentAtDisplay, setSmsConsentAtDisplay] = useState<string | null>(null);
-  const [smsConsentRevokedAtDisplay, setSmsConsentRevokedAtDisplay] = useState<
-    string | null
-  >(null);
   const [error, setError] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [similar, setSimilar] = useState<SimilarCustomer[]>([]);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  /** The row whose Delete is armed. Confirm swaps the icons in place. */
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const canWrite = canWriteCustomers(role);
 
-  const refresh = useCallback(async (nextPage: number, q: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await listCustomers({
-        search: q,
-        page: nextPage,
-        pageSize: PAGE_SIZE,
-      });
-      setCustomers(result.items);
-      setPage(result.page);
-      setTotal(result.total);
-      setTotalPages(result.totalPages);
-      return result;
-    } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : 'Failed to load customers',
-      );
-      return undefined;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const refresh = useCallback(
+    async (nextPage: number, q: string, size: number) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await listCustomers({
+          search: q,
+          page: nextPage,
+          pageSize: size,
+        });
+        setCustomers(result.items);
+        setPage(result.page);
+        setTotal(result.total);
+        setTotalPages(result.totalPages);
+        // The rows just changed underneath the selection; a checkbox set
+        // pointing at rows nobody can see is how a bulk action hits the
+        // wrong records.
+        setSelected(new Set());
+        setConfirmingId(null);
+      } catch (err) {
+        setError(
+          err instanceof ApiError ? err.message : 'Failed to load customers',
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!getAccessToken()) {
@@ -100,472 +92,242 @@ export default function CustomersPage() {
       return;
     }
     setRole(getCurrentRole());
-    void refresh(page, search);
-  }, [router, refresh, page, search]);
+    void refresh(page, search, pageSize);
+  }, [router, refresh, page, search, pageSize]);
 
-  const onSearch = (event: FormEvent) => {
-    event.preventDefault();
+  const runSearch = (term: string) => {
     setPage(1);
-    setSearch(searchInput.trim());
+    setSearch(term.trim());
   };
 
-  const resetForm = () => {
-    setEditId(null);
-    setName('');
-    setEmail('');
-    setPhone('');
-    setCity('Addis Ababa');
-    setCustomerType('COMMERCIAL');
-    setSmsConsentGiven(false);
-    setInitialSmsConsentGiven(false);
-    setSmsConsentAtDisplay(null);
-    setSmsConsentRevokedAtDisplay(null);
-    setFormError(null);
-    setSimilar([]);
-  };
-
-  const openCreate = () => {
-    resetForm();
-    setDrawerOpen(true);
-  };
-
-  const openEdit = (customer: Customer) => {
-    setEditId(customer.id);
-    setName(customer.name);
-    setEmail(customer.email ?? '');
-    setPhone(customer.phone ?? '');
-    setCity(customer.city ?? '');
-    setCustomerType(customer.customerType);
-    // "Currently consented" is smsConsentAt set AND not (yet) revoked (I10)
-    // — mirrors canSmsRecipient's own server-side predicate.
-    const consented = customer.smsConsentAt !== null && customer.smsConsentRevokedAt === null;
-    setSmsConsentGiven(consented);
-    setInitialSmsConsentGiven(consented);
-    setSmsConsentAtDisplay(customer.smsConsentAt);
-    setSmsConsentRevokedAtDisplay(customer.smsConsentRevokedAt);
-    setFormError(null);
-    setSimilar([]);
-    setDrawerOpen(true);
-  };
-
-  const closeDrawer = () => {
-    setDrawerOpen(false);
-    setFormError(null);
-    setSimilar([]);
-  };
-
-  /**
-   * Advisory look-alike lookup on blur. Never blocks the form — a failed
-   * check just clears the warning. Create only: editing an existing
-   * customer against itself isn't a duplicate.
-   */
-  const checkSimilar = async () => {
-    if (editId || name.trim().length < 2) {
-      setSimilar([]);
-      return;
-    }
-    try {
-      setSimilar(
-        await checkCustomerDuplicate({ name, phone: phone || undefined }),
-      );
-    } catch {
-      setSimilar([]);
-    }
-  };
-
-  const onSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    setSubmitting(true);
-    setFormError(null);
-    try {
-      const payload = {
-        name,
-        email: email || undefined,
-        phone: phone || undefined,
-        city: city || undefined,
-        customerType,
-        // Omit unless the operator actually toggled it — this is a
-        // regulatory consent record (ECA Directive 832/2021), not a
-        // preference; an unrelated edit (e.g. fixing a typo in the phone
-        // number) must never silently re-stamp smsConsentAt to "now".
-        smsConsentGiven:
-          smsConsentGiven !== initialSmsConsentGiven ? smsConsentGiven : undefined,
-      };
-      if (editId) {
-        await updateCustomer(editId, payload);
-      } else {
-        await createCustomer(payload);
-      }
-      closeDrawer();
-      setPage(1);
-      setSearch('');
-      setSearchInput('');
-      await refresh(1, '');
-    } catch (err) {
-      setFormError(
-        err instanceof ApiError
-          ? err.message
-          : `Failed to ${editId ? 'save' : 'create'} customer`,
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const onDelete = async (id: string) => {
-    setDeleting(true);
+  const onDelete = async (customer: Customer) => {
+    setBusy(true);
     setError(null);
     try {
-      await deleteCustomer(id);
-      setDeleteConfirmId(null);
-      const result = await refresh(page, search);
-      // Deleting the last row of a page > 1 leaves nothing to show on it;
-      // fall back one page rather than stranding the user on an empty page
-      // with no Pagination control to get back.
-      if (result && result.items.length === 0 && page > 1) {
-        await refresh(page - 1, search);
-      }
+      await deleteCustomer(customer.id);
+      setConfirmingId(null);
+      await refresh(page, search, pageSize);
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : 'Failed to delete customer',
+        err instanceof ApiError ? err.message : `Could not delete ${customer.name}`,
       );
-      setDeleteConfirmId(null);
     } finally {
-      setDeleting(false);
+      setBusy(false);
     }
   };
+
+  const onBulkDelete = async () => {
+    const ids = [...selected];
+    if (
+      !window.confirm(
+        `Delete ${ids.length} customer${ids.length === 1 ? '' : 's'}? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    // No bulk endpoint exists, so this is N calls. Report the real tally
+    // rather than pretending the loop was one atomic delete.
+    const results = await Promise.allSettled(ids.map((id) => deleteCustomer(id)));
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    setBusy(false);
+    await refresh(page, search, pageSize);
+    if (failed > 0) {
+      setError(
+        `Deleted ${ids.length - failed} of ${ids.length}. ${failed} could not be deleted — they may still have projects or invoices.`,
+      );
+    }
+  };
+
+  const onExportSelected = () => {
+    const rows = customers.filter((c) => selected.has(c.id));
+    saveCsv(
+      'customers.csv',
+      csvRows([
+        CSV_HEADERS,
+        ...rows.map((c) => [
+          c.name,
+          c.customerType,
+          c.city ?? '',
+          c.email ?? '',
+          c.phone ?? '',
+          c.outstandingBalanceEtb ?? '',
+        ]),
+      ]),
+    );
+  };
+
+  const columns: ColumnDef<Customer, unknown>[] = [
+    {
+      accessorKey: 'name',
+      header: 'Name',
+      enableSorting: true,
+      cell: ({ row }) => (
+        <span className="font-medium text-slate-900">{row.original.name}</span>
+      ),
+    },
+    { accessorKey: 'customerType', header: 'Type' },
+    { id: 'city', header: 'City', cell: ({ row }) => row.original.city ?? '—' },
+    {
+      id: 'contact',
+      header: 'Contact',
+      cell: ({ row }) => row.original.email ?? row.original.phone ?? '—',
+    },
+    {
+      id: 'balance',
+      header: 'Net balance',
+      meta: { align: 'right' },
+      cell: ({ row }) => formatEtb(row.original.outstandingBalanceEtb),
+    },
+    ...(canWrite
+      ? ([
+          {
+            id: 'actions',
+            header: '',
+            meta: { align: 'right' },
+            cell: ({ row }) => {
+              const customer = row.original;
+              return (
+                <div className="flex items-center justify-end gap-0.5">
+                  {confirmingId === customer.id ? (
+                    <>
+                      <RowAction
+                        icon={Check}
+                        tone="danger"
+                        disabled={busy}
+                        label={`Confirm deleting ${customer.name}`}
+                        onClick={() => void onDelete(customer)}
+                      />
+                      <RowAction
+                        icon={X}
+                        disabled={busy}
+                        label={`Keep ${customer.name}`}
+                        onClick={() => setConfirmingId(null)}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <RowAction
+                        icon={Pencil}
+                        label={`Edit ${customer.name}`}
+                        onClick={() =>
+                          router.push(`/customers/${customer.id}/edit`)
+                        }
+                      />
+                      <RowAction
+                        icon={Trash2}
+                        tone="danger"
+                        label={`Delete ${customer.name}`}
+                        onClick={() => setConfirmingId(customer.id)}
+                      />
+                    </>
+                  )}
+                </div>
+              );
+            },
+          },
+        ] satisfies ColumnDef<Customer, unknown>[])
+      : []),
+  ];
 
   return (
     <div className="flex min-h-screen">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-slate-200 bg-white px-8 py-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h1 className="font-display text-lg font-semibold">Customers</h1>
-              <p className="text-sm text-slate-500">
-                CRM accounts for elevator projects (amounts in ETB)
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <Link href="/projects" className={btnGhost}>
-                Project pipeline
-              </Link>
-              <button type="button" onClick={openCreate} className={btnPrimary}>
-                Create customer
-              </button>
-            </div>
-          </div>
-        </header>
+        <PageHeader
+          eyebrow="Sales"
+          title="Customers"
+          description="CRM accounts for elevator projects. Balances are in ETB."
+          actions={
+            <Link href="/projects" className={btnGhost}>
+              Project pipeline
+            </Link>
+          }
+        />
 
-        <main className="flex-1 bg-slate-50 p-8">
+        <main className="flex-1 bg-slate-50 p-4 sm:p-8">
           {error ? (
             <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
             </p>
           ) : null}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-6">
-            <form
-              onSubmit={onSearch}
-              className="mb-4 flex flex-wrap items-end gap-3"
-            >
-              <div className="min-w-[220px] flex-1">
-                <label className={labelClass} htmlFor="search">
-                  Search
-                </label>
-                <input
-                  id="search"
-                  className={fieldClass}
-                  placeholder="Name, email, or phone"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                />
-              </div>
-              <button
-                type="submit"
-                className={btnSecondary}
-              >
-                Search
-              </button>
-            </form>
+          <ListToolbar
+            search={
+              <SearchField
+                value={searchInput}
+                onChange={setSearchInput}
+                onSubmit={runSearch}
+                placeholder="Name, email, or phone"
+              />
+            }
+            actions={
+              <Link href="/customers/new" className={btnPrimary}>
+                Create customer
+              </Link>
+            }
+          />
 
-            {loading ? (
-              <p className="text-sm text-slate-500">Loading…</p>
-            ) : customers.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 px-6 py-12 text-center">
-                <p className="text-sm text-slate-500">No customers yet.</p>
+          <DataTable
+            caption="Customers"
+            columns={columns}
+            rows={customers}
+            getRowId={(c) => c.id}
+            getRowLabel={(c) => c.name}
+            loading={loading}
+            selectable
+            selectedIds={selected}
+            onSelectionChange={setSelected}
+            bulkActions={
+              <>
                 <button
                   type="button"
-                  onClick={openCreate}
-                  className="mt-3 text-sm font-semibold text-navy-800 hover:underline"
+                  onClick={onExportSelected}
+                  className={`${btnSecondary} px-2.5 py-1 text-xs`}
                 >
-                  Create your first customer
+                  Export selected
                 </button>
-              </div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[640px] text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                        <th className="py-2 pr-4 font-semibold">Name</th>
-                        <th className="py-2 pr-4 font-semibold">Type</th>
-                        <th className="py-2 pr-4 font-semibold">City</th>
-                        <th className="py-2 pr-4 font-semibold">Contact</th>
-                        <th className="py-2 font-semibold">Net Balance (ETB)</th>
-                        {canWrite ? (
-                          <th className="py-2 pl-4 font-semibold">Actions</th>
-                        ) : null}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {customers.map((c) => (
-                        <tr
-                          key={c.id}
-                          className="border-b border-slate-100 last:border-0"
-                        >
-                          <td className="py-3 pr-4 font-medium text-slate-900">
-                            {c.name}
-                          </td>
-                          <td className="py-3 pr-4 text-slate-600">
-                            {c.customerType}
-                          </td>
-                          <td className="py-3 pr-4 text-slate-600">
-                            {c.city ?? '—'}
-                          </td>
-                          <td className="py-3 pr-4 text-slate-600">
-                            {c.email ?? c.phone ?? '—'}
-                          </td>
-                          <td className="py-3 text-slate-600">
-                            {c.outstandingBalanceEtb}
-                          </td>
-                          {canWrite ? (
-                            <td className="py-3 pl-4">
-                              {deleteConfirmId === c.id ? (
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-xs text-slate-600">
-                                    Delete {c.name}? This cannot be undone.
-                                  </span>
-                                  <button
-                                    type="button"
-                                    disabled={deleting}
-                                    onClick={() => void onDelete(c.id)}
-                                    className={`${btnDanger} px-2.5 py-1 text-xs`}
-                                  >
-                                    {deleting ? 'Deleting…' : 'Confirm'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={deleting}
-                                    onClick={() => setDeleteConfirmId(null)}
-                                    className={`${btnGhost} px-2.5 py-1 text-xs`}
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-3">
-                                  <button
-                                    type="button"
-                                    onClick={() => openEdit(c)}
-                                    className="text-sm font-semibold text-navy-800 hover:underline"
-                                  >
-                                    Edit
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setDeleteConfirmId(c.id)}
-                                    className="text-sm font-semibold text-red-600 hover:underline"
-                                  >
-                                    Delete
-                                  </button>
-                                </div>
-                              )}
-                            </td>
-                          ) : null}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <Pagination
-                  page={page}
-                  pageSize={PAGE_SIZE}
-                  total={total}
-                  totalPages={totalPages}
-                  onPageChange={setPage}
-                />
+                {canWrite ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void onBulkDelete()}
+                    className={`${btnSecondary} px-2.5 py-1 text-xs text-red-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700`}
+                  >
+                    Delete selected
+                  </button>
+                ) : null}
               </>
-            )}
-          </section>
+            }
+            pagination={{
+              page,
+              pageSize,
+              total,
+              totalPages,
+              onPageChange: setPage,
+              onPageSizeChange: (size) => {
+                setPageSize(size);
+                setPage(1);
+              },
+            }}
+            empty={
+              <div className="space-y-3">
+                <p>
+                  {search
+                    ? `No customer matches “${search}”. Clear the search to see the full list.`
+                    : 'No customers yet. Create one here, then open a project against it on Projects.'}
+                </p>
+                {canWrite ? (
+                  <Link href="/customers/new" className={btnSecondary}>
+                    Create customer
+                  </Link>
+                ) : null}
+              </div>
+            }
+          />
         </main>
       </div>
-
-      <SideDrawer
-        open={drawerOpen}
-        onClose={closeDrawer}
-        title={editId ? 'Edit customer' : 'Create customer'}
-        description={
-          editId
-            ? undefined
-            : 'Look-alike customers are flagged as a warning.'
-        }
-        footer={
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={closeDrawer}
-              className={`${btnSecondary} flex-1`}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="customer-form"
-              disabled={submitting}
-              className={`${btnPrimary} flex-1`}
-            >
-              {submitting
-                ? 'Saving…'
-                : editId
-                  ? 'Save changes'
-                  : similar.length > 0
-                    ? 'Create anyway'
-                    : 'Save customer'}
-            </button>
-          </div>
-        }
-      >
-        <form
-          id="customer-form"
-          onSubmit={(e) => void onSubmit(e)}
-          className="space-y-4"
-        >
-          {formError ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {formError}
-            </p>
-          ) : null}
-
-          {similar.length > 0 ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
-                Already in the system
-              </p>
-              <ul className="mt-2 space-y-1.5">
-                {similar.map((m) => (
-                  <li
-                    key={m.id}
-                    className="flex items-center justify-between gap-2 text-sm text-amber-900"
-                  >
-                    <span className="truncate font-medium">{m.name}</span>
-                    <span className="shrink-0 text-xs text-amber-700">
-                      {[m.phone, m.city].filter(Boolean).join(' · ')}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-2 text-xs text-amber-800">
-                You can still save — this is only a heads-up.
-              </p>
-            </div>
-          ) : null}
-
-          <div>
-            <label className={labelClass} htmlFor="name">
-              Name
-            </label>
-            <input
-              id="name"
-              className={fieldClass}
-              required
-              minLength={2}
-              autoFocus
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                setFormError(null);
-              }}
-              onBlur={() => void checkSimilar()}
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              className={fieldClass}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="phone">
-              Phone
-            </label>
-            <input
-              id="phone"
-              className={fieldClass}
-              value={phone}
-              onChange={(e) => {
-                setPhone(e.target.value);
-                setFormError(null);
-              }}
-              onBlur={() => void checkSimilar()}
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="city">
-              City
-            </label>
-            <input
-              id="city"
-              className={fieldClass}
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="type">
-              Type
-            </label>
-            <select
-              id="type"
-              className={fieldClass}
-              value={customerType}
-              onChange={(e) =>
-                setCustomerType(e.target.value as CustomerType)
-              }
-            >
-              <option value="COMMERCIAL">Commercial</option>
-              <option value="RESIDENTIAL">Residential</option>
-              <option value="GOVERNMENT">Government</option>
-            </select>
-          </div>
-          <div className="rounded-lg border border-slate-200 p-3">
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={smsConsentGiven}
-                onChange={(e) => setSmsConsentGiven(e.target.checked)}
-              />
-              Consented to SMS notifications
-            </label>
-            <p className="mt-1 text-xs text-slate-400">
-              {smsConsentGiven
-                ? smsConsentAtDisplay
-                  ? `Recorded ${new Date(smsConsentAtDisplay).toLocaleString()}`
-                  : 'Will be recorded on save.'
-                : smsConsentRevokedAtDisplay
-                  ? `Revoked ${new Date(smsConsentRevokedAtDisplay).toLocaleString()}.`
-                  : 'Not yet recorded. Required before this customer receives any SMS (ECA Directive 832/2021).'}
-            </p>
-          </div>
-        </form>
-      </SideDrawer>
     </div>
   );
 }
