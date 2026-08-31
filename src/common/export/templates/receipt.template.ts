@@ -1,7 +1,13 @@
 import type { TenantBranding } from '../document-pdf.service';
 import { amountInWords } from './amount-in-words';
 import { buildFiscalStatusHtml } from './invoice.template';
-import { esc, renderLayout } from './layout';
+import {
+  esc,
+  renderLayout,
+  renderParties,
+  renderReferencePlate,
+  renderSignatureBlock,
+} from './layout';
 import { formatEtb } from './money-format';
 import { fmtDate } from './quotation.template';
 
@@ -65,29 +71,35 @@ export const buildReceiptHtml = (data: object, branding: TenantBranding | null):
     .join('');
 
   const bodyHtml = `
-  <div class="meta-grid">
-    <div><div class="label">Receipt No.</div><div class="value">${esc(d.receiptNumber)}</div></div>
-    <div><div class="label">Received</div><div class="value">${esc(fmtDate(d.receivedAt))}</div></div>
-    <div><div class="label">Method</div><div class="value">${esc(d.method)}${d.reference ? ` (${esc(d.reference)})` : ''}</div></div>
-  </div>
+  ${renderReferencePlate([
+    { label: 'Receipt No.', value: d.receiptNumber },
+    { label: 'Received', value: fmtDate(d.receivedAt) },
+    { label: 'Method', value: d.reference ? `${d.method} (${d.reference})` : d.method },
+  ])}
 
-  <h2>Received From</h2>
-  <div><strong>${esc(d.customerName)}</strong></div>
+  ${renderParties(branding, { label: 'Received From', lines: [d.customerName] })}
 
-  <h2>Amount</h2>
+  <div class="sum-block">
   <table class="totals">
+    <tbody>
     <tr class="grand"><td>Amount</td><td class="num">${formatEtb(d.amountEtb)}</td></tr>
+    </tbody>
   </table>
+  </div>
   <div class="notes">${esc(amountWordsFor(d.amountEtb))}</div>
 
   <h2>Applied To</h2>
-  <table>
-    <tr><th>Invoice</th><th class="num">Amount Applied</th></tr>
+  <table class="lines">
+    <thead><tr><th>Invoice</th><th class="num">Amount Applied</th></tr></thead>
+    <tbody>
     ${allocRows || '<tr><td colspan="2">No invoices allocated</td></tr>'}
     ${d.hasOnAccount ? `<tr><td>On account</td><td class="num">${formatEtb(d.onAccountEtb)}</td></tr>` : ''}
+    </tbody>
   </table>
 
-  ${buildFiscalStatusHtml(undefined)}`;
+  ${buildFiscalStatusHtml(undefined)}
+
+  ${renderSignatureBlock(branding, 'Received by')}`;
 
   return renderLayout({
     branding,

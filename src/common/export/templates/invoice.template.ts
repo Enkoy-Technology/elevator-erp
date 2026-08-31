@@ -1,5 +1,11 @@
 import type { TenantBranding } from '../document-pdf.service';
-import { esc, renderLayout } from './layout';
+import {
+  esc,
+  renderLayout,
+  renderParties,
+  renderReferencePlate,
+  renderSignatureBlock,
+} from './layout';
 import { formatEtb } from './money-format';
 import { fmtDate } from './quotation.template';
 
@@ -166,25 +172,31 @@ export const buildInvoiceHtml = (data: object, branding: TenantBranding | null):
     .join('');
 
   const bodyHtml = `
-  <div class="meta-grid">
-    <div><div class="label">Invoice No.</div><div class="value">${esc(d.invoiceNumber)}</div></div>
-    <div><div class="label">Issued</div><div class="value">${esc(fmtDate(d.issuedAt))}</div></div>
-    <div><div class="label">Due</div><div class="value">${esc(fmtDate(d.dueDate))}</div></div>
-  </div>
+  ${renderReferencePlate([
+    { label: 'Invoice No.', value: d.invoiceNumber },
+    { label: 'Issued', value: fmtDate(d.issuedAt) },
+    { label: 'Due', value: fmtDate(d.dueDate) },
+    { label: 'Status', value: d.status },
+  ])}
 
-  <h2>Billed To</h2>
-  <div><strong>${esc(d.customerName)}</strong></div>
-  ${d.projectName ? `<div>Project: ${esc(d.projectName)}</div>` : ''}
+  ${renderParties(branding, {
+    label: 'Billed To',
+    lines: [d.customerName, ...(d.projectName ? [`Project: ${d.projectName}`] : [])],
+  })}
 
   <h2>Items</h2>
-  <table>
-    <tr><th>Description</th><th class="num">Qty</th><th class="num">Unit Price</th><th class="num">Line Total</th></tr>
-    ${lineRows}
+  <table class="lines">
+    <thead>
+      <tr><th>Description</th><th class="num">Qty</th><th class="num">Unit Price</th><th class="num">Line Total</th></tr>
+    </thead>
+    <tbody>${lineRows}</tbody>
   </table>
 
   ${buildFiscalStatusHtml(d)}
 
+  <div class="sum-block">
   <table class="totals">
+    <tbody>
     <tr><td>Subtotal</td><td class="num">${formatEtb(d.subtotalEtb)}</td></tr>
     <tr><td>VAT (${esc(d.taxPercent ?? '0')}%)</td><td class="num">${formatEtb(d.vatEtb)}</td></tr>
     <tr class="grand"><td>Total</td><td class="num">${formatEtb(d.totalEtb)}</td></tr>
@@ -194,12 +206,15 @@ export const buildInvoiceHtml = (data: object, branding: TenantBranding | null):
     <tr class="grand"><td>Net cash due</td><td class="num">${formatEtb(d.netCashDueEtb)}</td></tr>`
         : ''
     }
-  </table>`;
+    </tbody>
+  </table>
+  </div>
+
+  ${renderSignatureBlock(branding)}`;
 
   return renderLayout({
     branding,
     documentTitle: 'INVOICE',
-    badge: d.status,
     bodyHtml,
     footerNote: d.dueDate ? `Payment due by ${fmtDate(d.dueDate)}. Prices in ETB.` : 'Prices in ETB.',
   });

@@ -1,5 +1,11 @@
 import type { TenantBranding } from '../document-pdf.service';
-import { esc, renderLayout } from './layout';
+import {
+  esc,
+  renderLayout,
+  renderParties,
+  renderReferencePlate,
+  renderSignatureBlock,
+} from './layout';
 import { formatEtb } from './money-format';
 import { fmtDate, TECH_ROWS } from './quotation.template';
 
@@ -38,8 +44,8 @@ export interface ProformaTemplateData {
 
 /**
  * Build the branded proforma-invoice HTML document. Pure — no I/O — mirrors
- * buildQuotationHtml's body shape; only the title, the meta-grid's leading
- * field, and the pricing block (taxable base / VAT / total only — no
+ * buildQuotationHtml's body shape; only the title, the reference plate's
+ * leading field, and the pricing block (taxable base / VAT / total only — no
  * margin, no cost itemization, see the interface doc comment) differ.
  */
 export const buildProformaHtml = (data: object, branding: TenantBranding | null): string => {
@@ -54,32 +60,42 @@ export const buildProformaHtml = (data: object, branding: TenantBranding | null)
     .join('');
 
   const bodyHtml = `
-  <div class="meta-grid">
-    <div><div class="label">Proforma No.</div><div class="value">${esc(d.proformaNumber)}</div></div>
-    <div><div class="label">Issued</div><div class="value">${esc(fmtDate(d.issuedAt))}</div></div>
-    <div><div class="label">Valid Until</div><div class="value">${esc(fmtDate(d.validUntil))}</div></div>
-  </div>
+  ${renderReferencePlate([
+    { label: 'Proforma No.', value: d.proformaNumber },
+    { label: 'Issued', value: fmtDate(d.issuedAt) },
+    { label: 'Valid Until', value: fmtDate(d.validUntil) },
+    { label: 'Status', value: d.status },
+  ])}
 
-  <h2>Prepared For</h2>
-  <div><strong>${esc(d.customerName)}</strong></div>
-  <div>Project: ${esc(d.projectName)}</div>
+  ${renderParties(branding, {
+    label: 'Prepared For',
+    lines: [d.customerName, `Project: ${d.projectName}`],
+  })}
 
   <h2>Technical Specification</h2>
-  <table>${techRows || '<tr><td>See attached specification</td><td></td></tr>'}</table>
+  <table class="lines">
+    <thead><tr><th>Item</th><th class="num">Specification</th></tr></thead>
+    <tbody>${techRows || '<tr><td>See attached specification</td><td class="num">&mdash;</td></tr>'}</tbody>
+  </table>
 
   <h2>Pricing</h2>
+  <div class="sum-block">
   <table class="totals">
+    <tbody>
     <tr><td>Supply and installation</td><td class="num">${formatEtb(d.subtotalEtb)}</td></tr>
     <tr><td>VAT (${esc(d.taxPercent ?? '0')}%)</td><td class="num">${formatEtb(d.vatEtb)}</td></tr>
     <tr class="grand"><td>Total</td><td class="num">${formatEtb(d.totalEtb)}</td></tr>
+    </tbody>
   </table>
+  </div>
 
-  ${d.notes ? `<div class="notes">${esc(d.notes)}</div>` : ''}`;
+  ${d.notes ? `<div class="notes">${esc(d.notes)}</div>` : ''}
+
+  ${renderSignatureBlock(branding)}`;
 
   return renderLayout({
     branding,
     documentTitle: 'PROFORMA INVOICE',
-    badge: d.status,
     bodyHtml,
     footerNote: `This proforma invoice is valid until ${fmtDate(d.validUntil)}. Prices in ETB.`,
   });
