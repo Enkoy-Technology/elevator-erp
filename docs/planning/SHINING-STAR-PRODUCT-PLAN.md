@@ -8,8 +8,8 @@ Source: client proposal *ERP SYSTEM SHINING STAR ELECTROMECHANICAL WORKS*
 |------|-----------------------------|
 | Calculator | Automatic elevator calc + ETB price |
 | Customers | Customer registration + duplicate warning |
-| Projects | Lead → survey → quote → contract pipeline |
-| Quotations | Quote / proforma / contract + branded PDF |
+| Projects | Lead → survey → quote → contract pipeline. The stage follows the work: creating a quotation auto-advances the project to **Quotation**, issuing a proforma auto-advances it to **Proforma** (forward only, never past a cancelled/completed project). **Contract, Execution and Completed stay manual** — those are real-world events (a signature, a crew starting, a handover) with no digital trigger. |
+| Quotations | Quote / proforma + branded PDF; the contract stage is tracked on the project |
 | Employees | Staff directory + role assignment |
 | Assets | Elevators / stairs / other under a customer |
 | Notifications | In-app inbox + colleague notices |

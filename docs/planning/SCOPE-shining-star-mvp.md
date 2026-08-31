@@ -6,15 +6,19 @@ Full client wishlist lives in `SHINING-STAR-PRODUCT-PLAN.md` — deliver it in
 
 ## Live today
 - Auth + tenant isolation
-- Elevator calculator (ETB)
+- Elevator calculator (ETB) — passenger, car platform lift, escalator
 - Customers (+ duplicate warning)
-- Projects (sales pipeline)
-- Quotations → proforma → contract + PDF
+- Projects (sales pipeline; the contract stage lives here)
+- Quotations → proforma + PDF / Word / Excel
 - Employees (roles)
 - Assets (elevator / stairs / other)
 - Notifications (in-app inbox)
 - Maintenance (contracts + visits + breakdowns)
-- Settings (branding + EN / አማርኛ)
+- Invoices, payments and receipts (the internal AR book)
+- Receivables ageing + customer statements
+- Message log (SMS reminders + consent)
+- Documentation page
+- Settings (company name, branding, EN / አማርኛ)
 
 ## Next (in order)
 - Expand Amharic coverage across remaining screens
