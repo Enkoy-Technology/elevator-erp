@@ -28,6 +28,8 @@ export default function SettingsPage() {
   const router = useRouter();
   const { t, setLocale } = useLocale();
   const [settings, setSettings] = useState<TenantSettings | null>(null);
+  const [name, setName] = useState('');
+  const [slogan, setSlogan] = useState('');
   const [primaryColorHex, setPrimaryColorHex] = useState('#1B2A4A');
   const [secondaryColorHex, setSecondaryColorHex] = useState('#E8B54D');
   const [logoUrl, setLogoUrl] = useState('');
@@ -49,6 +51,8 @@ export default function SettingsPage() {
   const applySettings = useCallback(
     (data: TenantSettings) => {
       setSettings(data);
+      setName(data.name);
+      setSlogan(data.slogan ?? '');
       setPrimaryColorHex(data.primaryColorHex);
       setSecondaryColorHex(data.secondaryColorHex);
       setLogoUrl(data.logoUrl ?? '');
@@ -94,6 +98,8 @@ export default function SettingsPage() {
     setSuccess(null);
     try {
       const data = await updateSettings({
+        name: name.trim(),
+        slogan: slogan.trim() || null,
         primaryColorHex,
         secondaryColorHex,
         logoUrl: logoUrl || null,
@@ -193,6 +199,32 @@ export default function SettingsPage() {
                       />
                     </div>
                   </div>
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="companyName">
+                    {t('settings.companyName')}
+                  </label>
+                  <input
+                    id="companyName"
+                    className={fieldClass}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    maxLength={200}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="slogan">
+                    {t('settings.slogan')}
+                  </label>
+                  <input
+                    id="slogan"
+                    className={fieldClass}
+                    value={slogan}
+                    onChange={(e) => setSlogan(e.target.value)}
+                    maxLength={200}
+                    placeholder="Star of Elevation"
+                  />
                 </div>
                 <div>
                   <label className={labelClass} htmlFor="logoUrl">
