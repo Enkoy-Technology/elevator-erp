@@ -15,10 +15,19 @@ export type MessageKey =
   | 'nav.maintenance'
   | 'nav.messages'
   | 'nav.settings'
+  | 'nav.docs'
   | 'nav.collapse'
   | 'nav.expand'
   | 'nav.hide'
   | 'nav.show'
+  | 'nav.signOut'
+  | 'nav.group.overview'
+  | 'nav.group.sales'
+  | 'nav.group.finance'
+  | 'nav.group.hr'
+  | 'nav.group.admin'
+  | 'nav.group.operations'
+
   | 'brand.subtitle'
   | 'settings.title'
   | 'settings.subtitle'
@@ -26,6 +35,8 @@ export type MessageKey =
   | 'settings.language'
   | 'settings.primaryColor'
   | 'settings.secondaryColor'
+  | 'settings.companyName'
+  | 'settings.slogan'
   | 'settings.logoUrl'
   | 'settings.stampUrl'
   | 'settings.address'
@@ -59,10 +70,18 @@ const en: Record<MessageKey, string> = {
   'nav.maintenance': 'Maintenance',
   'nav.messages': 'Messages',
   'nav.settings': 'Settings',
+  'nav.docs': 'Documentation',
   'nav.collapse': 'Collapse',
   'nav.expand': 'Expand sidebar',
   'nav.hide': 'Hide sidebar',
   'nav.show': 'Show sidebar',
+  'nav.signOut': 'Sign out',
+  'nav.group.overview': 'Overview',
+  'nav.group.sales': 'Sales',
+  'nav.group.finance': 'Finance',
+  'nav.group.hr': 'People',
+  'nav.group.admin': 'Administration',
+  'nav.group.operations': 'Operations',
   'brand.subtitle': 'Electromechanical',
   'settings.title': 'Settings',
   'settings.subtitle': 'Branding and language',
@@ -70,6 +89,8 @@ const en: Record<MessageKey, string> = {
   'settings.language': 'Default language',
   'settings.primaryColor': 'Primary colour',
   'settings.secondaryColor': 'Secondary colour',
+  'settings.companyName': 'Company name',
+  'settings.slogan': 'Slogan',
   'settings.logoUrl': 'Logo URL',
   'settings.stampUrl': 'Stamp URL',
   'settings.address': 'Official address',
@@ -106,10 +127,18 @@ const am: Record<MessageKey, string> = {
   'nav.maintenance': 'ጥገና',
   'nav.messages': 'መልዕክቶች',
   'nav.settings': 'ቅንብሮች',
+  'nav.docs': 'ሰነድ',
   'nav.collapse': 'ሰብስብ',
   'nav.expand': 'ሳይድባር አሳይ',
   'nav.hide': 'ሳይድባር ደብቅ',
   'nav.show': 'ሳይድባር አሳይ',
+  'nav.signOut': 'ውጣ',
+  'nav.group.overview': 'አጠቃላይ እይታ',
+  'nav.group.sales': 'ሽያጭ',
+  'nav.group.finance': 'ፋይናንስ',
+  'nav.group.hr': 'ሰራተኞች',
+  'nav.group.admin': 'አስተዳደር',
+  'nav.group.operations': 'ኦፕሬሽን',
   'brand.subtitle': 'ኤሌክትሮሜካኒካል',
   'settings.title': 'ቅንብሮች',
   'settings.subtitle': 'ብራንዲንግ እና ቋንቋ',
@@ -117,6 +146,8 @@ const am: Record<MessageKey, string> = {
   'settings.language': 'ነባሪ ቋንቋ',
   'settings.primaryColor': 'ዋና ቀለም',
   'settings.secondaryColor': 'ሁለተኛ ቀለም',
+  'settings.companyName': 'የድርጅት ስም',
+  'settings.slogan': 'መፈክር',
   'settings.logoUrl': 'የሎጎ አድራሻ',
   'settings.stampUrl': 'የማህተም አድራሻ',
   'settings.address': 'ኦፊሴላዊ አድራሻ',
