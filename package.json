@@ -8,7 +8,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm run infra:up && pnpm run db:migrate && concurrently -k -n api,web -c cyan,magenta \"pnpm run start:dev\" \"pnpm run web:dev\"",
+    "kill": "node scripts/kill-dev-ports.mjs",
+    "dev": "pnpm run kill && pnpm run infra:up && pnpm run db:migrate && concurrently -k -n api,web -c cyan,magenta \"pnpm run start:dev\" \"pnpm run web:dev\"",
     "infra:up": "docker compose up -d --wait",
     "infra:down": "docker compose down",
     "build": "nest build",
@@ -26,7 +27,8 @@
     "db:migrate": "tsx --env-file-if-exists=.env src/database/migrate.ts",
     "db:seed": "tsx --env-file-if-exists=.env src/database/seed.ts",
     "db:seed:dev": "ALLOW_DEMO_SEED=1 tsx --env-file-if-exists=.env src/database/seed.ts",
-    "db:seed:rates": "tsx --env-file-if-exists=.env src/database/seed-rates.cli.ts"
+    "db:seed:rates": "tsx --env-file-if-exists=.env src/database/seed-rates.cli.ts",
+    "db:bootstrap": "tsx --env-file-if-exists=.env src/database/bootstrap-tenant.cli.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.28",
@@ -62,6 +64,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
+    "@types/multer": "^2.2.0",
     "@types/node": "^26.1.1",
     "@types/passport-jwt": "^4.0.1",
     "@types/pg": "^8.20.0",
