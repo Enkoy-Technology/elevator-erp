@@ -3,14 +3,15 @@ import { eq } from 'drizzle-orm';
 
 import { tenantBranding, tenants } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
-import type { TenantBranding } from './document-pdf.service';
+import type { DocumentBranding } from './templates/layout';
 
 /** Matches tenant_branding.primary_color_hex's own DB default (see schema/tenants.ts). */
 const DEFAULT_PRIMARY = '#1B2A4A';
 
 /**
- * The one place `tenant_branding` + `tenants.name` become the TenantBranding
- * shape the pdf/docx renderers consume — quotations/proformas document
+ * The one place `tenant_branding` + `tenants.name` become the branding
+ * the pdf/docx renderers consume (`DocumentBranding`, the renderer's
+ * `TenantBranding` plus the stamp/email columns the templates read) — quotations/proformas document
  * endpoints both call this instead of each re-deriving the mapping.
  * Queries directly via TenantDbService (same tables SettingsRepository
  * reads) rather than importing SettingsModule, so ExportModule stays a
@@ -20,7 +21,7 @@ const DEFAULT_PRIMARY = '#1B2A4A';
 export class TenantBrandingProvider {
   constructor(private readonly tenantDb: TenantDbService) {}
 
-  async get(tenantId: string): Promise<TenantBranding> {
+  async get(tenantId: string): Promise<DocumentBranding> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       // The withTenant() RLS session GUC is the real defense; this explicit
       // filter is belt-and-suspenders, matching the pattern the new
@@ -38,12 +39,15 @@ export class TenantBrandingProvider {
         .limit(1);
       return {
         name: tenant?.name ?? '',
-        // tenant_branding has no slogan column today — renderLayout/docx
-        // both already treat an empty slogan as "omit the line".
-        slogan: '',
+        // renderLayout/docx both treat an empty slogan as "omit the line".
+        slogan: branding?.slogan ?? '',
         logoUrl: branding?.logoUrl ?? null,
+        // Rendered as the seal on the signature block of the customer-facing
+        // documents; null simply omits that block's seal column.
+        stampUrl: branding?.stampUrl ?? null,
         address: branding?.officialAddress ?? '',
         phones: branding?.contactPhone ? [branding.contactPhone] : [],
+        email: branding?.contactEmail ?? null,
         primaryColor: branding?.primaryColorHex ?? DEFAULT_PRIMARY,
       };
     });
