@@ -71,26 +71,22 @@ describe('QuotationsService', () => {
     const calcResult: CalcResult = {
       technical: { capacityPersons: 13 } as CalcResult['technical'],
       pricing: {
-        qBase: '45000.00',
-        baseCost: '45000.00',
-        stopCost: '0.00',
-        capacityMultiplier: '1.00',
-        speedPremium: '0.00',
-        doorPremium: '0.00',
-        installationCost: '0.00',
-        freightCost: '0.00',
-        equipmentSubtotal: '45000.00',
-        totalBeforeMargin: '45000.00',
-        marginAmount: '11250.00',
-        subtotalWithMargin: '56250.00',
+        // PASSENGER, 5 stops (floors to 0), 1000 kg: 7,000,000 + 370,000
+        basePrice: '7000000.00',
+        stopsAdjustment: '0.00',
+        capacityAdjustment: '370000.00',
+        totalBeforeMargin: '7370000.00',
+        marginAmount: '1842500.00',
+        subtotalWithMargin: '9212500.00',
         // Placeholders from calc's own (unused, taxPercent=0) math — the
         // service must overwrite these with the VAT-resolved figures.
         taxAmount: '0.00',
-        totalPrice: '56250.00',
+        totalPrice: '9212500.00',
       },
     };
 
     const dto = {
+      productType: 'PASSENGER',
       capacityKg: 1000,
       stops: 5,
       travelHeightM: 15,
@@ -130,12 +126,12 @@ describe('QuotationsService', () => {
       await service.createForProject(user, project.id, dto);
 
       const [, values] = repo.create.mock.calls[0]!;
-      // 56250.00 * 15% = 8437.50; total = 64687.50
-      expect(values.taxAmountEtb).toBe('8437.50');
-      expect(values.totalPriceEtb).toBe('64687.50');
+      // 9,212,500.00 * 15% = 1,381,875.00; total = 10,594,375.00
+      expect(values.taxAmountEtb).toBe('1381875.00');
+      expect(values.totalPriceEtb).toBe('10594375.00');
       expect(values.taxPercent).toBe('15.00');
-      expect(values.pricingBreakdown.taxAmount).toBe('8437.50');
-      expect(values.pricingBreakdown.totalPrice).toBe('64687.50');
+      expect(values.pricingBreakdown.taxAmount).toBe('1381875.00');
+      expect(values.pricingBreakdown.totalPrice).toBe('10594375.00');
     });
 
     it('never passes the client a way to set taxPercent — calc is called with a 0 placeholder', async () => {
