@@ -1,5 +1,12 @@
 import { sql } from 'drizzle-orm';
-import { integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  integer,
+  numeric,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { subscriptionStatusEnum, subscriptionTierEnum } from './enums';
 
@@ -88,6 +95,17 @@ export const tenants = pgTable('tenants', {
   ),
   paymentReminderInvalidPhoneSkippedCount: integer(
     'payment_reminder_invalid_phone_skipped_count',
+  ),
+  /**
+   * Discount above which a quotation needs explicit sign-off
+   * (`quotations.discountApprovedByUserId`). NULL — the default — means no
+   * approval is required at all: this client negotiates every deal and does
+   * not want the extra step on the sales manager. Same "tenant setting"
+   * path as fiscalYearStart above.
+   */
+  discountApprovalThresholdPercent: numeric(
+    'discount_approval_threshold_percent',
+    { precision: 5, scale: 2 },
   ),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()

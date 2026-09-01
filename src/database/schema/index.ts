@@ -17,3 +17,5 @@ export * from './expenses';
 export * from './outbound-messages';
 export * from './idempotency-keys';
 export * from './contracts';
+export * from './document-lines';
+export * from './document-templates';

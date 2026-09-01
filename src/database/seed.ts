@@ -6,6 +6,7 @@ import { Pool } from 'pg';
 
 import { RatesRepository } from '../modules/rates/rates.repository';
 import { seedRates } from '../modules/rates/seed-rates';
+import { seedDocumentContent } from '../modules/settings/seed-document-content';
 import * as schema from './schema';
 
 const BCRYPT_ROUNDS = 12;
@@ -46,7 +47,12 @@ const main = async (): Promise<void> => {
       .from(schema.tenants)
       .where(eq(schema.tenants.slug, 'demo'));
 
-    if (existing.length > 0) {
+    const [alreadySeeded] = existing;
+    if (alreadySeeded) {
+      // Same reasoning as seedRates above: document boilerplate is idempotent
+      // and never overwrites edited text, so re-running tops up a demo tenant
+      // that predates it instead of silently skipping.
+      await seedDocumentContent(db, alreadySeeded.id);
       console.log('Demo tenant already seeded, skipping.');
       return;
     }
@@ -74,6 +80,10 @@ const main = async (): Promise<void> => {
       fullName: 'Demo CEO',
       role: 'CEO',
     });
+
+    // The demo tenant prints the same documents as a real one, so it gets the
+    // same boilerplate; the production path is `pnpm run db:seed:document-content`.
+    await seedDocumentContent(db, tenant.id);
 
     console.log(`Seeded demo tenant ${tenant.id} (slug: demo)`);
     console.log('Login: ceo@demo.example.com / Demo!Passw0rd');

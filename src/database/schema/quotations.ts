@@ -66,6 +66,58 @@ export const quotations = pgTable(
       scale: 2,
     }).notNull(),
 
+    /**
+     * What the calculator produced BEFORE negotiation, on the same basis as
+     * `totalPriceEtb` — i.e. VAT-INCLUSIVE. Null on a quote that was never
+     * negotiated.
+     *
+     * This client prices backward from a round grand total: their real
+     * proforma reads 7,835,000.00 where the formula gives 8,521,500.00, and
+     * 7,835,000 / 1.15 = 6,813,043.48 + VAT 1,021,956.52 balances to the
+     * cent. So `discountAmountEtb` = `calculatedTotalEtb` - `totalPriceEtb`
+     * (686,500.00 here), and `discountPercent` = that over
+     * `calculatedTotalEtb` (8.06%). Both stored VAT-inclusive; the percent
+     * is the same on either basis, the AMOUNT is not — reading it as an
+     * ex-VAT figure would silently under-report every discount by the VAT
+     * rate.
+     *
+     * `totalPriceEtb` above is untouched: it remains the figure the customer
+     * pays and the figure every downstream document copies.
+     */
+    calculatedTotalEtb: numeric('calculated_total_etb', {
+      precision: 14,
+      scale: 2,
+    }),
+    discountAmountEtb: numeric('discount_amount_etb', {
+      precision: 14,
+      scale: 2,
+    }),
+    discountPercent: numeric('discount_percent', { precision: 5, scale: 2 }),
+    /**
+     * Who signed off the discount, when `tenants.discountApprovalThresholdPercent`
+     * required it. Null when the threshold is unset (the default) or the
+     * discount is under it — approval is deliberately not universal.
+     */
+    discountApprovedByUserId: uuid('discount_approved_by_user_id'),
+
+    // ---------------------------------------------------------------------
+    // Commercial terms the client prints as prose on page 1.
+    // ---------------------------------------------------------------------
+    /** Their own offer reference, e.g. "Rodas FUJIHD-E02". */
+    referenceCode: text('reference_code'),
+    deliveryDays: integer('delivery_days'),
+    /** Theirs: 60 months parts, 12 months free service. */
+    warrantyPartsMonths: integer('warranty_parts_months'),
+    warrantyFreeServiceMonths: integer('warranty_free_service_months'),
+    /**
+     * The offer-validity NUMBER they print as text ("valid for 5 days").
+     * `validUntil` below is the resolved date the system enforces; this is
+     * what the document says, kept separately so re-rendering an old
+     * document never re-states a validity that was counted from a different
+     * issue date.
+     */
+    validityDays: integer('validity_days'),
+
     validUntil: timestamp('valid_until', { withTimezone: true }),
     notes: text('notes'),
 
@@ -109,6 +161,11 @@ export const quotations = pgTable(
     foreignKey({
       name: 'quotations_approved_by_fk',
       columns: [table.tenantId, table.approvedByUserId],
+      foreignColumns: [users.tenantId, users.id],
+    }),
+    foreignKey({
+      name: 'quotations_discount_approved_by_fk',
+      columns: [table.tenantId, table.discountApprovedByUserId],
       foreignColumns: [users.tenantId, users.id],
     }),
     foreignKey({

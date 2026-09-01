@@ -442,6 +442,27 @@
       "when": 1788249211388,
       "tag": "0062_contracts_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1788280523816,
+      "tag": "0063_chunky_calypso",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1788280523817,
+      "tag": "0064_document_lines_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1788282048615,
+      "tag": "0065_low_sauron",
+      "breakpoints": true
     }
   ]
 }

@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   date,
   foreignKey,
+  integer,
   jsonb,
   numeric,
   pgTable,
@@ -19,6 +20,19 @@ import { quotations } from './quotations';
 import { rateVersions } from './rate-tables';
 import { tenants } from './tenants';
 import { users } from './users';
+
+/**
+ * One row of the payment schedule as it was printed: "50% on signing".
+ * The shape stored in `proformas.paymentTerms`, mirroring the three columns
+ * a `quotation_payment_terms` row carries.
+ */
+export interface ProformaPaymentTerm {
+  sequence: number;
+  label: string;
+  /** A 2-decimal string, same as the numeric(5,2) column it came from. */
+  percent: string;
+  triggerEvent: string | null;
+}
 
 export const proformas = pgTable(
   'proformas',
@@ -70,6 +84,41 @@ export const proformas = pgTable(
     // internal audit trail for Phase 4, not for customer display.
     technicalSpec: jsonb('technical_spec').notNull(),
     pricingBreakdown: jsonb('pricing_breakdown').notNull(),
+
+    // ---------------------------------------------------------------------
+    // Commercial terms, copied off the quotation at issue time — the same
+    // snapshot rule as the money and jsonb columns above, never a live join
+    // back to `quotations` (a quotation can be revised after conversion, and
+    // the customer holds THIS document). Column-for-column mirrors of
+    // `quotations`' own terms columns; nullable because a quotation issued
+    // before those columns existed has none.
+    // ---------------------------------------------------------------------
+    /** Their own offer reference, e.g. "Rodas FUJIHD-E02". */
+    referenceCode: text('reference_code'),
+    deliveryDays: integer('delivery_days'),
+    warrantyPartsMonths: integer('warranty_parts_months'),
+    warrantyFreeServiceMonths: integer('warranty_free_service_months'),
+    /** The validity NUMBER the document prints ("valid for 5 days"); the
+     * `validUntil` date below is what the system enforces. */
+    validityDays: integer('validity_days'),
+
+    /**
+     * The payment schedule as the offer stated it, snapshotted verbatim from
+     * `quotation_payment_terms` at issue time.
+     *
+     * jsonb, NOT a mirror `proforma_payment_terms` table (unlike
+     * `proforma_lines`): these rows are never edited, never re-sequenced,
+     * never queried by percent and never joined — the DRAFT-gated
+     * replace-all/resequence machinery that earns `quotation_payment_terms`
+     * its own table has no counterpart on an issued document. One nullable
+     * column on a row that already carries two jsonb snapshots costs a table,
+     * a composite FK, a unique constraint and an RLS policy less. NULL means
+     * "issued before terms existed"; `[]` means "no schedule was stated".
+     *
+     * ponytail: promote to a real table only if finance ever needs to report
+     * across instalment lines.
+     */
+    paymentTerms: jsonb('payment_terms').$type<ProformaPaymentTerm[]>(),
 
     issuedAt: timestamp('issued_at', { withTimezone: true })
       .notNull()
