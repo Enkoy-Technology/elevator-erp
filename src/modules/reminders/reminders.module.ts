@@ -9,6 +9,8 @@ import { MaintenanceReminderService } from './maintenance-reminders.service';
 import { PaymentReminderRepository } from './payment-reminders.repository';
 import { PaymentReminderService } from './payment-reminders.service';
 import { TenantDirectoryService } from './tenant-directory.service';
+import { WarrantyReminderRepository } from './warranty-reminders.repository';
+import { WarrantyReminderService } from './warranty-reminders.service';
 
 @Module({
   // OutboxModule for OutboxService.enqueue (task-1 built this specifically
@@ -25,6 +27,8 @@ import { TenantDirectoryService } from './tenant-directory.service';
     PaymentReminderService,
     BalanceReconciliationRepository,
     BalanceReconciliationService,
+    WarrantyReminderRepository,
+    WarrantyReminderService,
   ],
   // MaintenanceReminderService.notifyBreakdownAssigned is called by
   // MaintenanceService right after a breakdown assignment write, on the
@@ -39,6 +43,7 @@ import { TenantDirectoryService } from './tenant-directory.service';
     MaintenanceReminderService,
     PaymentReminderService,
     BalanceReconciliationService,
+    WarrantyReminderService,
   ],
 })
 export class RemindersModule {}
