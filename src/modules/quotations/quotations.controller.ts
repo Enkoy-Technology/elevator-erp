@@ -23,13 +23,18 @@ import { CurrentUser, Roles } from '../../common/decorators';
 import { parseDocumentFormat } from '../../common/export/document-format';
 import { DocumentDocxService } from '../../common/export/document-docx.service';
 import { DocumentPdfService } from '../../common/export/document-pdf.service';
+import { TECHNICAL_PROPOSAL_TEMPLATE } from '../../common/export/templates/technical-proposal.template';
 import { setDownloadHeaders, singleRow, writeXlsx } from '../../common/export/tabular';
 import { TenantBrandingProvider } from '../../common/export/tenant-branding.provider';
 import { quoteStatusEnum, type QuoteStatus } from '../../database/schema';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { CreateQuotationDto } from './dto/create-quotation.dto';
 import { RejectQuotationDto } from './dto/reject-quotation.dto';
-import { QUOTATION_DOCUMENT_COLUMNS, quotationDocumentData } from './quotation-document.mapper';
+import {
+  QUOTATION_DOCUMENT_COLUMNS,
+  quotationDocumentData,
+  technicalProposalData,
+} from './quotation-document.mapper';
 import { QuotationsService } from './quotations.service';
 
 const QUOTE_STATUSES = quoteStatusEnum.enumValues;
@@ -126,6 +131,41 @@ export class QuotationsController {
       filename,
       'docx',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    res.end(buf);
+  }
+
+  @Get('quotations/:id/technical-proposal')
+  @ApiOperation({
+    summary:
+      'Download the standalone technical proposal / technical specification sheet (?format=pdf). Same content under either name; carries no pricing.',
+  })
+  async technicalProposal(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('format') formatRaw: string | undefined,
+    @Res({ passthrough: false }) res: Response,
+  ): Promise<void> {
+    // Reuses the shared validator for the shape/message, then narrows: this
+    // document has a PDF builder only — there is no docx renderer and no
+    // sensible spreadsheet of a specification sheet.
+    if (parseDocumentFormat(formatRaw) !== 'pdf') {
+      throw new BadRequestException('The technical proposal is available as pdf only');
+    }
+    const row = await this.quotationsService.getDocumentData(user, id);
+    const branding = await this.tenantBranding.get(user.tenantId);
+    const buf = await this.pdfService.renderDocumentPdf(
+      // Cast until the builder is registered in document-pdf.service.ts,
+      // which is what adds this name to the DocumentTemplate union.
+      TECHNICAL_PROPOSAL_TEMPLATE,
+      technicalProposalData(row),
+      branding,
+    );
+    setDownloadHeaders(
+      res,
+      `technical-proposal-${row.quoteNumber}`,
+      'pdf',
+      'application/pdf',
     );
     res.end(buf);
   }

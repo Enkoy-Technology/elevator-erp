@@ -857,14 +857,33 @@ export const updateMaintenanceContract = (
     body: JSON.stringify(payload),
   });
 
+/**
+ * The three named fields are the client's own Maintenance Form; `notes`
+ * stays the free-text catch-all beside them.
+ */
 export const logServiceVisit = (
   contractId: string,
-  payload?: { notes?: string },
-): Promise<{ visit: unknown; contract: MaintenanceContract }> =>
+  payload?: {
+    notes?: string;
+    inspectionResults?: string;
+    partsReplaced?: string;
+    recommendations?: string;
+  },
+): Promise<{ visit: { id: string }; contract: MaintenanceContract }> =>
   apiFetch(`/maintenance/contracts/${contractId}/visits`, {
     method: 'POST',
     body: JSON.stringify(payload ?? {}),
   });
+
+/**
+ * The printed Maintenance Report for one visit — the customer signs it on
+ * paper. PDF only: the API 400s on any other format.
+ */
+export const downloadMaintenanceReport = (visitId: string): Promise<void> =>
+  downloadDocument(
+    `/maintenance/visits/${visitId}/report?format=pdf`,
+    `maintenance-report-${visitId.slice(0, 8)}.pdf`,
+  );
 
 export const listBreakdowns = (options?: {
   status?: BreakdownStatus;
@@ -1147,6 +1166,9 @@ export const printInvoiceDocument = (id: string): Promise<void> =>
 export const printReceiptDocument = (id: string): Promise<void> =>
   printDocument(`/payments/${id}/document?format=pdf`);
 
+export const printContractDocument = (id: string): Promise<void> =>
+  printDocument(`/contracts/${id}/document?format=pdf`);
+
 /**
  * The date in the print header (globals.css `body::before` reads it). Stamped
  * here because CSS has no clock, and every page already imports this module.
@@ -1261,6 +1283,21 @@ export const downloadQuotationDocument = (
   downloadDocument(
     `/quotations/${id}/document?format=${format}`,
     `quotation-${quoteNumber}.${format}`,
+  );
+
+/**
+ * The standalone technical proposal / technical specification sheet — the
+ * same EN 81 spec the quotation carries as a section, as its own document so
+ * it can go to a consultant without the prices. PDF only: it has no docx or
+ * spreadsheet renderer (the API 400s on any other format).
+ */
+export const downloadQuotationTechnicalProposal = (
+  id: string,
+  quoteNumber: string,
+): Promise<void> =>
+  downloadDocument(
+    `/quotations/${id}/technical-proposal?format=pdf`,
+    `technical-proposal-${quoteNumber}.pdf`,
   );
 
 export type ProformaStatus = 'ISSUED' | 'CANCELLED';
@@ -1835,3 +1872,231 @@ export const getOutboxProvider = (): Promise<{ provider: string }> =>
 /** Retry a FAILED message: QUEUED, due immediately, attempts NOT reset. */
 export const retryOutboxMessage = (id: string): Promise<OutboundMessage> =>
   apiFetch<OutboundMessage>(`/outbox/${id}/retry`, { method: 'POST' });
+
+/* ---- contracts ------------------------------------------------------ */
+
+export type ContractStatus = 'DRAFT' | 'SIGNED' | 'COMPLETED' | 'CANCELLED';
+
+export interface Contract {
+  id: string;
+  proformaId: string;
+  projectId: string;
+  customerId: string;
+  contractNumber: string;
+  fiscalYearLabel: string;
+  contractValueEtb: string;
+  scopeOfWork: string | null;
+  termsAndConditions: string | null;
+  warrantyMonths: number | null;
+  status: ContractStatus;
+  signedAt: string | null;
+  handedOverAt: string | null;
+  handedOverToName: string | null;
+  handoverNotes: string | null;
+  cancelReason: string | null;
+  issuedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The list joins the names on; GET /contracts/:id returns the bare record. */
+export interface ContractListRow extends Contract {
+  customerName: string | null;
+  projectName: string | null;
+}
+
+/** Shared by the list and its export so the two can never disagree on the
+ *  filters — same shape as paymentListParams/outboxListParams. */
+const contractListParams = (options?: {
+  projectId?: string;
+  status?: ContractStatus;
+}): URLSearchParams => {
+  const params = new URLSearchParams();
+  if (options?.projectId) {
+    params.set('projectId', options.projectId);
+  }
+  if (options?.status) {
+    params.set('status', options.status);
+  }
+  return params;
+};
+
+export const listContracts = (options?: {
+  projectId?: string;
+  status?: ContractStatus;
+  page?: number;
+  pageSize?: number;
+}): Promise<Paginated<ContractListRow>> => {
+  const params = contractListParams(options);
+  if (options?.page) {
+    params.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set('pageSize', String(options.pageSize));
+  }
+  const query = params.toString();
+  return apiFetch<Paginated<ContractListRow>>(`/contracts${query ? `?${query}` : ''}`);
+};
+
+export type ContractExportFormat = 'csv' | 'xlsx';
+
+/** GET /contracts?format=csv|xlsx with the same filters as listContracts —
+ *  the whole filtered set, not just the loaded page. */
+export const downloadContracts = (
+  format: ContractExportFormat,
+  options?: { projectId?: string; status?: ContractStatus },
+): Promise<void> => {
+  const params = contractListParams(options);
+  params.set('format', format);
+  return downloadDocument(`/contracts?${params.toString()}`, `contracts.${format}`);
+};
+
+export const getContract = (id: string): Promise<Contract> =>
+  apiFetch<Contract>(`/contracts/${id}`);
+
+/** DRAFT contracts only — the API 409s once the customer has signed. */
+export const updateContract = (
+  id: string,
+  payload: {
+    scopeOfWork?: string | null;
+    termsAndConditions?: string | null;
+    warrantyMonths?: number | null;
+  },
+): Promise<Contract> =>
+  apiFetch<Contract>(`/contracts/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+
+/** DRAFT -> SIGNED. `signedAt` is an ISO date; the API defaults it to today. */
+export const signContract = (id: string, signedAt?: string): Promise<Contract> =>
+  apiFetch<Contract>(`/contracts/${id}/sign`, {
+    method: 'POST',
+    body: JSON.stringify(signedAt ? { signedAt } : {}),
+  });
+
+/** A contract is never deleted — cancelling with a reason is the way out. */
+export const cancelContract = (id: string, reason: string): Promise<Contract> =>
+  apiFetch<Contract>(`/contracts/${id}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+
+export const downloadContractDocument = (
+  id: string,
+  contractNumber: string,
+  format: DocumentFormat,
+): Promise<void> =>
+  downloadDocument(
+    `/contracts/${id}/document?format=${format}`,
+    `contract-${contractNumber}.${format}`,
+  );
+
+/** Issue a DRAFT contract from an ISSUED proforma. 409 on a cancelled
+ *  proforma or one that already has a contract. */
+export const issueContractFromProforma = (
+  proformaId: string,
+): Promise<Contract> =>
+  apiFetch<Contract>(`/proformas/${proformaId}/contract`, { method: 'POST' });
+
+/* ---- contract payment schedule ------------------------------------- */
+
+export type ContractInstalmentStatus = 'PENDING' | 'INVOICED' | 'CANCELLED';
+
+export interface ContractInstalment {
+  id: string;
+  contractId: string;
+  sequence: number;
+  label: string;
+  dueDate: string | null;
+  amountEtb: string;
+  status: ContractInstalmentStatus;
+  invoiceId: string | null;
+}
+
+/** One row as the schedule editor sends it — `sequence` is the array order. */
+export interface ContractInstalmentInput {
+  label: string;
+  dueDate?: string;
+  amountEtb: string;
+}
+
+export const listContractInstalments = (
+  contractId: string,
+): Promise<ContractInstalment[]> =>
+  apiFetch<ContractInstalment[]>(`/contracts/${contractId}/instalments`);
+
+/**
+ * Replace the WHOLE schedule. There is no add-one endpoint: the instalments
+ * are numbered in agreed order and have to total the contract value as a
+ * set, so the list is the unit of change. DRAFT contracts only — the API
+ * rejects an edit once the customer has signed the schedule.
+ */
+export const setContractInstalments = (
+  contractId: string,
+  instalments: ContractInstalmentInput[],
+): Promise<ContractInstalment[]> =>
+  apiFetch<ContractInstalment[]>(`/contracts/${contractId}/instalments`, {
+    method: 'PUT',
+    body: JSON.stringify({ instalments }),
+  });
+
+/** Record the invoice actually raised for one instalment: PENDING -> INVOICED. */
+export const markContractInstalmentInvoiced = (
+  contractId: string,
+  instalmentId: string,
+  invoiceId: string,
+): Promise<ContractInstalment> =>
+  apiFetch<ContractInstalment>(
+    `/contracts/${contractId}/instalments/${instalmentId}/invoice`,
+    { method: 'POST', body: JSON.stringify({ invoiceId }) },
+  );
+
+/** The printed Payment Schedule for wet signing. PDF only. */
+export const downloadPaymentSchedule = (
+  contractId: string,
+  contractNumber: string,
+): Promise<void> =>
+  downloadDocument(
+    `/contracts/${contractId}/payment-schedule`,
+    `payment-schedule-${contractNumber}.pdf`,
+  );
+
+/**
+ * Record the handover of a SIGNED contract. The API moves the contract
+ * SIGNED -> COMPLETED and advances the project to COMPLETED in the same
+ * transaction, so a 409 here means the contract was not SIGNED (already
+ * handed over, still a draft, or cancelled).
+ */
+export const handoverContract = (
+  contractId: string,
+  payload: {
+    handedOverAt?: string;
+    handedOverToName: string;
+    handoverNotes?: string;
+  },
+): Promise<{ id: string; contractNumber: string; status: string }> =>
+  apiFetch(`/contracts/${contractId}/handover`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+/** The Completion Certificate for wet signing. PDF only; 409 until a handover is recorded. */
+export const downloadCompletionCertificate = (
+  contractId: string,
+  contractNumber: string,
+): Promise<void> =>
+  downloadDocument(
+    `/contracts/${contractId}/completion-certificate`,
+    `completion-certificate-${contractNumber}.pdf`,
+  );
+
+/** The Warranty Certificate. PDF only; 409 when the contract carries no warranty period. */
+export const downloadWarrantyCertificate = (
+  contractId: string,
+  contractNumber: string,
+): Promise<void> =>
+  downloadDocument(
+    `/contracts/${contractId}/warranty-certificate`,
+    `warranty-certificate-${contractNumber}.pdf`,
+  );

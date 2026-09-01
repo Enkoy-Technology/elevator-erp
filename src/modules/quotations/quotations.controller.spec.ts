@@ -25,6 +25,14 @@ describe('QuotationsController — role gating', () => {
     expect(roles).toBeUndefined();
   });
 
+  it('gates the technical proposal on the same class-level read roles', () => {
+    const roles = reflector.get<string[] | undefined>(
+      ROLES_KEY,
+      QuotationsController.prototype.technicalProposal,
+    );
+    expect(roles).toBeUndefined();
+  });
+
   it('leaves GET /quotations/:id open the same way, for comparison', () => {
     const roles = reflector.get<string[] | undefined>(
       ROLES_KEY,
@@ -153,4 +161,90 @@ describe('QuotationsController.document — format routing and filenames', () =>
     expect(pdfService.renderDocumentPdf).not.toHaveBeenCalled();
     expect(docxService.renderDocumentDocx).not.toHaveBeenCalled();
   });
+});
+
+describe('QuotationsController.technicalProposal', () => {
+  const user: AuthenticatedUser = {
+    userId: '11111111-1111-1111-1111-111111111111',
+    tenantId: '22222222-2222-2222-2222-222222222222',
+    role: 'TECHNICAL_LEAD',
+  };
+
+  const row = {
+    quoteNumber: 'QTN-2026-ABCD1234',
+    status: 'APPROVED',
+    createdAt: new Date('2026-07-22T00:00:00.000Z'),
+    validUntil: null,
+    customerName: 'Acme',
+    projectName: 'Bole Tower',
+    technicalSpec: { productType: 'PASSENGER', carHeightMm: 2300 },
+    calcInput: { productType: 'PASSENGER', stops: 8 },
+    pricingBreakdown: null,
+    subtotalEtb: '100000.00',
+    marginPercent: '25.00',
+    marginAmountEtb: '25000.00',
+    taxPercent: '15.00',
+    taxAmountEtb: '18750.00',
+    totalPriceEtb: '143750.00',
+    notes: null,
+  };
+
+  const quotationsService = { getDocumentData: jest.fn() };
+  const pdfService = { renderDocumentPdf: jest.fn() };
+  const docxService = { renderDocumentDocx: jest.fn() };
+  const tenantBranding = { get: jest.fn() };
+  const branding = { name: 'Enkoy', slogan: '', logoUrl: null, address: '', phones: [], primaryColor: '#123456' };
+  const res = { end: jest.fn() };
+
+  const controller = new QuotationsController(
+    quotationsService as unknown as QuotationsService,
+    pdfService as unknown as DocumentPdfService,
+    docxService,
+    tenantBranding as unknown as TenantBrandingProvider,
+  );
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    quotationsService.getDocumentData.mockResolvedValue(row);
+    tenantBranding.get.mockResolvedValue(branding);
+    pdfService.renderDocumentPdf.mockResolvedValue(Buffer.from('%PDF'));
+  });
+
+  it('renders the technical-proposal template and writes technical-proposal-<quoteNumber>.pdf headers', async () => {
+    await controller.technicalProposal(user, 'id', 'pdf', res as never);
+
+    expect(pdfService.renderDocumentPdf).toHaveBeenCalledWith(
+      'technical-proposal',
+      expect.objectContaining({
+        quoteNumber: 'QTN-2026-ABCD1234',
+        calcInput: { productType: 'PASSENGER', stops: 8 },
+      }),
+      branding,
+    );
+    expect(mockSetDownloadHeaders).toHaveBeenCalledWith(
+      res,
+      'technical-proposal-QTN-2026-ABCD1234',
+      'pdf',
+      'application/pdf',
+    );
+    expect(res.end).toHaveBeenCalledWith(Buffer.from('%PDF'));
+  });
+
+  it('never puts a price on the wire', async () => {
+    await controller.technicalProposal(user, 'id', 'pdf', res as never);
+
+    const [, data] = pdfService.renderDocumentPdf.mock.calls[0] as [string, Record<string, unknown>];
+    expect(Object.keys(data)).not.toContain('totalPriceEtb');
+    expect(Object.keys(data)).not.toContain('pricingBreakdown');
+  });
+
+  it.each(['docx', 'xlsx', 'csv', undefined])(
+    'rejects format=%s with a 400 before touching the service',
+    async (format) => {
+      await expect(
+        controller.technicalProposal(user, 'id', format, res as never),
+      ).rejects.toThrow(BadRequestException);
+      expect(quotationsService.getDocumentData).not.toHaveBeenCalled();
+    },
+  );
 });

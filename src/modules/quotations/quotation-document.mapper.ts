@@ -1,5 +1,6 @@
 import type { ColumnDef } from '../../common/export/tabular';
 import type { QuotationTemplateData } from '../../common/export/templates/quotation.template';
+import type { TechnicalProposalTemplateData } from '../../common/export/templates/technical-proposal.template';
 
 /**
  * The fields quotationDocumentData/QUOTATION_DOCUMENT_COLUMNS actually read
@@ -16,6 +17,12 @@ export interface QuotationDocumentRow {
   customerName: string | null;
   projectName: string | null;
   technicalSpec: unknown;
+  /**
+   * The stored calc inputs. Optional only so the existing document fixtures
+   * (which never needed it) still satisfy this shape — the joined row from
+   * QuotationsRepository.findByIdForDocument always carries the column.
+   */
+  calcInput?: unknown;
   pricingBreakdown: unknown;
   subtotalEtb: string;
   marginPercent: string;
@@ -49,6 +56,24 @@ export const quotationDocumentData = (q: QuotationDocumentRow): QuotationTemplat
   taxAmountEtb: q.taxAmountEtb,
   totalPriceEtb: q.totalPriceEtb,
   notes: q.notes,
+});
+
+/**
+ * Maps the same row to the standalone technical proposal / technical
+ * specification sheet. Deliberately passes NOTHING priced: that document goes
+ * to consultants and building owners, and the commercial terms are the
+ * quotation's business.
+ */
+export const technicalProposalData = (
+  q: QuotationDocumentRow,
+): TechnicalProposalTemplateData => ({
+  quoteNumber: q.quoteNumber,
+  status: q.status,
+  createdAt: q.createdAt,
+  customerName: q.customerName ?? '',
+  projectName: q.projectName ?? '',
+  technicalSpec: q.technicalSpec as Record<string, unknown> | null,
+  calcInput: (q.calcInput ?? null) as Record<string, unknown> | null,
 });
 
 /**

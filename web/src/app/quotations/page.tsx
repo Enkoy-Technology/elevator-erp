@@ -23,8 +23,10 @@ import {
   cancelProforma,
   convertProformaToInvoice,
   convertQuotationToProforma,
+  issueContractFromProforma,
   downloadProformaDocument,
   downloadQuotationDocument,
+  downloadQuotationTechnicalProposal,
   printProformaDocument,
   printQuotationDocument,
   expireQuotation,
@@ -94,6 +96,21 @@ const PROFORMA_FILTERS: readonly ProformaStatus[] = ['ISSUED', 'CANCELLED'];
  * table's overflow container would be clipped on the last rows, and the
  * native picker is keyboard- and screen-reader-correct for free.
  */
+/**
+ * The quote row's Download… menu is not just formats of one document: the
+ * technical proposal is its own PDF (no docx/xlsx renderer), so it rides in
+ * the same control rather than adding a fifth button to the row.
+ */
+const QUOTE_DOWNLOADS = ['pdf', 'docx', 'xlsx', 'technical-proposal'] as const;
+type QuoteDownload = (typeof QUOTE_DOWNLOADS)[number];
+
+const PROFORMA_DOWNLOADS: readonly DocumentFormat[] = ['pdf', 'docx', 'xlsx'];
+
+/** Entries that are a document, not a format — the rest render as PDF/DOCX/XLSX. */
+const DOWNLOAD_LABELS: Record<string, string> = {
+  'technical-proposal': 'Technical proposal (PDF)',
+};
+
 const DownloadSelect = <T extends string>({
   formats,
   disabled,
@@ -120,7 +137,7 @@ const DownloadSelect = <T extends string>({
     <option value="">Download…</option>
     {formats.map((format) => (
       <option key={format} value={format}>
-        {format.toUpperCase()}
+        {DOWNLOAD_LABELS[format] ?? format.toUpperCase()}
       </option>
     ))}
   </select>
@@ -413,11 +430,32 @@ export default function QuotationsPage() {
     }
   };
 
-  const onDownloadQuote = async (quote: Quotation, format: DocumentFormat) => {
+  /**
+   * The other half of an ISSUED proforma: the invoice bills it, the
+   * contract is what the parties sign. One contract per proforma — the API
+   * 409s on a second, so this is not gated on `convertedIds` (which only
+   * tracks this session's invoice conversions).
+   */
+  const onIssueContract = async (proforma: Proforma) => {
+    setBusyId(proforma.id);
+    setError(null);
+    try {
+      await issueContractFromProforma(proforma.id);
+      router.push('/contracts');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Action failed');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const onDownloadQuote = async (quote: Quotation, choice: QuoteDownload) => {
     setBusyId(quote.id);
     setError(null);
     try {
-      await downloadQuotationDocument(quote.id, quote.quoteNumber, format);
+      await (choice === 'technical-proposal'
+        ? downloadQuotationTechnicalProposal(quote.id, quote.quoteNumber)
+        : downloadQuotationDocument(quote.id, quote.quoteNumber, choice));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Download failed');
     } finally {
@@ -500,11 +538,12 @@ export default function QuotationsPage() {
     );
   };
 
-  const renderDocumentActions = (
+  const renderDocumentActions = <T extends string>(
     busy: boolean,
-    onPick: (format: DocumentFormat) => void,
+    onPick: (choice: T) => void,
     onPrint: () => void,
     label: string,
+    formats: readonly T[],
   ) => (
     <>
       <button
@@ -517,7 +556,7 @@ export default function QuotationsPage() {
         Print
       </button>
       <DownloadSelect
-        formats={['pdf', 'docx', 'xlsx'] as const}
+        formats={formats}
         disabled={busy}
         onPick={onPick}
         label={label}
@@ -561,9 +600,10 @@ export default function QuotationsPage() {
         ) : null}
         {renderDocumentActions(
           busy,
-          (format) => void onDownloadQuote(quote, format),
+          (choice) => void onDownloadQuote(quote, choice),
           () => void onPrintQuote(quote),
           `Download ${quote.quoteNumber}`,
+          QUOTE_DOWNLOADS,
         )}
         {/* Destructive actions sit last, in the same place on every list.
             Reject already prompts for a mandatory reason, which IS its
@@ -626,11 +666,22 @@ export default function QuotationsPage() {
             → Invoice
           </button>
         ) : null}
+        {canMutate && proforma.status === 'ISSUED' ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void onIssueContract(proforma)}
+            className={`${btnSecondary} px-2.5 py-1 text-xs`}
+          >
+            → Contract
+          </button>
+        ) : null}
         {renderDocumentActions(
           busy,
           (format) => void onDownloadProforma(proforma, format),
           () => void onPrintProforma(proforma),
           `Download ${proforma.proformaNumber}`,
+          PROFORMA_DOWNLOADS,
         )}
         {/* Cancel is a proforma's destructive equivalent — a proforma is
             never deleted. Its reason prompt is the confirmation step. */}

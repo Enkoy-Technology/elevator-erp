@@ -29,6 +29,7 @@ export const FormPage = ({
   backLabel,
   error,
   submitting = false,
+  submitDisabled = false,
   submitLabel,
   onSubmit,
   children,
@@ -42,6 +43,9 @@ export const FormPage = ({
   backLabel: string;
   error?: string | null;
   submitting?: boolean;
+  /** Locked record: Save is dead, Cancel still works. Unlike `submitting`,
+   *  which means a save is in flight and disables both. */
+  submitDisabled?: boolean;
   submitLabel: string;
   onSubmit: (event: FormEvent) => void;
   children: ReactNode;
@@ -92,7 +96,11 @@ export const FormPage = ({
               bottom of a long form — the one thing the overlay drawer did
               well, kept. */}
           <div className="sticky bottom-0 mt-8 flex max-w-2xl flex-wrap items-center gap-3 border-t border-slate-200 bg-slate-100/95 py-4 backdrop-blur">
-            <button type="submit" disabled={submitting} className={btnPrimary}>
+            <button
+              type="submit"
+              disabled={submitting || submitDisabled}
+              className={btnPrimary}
+            >
               {submitting ? 'Saving…' : submitLabel}
             </button>
             <button

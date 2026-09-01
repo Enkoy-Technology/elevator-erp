@@ -7,6 +7,7 @@ import { Field, FormPage, FormSection } from '@/components/form-page';
 import { fieldClass } from '@/components/form-styles';
 import {
   ApiError,
+  downloadMaintenanceReport,
   getAccessToken,
   listAssets,
   listMaintenanceContracts,
@@ -44,6 +45,9 @@ export default function LogServiceVisitPage() {
   const [contract, setContract] = useState<MaintenanceContract | null>(null);
   const [assetName, setAssetName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [inspectionResults, setInspectionResults] = useState('');
+  const [partsReplaced, setPartsReplaced] = useState('');
+  const [recommendations, setRecommendations] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -89,7 +93,17 @@ export default function LogServiceVisitPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await logServiceVisit(contract.id, { notes: notes || undefined });
+      const { visit } = await logServiceVisit(contract.id, {
+        notes: notes || undefined,
+        inspectionResults: inspectionResults || undefined,
+        partsReplaced: partsReplaced || undefined,
+        recommendations: recommendations || undefined,
+      });
+      // The report is what the customer signs, so it is fetched right after
+      // the visit is stored. A failed download must not look like a failed
+      // visit — the visit is already committed — so it is swallowed here and
+      // the report stays downloadable from the API.
+      await downloadMaintenanceReport(visit.id).catch(() => undefined);
       router.push('/maintenance');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to log visit');
@@ -111,22 +125,51 @@ export default function LogServiceVisitPage() {
       backLabel="Maintenance"
       error={error}
       submitting={submitting}
-      submitLabel="Log visit"
+      submitLabel="Log visit & download report"
       onSubmit={(event) => void onSubmit(event)}
     >
       <FormSection title="Visit">
         {loading ? (
           <p className="text-sm text-slate-500 sm:col-span-2">Loading…</p>
         ) : contract ? (
-          <Field label="Notes" htmlFor="visitNotes" wide>
-            <textarea
-              id="visitNotes"
-              className={fieldClass}
-              rows={4}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </Field>
+          <>
+            <Field label="Inspection results" htmlFor="inspectionResults" wide>
+              <textarea
+                id="inspectionResults"
+                className={fieldClass}
+                rows={4}
+                value={inspectionResults}
+                onChange={(e) => setInspectionResults(e.target.value)}
+              />
+            </Field>
+            <Field label="Parts replaced" htmlFor="partsReplaced" wide>
+              <textarea
+                id="partsReplaced"
+                className={fieldClass}
+                rows={3}
+                value={partsReplaced}
+                onChange={(e) => setPartsReplaced(e.target.value)}
+              />
+            </Field>
+            <Field label="Recommendations" htmlFor="recommendations" wide>
+              <textarea
+                id="recommendations"
+                className={fieldClass}
+                rows={3}
+                value={recommendations}
+                onChange={(e) => setRecommendations(e.target.value)}
+              />
+            </Field>
+            <Field label="Notes" htmlFor="visitNotes" wide>
+              <textarea
+                id="visitNotes"
+                className={fieldClass}
+                rows={3}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </Field>
+          </>
         ) : (
           <p className="text-sm text-slate-500 sm:col-span-2">
             Nothing to log against. Go back to Maintenance and pick a contract
