@@ -25,11 +25,15 @@ import {
 import {
   customers,
   documentSequences,
+  proformaLines,
   proformas,
   projects,
+  quotationLines,
+  quotationPaymentTerms,
   quotations,
   rateVersions,
   tenants,
+  type ProformaPaymentTerm,
   type ProformaStatus,
 } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
@@ -39,6 +43,7 @@ import { buildProformaNumber } from './proforma-number';
 
 export type ProformaRecord = typeof proformas.$inferSelect;
 export type ProformaInsert = typeof proformas.$inferInsert;
+export type ProformaLineRecord = typeof proformaLines.$inferSelect;
 
 /** `document_sequences.kind` for this document type — see the table's own doc comment. */
 const PROFORMA_SEQUENCE_KIND = 'PROFORMA';
@@ -140,7 +145,19 @@ export class ProformasRepository {
         .from(proformas)
         .where(eq(proformas.id, id))
         .limit(1);
-      return rows[0] ?? null;
+      const row = rows[0];
+      if (!row) {
+        return null;
+      }
+      // The lines snapshotted at issue time. A proforma issued before line
+      // items existed has none, and the template falls back to the single
+      // line its header implies.
+      const lines = await tx
+        .select()
+        .from(proformaLines)
+        .where(eq(proformaLines.proformaId, id))
+        .orderBy(asc(proformaLines.sequence));
+      return { ...row, lines };
     });
   }
 
@@ -298,39 +315,45 @@ export class ProformasRepository {
         claimed.lastValue,
       );
 
-      // 4. Insert the immutable snapshot. subtotalEtb is the TAXABLE BASE —
-      // NOT the quotation's pre-margin subtotalEtb, and NOT
-      // quote.subtotalEtb + quote.marginAmountEtb either: those are two
-      // INDEPENDENTLY-ROUNDED 2dp columns, and summing them can be off by a
-      // cent from the full-precision figure VAT was actually computed on
-      // (e.g. a true subtotal-with-margin of 126.014 rounds subtotal
-      // 100.00 + margin 26.01 = 126.01, while 100.00 + 26.01 itself can
-      // land a cent either side of that once each addend was independently
-      // rounded first). The one value guaranteed to match what VAT was
-      // computed from is quote.pricingBreakdown.subtotalWithMargin itself
-      // — see ElevatorCalcService.calculateSpecs (money(subtotalWithMargin),
-      // the single rounding point) and QuotationsService.createForProject
-      // (taxAmount = D(pricing.subtotalWithMargin).mul(vatPercent).div(100))
-      // — so subtotalEtb is copied from there, not re-derived. That's what
-      // makes subtotalEtb + vatEtb = totalEtb hold: same source value,
-      // never re-summed from already-rounded parts.
-      const subtotalWithMargin = (quote.pricingBreakdown as Record<string, unknown> | null)
-        ?.subtotalWithMargin;
-      if (typeof subtotalWithMargin !== 'string') {
-        throw new Error(
-          `Quotation ${quote.id} has no pricingBreakdown.subtotalWithMargin — cannot issue a proforma without the value VAT was computed from`,
-        );
-      }
-      let subtotalEtb: string;
-      try {
-        subtotalEtb = new Decimal(subtotalWithMargin)
-          .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
-          .toFixed(2);
-      } catch {
-        throw new Error(
-          `Quotation ${quote.id}'s pricingBreakdown.subtotalWithMargin is not a valid decimal: ${JSON.stringify(subtotalWithMargin)}`,
-        );
-      }
+      // 4. Insert the immutable snapshot. subtotalEtb is the TAXABLE BASE,
+      // and it is derived by SUBTRACTION — total minus VAT — for the same
+      // reason quote-pricing.ts's deriveFromGrandTotal subtracts rather than
+      // recomputes: subtraction is the only rule that makes
+      // `subtotalEtb + vatEtb === totalEtb` hold to the cent for every
+      // quotation, and those three figures are what the customer reads.
+      //
+      // It is NOT the quotation's own `subtotalEtb` column (pre-margin on an
+      // un-negotiated quote) and NOT `subtotalEtb + marginAmountEtb` (two
+      // independently-rounded 2dp columns, which can land a cent either side
+      // of the full-precision base VAT was computed on).
+      //
+      // It was `pricingBreakdown.subtotalWithMargin` until the negotiated
+      // pricing landed, and that is now WRONG: QuotationsService.
+      // priceFromGrandTotal rewrites the header's subtotal/tax/total from
+      // the agreed round grand total but leaves `pricingBreakdown` holding
+      // the CALCULATOR's original figures, so a negotiated quotation would
+      // have issued a proforma whose taxable base was the pre-discount one
+      // — 686,500 ETB adrift on the client's own document, with
+      // subtotal + VAT no longer equal to total. Subtraction is right in
+      // both cases: on an un-negotiated quote `totalPriceEtb - taxAmountEtb`
+      // is exactly `money(subtotalWithMargin)` (createForProject adds an
+      // already-2dp subtotal to the tax before rounding, so the rounding
+      // commutes), and on a negotiated one it is exactly the `subtotalEtb`
+      // deriveFromGrandTotal wrote. Both columns are NOT NULL numeric(14,2),
+      // so the subtraction is exact and cannot fail to parse.
+      const subtotalEtb = new Decimal(quote.totalPriceEtb)
+        .minus(quote.taxAmountEtb)
+        .toFixed(2);
+
+      // The payment schedule as the offer stated it, read here and stored as
+      // a jsonb snapshot on the proforma row (see proformas.paymentTerms for
+      // why it is not a mirror table). `[]` when the quotation stated none —
+      // distinct from the NULL a pre-terms proforma carries.
+      const terms = await tx
+        .select()
+        .from(quotationPaymentTerms)
+        .where(eq(quotationPaymentTerms.quotationId, quote.id))
+        .orderBy(asc(quotationPaymentTerms.sequence));
 
       const [row] = await tx
         .insert(proformas)
@@ -347,6 +370,23 @@ export class ProformasRepository {
           rateVersionId: quote.rateVersionId,
           technicalSpec: quote.technicalSpec,
           pricingBreakdown: quote.pricingBreakdown,
+          // Commercial terms: copied, never joined. The discount columns
+          // (calculatedTotalEtb / discountAmountEtb / discountPercent) are
+          // deliberately NOT copied — `proformas` has no columns for them
+          // and this document goes to the customer.
+          referenceCode: quote.referenceCode,
+          deliveryDays: quote.deliveryDays,
+          warrantyPartsMonths: quote.warrantyPartsMonths,
+          warrantyFreeServiceMonths: quote.warrantyFreeServiceMonths,
+          validityDays: quote.validityDays,
+          paymentTerms: terms.map(
+            (term): ProformaPaymentTerm => ({
+              sequence: term.sequence,
+              label: term.label,
+              percent: term.percent,
+              triggerEvent: term.triggerEvent,
+            }),
+          ),
           issuedByUserId: userId,
           validUntil,
           status: 'ISSUED',
@@ -354,6 +394,33 @@ export class ProformasRepository {
         .returning();
       if (!row) {
         throw new Error('Failed to insert proforma');
+      }
+
+      // 4b. Copy every quotation line onto the proforma, in the same
+      // transaction and in the same print order. Verbatim: spreading the
+      // source row is what keeps the two shapes from drifting as columns are
+      // added (the shared `lineColumns` builder in document-lines.ts exists
+      // for the same reason). Only identity is re-minted — a new `id`, this
+      // proforma's `proformaId`, fresh timestamps. A quotation written
+      // before `quotation_lines` existed has none, and gets the line
+      // `listLines` synthesizes from this row's own header snapshot instead.
+      const sourceLines = await tx
+        .select()
+        .from(quotationLines)
+        .where(eq(quotationLines.quotationId, quote.id))
+        .orderBy(asc(quotationLines.sequence));
+      if (sourceLines.length > 0) {
+        await tx.insert(proformaLines).values(
+          sourceLines.map(
+            ({
+              id: _id,
+              quotationId: _quotationId,
+              createdAt: _createdAt,
+              updatedAt: _updatedAt,
+              ...line
+            }) => ({ ...line, tenantId, proformaId: row.id }),
+          ),
+        );
       }
 
       // 5. The project's stage follows the work: issuing the proforma IS the

@@ -17,17 +17,16 @@ const quoteRow = {
   id: QUOTE_ID,
   projectId: PROJECT_ID,
   customerId: CUSTOMER_ID,
+  // Self-consistent by construction: 100.00 base + 20.00 margin = 120.00
+  // ex-VAT, 15% of which is 18.00, giving 138.00. The proforma's subtotal is
+  // derived as totalPriceEtb - taxAmountEtb, so a fixture whose columns did
+  // not add up could not tell a correct derivation from a broken one.
   subtotalEtb: '100.00',
   marginAmountEtb: '20.00',
-  taxAmountEtb: '15.00',
-  totalPriceEtb: '115.00',
+  taxAmountEtb: '18.00',
+  totalPriceEtb: '138.00',
   rateVersionId: RATE_VERSION_ID,
   technicalSpec: { capacityPersons: 13 },
-  // subtotalWithMargin is the value subtotalEtb is actually copied from
-  // (see issue()'s doc comment) — deliberately equal to
-  // subtotalEtb + marginAmountEtb here (100.00 + 20.00) so this fixture
-  // can't hide a regression to the old "sum two rounded columns" logic;
-  // the fractional-remainder test below is what actually distinguishes them.
   pricingBreakdown: { baseCost: '80.00', subtotalWithMargin: '120.00' },
 };
 
@@ -40,13 +39,41 @@ const makeUpdateChain = (returning: unknown[]) => {
   return chain;
 };
 
-/** Wires a fake `select().from().where().orderBy().limit()` chain (orderBy is optional in the real call chain, but always chainable here). */
+/**
+ * Wires a fake `select().from().where().orderBy().limit()` chain (orderBy is
+ * optional in the real call chain, but always chainable here).
+ *
+ * The chain is THENABLE, because Drizzle's query builder is: a query that
+ * ends at `.orderBy()` is awaited directly, with no `.limit()` to hang the
+ * promise off. The payment-terms read in `issue()` is exactly that shape,
+ * and without `then` here it awaited to the chain object itself and failed
+ * with "terms.map is not a function".
+ */
 const makeSelectChain = (rows: unknown[]) => {
-  const chain: Record<string, jest.Mock> = {};
+  const chain: Record<string, jest.Mock> & {
+    then?: (onFulfilled: (rows: unknown[]) => unknown) => Promise<unknown>;
+  } = {};
   chain.from = jest.fn(() => chain);
   chain.where = jest.fn(() => chain);
   chain.orderBy = jest.fn(() => chain);
   chain.limit = jest.fn(() => Promise.resolve(rows));
+  chain.then = (onFulfilled) => Promise.resolve(rows).then(onFulfilled);
+  return chain;
+};
+
+/**
+ * Wires the `insert(proformaLines).values([...])` bulk copy, which is awaited
+ * directly with no `.returning()` — hence thenable, like the real builder.
+ */
+const makeLinesInsertChain = (onValues: (v: unknown) => void = () => {}) => {
+  const chain: Record<string, jest.Mock> & {
+    then?: (onFulfilled: (v: unknown) => unknown) => Promise<unknown>;
+  } = {};
+  chain.values = jest.fn((v: unknown) => {
+    onValues(v);
+    return chain;
+  });
+  chain.then = (onFulfilled) => Promise.resolve(undefined).then(onFulfilled);
   return chain;
 };
 
@@ -95,7 +122,9 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
     const insert = jest
       .fn()
       .mockReturnValueOnce(seqChain)
-      .mockReturnValueOnce(proformaChain);
+      .mockReturnValueOnce(proformaChain)
+      // 3rd insert: the proforma_lines copy of the quotation's lines.
+      .mockReturnValue(makeLinesInsertChain());
     const withTenant = jest.fn(
       async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
         fn({ update, select, insert }),
@@ -104,14 +133,16 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
 
     await repo.issue(TENANT_ID, USER_ID, QUOTE_ID, null);
 
-    // Money snapshot: subtotalEtb is the TAXABLE BASE, copied from
-    // pricingBreakdown.subtotalWithMargin (not summed from
-    // subtotalEtb + marginAmountEtb — see the fractional-remainder test
-    // below for why that distinction matters). vatEtb/totalEtb map
-    // straight from the quotation's own names (taxAmountEtb/totalPriceEtb).
+    // Money snapshot: subtotalEtb is the TAXABLE BASE, derived as
+    // totalPriceEtb - taxAmountEtb rather than read off
+    // pricingBreakdown.subtotalWithMargin. On an un-negotiated quotation the
+    // two agree; on a negotiated one only the subtraction is right, because
+    // subtotalWithMargin still holds the pre-negotiation figure (see the
+    // negotiated-quotation test below). vatEtb/totalEtb map straight from
+    // the quotation's own names (taxAmountEtb/totalPriceEtb).
     expect(insertedProforma.subtotalEtb).toBe('120.00');
-    expect(insertedProforma.vatEtb).toBe('15.00');
-    expect(insertedProforma.totalEtb).toBe('115.00');
+    expect(insertedProforma.vatEtb).toBe('18.00');
+    expect(insertedProforma.totalEtb).toBe('138.00');
     expect(insertedProforma.rateVersionId).toBe(RATE_VERSION_ID);
     expect(insertedProforma.projectId).toBe(PROJECT_ID);
     expect(insertedProforma.customerId).toBe(CUSTOMER_ID);
@@ -189,13 +220,13 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
     ).rejects.toBeInstanceOf(WorkflowTransitionError);
   });
 
-  it('copies subtotalEtb from pricingBreakdown.subtotalWithMargin, not from summing subtotalEtb+marginAmountEtb — reviewer counterexample: 100.00 + 26.00 = 126.00, but the real taxable base VAT was computed on is 126.01', async () => {
+  it('derives subtotalEtb as total minus VAT, never by summing subtotalEtb+marginAmountEtb — counterexample: 100.00 + 26.00 = 126.00, but the real taxable base is 126.01', async () => {
     // subtotalEtb (100.00) + marginAmountEtb (26.00) — two independently
     // rounded 2dp columns — sum to 126.00, a cent short of the real,
     // full-precision taxable base (126.01) VAT was actually computed from.
-    // If subtotalEtb were re-derived by summing those two columns instead
-    // of copied from subtotalWithMargin, 126.00 + 18.90 (vatEtb) would
-    // equal 144.90, not the quotation's own totalPriceEtb of 144.91.
+    // Deriving as totalPriceEtb - taxAmountEtb (144.91 - 18.90) recovers
+    // 126.01 exactly; summing the two rounded columns would print 126.00
+    // and leave the customer's document a cent out of balance.
     const fractionalQuoteRow = {
       ...quoteRow,
       subtotalEtb: '100.00',
@@ -218,7 +249,8 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
       .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
       .mockReturnValueOnce(
         makeProformaInsertChain((v) => (insertedProforma = v), [{ id: 'pf-1' }]),
-      );
+      )
+      .mockReturnValue(makeLinesInsertChain());
     const withTenant = jest.fn(
       async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
         fn({ update, select, insert }),
@@ -237,56 +269,53 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
     ).toBe(insertedProforma.totalEtb);
   });
 
-  it('throws when the quotation has no pricingBreakdown.subtotalWithMargin at all', async () => {
-    const update = jest.fn(() =>
-      makeUpdateChain([{ ...quoteRow, pricingBreakdown: { baseCost: '80.00' } }]),
-    );
+  it('carries the NEGOTIATED figures, not the pre-negotiation subtotalWithMargin', async () => {
+    // The whole reason subtotalEtb is derived rather than copied. A sales
+    // manager quoted a round 7,835,000.00 against a calculator that said
+    // 8,521,500.00, so pricingBreakdown still holds the stale, higher
+    // subtotalWithMargin. Copying it would issue the customer a proforma
+    // whose ex-VAT line disagrees with the total they actually agreed.
+    const negotiated = {
+      ...quoteRow,
+      taxAmountEtb: '1021956.52',
+      totalPriceEtb: '7835000.00',
+      pricingBreakdown: { subtotalWithMargin: '7410000.00' },
+    };
+    const update = jest.fn(() => makeUpdateChain([negotiated]));
     const select = jest
       .fn()
       .mockReturnValueOnce(makeSelectChain([{ id: RATE_VERSION_ID }]))
       .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
-      // 3rd select: autoAdvanceProject reading the project's current stage,
-      // inside this same transaction (QUOTATION -> PROFORMA).
       .mockReturnValue(makeSelectChain([{ status: 'QUOTATION' }]));
-    // The documentSequences claim (step 3) runs before the subtotalEtb
-    // derivation (step 4) that's actually under test here, so it still
-    // needs a working insert chain — only the proforma insert (step 4)
-    // never gets reached.
-    const insert = jest.fn(() => makeSeqInsertChain([{ lastValue: 1 }]));
-    const withTenant = jest.fn(
-      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
-        fn({ update, select, insert }),
-    );
-    const repo = new ProformasRepository({ withTenant } as never);
-
-    await expect(repo.issue(TENANT_ID, USER_ID, QUOTE_ID, null)).rejects.toThrow(
-      /subtotalWithMargin/,
-    );
-  });
-
-  it('throws when pricingBreakdown.subtotalWithMargin is not a valid decimal', async () => {
-    const update = jest.fn(() =>
-      makeUpdateChain([
-        { ...quoteRow, pricingBreakdown: { subtotalWithMargin: 'not-a-number' } },
-      ]),
-    );
-    const select = jest
+    let insertedProforma: Record<string, unknown> = {};
+    const insert = jest
       .fn()
-      .mockReturnValueOnce(makeSelectChain([{ id: RATE_VERSION_ID }]))
-      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
-      // 3rd select: autoAdvanceProject reading the project's current stage,
-      // inside this same transaction (QUOTATION -> PROFORMA).
-      .mockReturnValue(makeSelectChain([{ status: 'QUOTATION' }]));
-    const insert = jest.fn(() => makeSeqInsertChain([{ lastValue: 1 }]));
+      .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
+      .mockReturnValueOnce(
+        makeProformaInsertChain((v) => (insertedProforma = v), [{ id: 'pf-1' }]),
+      )
+      .mockReturnValue(makeLinesInsertChain());
     const withTenant = jest.fn(
       async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
         fn({ update, select, insert }),
     );
-    const repo = new ProformasRepository({ withTenant } as never);
 
-    await expect(repo.issue(TENANT_ID, USER_ID, QUOTE_ID, null)).rejects.toThrow(
-      /not a valid decimal/,
+    await new ProformasRepository({ withTenant } as never).issue(
+      TENANT_ID,
+      USER_ID,
+      QUOTE_ID,
+      null,
     );
+
+    expect(insertedProforma.subtotalEtb).toBe('6813043.48');
+    expect(insertedProforma.vatEtb).toBe('1021956.52');
+    expect(insertedProforma.totalEtb).toBe('7835000.00');
+    // The invariant an auditor checks, on the customer's own copy.
+    expect(
+      new Decimal(insertedProforma.subtotalEtb as string)
+        .plus(insertedProforma.vatEtb as string)
+        .toFixed(2),
+    ).toBe(insertedProforma.totalEtb);
   });
 });
 
@@ -437,7 +466,8 @@ describe('ProformasRepository.issue — project stage auto-advance', () => {
       .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
       .mockReturnValueOnce(
         makeProformaInsertChain(() => {}, [{ id: 'pf-1', projectId: PROJECT_ID }]),
-      );
+      )
+      .mockReturnValue(makeLinesInsertChain());
     const withTenant = jest.fn(
       async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
         fn({ update, select, insert }),

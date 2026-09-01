@@ -23,6 +23,7 @@ import { todayIso } from '../../common/business-time';
 import { CurrentUser, Roles } from '../../common/decorators';
 import { parseDocumentFormat } from '../../common/export/document-format';
 import { DocumentDocxService } from '../../common/export/document-docx.service';
+import { DocumentContentProvider } from '../../common/export/document-content.provider';
 import { DocumentPdfService } from '../../common/export/document-pdf.service';
 import { parseExportFormat } from '../../common/export/export-query.dto';
 import {
@@ -70,6 +71,7 @@ export class ProformasController {
     private readonly pdfService: DocumentPdfService,
     private readonly docxService: DocumentDocxService,
     private readonly tenantBranding: TenantBrandingProvider,
+    private readonly documentContent: DocumentContentProvider,
   ) {}
 
   @Post('quotations/:id/convert-to-proforma')
@@ -174,8 +176,13 @@ export class ProformasController {
       return;
     }
 
-    const branding = await this.tenantBranding.get(user.tenantId);
-    const data = proformaDocumentData(row);
+    // Branding and appendix content are independent reads — issue them
+    // together rather than paying two round trips in series.
+    const [branding, content] = await Promise.all([
+      this.tenantBranding.get(user.tenantId),
+      this.documentContent.get(user.tenantId),
+    ]);
+    const data = proformaDocumentData(row, content);
     if (format === 'pdf') {
       const buf = await this.pdfService.renderDocumentPdf('proforma', data, branding);
       setDownloadHeaders(res, filename, 'pdf', 'application/pdf');

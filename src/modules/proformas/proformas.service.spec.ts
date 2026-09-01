@@ -25,6 +25,15 @@ describe('ProformasService', () => {
     rateVersionId: '77777777-7777-7777-7777-777777777777',
     technicalSpec: { capacityPersons: 13 },
     pricingBreakdown: { baseCost: '80.00' },
+    // Commercial terms snapshotted at issue time. Null here: this fixture
+    // predates them, which is exactly the pre-terms proforma the document
+    // renderer must still handle.
+    referenceCode: null,
+    deliveryDays: null,
+    warrantyPartsMonths: null,
+    warrantyFreeServiceMonths: null,
+    validityDays: null,
+    paymentTerms: null,
     issuedAt: new Date('2026-08-08T00:00:00.000Z'),
     issuedByUserId: user.userId,
     validUntil: null,

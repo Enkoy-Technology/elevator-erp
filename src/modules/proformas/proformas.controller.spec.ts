@@ -1,3 +1,5 @@
+import type { DocumentAppendixContent } from '../../common/export/templates/commercial-document';
+import type { DocumentContentProvider } from '../../common/export/document-content.provider';
 import { BadRequestException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
@@ -60,6 +62,14 @@ describe('ProformasController.document — format routing and filenames', () => 
   const pdfService = { renderDocumentPdf: jest.fn() };
   const docxService = { renderDocumentDocx: jest.fn() };
   const tenantBranding = { get: jest.fn() };
+  // Pages 3+ of the document. An empty appendix is the realistic default for
+  // a tenant that has not filled its boilerplate in yet.
+  const documentContent = {
+    get: jest.fn<Promise<DocumentAppendixContent>, [string]>(async () => ({
+      boilerplate: [],
+      components: [],
+    })),
+  };
   const branding = { name: 'Enkoy', slogan: '', logoUrl: null, address: '', phones: [], primaryColor: '#123456' };
 
   const res = { end: jest.fn() };
@@ -69,6 +79,7 @@ describe('ProformasController.document — format routing and filenames', () => 
     pdfService as unknown as DocumentPdfService,
     docxService,
     tenantBranding as unknown as TenantBrandingProvider,
+    documentContent as unknown as DocumentContentProvider,
   );
 
   beforeEach(() => {

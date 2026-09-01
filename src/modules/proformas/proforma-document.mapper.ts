@@ -1,6 +1,12 @@
 import type { ColumnDef } from '../../common/export/tabular';
+import type {
+  DocumentAppendixContent,
+  DocumentLineData,
+  PaymentTermData,
+} from '../../common/export/templates/commercial-document';
 import { vatPercentLabel } from '../../common/export/templates/money-format';
 import type { ProformaTemplateData } from '../../common/export/templates/proforma.template';
+import { describeFloorPlan } from '../../common/floor-plan';
 
 /**
  * The fields proformaDocumentData/PROFORMA_DOCUMENT_COLUMNS actually read —
@@ -18,6 +24,27 @@ import type { ProformaTemplateData } from '../../common/export/templates/proform
  * renders technicalSpec; pricingBreakdown stays available as an internal
  * audit trail for Phase 4.
  */
+export interface ProformaLineRow {
+  sequence: number;
+  productType: string;
+  specSummary: string | null;
+  quantity: number;
+  unitPriceEtb: string | null;
+  lineTotalEtb: string | null;
+  machineRoomLabel: string | null;
+  floorLabels: string | null;
+  floorDisplaySummary: string | null;
+  doorHeightMm: number | null;
+  ropingRatio: string | null;
+  tractionMachineType: string | null;
+  controlSystem: string | null;
+  powerSupply: string | null;
+  lightSupply: string | null;
+  entranceCount: number | null;
+  calcInput: unknown;
+  technicalSpec: unknown;
+}
+
 export interface ProformaDocumentRow {
   proformaNumber: string;
   status: string;
@@ -29,7 +56,40 @@ export interface ProformaDocumentRow {
   subtotalEtb: string;
   vatEtb: string;
   totalEtb: string;
+  /** Snapshotted at issue time. Absent on a pre-lines proforma. */
+  lines?: readonly ProformaLineRow[];
+  /** jsonb snapshot of the quotation's schedule. Null on a pre-terms proforma. */
+  paymentTerms?: readonly PaymentTermData[] | null;
+  referenceCode?: string | null;
+  deliveryDays?: number | null;
+  warrantyPartsMonths?: number | null;
+  warrantyFreeServiceMonths?: number | null;
+  validityDays?: number | null;
 }
+
+/** Mirrors quotation-document.mapper's documentLine — same printed shape. */
+const documentLine = (line: ProformaLineRow): DocumentLineData => {
+  const plan = describeFloorPlan(line.floorLabels, line.entranceCount);
+  return {
+    sequence: line.sequence,
+    productType: line.productType,
+    specSummary: line.specSummary,
+    quantity: line.quantity,
+    unitPriceEtb: line.unitPriceEtb,
+    lineTotalEtb: line.lineTotalEtb,
+    machineRoomLabel: line.machineRoomLabel,
+    floorDisplaySummary: line.floorDisplaySummary ?? plan?.displaySummary ?? null,
+    floorsStopsDoors: plan?.floorsStopsDoors ?? null,
+    doorHeightMm: line.doorHeightMm,
+    ropingRatio: line.ropingRatio,
+    tractionMachineType: line.tractionMachineType,
+    controlSystem: line.controlSystem,
+    powerSupply: line.powerSupply,
+    lightSupply: line.lightSupply,
+    calcInput: line.calcInput as Record<string, unknown> | null,
+    technicalSpec: line.technicalSpec as Record<string, unknown> | null,
+  };
+};
 
 /**
  * Maps a proforma row to the data shape both DocumentPdfService and
@@ -37,7 +97,10 @@ export interface ProformaDocumentRow {
  * pass through as raw decimal strings — buildProformaHtml/buildProformaDocx
  * call formatEtb() themselves, same as the quotation template.
  */
-export const proformaDocumentData = (p: ProformaDocumentRow): ProformaTemplateData => ({
+export const proformaDocumentData = (
+  p: ProformaDocumentRow,
+  content?: DocumentAppendixContent,
+): ProformaTemplateData => ({
   proformaNumber: p.proformaNumber,
   status: p.status,
   issuedAt: p.issuedAt,
@@ -51,6 +114,18 @@ export const proformaDocumentData = (p: ProformaDocumentRow): ProformaTemplateDa
   totalEtb: p.totalEtb,
   // proformas has no notes column of its own (see database/schema/proformas.ts).
   notes: null,
+  // Everything below was snapshotted at issue time and, until now, written
+  // and never read — the customer's proforma printed one implied line and
+  // no terms at all, while the quotation it came from printed both.
+  lines: (p.lines ?? []).map(documentLine),
+  paymentTerms: p.paymentTerms ?? [],
+  referenceCode: p.referenceCode ?? null,
+  validityDays: p.validityDays ?? null,
+  warrantyPartsMonths: p.warrantyPartsMonths ?? null,
+  warrantyFreeServiceMonths: p.warrantyFreeServiceMonths ?? null,
+  deliveryDays: p.deliveryDays ?? null,
+  boilerplate: content?.boilerplate,
+  components: content?.components,
 });
 
 /**
