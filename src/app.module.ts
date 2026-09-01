@@ -12,6 +12,7 @@ import { DatabaseModule } from './database/database.module';
 import { AssetsModule } from './modules/assets/assets.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BanksModule } from './modules/banks/banks.module';
+import { ContractsModule } from './modules/contracts/contracts.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ElevatorCalcModule } from './modules/elevator-calc/elevator-calc.module';
@@ -49,6 +50,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     ProjectsModule,
     QuotationsModule,
     ProformasModule,
+    ContractsModule,
     InvoicesModule,
     PaymentsModule,
     ExpensesModule,
