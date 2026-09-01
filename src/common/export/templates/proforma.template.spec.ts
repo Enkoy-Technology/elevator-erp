@@ -45,16 +45,18 @@ describe('buildProformaHtml', () => {
     expect(html).toContain('Bole Road, Addis Ababa');
   });
 
-  it('reuses the quotation template technical spec rows', () => {
+  it('prints the specification page from the stored snapshot even with no lines of its own', () => {
     const html = buildProformaHtml(data, branding);
-    expect(html).toContain('Rated capacity');
+    expect(html).toContain('Specification');
+    expect(html).toContain('Ordering quantity');
   });
 
-  it('shows the taxable base as a single "Supply and installation" line — no margin row, no cost itemization', () => {
+  it('shows the taxable base, VAT and grand total — no margin row, no cost itemization', () => {
     const html = buildProformaHtml(data, branding);
-    expect(html).toContain('Supply and installation');
+    expect(html).toContain('Total price');
     expect(html).toContain('100,000.00 ETB');
     expect(html).toContain('VAT (15.00%)');
+    expect(html).toContain('Grand total');
     expect(html).not.toContain('Margin');
     expect(html).not.toContain('Base equipment');
   });

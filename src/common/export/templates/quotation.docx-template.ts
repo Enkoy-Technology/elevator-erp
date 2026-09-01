@@ -12,8 +12,8 @@ import {
   signatureTable,
   textBlock,
 } from './docx-layout';
-import { formatEtb } from './money-format';
-import { fmtDate, PRICING_ROWS, TECH_ROWS, type QuotationTemplateData } from './quotation.template';
+import { formatEtb, netOfTaxEtb } from './money-format';
+import { fmtDate, TECH_ROWS, type QuotationTemplateData } from './quotation.template';
 
 export { formatEtb };
 
@@ -35,7 +35,6 @@ export { formatEtb };
  */
 export const buildQuotationDocx = (data: object, branding: TenantBranding | null): Document => {
   const d = data as QuotationTemplateData;
-  const pricing = d.pricingBreakdown ?? {};
   const tech = d.technicalSpec ?? {};
   const primary = branding?.primaryColor ?? null;
 
@@ -45,8 +44,15 @@ export const buildQuotationDocx = (data: object, branding: TenantBranding | null
       `${r.format ? r.format(tech[r.key]) : String(tech[r.key])}${r.unit ? ` ${r.unit}` : ''}`,
     ),
   );
-  const pricingRows = PRICING_ROWS.filter((r) => pricing[r.key] != null).map((r) =>
-    row(r.label, formatEtb(pricing[r.key])),
+
+  // Page 1's line table, same columns as the PDF. A pre-lines quotation
+  // carries no lines, so fall back to the single line its header implies —
+  // the same fallback buildQuotationHtml uses.
+  const lineRows = (d.lines ?? []).map((line) =>
+    row(
+      `${line.quantity} x ${line.specSummary ?? line.productType}`,
+      formatEtb(line.lineTotalEtb),
+    ),
   );
 
   const children: (Paragraph | Table)[] = [
@@ -63,19 +69,25 @@ export const buildQuotationDocx = (data: object, branding: TenantBranding | null
       label: 'Prepared For',
       lines: [d.customerName, `Project: ${d.projectName}`],
     }),
-    heading('Technical Specification', primary),
-    fullWidthTable(techRows.length ? techRows : [row('See attached specification', '—')]),
-    heading('Pricing', primary),
+    heading('Equipment', primary),
     // docx's Table rejects a zero-row table (unlike an empty HTML <table>,
     // which the PDF template tolerates silently) — fall back to a single
-    // placeholder row rather than let an unfunded quote crash the render.
-    fullWidthTable(pricingRows.length ? pricingRows : [row('See pricing breakdown', '—')]),
+    // placeholder row rather than let an unpriced quote crash the render.
+    fullWidthTable(
+      lineRows.length ? lineRows : [row('See attached specification', '—')],
+    ),
+    heading('Technical Specification', primary),
+    fullWidthTable(techRows.length ? techRows : [row('See attached specification', '—')]),
     heading('Totals', primary),
+    // NEVER the margin. This file used to print `Margin (25.00%)` and the
+    // pre-margin subtotal, so a salesperson who downloaded .docx instead of
+    // .pdf handed the customer the tenant's markup — the one disclosure both
+    // document mappers exist to prevent. The ex-VAT figure is derived the
+    // same way the PDF derives it, from the total and the tax.
     fullWidthTable([
-      row('Subtotal', formatEtb(d.subtotalEtb)),
-      row(`Margin (${d.marginPercent ?? '0'}%)`, formatEtb(d.marginAmountEtb)),
-      row(`Tax (${d.taxPercent ?? '0'}%)`, formatEtb(d.taxAmountEtb)),
-      grandRow('Total', formatEtb(d.totalPriceEtb)),
+      row('Total price', formatEtb(netOfTaxEtb(d.totalPriceEtb, d.taxAmountEtb))),
+      row(`VAT (${d.taxPercent ?? '0'}%)`, formatEtb(d.taxAmountEtb)),
+      grandRow('Grand total', formatEtb(d.totalPriceEtb)),
     ]),
     ...(d.notes ? [heading('Notes', primary), textBlock(d.notes)] : []),
     signatureTable(branding),

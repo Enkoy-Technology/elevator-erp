@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { DocumentContentProvider } from './document-content.provider';
 import { DocumentDocxService } from './document-docx.service';
 import { DocumentPdfService } from './document-pdf.service';
 import { TenantBrandingProvider } from './tenant-branding.provider';
@@ -19,9 +20,22 @@ import { TenantBrandingProvider } from './tenant-branding.provider';
  * TenantBrandingProvider lives here too (not in a feature module): it's the
  * one place tenant_branding + tenants.name become the TenantBranding shape
  * both renderers consume, shared by every module that generates a document.
+ * DocumentContentProvider is its counterpart for the tenant's document
+ * BODY content — the boilerplate prose and component table that make up
+ * pages 3+ of a quotation/proforma.
  */
 @Module({
-  providers: [DocumentPdfService, DocumentDocxService, TenantBrandingProvider],
-  exports: [DocumentPdfService, DocumentDocxService, TenantBrandingProvider],
+  providers: [
+    DocumentPdfService,
+    DocumentDocxService,
+    TenantBrandingProvider,
+    DocumentContentProvider,
+  ],
+  exports: [
+    DocumentPdfService,
+    DocumentDocxService,
+    TenantBrandingProvider,
+    DocumentContentProvider,
+  ],
 })
 export class ExportModule {}

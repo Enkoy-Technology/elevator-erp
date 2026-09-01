@@ -221,10 +221,10 @@ export const renderLayout = (opts: LayoutOptions): string => {
       }
       <td style="padding:0 12px 0 0;vertical-align:middle;border:none;">
         <div style="font-size:13px;font-weight:bold;line-height:1.25;color:#17150f;">${esc(b?.name ?? '')}</div>
-        ${b?.slogan ? `<div style="font-size:8.5px;letter-spacing:0.5px;text-transform:uppercase;color:#57534e;">${esc(b.slogan)}</div>` : ''}
+        ${b?.slogan ? `<div style="font-size:8.5px;letter-spacing:0.4px;text-transform:uppercase;color:#57534e;">${esc(b.slogan)}</div>` : ''}
       </td>
       <td style="width:1%;text-align:right;white-space:nowrap;vertical-align:middle;border:none;">
-        <div style="font-size:17px;font-weight:bold;letter-spacing:1px;color:#17150f;">${esc(documentTitle)}</div>
+        <div style="font-size:17px;font-weight:bold;letter-spacing:0.8px;color:#17150f;">${esc(documentTitle)}</div>
       </td>
     </tr></tbody></table>
     <div style="height:2.5px;background:${primary};margin-top:5px;"></div>
@@ -374,6 +374,47 @@ export const renderLayout = (opts: LayoutOptions): string => {
     background: var(--tint-strong); border-top: 1px solid var(--ink);
     font-size: 14px; font-weight: bold; color: var(--ink); padding: 8px 10px;
   }
+
+  /* ---- multi-page commercial document ------------------------------
+     The quotation/proforma are multi-page BY DESIGN (page 1 commercial,
+     page 2 specification, pages 3+ appendix), so the page break is an
+     explicit element rather than something left to content length.
+     break-before is the modern property; page-break-before is what
+     Chromium's print path still honours — both, deliberately. A
+     page-break-after:avoid h2 opening a page would strand the heading, so
+     the break sits on the wrapper instead of on the heading. */
+  .page-break { page-break-before: always; break-before: page; }
+
+  /* Numbered spec rows: label column carries the number, so the table stays
+     the two columns the client's page 2 has. */
+  .spec td:first-child { width: 42%; }
+  .spec td:last-child { font-weight: bold; }
+  .rowno {
+    display: inline-block; min-width: 16px;
+    color: var(--ink-soft); font-variant-numeric: tabular-nums;
+  }
+  .terms td:first-child { width: 42%; color: var(--ink-soft); }
+
+  /* Payment schedule: percent, what it is for, and the event it falls due
+     on — the three things their page 1 states as a sentence each. */
+  .terms-list { margin: 0; padding: 0 0 0 4px; list-style: none; }
+  .terms-list li {
+    padding: 4px 0; border-bottom: 1px solid var(--rule);
+    page-break-inside: avoid;
+  }
+  .term-pct {
+    display: inline-block; min-width: 52px; font-weight: bold;
+    font-variant-numeric: tabular-nums;
+  }
+  .term-label { margin-right: 6px; }
+  .term-trigger {
+    font-size: 8.5px; letter-spacing: 0.4px; text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  /* Tenant boilerplate: their own paragraphing survives, their markup does
+     not (esc runs before this ever sees the text). */
+  .prose { white-space: pre-line; margin: 0 0 10px; }
 
   /* ---- notes, notices, signature ----------------------------------- */
   .notes { margin-top: 16px; padding: 8px 12px; background: var(--tint); border-left: 3px solid var(--primary); page-break-inside: avoid; }

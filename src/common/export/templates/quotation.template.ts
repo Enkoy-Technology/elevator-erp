@@ -1,12 +1,14 @@
 import type { TenantBranding } from '../document-pdf.service';
 import {
-  esc,
-  renderLayout,
-  renderParties,
-  renderReferencePlate,
-  renderSignatureBlock,
-} from './layout';
-import { formatEtb } from './money-format';
+  PRODUCT_LABELS,
+  renderCommercialBody,
+  type CommercialTermsData,
+  type DocumentAppendixContent,
+  type DocumentLineData,
+  type PaymentTermData,
+} from './commercial-document';
+import { renderLayout } from './layout';
+import { formatEtb, netOfTaxEtb } from './money-format';
 
 export { formatEtb };
 
@@ -26,7 +28,9 @@ export const fmtDate = (d: Date | string | null | undefined): string => {
  * cast is the one place that shape gets asserted — Phase 3 (quotations) is
  * the caller responsible for actually supplying it.
  */
-export interface QuotationTemplateData {
+export interface QuotationTemplateData
+  extends CommercialTermsData,
+    DocumentAppendixContent {
   quoteNumber: string;
   status: string;
   createdAt?: Date | string | null;
@@ -42,6 +46,13 @@ export interface QuotationTemplateData {
   taxAmountEtb?: string | null;
   totalPriceEtb?: string | null;
   notes?: string | null;
+  /**
+   * Page 1's line-item table. Absent on a quotation written before line
+   * items existed (and on the docx/xlsx fixtures) — the template then prints
+   * the single line the header implies, which is what that quote always was.
+   */
+  lines?: readonly DocumentLineData[];
+  paymentTerms?: readonly PaymentTermData[];
 }
 
 // Exported (alongside fmtDate above) so the docx renderer mirrors the same
@@ -60,16 +71,6 @@ export const PRICING_ROWS: ReadonlyArray<{ key: string; label: string }> = [
   { key: 'installationCost', label: 'Installation' },
   { key: 'freightCost', label: 'Freight' },
 ];
-
-/**
- * What the customer sees instead of the raw enum. A product not listed here
- * falls back to its own value rather than disappearing off the document.
- */
-const PRODUCT_LABELS: Record<string, string> = {
-  PASSENGER: 'Passenger / hospital elevator',
-  CAR_PLATFORM_LIFT: 'Car platform lift',
-  ESCALATOR: 'Escalator',
-};
 
 // `productType` leads: it is the one row that is always present, and on a
 // flat-priced escalator or platform lift it is the ONLY row — the EN 81
@@ -102,65 +103,67 @@ export const TECH_ROWS: ReadonlyArray<{
 ];
 
 /**
- * Build the branded quotation HTML document. Pure — no I/O — so it is unit
- * testable and Puppeteer just renders whatever string this returns. Every
+ * The single line a document with no line items implies: its own header,
+ * priced ex-VAT. Shared by both commercial templates so a pre-lines
+ * quotation and a proforma whose lines were never snapshotted still print a
+ * real line-item table and a real spec sheet instead of an empty one.
+ */
+export const impliedLine = (
+  technicalSpec: Record<string, unknown> | null | undefined,
+  exVatTotalEtb: string,
+): DocumentLineData => ({
+  sequence: 1,
+  productType: (technicalSpec?.productType as string | undefined) ?? null,
+  specSummary: null,
+  quantity: 1,
+  unitPriceEtb: exVatTotalEtb,
+  lineTotalEtb: exVatTotalEtb,
+  technicalSpec: technicalSpec ?? null,
+});
+
+/**
+ * Build the branded quotation HTML document, in the shape of the client's
+ * own 8-page offer: page 1 commercial, page 2 specification, pages 3+ their
+ * boilerplate and component table. Pure — no I/O — so it is unit testable
+ * and Puppeteer just renders whatever string this returns. Every
  * interpolated data/branding field is HTML-escaped.
+ *
+ * The negotiated discount and the calculated-before-negotiation total are
+ * deliberately absent: they are recorded on the quotation for the client's
+ * own reporting, and printing either on the customer's copy would hand over
+ * the negotiating position.
  */
 export const buildQuotationHtml = (data: object, branding: TenantBranding | null): string => {
   const d = data as QuotationTemplateData;
-  const pricing = d.pricingBreakdown ?? {};
-  const tech = d.technicalSpec ?? {};
+  // total - VAT, so the three printed figures always add up to the cent (see
+  // netOfTaxEtb) rather than being re-derived from the pre-margin subtotal.
+  const exVatTotalEtb = netOfTaxEtb(d.totalPriceEtb, d.taxAmountEtb);
+  const lines =
+    d.lines && d.lines.length > 0
+      ? d.lines
+      : [impliedLine(d.technicalSpec, exVatTotalEtb)];
 
-  const pricingRows = PRICING_ROWS.filter((r) => pricing[r.key] != null)
-    .map((r) => `<tr><td>${r.label}</td><td class="num">${formatEtb(pricing[r.key])}</td></tr>`)
-    .join('');
-
-  const techRows = TECH_ROWS.filter((r) => tech[r.key] != null)
-    .map((r) => {
-      const value = r.format ? r.format(tech[r.key]) : tech[r.key];
-      return `<tr><td>${r.label}</td><td class="num">${esc(value)}${r.unit ? ` ${r.unit}` : ''}</td></tr>`;
-    })
-    .join('');
-
-  const bodyHtml = `
-  ${renderReferencePlate([
-    { label: 'Quote No.', value: d.quoteNumber },
-    { label: 'Issued', value: fmtDate(d.createdAt) },
-    { label: 'Valid Until', value: fmtDate(d.validUntil) },
-    { label: 'Status', value: d.status },
-  ])}
-
-  ${renderParties(branding, {
-    label: 'Prepared For',
-    lines: [d.customerName, `Project: ${d.projectName}`],
-  })}
-
-  <h2>Technical Specification</h2>
-  <table class="lines">
-    <thead><tr><th>Item</th><th class="num">Specification</th></tr></thead>
-    <tbody>${techRows || '<tr><td>See attached specification</td><td class="num">&mdash;</td></tr>'}</tbody>
-  </table>
-
-  <h2>Pricing</h2>
-  <table class="lines">
-    <thead><tr><th>Description</th><th class="num">Amount</th></tr></thead>
-    <tbody>${pricingRows}</tbody>
-  </table>
-
-  <div class="sum-block">
-  <table class="totals">
-    <tbody>
-    <tr><td>Subtotal</td><td class="num">${formatEtb(d.subtotalEtb)}</td></tr>
-    <tr><td>Margin (${esc(d.marginPercent ?? '0')}%)</td><td class="num">${formatEtb(d.marginAmountEtb)}</td></tr>
-    <tr><td>Tax (${esc(d.taxPercent ?? '0')}%)</td><td class="num">${formatEtb(d.taxAmountEtb)}</td></tr>
-    <tr class="grand"><td>Total</td><td class="num">${formatEtb(d.totalPriceEtb)}</td></tr>
-    </tbody>
-  </table>
-  </div>
-
-  ${d.notes ? `<div class="notes">${esc(d.notes)}</div>` : ''}
-
-  ${renderSignatureBlock(branding)}`;
+  const bodyHtml = renderCommercialBody({
+    branding,
+    plate: [
+      { label: 'Quote No.', value: d.quoteNumber },
+      ...(d.referenceCode ? [{ label: 'Ref.', value: d.referenceCode }] : []),
+      { label: 'Issued', value: fmtDate(d.createdAt) },
+      { label: 'Status', value: d.status },
+    ],
+    customerName: d.customerName,
+    projectName: d.projectName,
+    lines,
+    exVatTotalEtb,
+    vatPercent: d.taxPercent ?? null,
+    vatEtb: d.taxAmountEtb,
+    grandTotalEtb: d.totalPriceEtb,
+    paymentTerms: d.paymentTerms,
+    terms: d,
+    boilerplate: d.boilerplate,
+    components: d.components,
+    notes: d.notes,
+  });
 
   return renderLayout({
     branding,

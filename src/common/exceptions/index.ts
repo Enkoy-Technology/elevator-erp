@@ -1,4 +1,5 @@
 export { CustomerInUseError } from './customer-in-use.error';
+export { DiscountApprovalRequiredError } from './discount-approval-required.error';
 export { DomainError } from './domain.error';
 export { IdempotencyKeyConflictError } from './idempotency-key-conflict.error';
 export { IdempotencyKeyInProgressError } from './idempotency-key-in-progress.error';
