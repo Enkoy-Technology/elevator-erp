@@ -189,3 +189,22 @@ export const messageStatusEnum = pgEnum('message_status', [
   'SENT',
   'FAILED',
 ]);
+
+/**
+ * A contract is DRAFT until the parties sign — which is what lets one
+ * record render as both documents the client's proposal lists: "Contract
+ * Draft" while DRAFT, "Contract" once SIGNED. COMPLETED means handed over.
+ */
+export const contractStatusEnum = pgEnum('contract_status', [
+  'DRAFT',
+  'SIGNED',
+  'COMPLETED',
+  'CANCELLED',
+]);
+
+/** An instalment is a plan until an invoice is actually raised for it. */
+export const contractInstalmentStatusEnum = pgEnum('contract_instalment_status', [
+  'PENDING',
+  'INVOICED',
+  'CANCELLED',
+]);
