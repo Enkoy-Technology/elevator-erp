@@ -2,10 +2,12 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   Res,
@@ -22,6 +24,7 @@ import { isUUID } from 'class-validator';
 import { CurrentUser, Roles } from '../../common/decorators';
 import { parseDocumentFormat } from '../../common/export/document-format';
 import { DocumentDocxService } from '../../common/export/document-docx.service';
+import { DocumentContentProvider } from '../../common/export/document-content.provider';
 import { DocumentPdfService } from '../../common/export/document-pdf.service';
 import { TECHNICAL_PROPOSAL_TEMPLATE } from '../../common/export/templates/technical-proposal.template';
 import { setDownloadHeaders, singleRow, writeXlsx } from '../../common/export/tabular';
@@ -29,6 +32,13 @@ import { TenantBrandingProvider } from '../../common/export/tenant-branding.prov
 import { quoteStatusEnum, type QuoteStatus } from '../../database/schema';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { CreateQuotationDto } from './dto/create-quotation.dto';
+import { PriceQuotationDto } from './dto/price-quotation.dto';
+import {
+  CreateQuotationLineDto,
+  ReorderQuotationLinesDto,
+  UpdateQuotationLineDto,
+} from './dto/quotation-line.dto';
+import { UpdateQuotationTermsDto } from './dto/quotation-terms.dto';
 import { RejectQuotationDto } from './dto/reject-quotation.dto';
 import {
   QUOTATION_DOCUMENT_COLUMNS,
@@ -49,6 +59,7 @@ export class QuotationsController {
     private readonly pdfService: DocumentPdfService,
     private readonly docxService: DocumentDocxService,
     private readonly tenantBranding: TenantBrandingProvider,
+    private readonly documentContent: DocumentContentProvider,
   ) {}
 
   @Get('quotations')
@@ -117,8 +128,13 @@ export class QuotationsController {
       return;
     }
 
-    const branding = await this.tenantBranding.get(user.tenantId);
-    const data = quotationDocumentData(row);
+    // Branding and appendix content are independent reads — issue them
+    // together rather than paying two round trips in series.
+    const [branding, content] = await Promise.all([
+      this.tenantBranding.get(user.tenantId),
+      this.documentContent.get(user.tenantId),
+    ]);
+    const data = quotationDocumentData(row, content);
     if (format === 'pdf') {
       const buf = await this.pdfService.renderDocumentPdf('quotation', data, branding);
       setDownloadHeaders(res, filename, 'pdf', 'application/pdf');
@@ -168,6 +184,135 @@ export class QuotationsController {
       'application/pdf',
     );
     res.end(buf);
+  }
+
+
+  // ---------------------------------------------------------------------
+  // Line items. Reads are open to the class-level roles; every write is
+  // Sales Manager and DRAFT-only (enforced in the repository transaction).
+  // ---------------------------------------------------------------------
+
+  @Get('quotations/:id/lines')
+  @ApiOperation({
+    summary:
+      "The quotation's line items in print order. A quotation written before line items existed reads back as the single line its header implies.",
+  })
+  lines(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.quotationsService.listLines(user, id);
+  }
+
+  @Post('quotations/:id/lines')
+  @Roles('SALES_MANAGER')
+  @ApiOperation({
+    summary:
+      'Add a line to a DRAFT quotation. The line is priced by its own calculator run.',
+  })
+  addLine(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateQuotationLineDto,
+  ) {
+    return this.quotationsService.addLine(user, id, dto);
+  }
+
+  @Post('quotations/:id/lines/reorder')
+  @HttpCode(200)
+  @Roles('SALES_MANAGER')
+  @ApiOperation({ summary: 'Set the print order of a DRAFT quotation\'s lines' })
+  reorderLines(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReorderQuotationLinesDto,
+  ) {
+    return this.quotationsService.reorderLines(user, id, dto);
+  }
+
+  @Patch('quotations/:id/lines/:lineId')
+  @Roles('SALES_MANAGER')
+  @ApiOperation({
+    summary:
+      'Update one line of a DRAFT quotation. Merged onto the stored spec, then re-priced.',
+  })
+  updateLine(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('lineId', ParseUUIDPipe) lineId: string,
+    @Body() dto: UpdateQuotationLineDto,
+  ) {
+    return this.quotationsService.updateLine(user, id, lineId, dto);
+  }
+
+  @Delete('quotations/:id/lines/:lineId')
+  @Roles('SALES_MANAGER')
+  @ApiOperation({
+    summary:
+      'Remove a line from a DRAFT quotation and close the gap in the print order',
+  })
+  removeLine(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('lineId', ParseUUIDPipe) lineId: string,
+  ) {
+    return this.quotationsService.removeLine(user, id, lineId);
+  }
+
+  // ---------------------------------------------------------------------
+  // Negotiated price and commercial terms.
+  // ---------------------------------------------------------------------
+
+  @Post('quotations/:id/price')
+  @HttpCode(200)
+  @Roles('SALES_MANAGER')
+  @ApiOperation({
+    summary:
+      'Price a DRAFT quotation from the round VAT-inclusive total the customer pays. The ex-VAT line, the VAT line, each line amount and the discount are derived from it.',
+  })
+  price(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PriceQuotationDto,
+  ) {
+    return this.quotationsService.priceFromGrandTotal(user, id, dto);
+  }
+
+  @Post('quotations/:id/approve-discount')
+  @HttpCode(200)
+  @Roles('CEO', 'FINANCE')
+  @ApiOperation({
+    summary:
+      "Sign off the negotiated discount, as yourself. Only needed when the tenant has set a discount approval threshold and this quotation is over it.",
+  })
+  approveDiscount(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.quotationsService.approveDiscount(user, id);
+  }
+
+  @Get('quotations/:id/payment-terms')
+  @ApiOperation({ summary: 'The payment schedule the offer states' })
+  paymentTerms(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.quotationsService.listPaymentTerms(user, id);
+  }
+
+  @Patch('quotations/:id/terms')
+  @Roles('SALES_MANAGER')
+  @ApiOperation({
+    summary:
+      'Set the commercial terms of a DRAFT quotation (reference, delivery, warranty, validity) and optionally replace the payment schedule, whose percentages must total 100.',
+  })
+  updateTerms(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateQuotationTermsDto,
+  ) {
+    return this.quotationsService.updateTerms(user, id, dto);
   }
 
   @Post('projects/:projectId/quotations')

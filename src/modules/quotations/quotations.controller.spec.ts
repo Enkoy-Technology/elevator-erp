@@ -1,3 +1,5 @@
+import type { DocumentAppendixContent } from '../../common/export/templates/commercial-document';
+import type { DocumentContentProvider } from '../../common/export/document-content.provider';
 import { BadRequestException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
@@ -73,6 +75,14 @@ describe('QuotationsController.document — format routing and filenames', () =>
   const pdfService = { renderDocumentPdf: jest.fn() };
   const docxService = { renderDocumentDocx: jest.fn() };
   const tenantBranding = { get: jest.fn() };
+  // Pages 3+ of the document. An empty appendix is the realistic default for
+  // a tenant that has not filled its boilerplate in yet.
+  const documentContent = {
+    get: jest.fn<Promise<DocumentAppendixContent>, [string]>(async () => ({
+      boilerplate: [],
+      components: [],
+    })),
+  };
   const branding = { name: 'Enkoy', slogan: '', logoUrl: null, address: '', phones: [], primaryColor: '#123456' };
 
   const res = { end: jest.fn() };
@@ -82,6 +92,7 @@ describe('QuotationsController.document — format routing and filenames', () =>
     pdfService as unknown as DocumentPdfService,
     docxService,
     tenantBranding as unknown as TenantBrandingProvider,
+    documentContent as unknown as DocumentContentProvider,
   );
 
   beforeEach(() => {
@@ -108,11 +119,26 @@ describe('QuotationsController.document — format routing and filenames', () =>
 
   it('format=pdf: renders via DocumentPdfService and writes quotation-<quoteNumber>.pdf headers', async () => {
     pdfService.renderDocumentPdf.mockResolvedValue(Buffer.from('%PDF'));
+    documentContent.get.mockResolvedValue({
+      boilerplate: [{ title: 'Standards', body: 'EN 81-20 / EN 81-50' }],
+      components: [
+        { sequence: 1, componentName: 'Traction machine', brand: 'FUJI', remark: null },
+      ],
+    });
 
     await controller.document(user, 'id', 'pdf', res as never);
 
     expect(quotationsService.getDocumentData).toHaveBeenCalledWith(user, 'id');
     expect(tenantBranding.get).toHaveBeenCalledWith(user.tenantId);
+    // Pages 3+ must actually reach the renderer. The provider was registered
+    // in the module but injected nowhere, so the tenant's boilerplate and
+    // component table were loaded by nothing and never printed — the whole
+    // settings feature was inert at runtime while every test still passed.
+    expect(documentContent.get).toHaveBeenCalledWith(user.tenantId);
+    const [, data] = pdfService.renderDocumentPdf.mock.calls[0] ?? [];
+    expect(data).toMatchObject({
+      boilerplate: [{ title: 'Standards', body: 'EN 81-20 / EN 81-50' }],
+    });
     expect(pdfService.renderDocumentPdf).toHaveBeenCalledWith(
       'quotation',
       expect.objectContaining({ quoteNumber: 'QTN-2026-ABCD1234' }),
@@ -193,6 +219,12 @@ describe('QuotationsController.technicalProposal', () => {
   const pdfService = { renderDocumentPdf: jest.fn() };
   const docxService = { renderDocumentDocx: jest.fn() };
   const tenantBranding = { get: jest.fn() };
+  const documentContent = {
+    get: jest.fn<Promise<DocumentAppendixContent>, [string]>(async () => ({
+      boilerplate: [],
+      components: [],
+    })),
+  };
   const branding = { name: 'Enkoy', slogan: '', logoUrl: null, address: '', phones: [], primaryColor: '#123456' };
   const res = { end: jest.fn() };
 
@@ -201,6 +233,7 @@ describe('QuotationsController.technicalProposal', () => {
     pdfService as unknown as DocumentPdfService,
     docxService,
     tenantBranding as unknown as TenantBrandingProvider,
+    documentContent as unknown as DocumentContentProvider,
   );
 
   beforeEach(() => {

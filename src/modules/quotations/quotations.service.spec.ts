@@ -1,6 +1,10 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Decimal } from 'decimal.js';
 
-import { WorkflowTransitionError } from '../../common/exceptions';
+import {
+  DiscountApprovalRequiredError,
+  WorkflowTransitionError,
+} from '../../common/exceptions';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type { CalcResult } from '../elevator-calc/types';
 import type { QuotationRecord } from './quotations.repository';
@@ -36,6 +40,15 @@ describe('QuotationsService', () => {
     marginAmountEtb: '25.00',
     taxAmountEtb: '18.75',
     totalPriceEtb: '143.75',
+    calculatedTotalEtb: null,
+    discountAmountEtb: null,
+    discountPercent: null,
+    discountApprovedByUserId: null,
+    referenceCode: null,
+    deliveryDays: null,
+    warrantyPartsMonths: null,
+    warrantyFreeServiceMonths: null,
+    validityDays: null,
     validUntil: null,
     notes: null,
     approvedByUserId: null,
@@ -53,6 +66,17 @@ describe('QuotationsService', () => {
     findById: jest.fn(),
     create: jest.fn(),
     updateStatus: jest.fn(),
+    listLines: jest.fn(),
+    addLine: jest.fn(),
+    updateLine: jest.fn(),
+    removeLine: jest.fn(),
+    reorderLines: jest.fn(),
+    applyPricing: jest.fn(),
+    setDiscountApprovedBy: jest.fn(),
+    getDiscountApprovalThresholdPercent: jest.fn(),
+    updateTerms: jest.fn(),
+    listPaymentTerms: jest.fn(),
+    replacePaymentTerms: jest.fn(),
   };
   const calc = { calculateSpecs: jest.fn() };
   const projectsService = { getById: jest.fn() };
@@ -248,6 +272,378 @@ describe('QuotationsService', () => {
       repo.findById.mockResolvedValue(null);
       await expect(service.submit(user, draft.id)).rejects.toBeInstanceOf(
         NotFoundException,
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Line items, negotiated pricing, discount sign-off, commercial terms.
+  // -------------------------------------------------------------------------
+
+  /** A priced line as the calculator left it: ex-VAT selling price per unit. */
+  const line = (
+    id: string,
+    subtotalWithMargin: string,
+    quantity = 1,
+  ): Record<string, unknown> => ({
+    id,
+    quotationId: draft.id,
+    sequence: 1,
+    quantity,
+    productType: 'PASSENGER',
+    calcInput: { productType: 'PASSENGER', stops: 13 },
+    technicalSpec: {},
+    pricingBreakdown: { subtotalWithMargin },
+    unitPriceEtb: subtotalWithMargin,
+    lineTotalEtb: subtotalWithMargin,
+  });
+
+  describe('priceFromGrandTotal', () => {
+    beforeEach(() => {
+      repo.findById.mockResolvedValue(draft);
+      repo.applyPricing.mockImplementation(async () => draft);
+    });
+
+    it("reproduces the client's real proforma to the cent from the round total they typed", async () => {
+      // Formula: 7,410,000.00 ex-VAT -> 8,521,500.00 incl VAT.
+      // Agreed with the customer: 7,835,000.00.
+      repo.listLines.mockResolvedValue([line('L1', '7410000.00')]);
+
+      await service.priceFromGrandTotal(user, draft.id, {
+        grandTotalEtb: '7835000.00',
+      });
+
+      const [, , header, amounts] = repo.applyPricing.mock.calls[0]!;
+      expect(header).toMatchObject({
+        subtotalEtb: '6813043.48',
+        taxAmountEtb: '1021956.52',
+        totalPriceEtb: '7835000.00',
+        calculatedTotalEtb: '8521500.00',
+        discountAmountEtb: '686500.00',
+        discountPercent: '8.06',
+      });
+      expect(amounts).toEqual([
+        { id: 'L1', lineTotalEtb: '6813043.48', unitPriceEtb: '6813043.48' },
+      ]);
+    });
+
+    it("the header's subtotal is exactly the sum of its lines' totals", async () => {
+      repo.listLines.mockResolvedValue([
+        line('L1', '7410000.00'),
+        line('L2', '3000000.00', 2),
+        line('L3', '1234567.89'),
+      ]);
+
+      await service.priceFromGrandTotal(user, draft.id, {
+        grandTotalEtb: '7835000.00',
+      });
+
+      const call = repo.applyPricing.mock.calls[0]!;
+      const header = call[2] as Record<string, string>;
+      const amounts = call[3] as { lineTotalEtb: string }[];
+      const summed = amounts.reduce(
+        (sum, amount) => sum.plus(new Decimal(amount.lineTotalEtb)),
+        new Decimal(0),
+      );
+      expect(summed.toFixed(2)).toBe(header.subtotalEtb);
+      // ...and the document still balances around it.
+      expect(
+        new Decimal(header.subtotalEtb!).plus(header.taxAmountEtb!).toFixed(2),
+      ).toBe(header.totalPriceEtb);
+    });
+
+    it('zeroes the margin amount, because the negotiated subtotal already contains it', async () => {
+      repo.listLines.mockResolvedValue([line('L1', '7410000.00')]);
+      await service.priceFromGrandTotal(user, draft.id, {
+        grandTotalEtb: '7835000.00',
+      });
+      const [, , header] = repo.applyPricing.mock.calls[0]!;
+      expect(header.marginAmountEtb).toBe('0.00');
+    });
+
+    it("measures the discount against the CALCULATOR, not against last week's negotiation", async () => {
+      // A line already priced down once: its stored amounts are negotiated,
+      // its pricingBreakdown is still the formula's.
+      const alreadyPriced = {
+        ...line('L1', '7410000.00'),
+        unitPriceEtb: '6813043.48',
+        lineTotalEtb: '6813043.48',
+      };
+      repo.listLines.mockResolvedValue([alreadyPriced]);
+
+      await service.priceFromGrandTotal(user, draft.id, {
+        grandTotalEtb: '7835000.00',
+      });
+
+      const [, , header] = repo.applyPricing.mock.calls[0]!;
+      expect(header.calculatedTotalEtb).toBe('8521500.00');
+      expect(header.discountPercent).toBe('8.06');
+    });
+
+    it('records a premium as a negative discount rather than clamping it', async () => {
+      repo.listLines.mockResolvedValue([line('L1', '1000000.00')]);
+      await service.priceFromGrandTotal(user, draft.id, {
+        grandTotalEtb: '1265000.00',
+      });
+      const [, , header] = repo.applyPricing.mock.calls[0]!;
+      // 1,000,000 * 1.15 = 1,150,000 calculated; quoted 1,265,000.
+      expect(header.discountAmountEtb).toBe('-115000.00');
+      expect(header.discountPercent).toBe('-10.00');
+    });
+  });
+
+  describe('discount approval', () => {
+    const discounted: QuotationRecord = {
+      ...draft,
+      calculatedTotalEtb: '8521500.00',
+      discountAmountEtb: '686500.00',
+      discountPercent: '8.06',
+    };
+
+    it('never even asks for the threshold when nothing was negotiated', async () => {
+      repo.findById.mockResolvedValue(draft);
+      repo.updateStatus.mockResolvedValue({
+        ...draft,
+        status: 'PENDING_APPROVAL',
+      });
+      await service.submit(user, draft.id);
+      expect(repo.getDiscountApprovalThresholdPercent).not.toHaveBeenCalled();
+    });
+
+    it('lets a discounted quote through untouched when the tenant set no threshold — the default', async () => {
+      repo.findById.mockResolvedValue(discounted);
+      repo.getDiscountApprovalThresholdPercent.mockResolvedValue(null);
+      repo.updateStatus.mockResolvedValue({
+        ...discounted,
+        status: 'PENDING_APPROVAL',
+      });
+      await expect(service.submit(user, draft.id)).resolves.toMatchObject({
+        status: 'PENDING_APPROVAL',
+      });
+    });
+
+    it('blocks submission when the discount is over the threshold and nobody signed it off', async () => {
+      repo.findById.mockResolvedValue(discounted);
+      repo.getDiscountApprovalThresholdPercent.mockResolvedValue('5.00');
+      await expect(service.submit(user, draft.id)).rejects.toBeInstanceOf(
+        DiscountApprovalRequiredError,
+      );
+      expect(repo.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('lets it through once someone has signed it off', async () => {
+      repo.findById.mockResolvedValue({
+        ...discounted,
+        discountApprovedByUserId: '99999999-9999-9999-9999-999999999999',
+      });
+      repo.getDiscountApprovalThresholdPercent.mockResolvedValue('5.00');
+      repo.updateStatus.mockResolvedValue({
+        ...discounted,
+        status: 'PENDING_APPROVAL',
+      });
+      await expect(service.submit(user, draft.id)).resolves.toMatchObject({
+        status: 'PENDING_APPROVAL',
+      });
+    });
+
+    it('leaves a discount at or under the threshold alone', async () => {
+      repo.findById.mockResolvedValue({ ...discounted, discountPercent: '5.00' });
+      repo.getDiscountApprovalThresholdPercent.mockResolvedValue('5.00');
+      repo.updateStatus.mockResolvedValue({
+        ...discounted,
+        status: 'PENDING_APPROVAL',
+      });
+      await expect(service.submit(user, draft.id)).resolves.toBeDefined();
+    });
+
+    it('never blocks a PREMIUM — a negative discount is a quote above the formula', async () => {
+      repo.findById.mockResolvedValue({
+        ...discounted,
+        discountPercent: '-10.00',
+      });
+      repo.getDiscountApprovalThresholdPercent.mockResolvedValue('5.00');
+      repo.updateStatus.mockResolvedValue({
+        ...discounted,
+        status: 'PENDING_APPROVAL',
+      });
+      await expect(service.submit(user, draft.id)).resolves.toBeDefined();
+    });
+
+    it('does not gate EXPIRED behind an unapproved discount — an offer lapses regardless', async () => {
+      repo.findById.mockResolvedValue(discounted);
+      repo.getDiscountApprovalThresholdPercent.mockResolvedValue('5.00');
+      repo.updateStatus.mockResolvedValue({ ...discounted, status: 'EXPIRED' });
+      await expect(service.expire(user, draft.id)).resolves.toMatchObject({
+        status: 'EXPIRED',
+      });
+    });
+
+    it('stamps the approver as the caller, never as whoever the body names', async () => {
+      repo.findById.mockResolvedValue(discounted);
+      repo.setDiscountApprovedBy.mockResolvedValue(discounted);
+      await service.approveDiscount(user, draft.id);
+      expect(repo.setDiscountApprovedBy).toHaveBeenCalledWith(
+        user.tenantId,
+        draft.id,
+        user.userId,
+      );
+    });
+
+    it('refuses to approve a discount that does not exist yet', async () => {
+      repo.findById.mockResolvedValue(draft);
+      await expect(
+        service.approveDiscount(user, draft.id),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('commercial terms', () => {
+    beforeEach(() => {
+      repo.updateTerms.mockResolvedValue(draft);
+      repo.replacePaymentTerms.mockResolvedValue([]);
+      repo.listPaymentTerms.mockResolvedValue([]);
+    });
+
+    it('rejects a payment schedule that totals 95% and writes nothing', async () => {
+      await expect(
+        service.updateTerms(user, draft.id, {
+          paymentTerms: [
+            { label: 'On signing', percent: '50.00' },
+            { label: 'On shipping documents', percent: '30.00' },
+            { label: 'On delivery', percent: '10.00' },
+            { label: 'After commissioning', percent: '5.00' },
+          ],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repo.replacePaymentTerms).not.toHaveBeenCalled();
+      expect(repo.updateTerms).not.toHaveBeenCalled();
+    });
+
+    it("saves the client's 50/30/10/10 schedule alongside the prose", async () => {
+      await service.updateTerms(user, draft.id, {
+        referenceCode: 'Rodas FUJIHD-E02',
+        deliveryDays: 150,
+        warrantyPartsMonths: 60,
+        warrantyFreeServiceMonths: 12,
+        validityDays: 5,
+        paymentTerms: [
+          { label: 'On signing', percent: '50.00' },
+          { label: 'On shipping documents', percent: '30.00' },
+          { label: 'On delivery', percent: '10.00' },
+          { label: 'After commissioning', percent: '10.00' },
+        ],
+      });
+
+      expect(repo.updateTerms).toHaveBeenCalledWith(user.tenantId, draft.id, {
+        referenceCode: 'Rodas FUJIHD-E02',
+        deliveryDays: 150,
+        warrantyPartsMonths: 60,
+        warrantyFreeServiceMonths: 12,
+        validityDays: 5,
+      });
+      expect(repo.replacePaymentTerms.mock.calls[0]![2]).toHaveLength(4);
+    });
+
+    it('a patch that mentions one field does not blank the others', async () => {
+      await service.updateTerms(user, draft.id, {
+        deliveryDays: 120,
+        referenceCode: undefined,
+      });
+      expect(repo.updateTerms).toHaveBeenCalledWith(user.tenantId, draft.id, {
+        deliveryDays: 120,
+      });
+    });
+
+    it('leaves an untouched schedule alone rather than clearing it', async () => {
+      await service.updateTerms(user, draft.id, { deliveryDays: 120 });
+      expect(repo.replacePaymentTerms).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('addLine', () => {
+    const calcResultForLine: CalcResult = {
+      technical: { capacityPersons: 10 } as CalcResult['technical'],
+      pricing: {
+        basePrice: '7000000.00',
+        stopsAdjustment: '240000.00',
+        capacityAdjustment: '170000.00',
+        totalBeforeMargin: '7410000.00',
+        marginAmount: '0.00',
+        subtotalWithMargin: '7410000.00',
+        taxAmount: '0.00',
+        totalPrice: '7410000.00',
+      },
+    };
+
+    const lineDto = {
+      productType: 'PASSENGER',
+      capacityKg: 800,
+      travelHeightM: 39,
+      speedMs: 1.5,
+      machineRoomType: 'MR',
+      doorType: 'CENTER_OPEN',
+      doorWidthMm: 900,
+      buildingUsage: 'COMMERCIAL',
+      marginPercent: 0,
+      floorLabels: 'B,G,M,1,2,3,4,5,6,7,8,9,10',
+      entranceCount: 1,
+    } satisfies Record<string, unknown>;
+
+    beforeEach(() => {
+      repo.findById.mockResolvedValue(draft);
+      calc.calculateSpecs.mockReturnValue(calcResultForLine);
+      repo.addLine.mockImplementation(async () => ({}));
+    });
+
+    it('fills the frozen formula\'s stops from the floor labels', async () => {
+      await service.addLine(user, draft.id, lineDto as never);
+      expect(calc.calculateSpecs).toHaveBeenCalledWith(
+        expect.objectContaining({ stops: 13, taxPercent: 0 }),
+      );
+    });
+
+    it('derives the page-1 cell and the compressed floor summary', async () => {
+      await service.addLine(user, draft.id, lineDto as never);
+      const [, , values] = repo.addLine.mock.calls[0]!;
+      expect(values.specSummary).toBe(
+        '800KG -10persons / Speed 1.5m/s / B+G+M+10 / 13 floors/13 doors',
+      );
+      expect(values.floorDisplaySummary).toBe('B+G+M+10');
+    });
+
+    it("prices the line's own VAT off the quotation's resolved rate, in decimal", async () => {
+      await service.addLine(user, draft.id, lineDto as never);
+      const [, , values] = repo.addLine.mock.calls[0]!;
+      expect(values.pricingBreakdown.taxAmount).toBe('1111500.00');
+      expect(values.pricingBreakdown.totalPrice).toBe('8521500.00');
+      expect(values.lineTotalEtb).toBe('7410000.00');
+    });
+
+    it('multiplies the line total by the number of units', async () => {
+      await service.addLine(user, draft.id, {
+        ...lineDto,
+        quantity: 3,
+      } as never);
+      const [, , values] = repo.addLine.mock.calls[0]!;
+      expect(values.unitPriceEtb).toBe('7410000.00');
+      expect(values.lineTotalEtb).toBe('22230000.00');
+    });
+
+    it('refuses a line that states neither stops nor floor labels', async () => {
+      const { floorLabels: _drop, ...noFloors } = lineDto;
+      await expect(
+        service.addLine(user, draft.id, noFloors as never),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('accepts an explicit stop count when there is no floor plan', async () => {
+      const { floorLabels: _drop, ...noFloors } = lineDto;
+      await service.addLine(user, draft.id, {
+        ...noFloors,
+        stops: 6,
+      } as never);
+      expect(calc.calculateSpecs).toHaveBeenCalledWith(
+        expect.objectContaining({ stops: 6 }),
       );
     });
   });
