@@ -28,6 +28,7 @@
     "db:seed": "tsx --env-file-if-exists=.env src/database/seed.ts",
     "db:seed:dev": "ALLOW_DEMO_SEED=1 tsx --env-file-if-exists=.env src/database/seed.ts",
     "db:seed:rates": "tsx --env-file-if-exists=.env src/database/seed-rates.cli.ts",
+    "db:seed:document-content": "tsx --env-file-if-exists=.env src/database/seed-document-content.cli.ts",
     "db:bootstrap": "tsx --env-file-if-exists=.env src/database/bootstrap-tenant.cli.ts"
   },
   "dependencies": {
