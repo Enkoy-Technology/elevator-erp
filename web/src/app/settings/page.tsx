@@ -1,9 +1,10 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-import { fieldClass, labelClass } from '@/components/form-styles';
+import { btnSecondary, fieldClass, labelClass } from '@/components/form-styles';
 import { useLocale } from '@/components/locale-provider';
 import { Sidebar } from '@/components/sidebar';
 import {
@@ -144,6 +145,27 @@ export default function SettingsPage() {
               {success}
             </p>
           ) : null}
+
+          {/* The two document-content screens live under this section but
+              are their own routes: they are lists, not fields on this form.
+              Sales managers reach them from the sidebar too — Settings
+              itself is ADMIN-only, they are not. */}
+          <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-6">
+            <h2 className="font-display text-base font-semibold text-slate-900">
+              {t('settings.documentContent')}
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm text-slate-500">
+              {t('settings.documentContentHelp')}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href="/settings/boilerplate" className={btnSecondary}>
+                {t('settings.boilerplateLink')}
+              </Link>
+              <Link href="/settings/components" className={btnSecondary}>
+                {t('settings.componentsLink')}
+              </Link>
+            </div>
+          </section>
 
           {loading || !settings ? (
             <p className="text-sm text-slate-500">Loading…</p>

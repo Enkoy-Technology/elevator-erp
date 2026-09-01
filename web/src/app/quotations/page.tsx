@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ColumnDef } from '@tanstack/react-table';
 
-import { Ban, Check, X, XCircle } from 'lucide-react';
+import { Ban, Check, Pencil, X, XCircle } from 'lucide-react';
 
 import { DataTable } from '@/components/data-table';
 import { btnGhost, btnPrimary, btnSecondary } from '@/components/form-styles';
@@ -568,6 +568,16 @@ export default function QuotationsPage() {
     const busy = busyId === quote.id;
     return (
       <div className="flex items-center justify-end gap-1.5">
+        {/* A quotation is built on its own screen — lifts, negotiated price
+            and terms — and only a DRAFT can still be built. */}
+        {canMutate && quote.status === 'DRAFT' ? (
+          <RowAction
+            icon={Pencil}
+            disabled={busy}
+            label={`Edit ${quote.quoteNumber}`}
+            onClick={() => router.push(`/quotations/${quote.id}/edit`)}
+          />
+        ) : null}
         {canMutate && quote.status === 'DRAFT' ? (
           <button
             type="button"

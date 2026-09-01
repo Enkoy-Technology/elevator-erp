@@ -1208,6 +1208,31 @@ export interface Quotation {
   marginAmountEtb: string;
   taxAmountEtb: string;
   totalPriceEtb: string;
+
+  // ---- negotiated price. Null on a quotation nobody has priced backward
+  // from a round grand total (see priceQuotation).
+  /** VAT-INCLUSIVE figure the frozen formula produced, on the same basis as
+   *  totalPriceEtb — what the discount is measured against. */
+  calculatedTotalEtb: string | null;
+  /** calculatedTotalEtb - totalPriceEtb, also VAT-INCLUSIVE. Reading it as an
+   *  ex-VAT amount under-reports every discount by the VAT rate. */
+  discountAmountEtb: string | null;
+  /** Same percent on either basis. Negative is a PREMIUM, not a discount. */
+  discountPercent: string | null;
+  /** Set only where the tenant's discount-approval threshold required a
+   *  sign-off and someone gave it (see approveQuotationDiscount). */
+  discountApprovedByUserId: string | null;
+
+  // ---- commercial terms printed as prose on page 1 (see updateQuotationTerms).
+  referenceCode: string | null;
+  deliveryDays: number | null;
+  warrantyPartsMonths: number | null;
+  warrantyFreeServiceMonths: number | null;
+  /** The validity the document STATES ("valid for 5 days"). `validUntil`
+   *  below is the resolved date the system enforces; the two are kept apart
+   *  so re-rendering an old document never re-states a fresh validity. */
+  validityDays: number | null;
+
   validUntil: string | null;
   notes: string | null;
   approvedByUserId: string | null;
@@ -1298,6 +1323,242 @@ export const downloadQuotationTechnicalProposal = (
   downloadDocument(
     `/quotations/${id}/technical-proposal?format=pdf`,
     `technical-proposal-${quoteNumber}.pdf`,
+  );
+
+/** GET /quotations/:id — the bare header row, same shape the list returns. */
+export const getQuotation = (id: string): Promise<Quotation> =>
+  apiFetch<Quotation>(`/quotations/${id}`);
+
+/* ---- quotation line items ------------------------------------------ */
+
+/**
+ * Page 2's 19-row specification table. DISPLAY ONLY — none of these feed the
+ * frozen pricing formula. `floorLabels` is the single exception, in one
+ * direction: its COUNT fills the calculator's `stops`, which pricing already
+ * used.
+ */
+export interface QuotationLineSpecFields {
+  /** "WITH MR" / "MRL" as printed — the label, not the calculator's enum. */
+  machineRoomLabel: string | null;
+  /** Comma-separated floor names in print order: "B,G,M,1,2,...,10". */
+  floorLabels: string | null;
+  /** The compressed form they print: "B+G+M+10". */
+  floorDisplaySummary: string | null;
+  doorHeightMm: number | null;
+  ropingRatio: string | null;
+  tractionMachineType: string | null;
+  /** "Simplex" / "Duplex" / "Triplex". */
+  controlSystem: string | null;
+  /** "380V AC 50HZ 3-phase 4 lines". */
+  powerSupply: string | null;
+  /** "240V AC 50HZ Single phase". */
+  lightSupply: string | null;
+  entranceCount: number | null;
+}
+
+/**
+ * The same page-2 fields as they go OUT on a create/update body: every one
+ * optional and never `null` — the API's validators reject null, so omit the
+ * key instead of blanking it.
+ */
+export type QuotationLineSpecInput = {
+  [K in keyof QuotationLineSpecFields]?: NonNullable<QuotationLineSpecFields[K]>;
+};
+
+/** One lift on page 1's line table (their "No of Units" column is `quantity`). */
+export interface QuotationLine extends QuotationLineSpecFields {
+  id: string;
+  quotationId: string;
+  /** 1-based print order. */
+  sequence: number;
+  productType: ProductType;
+  /** Snapshots of this line's OWN calculator run. Null on a hand-entered
+   *  line that no calculator run produced. */
+  calcInput: Omit<CalcInputPayload, 'taxPercent'> | null;
+  technicalSpec: CalcResult['technical'] | null;
+  pricingBreakdown: CalcResult['pricing'] | null;
+  /** The page-1 description cell, rendered verbatim. */
+  specSummary: string | null;
+  quantity: number;
+  /** EX-VAT. After a round grand total is allocated across the lines,
+   *  `lineTotalEtb` is NOT necessarily `quantity * unitPriceEtb` — the cent
+   *  of rounding the customer absorbed lives in that gap. */
+  unitPriceEtb: string | null;
+  lineTotalEtb: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Priced by its own calculator run, so it takes the calculator's whole input
+ * minus `taxPercent` (VAT is the statutory rate on the quotation header).
+ * `stops` is optional only because `floorLabels` derives it — supply one or
+ * the other or the API 400s.
+ */
+export interface CreateQuotationLinePayload
+  extends Omit<CalcInputPayload, 'taxPercent' | 'stops'>,
+    QuotationLineSpecInput {
+  stops?: number;
+  /** 1..999, defaults to 1. */
+  quantity?: number;
+  /** Derived from the spec fields when omitted. */
+  specSummary?: string;
+}
+
+/**
+ * Merged onto the line's stored spec and re-priced off the merged result, so
+ * a one-field edit never has to restate the whole lift.
+ */
+export type UpdateQuotationLinePayload = Partial<CreateQuotationLinePayload>;
+
+/**
+ * Lines in print order. Never empty: a quotation written before line items
+ * existed reads back as the single line its header implies, carrying the
+ * QUOTATION's own id — which is also the id it keeps once a write
+ * materializes it, so it is safe to edit and reorder like any other line.
+ */
+export const listQuotationLines = (id: string): Promise<QuotationLine[]> =>
+  apiFetch<QuotationLine[]>(`/quotations/${id}/lines`);
+
+/** DRAFT quotations only — the API 409s once it has left DRAFT. */
+export const addQuotationLine = (
+  id: string,
+  payload: CreateQuotationLinePayload,
+): Promise<QuotationLine> =>
+  apiFetch<QuotationLine>(`/quotations/${id}/lines`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const updateQuotationLine = (
+  id: string,
+  lineId: string,
+  payload: UpdateQuotationLinePayload,
+): Promise<QuotationLine> =>
+  apiFetch<QuotationLine>(`/quotations/${id}/lines/${lineId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+
+/** Returns the REMAINING lines, already renumbered — render them, don't
+ *  re-fetch. */
+export const removeQuotationLine = (
+  id: string,
+  lineId: string,
+): Promise<QuotationLine[]> =>
+  apiFetch<QuotationLine[]>(`/quotations/${id}/lines/${lineId}`, {
+    method: 'DELETE',
+  });
+
+/**
+ * `lineIds` must name EVERY line of the quotation exactly once, in the order
+ * they should print — a partial list is rejected, because the print order is
+ * a unique key and renumbering a subset collides with the rows left out.
+ */
+export const reorderQuotationLines = (
+  id: string,
+  lineIds: string[],
+): Promise<QuotationLine[]> =>
+  apiFetch<QuotationLine[]>(`/quotations/${id}/lines/reorder`, {
+    method: 'POST',
+    body: JSON.stringify({ lineIds }),
+  });
+
+/* ---- negotiated price ----------------------------------------------- */
+
+/**
+ * Price the quotation BACKWARD from the round, VAT-INCLUSIVE figure the
+ * customer actually pays — how this client sells: their proforma reads
+ * 7,835,000.00 where the formula gives 8,521,500.00, and 7,835,000 / 1.15 =
+ * 6,813,043.48 + VAT 1,021,956.52 balances to the cent.
+ *
+ * The returned quotation carries the derived `subtotalEtb` / `taxAmountEtb` /
+ * `totalPriceEtb` plus `calculatedTotalEtb`, `discountAmountEtb` and
+ * `discountPercent`; each line's amount is re-allocated pro rata. Send a
+ * decimal STRING (never a float) — `marginAmountEtb` comes back '0.00' on
+ * purpose, since the negotiated subtotal already contains the margin.
+ *
+ * DRAFT only.
+ */
+export const priceQuotation = (
+  id: string,
+  grandTotalEtb: string,
+): Promise<Quotation> =>
+  apiFetch<Quotation>(`/quotations/${id}/price`, {
+    method: 'POST',
+    body: JSON.stringify({ grandTotalEtb }),
+  });
+
+/**
+ * Sign the negotiated discount off as yourself (CEO/FINANCE). Only needed
+ * where the tenant set a discount-approval threshold and this quotation is
+ * over it — submitting an unapproved over-threshold quotation is what fails.
+ * 400s on a quotation that has no negotiated discount yet.
+ */
+export const approveQuotationDiscount = (id: string): Promise<Quotation> =>
+  apiFetch<Quotation>(`/quotations/${id}/approve-discount`, { method: 'POST' });
+
+/* ---- commercial terms + payment schedule ---------------------------- */
+
+/** One row of the schedule the OFFER states — a percentage against an event,
+ *  not a dated instalment. */
+export interface QuotationPaymentTerm {
+  id: string;
+  quotationId: string;
+  /** 1-based print order. */
+  sequence: number;
+  /** The sentence printed: "Payable upon submission of shipping documents". */
+  label: string;
+  /** Percent of the quoted price, as a decimal string. */
+  percent: string;
+  /** Optional machine tag (SIGNING, SHIPPING_DOCUMENTS, ...). Nothing keys
+   *  off it yet. */
+  triggerEvent: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One row as the schedule editor sends it — `sequence` is the array order. */
+export interface PaymentTermInput {
+  label: string;
+  percent: string;
+  triggerEvent?: string;
+}
+
+/**
+ * Only the keys PRESENT are written: sending `{ deliveryDays: 120 }` must not
+ * blank the warranty someone else set, so omit a field rather than sending
+ * null or ''.
+ */
+export interface UpdateQuotationTermsPayload {
+  /** Their own offer reference, e.g. "Rodas FUJIHD-E02". */
+  referenceCode?: string;
+  deliveryDays?: number;
+  warrantyPartsMonths?: number;
+  warrantyFreeServiceMonths?: number;
+  validityDays?: number;
+  /**
+   * Replaces the WHOLE schedule when present; `[]` clears it. The percentages
+   * must total exactly 100 or the API 400s. Omit the key to leave the
+   * existing schedule alone.
+   */
+  paymentTerms?: PaymentTermInput[];
+}
+
+export const listQuotationPaymentTerms = (
+  id: string,
+): Promise<QuotationPaymentTerm[]> =>
+  apiFetch<QuotationPaymentTerm[]>(`/quotations/${id}/payment-terms`);
+
+/** DRAFT only. Returns the updated header AND the schedule as saved, so a
+ *  terms form needs no follow-up fetch. */
+export const updateQuotationTerms = (
+  id: string,
+  payload: UpdateQuotationTermsPayload,
+): Promise<{ quotation: Quotation; paymentTerms: QuotationPaymentTerm[] }> =>
+  apiFetch<{ quotation: Quotation; paymentTerms: QuotationPaymentTerm[] }>(
+    `/quotations/${id}/terms`,
+    { method: 'PATCH', body: JSON.stringify(payload) },
   );
 
 export type ProformaStatus = 'ISSUED' | 'CANCELLED';
@@ -2100,3 +2361,137 @@ export const downloadWarrantyCertificate = (
     `/contracts/${contractId}/warranty-certificate`,
     `warranty-certificate-${contractNumber}.pdf`,
   );
+
+/* ---- document boilerplate + component specifications ---------------- */
+
+/**
+ * One prose slot of pages 3-6 (scope of supply, exclusions, standards...),
+ * owned by the tenant and edited once instead of pasted per quote — which is
+ * what let the client's own copies drift out of sync with their spec table.
+ *
+ * `body` is PLAIN TEXT, not Markdown or HTML: a line beginning with '- ' is
+ * rendered as a bullet, every other line as a paragraph line.
+ */
+export interface BoilerplateSection {
+  id: string;
+  /** The layout slot the renderer looks this up by — an identifier
+   *  (`^[a-z][a-z0-9_]*$`), not free text. Immutable after create: renaming
+   *  it would silently empty that slot. */
+  sectionKey: string;
+  title: string | null;
+  body: string | null;
+  sortOrder: number;
+  /** False hides the section from printed documents without losing its text. */
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * The COMPLETE list in one envelope — the API never really pages this (8-ish
+ * rows, and reordering a list you can only see part of is a bug generator),
+ * so `page` is always 1 and `pageSize` is the row count. Render the rows;
+ * do not build a pager. Inactive sections are included.
+ */
+export const listBoilerplateSections = (): Promise<
+  Paginated<BoilerplateSection>
+> => apiFetch<Paginated<BoilerplateSection>>('/settings/boilerplate');
+
+/** `sortOrder` omitted appends to the end. 409s on a duplicate `sectionKey`. */
+export const createBoilerplateSection = (payload: {
+  sectionKey: string;
+  title?: string;
+  body?: string;
+  sortOrder?: number;
+}): Promise<BoilerplateSection> =>
+  apiFetch<BoilerplateSection>('/settings/boilerplate', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+/** No `sectionKey` and no `isActive` here on purpose — the key is the slot
+ *  identity, and deactivation has its own route below. */
+export const updateBoilerplateSection = (
+  id: string,
+  payload: { title?: string; body?: string; sortOrder?: number },
+): Promise<BoilerplateSection> =>
+  apiFetch<BoilerplateSection>(`/settings/boilerplate/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+
+/** Stop printing a section without losing its text. There is no reactivate
+ *  route yet; there is no delete route at all. */
+export const deactivateBoilerplateSection = (
+  id: string,
+): Promise<BoilerplateSection> =>
+  apiFetch<BoilerplateSection>(`/settings/boilerplate/${id}/deactivate`, {
+    method: 'POST',
+  });
+
+/** `ids` must name EVERY section exactly once, in the new print order — a
+ *  partial list is rejected as a client that reordered a stale list. */
+export const reorderBoilerplateSections = (
+  ids: string[],
+): Promise<Paginated<BoilerplateSection>> =>
+  apiFetch<Paginated<BoilerplateSection>>('/settings/boilerplate/reorder', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+
+/** One row of the component/brand table on their page 5 ("Traction machine
+ *  — FUJI — Zhejiang (Sino-Japan Joint Venture)"). Tenant-level: the same
+ *  table on every document until they change supplier. */
+export interface ComponentSpecification {
+  id: string;
+  /** 1-based row number in the printed table, unique per tenant. */
+  sequence: number;
+  componentName: string;
+  brand: string | null;
+  remark: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Same whole-list envelope as listBoilerplateSections — page 1, pageSize =
+ *  row count, no pager. */
+export const listComponentSpecifications = (): Promise<
+  Paginated<ComponentSpecification>
+> => apiFetch<Paginated<ComponentSpecification>>('/settings/components');
+
+/** `sequence` omitted appends to the end; giving one that is taken 409s. */
+export const createComponentSpecification = (payload: {
+  componentName: string;
+  brand?: string;
+  remark?: string;
+  sequence?: number;
+}): Promise<ComponentSpecification> =>
+  apiFetch<ComponentSpecification>('/settings/components', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+/** No `sequence` — reordering is the reorder route, so the unique row number
+ *  can never collide through an edit. */
+export const updateComponentSpecification = (
+  id: string,
+  payload: { componentName?: string; brand?: string; remark?: string },
+): Promise<ComponentSpecification> =>
+  apiFetch<ComponentSpecification>(`/settings/components/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+
+/** A hard delete, unlike a boilerplate section — documents already issued
+ *  carry their own snapshot. 204, so nothing comes back. */
+export const deleteComponentSpecification = (id: string): Promise<void> =>
+  apiFetch<void>(`/settings/components/${id}`, { method: 'DELETE' });
+
+/** `ids` must name EVERY row exactly once, in the new print order. */
+export const reorderComponentSpecifications = (
+  ids: string[],
+): Promise<Paginated<ComponentSpecification>> =>
+  apiFetch<Paginated<ComponentSpecification>>('/settings/components/reorder', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });

@@ -198,6 +198,28 @@ export const MODULES: ModuleNavItem[] = [
     roles: ['ADMIN'],
   },
   {
+    nameKey: 'nav.boilerplate',
+    group: 'admin',
+    description: 'Standing text printed on every document',
+    phase: null,
+    href: '/settings/boilerplate',
+    icon: 'M7 3h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z M9 8h6 M9 12h6 M9 16h4',
+    // Mirrors DocumentContentController's class-level
+    // @Roles('SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'); writing is
+    // SALES_MANAGER only and is gated inside the page, not here.
+    roles: ['SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
+  },
+  {
+    nameKey: 'nav.components',
+    group: 'admin',
+    description: 'Brand appendix printed on every document',
+    phase: null,
+    href: '/settings/components',
+    icon: 'M4 5h16v14H4z M4 10h16 M10 5v14',
+    // Same controller, same class-level roles.
+    roles: ['SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
+  },
+  {
     nameKey: 'nav.docs',
     group: 'admin',
     description: 'How the whole system works',

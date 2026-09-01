@@ -16,6 +16,8 @@ export type MessageKey =
   | 'nav.maintenance'
   | 'nav.messages'
   | 'nav.settings'
+  | 'nav.boilerplate'
+  | 'nav.components'
   | 'nav.docs'
   | 'nav.collapse'
   | 'nav.expand'
@@ -54,7 +56,11 @@ export type MessageKey =
   | 'settings.saving'
   | 'settings.saved'
   | 'settings.loadError'
-  | 'settings.saveError';
+  | 'settings.saveError'
+  | 'settings.documentContent'
+  | 'settings.documentContentHelp'
+  | 'settings.boilerplateLink'
+  | 'settings.componentsLink';
 
 const en: Record<MessageKey, string> = {
   'nav.dashboard': 'Dashboard',
@@ -72,6 +78,8 @@ const en: Record<MessageKey, string> = {
   'nav.maintenance': 'Maintenance',
   'nav.messages': 'Messages',
   'nav.settings': 'Settings',
+  'nav.boilerplate': 'Document text',
+  'nav.components': 'Components & brands',
   'nav.docs': 'Documentation',
   'nav.collapse': 'Collapse',
   'nav.expand': 'Expand sidebar',
@@ -112,6 +120,11 @@ const en: Record<MessageKey, string> = {
   'settings.saved': 'Settings saved.',
   'settings.loadError': 'Failed to load settings',
   'settings.saveError': 'Failed to save settings',
+  'settings.documentContent': 'Document content',
+  'settings.documentContentHelp':
+    'The standing text and the component/brand appendix that print on every quotation and proforma. Edited here once instead of pasted into each document — which is how a proforma ends up saying one thing on page 2 and another on page 3.',
+  'settings.boilerplateLink': 'Document boilerplate',
+  'settings.componentsLink': 'Components & brands',
 };
 
 const am: Record<MessageKey, string> = {
@@ -130,6 +143,8 @@ const am: Record<MessageKey, string> = {
   'nav.maintenance': 'ጥገና',
   'nav.messages': 'መልዕክቶች',
   'nav.settings': 'ቅንብሮች',
+  'nav.boilerplate': 'የሰነድ ጽሑፍ',
+  'nav.components': 'መለዋወጫዎች እና ብራንዶች',
   'nav.docs': 'ሰነድ',
   'nav.collapse': 'ሰብስብ',
   'nav.expand': 'ሳይድባር አሳይ',
@@ -170,6 +185,11 @@ const am: Record<MessageKey, string> = {
   'settings.saved': 'ቅንብሮች ተቀምጠዋል።',
   'settings.loadError': 'ቅንብሮችን መጫን አልተሳካም',
   'settings.saveError': 'ቅንብሮችን ማስቀመጥ አልተሳካም',
+  'settings.documentContent': 'የሰነድ ይዘት',
+  'settings.documentContentHelp':
+    'በእያንዳንዱ የዋጋ ማቅረቢያና ፕሮፎርማ ላይ የሚታተመው ቋሚ ጽሑፍና የመለዋወጫ/ብራንድ ሠንጠረዥ። በየሰነዱ ከመቅዳት ይልቅ እዚህ አንድ ጊዜ ይስተካከላል።',
+  'settings.boilerplateLink': 'የሰነድ ቋሚ ጽሑፍ',
+  'settings.componentsLink': 'መለዋወጫዎች እና ብራንዶች',
 };
 
 const dictionaries: Record<AppLocale, Record<MessageKey, string>> = {

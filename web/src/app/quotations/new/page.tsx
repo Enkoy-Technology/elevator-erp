@@ -1,7 +1,7 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useEffect, useState, type FormEvent } from 'react';
 
 import { Field, FormPage, FormSection } from '@/components/form-page';
 import { fieldClass } from '@/components/form-styles';
@@ -12,14 +12,24 @@ import {
   getCurrentRole,
   listProjects,
   optional,
-  PRODUCT_TYPE_LABELS,
-  PRODUCT_TYPES,
   type CreateQuotationPayload,
   type Project,
   type UserRole,
 } from '@/lib/api';
 
-const CALC_DEFAULTS: Omit<CreateQuotationPayload, 'validUntil' | 'notes'> = {
+/**
+ * Starting a quotation asks for the customer's project and nothing else.
+ *
+ * A quotation is a table of lifts now, and a lift is nineteen fields — so
+ * describing the first one HERE and the second one on the next screen would
+ * be two different jobs wearing the same name. This creates the DRAFT with a
+ * placeholder lift and hands over to the editor, which is the one place a
+ * lift is ever described.
+ */
+
+/** The placeholder lift. Every value is overwritten on the next screen; it
+ *  exists so the API has a priced line to create the quotation around. */
+const PLACEHOLDER_LIFT: Omit<CreateQuotationPayload, 'validUntil' | 'notes'> = {
   productType: 'PASSENGER',
   capacityKg: 1000,
   stops: 12,
@@ -41,7 +51,6 @@ export default function NewQuotationPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState('');
-  const [calc, setCalc] = useState(CALC_DEFAULTS);
   const [validUntil, setValidUntil] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -66,13 +75,6 @@ export default function NewQuotationPage() {
     })();
   }, [router]);
 
-  const setCalcField = (field: keyof typeof CALC_DEFAULTS, value: string) => {
-    setCalc((prev) => ({
-      ...prev,
-      [field]: typeof CALC_DEFAULTS[field] === 'number' ? Number(value) : value,
-    }));
-  };
-
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!projectId) {
@@ -82,12 +84,12 @@ export default function NewQuotationPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await createQuotationFromCalc(projectId, {
-        ...calc,
+      const quotation = await createQuotationFromCalc(projectId, {
+        ...PLACEHOLDER_LIFT,
         validUntil: validUntil ? new Date(validUntil).toISOString() : undefined,
         notes: notes || undefined,
       });
-      router.push('/quotations');
+      router.push(`/quotations/${quotation.id}/edit`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to create quotation');
     } finally {
@@ -99,12 +101,12 @@ export default function NewQuotationPage() {
     <FormPage
       eyebrow="Sales"
       title="New quotation"
-      description="Prices the elevator spec server-side (VAT from the statutory rate table) and saves a DRAFT."
+      description="Opens a DRAFT with one lift on it. You describe the lifts, agree the price and state the terms on the next screen."
       backHref="/quotations"
       backLabel="Quotations"
       error={error}
       submitting={submitting}
-      submitLabel="Save draft"
+      submitLabel="Start the offer"
       onSubmit={(event) => void onSubmit(event)}
     >
       <FormSection title="Project">
@@ -129,128 +131,11 @@ export default function NewQuotationPage() {
         </Field>
       </FormSection>
 
-      <FormSection title="Elevator spec">
-        <Field
-          label="Product"
-          htmlFor="productType"
-          wide
-          hint={
-            calc.productType !== 'PASSENGER'
-              ? 'Flat price — stops and capacity do not change it.'
-              : undefined
-          }
-        >
-          <select
-            id="productType"
-            className={fieldClass}
-            value={calc.productType}
-            onChange={(e) => setCalcField('productType', e.target.value)}
-          >
-            {PRODUCT_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {PRODUCT_TYPE_LABELS[t]}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <Field label="Capacity (kg)" htmlFor="capacityKg">
-          <input
-            id="capacityKg"
-            type="number"
-            className={fieldClass}
-            value={calc.capacityKg}
-            onChange={(e) => setCalcField('capacityKg', e.target.value)}
-          />
-        </Field>
-        <Field label="Stops" htmlFor="stops">
-          <input
-            id="stops"
-            type="number"
-            className={fieldClass}
-            value={calc.stops}
-            onChange={(e) => setCalcField('stops', e.target.value)}
-          />
-        </Field>
-        <Field label="Travel height (m)" htmlFor="travelHeightM">
-          <input
-            id="travelHeightM"
-            type="number"
-            step="0.01"
-            className={fieldClass}
-            value={calc.travelHeightM}
-            onChange={(e) => setCalcField('travelHeightM', e.target.value)}
-          />
-        </Field>
-        <Field label="Speed (m/s)" htmlFor="speedMs">
-          <input
-            id="speedMs"
-            type="number"
-            step="0.01"
-            className={fieldClass}
-            value={calc.speedMs}
-            onChange={(e) => setCalcField('speedMs', e.target.value)}
-          />
-        </Field>
-        <Field label="Machine room" htmlFor="machineRoomType">
-          <select
-            id="machineRoomType"
-            className={fieldClass}
-            value={calc.machineRoomType}
-            onChange={(e) => setCalcField('machineRoomType', e.target.value)}
-          >
-            <option value="MRL">MRL</option>
-            <option value="MR">MR</option>
-          </select>
-        </Field>
-        <Field label="Door type" htmlFor="doorType">
-          <select
-            id="doorType"
-            className={fieldClass}
-            value={calc.doorType}
-            onChange={(e) => setCalcField('doorType', e.target.value)}
-          >
-            <option value="CENTER_OPEN">Center open</option>
-            <option value="TELESCOPIC">Telescopic</option>
-            <option value="SWING">Swing</option>
-          </select>
-        </Field>
-        <Field label="Door width (mm)" htmlFor="doorWidthMm">
-          <input
-            id="doorWidthMm"
-            type="number"
-            className={fieldClass}
-            value={calc.doorWidthMm}
-            onChange={(e) => setCalcField('doorWidthMm', e.target.value)}
-          />
-        </Field>
-        <Field label="Building usage" htmlFor="buildingUsage">
-          <select
-            id="buildingUsage"
-            className={fieldClass}
-            value={calc.buildingUsage}
-            onChange={(e) => setCalcField('buildingUsage', e.target.value)}
-          >
-            <option value="RESIDENTIAL">Residential</option>
-            <option value="COMMERCIAL">Commercial</option>
-            <option value="HOSPITAL">Hospital</option>
-            <option value="INDUSTRIAL">Industrial</option>
-          </select>
-        </Field>
-        <Field label="Margin (%)" htmlFor="marginPercent">
-          <input
-            id="marginPercent"
-            type="number"
-            step="0.01"
-            className={fieldClass}
-            value={calc.marginPercent}
-            onChange={(e) => setCalcField('marginPercent', e.target.value)}
-          />
-        </Field>
-      </FormSection>
-
-      <FormSection title="Terms">
-        <Field label="Valid until (optional)" htmlFor="validUntil">
+      <FormSection
+        title="Optional"
+        description="Both can wait — the offer's stated validity is set with the rest of the terms on the next screen."
+      >
+        <Field label="Expires on" htmlFor="validUntil">
           <input
             id="validUntil"
             type="date"
@@ -259,7 +144,7 @@ export default function NewQuotationPage() {
             onChange={(e) => setValidUntil(e.target.value)}
           />
         </Field>
-        <Field label="Notes (optional)" htmlFor="notes" wide>
+        <Field label="Internal notes" htmlFor="notes" wide>
           <textarea
             id="notes"
             className={fieldClass}
