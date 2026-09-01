@@ -6,7 +6,9 @@ jest.mock('puppeteer', () => ({ __esModule: true, default: { launch: jest.fn() }
 import { Test } from '@nestjs/testing';
 
 import { TemplateNotImplementedError } from '../exceptions';
-import { DocumentPdfService, isAllowedAssetUrl, type TenantBranding } from './document-pdf.service';
+import { DocumentPdfService, isAllowedAssetUrl, type TenantBranding,
+  type DocumentTemplate,
+} from './document-pdf.service';
 
 describe('isAllowedAssetUrl (SSRF guard)', () => {
   it('allows https to public hosts, about:blank, and data URIs', () => {
@@ -97,22 +99,25 @@ describe('DocumentPdfService.renderDocumentPdf', () => {
     primaryColor: '#123456',
   };
 
-  it('throws TemplateNotImplementedError for a template with no registered builder yet', async () => {
+  // Every DocumentTemplate member now has a builder — TEMPLATE_BUILDERS is a
+  // total Record, so the compiler enforces it — and the union no longer
+  // carries a name for an unwritten template. The rejection path is still
+  // real for a bad name arriving off the wire or through a cast, so it is
+  // exercised through one rather than a union member that cannot exist.
+  it('rejects an unknown template by name, without launching Chromium', async () => {
     const service = new DocumentPdfService();
-    await expect(
-      service.renderDocumentPdf('contract', {}, branding),
-    ).rejects.toBeInstanceOf(TemplateNotImplementedError);
-    // Rejecting before touching Chromium: no browser launch attempted.
+    const rejection = expect(
+      service.renderDocumentPdf(
+        'not-a-template' as unknown as DocumentTemplate,
+        {},
+        branding,
+      ),
+    ).rejects;
+    await rejection.toBeInstanceOf(TemplateNotImplementedError);
+    await rejection.toThrow(/not-a-template/);
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const puppeteer = require('puppeteer').default as { launch: jest.Mock };
     expect(puppeteer.launch).not.toHaveBeenCalled();
-  });
-
-  it('names the rejected template in the error message', async () => {
-    const service = new DocumentPdfService();
-    await expect(
-      service.renderDocumentPdf('installation-certificate', {}, branding),
-    ).rejects.toThrow(/installation-certificate/);
   });
 
   it('has a registered builder for "proforma" (Phase 3) — does not throw TemplateNotImplementedError', async () => {

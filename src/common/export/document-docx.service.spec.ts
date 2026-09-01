@@ -1,3 +1,4 @@
+import type { DocumentTemplate } from './document-pdf.service';
 import zlib from 'node:zlib';
 
 import { TemplateNotImplementedError } from '../exceptions';
@@ -91,7 +92,11 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
   it('throws TemplateNotImplementedError for a template with no registered builder yet', async () => {
     const service = new DocumentDocxService();
     await expect(
-      service.renderDocumentDocx('installation-certificate', {}, branding),
+      service.renderDocumentDocx(
+        'not-a-template' as unknown as DocumentTemplate,
+        {},
+        branding,
+      ),
     ).rejects.toBeInstanceOf(TemplateNotImplementedError);
   });
 

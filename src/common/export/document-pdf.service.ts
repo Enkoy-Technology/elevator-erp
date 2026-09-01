@@ -7,21 +7,39 @@ import type { Browser } from 'puppeteer';
 
 import { TemplateNotImplementedError } from '../exceptions';
 import { buildAgingReportHtml } from './templates/aging.template';
+import { buildCompletionCertificateHtml } from './templates/completion-certificate.template';
+import { buildContractHtml } from './templates/contract.template';
 import { buildInvoiceHtml } from './templates/invoice.template';
+import { buildMaintenanceReportHtml } from './templates/maintenance-report.template';
+import { buildPaymentScheduleHtml } from './templates/payment-schedule.template';
 import { buildProformaHtml } from './templates/proforma.template';
 import { buildQuotationHtml } from './templates/quotation.template';
 import { buildReceiptHtml } from './templates/receipt.template';
 import { buildCustomerStatementHtml } from './templates/statement.template';
+import { buildTechnicalProposalHtml } from './templates/technical-proposal.template';
+import { buildWarrantyCertificateHtml } from './templates/warranty-certificate.template';
 
+/**
+ * Every member here MUST have a builder in TEMPLATE_BUILDERS below. This
+ * union previously declared four templates nobody had written — 'contract',
+ * 'maintenance-report', 'warranty-certificate' and 'installation-certificate'
+ * — so the type read as "built" while every call threw
+ * TemplateNotImplementedError at runtime. The first three are now real; the
+ * fourth is gone, because the installation module it belonged to is a
+ * documented deferral and the client's proposal asks for a Completion
+ * Certificate instead.
+ */
 export type DocumentTemplate =
   | 'quotation'
   | 'proforma'
   | 'invoice'
   | 'receipt'
   | 'contract'
+  | 'payment-schedule'
+  | 'technical-proposal'
   | 'maintenance-report'
-  | 'installation-certificate'
   | 'warranty-certificate'
+  | 'completion-certificate'
   | 'aging-report'
   | 'customer-statement';
 
@@ -48,11 +66,20 @@ type TemplateBuilder = (data: object, branding: TenantBranding | null) => string
  * TemplateNotImplementedError until its phase lands — do not stub the
  * remaining templates ahead of the data that would fill them.
  */
-const TEMPLATE_BUILDERS: Partial<Record<DocumentTemplate, TemplateBuilder>> = {
+// Record, not Partial<Record>: every union member above must have a builder,
+// and the compiler now says so. That is the guard against a template being
+// declared and never written again.
+const TEMPLATE_BUILDERS: Record<DocumentTemplate, TemplateBuilder> = {
   quotation: buildQuotationHtml,
   proforma: buildProformaHtml,
   invoice: buildInvoiceHtml,
   receipt: buildReceiptHtml,
+  contract: buildContractHtml,
+  'payment-schedule': buildPaymentScheduleHtml,
+  'technical-proposal': buildTechnicalProposalHtml,
+  'maintenance-report': buildMaintenanceReportHtml,
+  'warranty-certificate': buildWarrantyCertificateHtml,
+  'completion-certificate': buildCompletionCertificateHtml,
   'aging-report': buildAgingReportHtml,
   'customer-statement': buildCustomerStatementHtml,
 };
@@ -218,12 +245,20 @@ export class DocumentPdfService implements OnModuleDestroy {
       // compiled against the API's Node lib, which has no DOM types — hence
       // the narrow structural cast rather than pulling "dom" into tsconfig
       // for one function.
+      // Declare NO named function or helper in here. Only this callback's
+      // source crosses into Chromium, so a bundler that keeps function names
+      // (esbuild/swc, which `nest build --builder swc` and tsx both use)
+      // rewrites a named binding to `__name(fn, '...')` and the render dies
+      // in the browser with "__name is not defined". Repeating the
+      // querySelector is the cost of the boundary.
       const bands = await page.evaluate(() => {
         const { document: doc } = globalThis as unknown as {
           document: { querySelector(selector: string): { innerHTML: string } | null };
         };
-        const read = (id: string): string => doc.querySelector(`#${id}`)?.innerHTML ?? '';
-        return { head: read('page-head'), foot: read('page-foot') };
+        return {
+          head: doc.querySelector('#page-head')?.innerHTML ?? '',
+          foot: doc.querySelector('#page-foot')?.innerHTML ?? '',
+        };
       });
 
       const bandStyle =
