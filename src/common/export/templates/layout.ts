@@ -138,6 +138,37 @@ export const renderSignatureBlock = (
   </tr></tbody></table>`;
 };
 
+/**
+ * Two signature columns side by side — the shape every counter-signed
+ * document wants (contractor on the left, the other party on the right).
+ *
+ * Four templates had each hand-rolled this same table, and the fifth
+ * (payment schedule) stacked two full-width `renderSignatureBlock` tables
+ * instead and printed a lone rule across the page. One helper so a signed
+ * document looks the same whichever one the customer is holding.
+ *
+ * `lines` are the small captions under the rule — party name, "Name,
+ * signature and date", whatever that document needs. Escaped here; pass
+ * plain text.
+ */
+export const renderSignaturePair = (
+  left: { caption: string; lines?: readonly (string | null | undefined)[] },
+  right: { caption: string; lines?: readonly (string | null | undefined)[] },
+): string => {
+  const column = (side: {
+    caption: string;
+    lines?: readonly (string | null | undefined)[];
+  }): string =>
+    `<td class="sign-sign" style="width:50%"><div class="sign-rule"></div>` +
+    `<div class="sign-caption">${esc(side.caption)}</div>` +
+    (side.lines ?? [])
+      .filter((line): line is string => Boolean(line))
+      .map((line) => `<div class="sign-caption">${esc(line)}</div>`)
+      .join('') +
+    `</td>`;
+  return `<table class="sign"><tbody><tr>${column(left)}${column(right)}</tr></tbody></table>`;
+};
+
 export interface LayoutOptions {
   branding: TenantBranding | null;
   /** Document heading, e.g. "QUOTATION". Escaped internally. */
