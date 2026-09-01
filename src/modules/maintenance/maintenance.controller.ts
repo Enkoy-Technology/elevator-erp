@@ -20,8 +20,17 @@ import type { Response } from 'express';
 
 import { todayIso } from '../../common/business-time';
 import { CurrentUser, Roles } from '../../common/decorators';
+import { DocumentPdfService } from '../../common/export/document-pdf.service';
+import { parseDocumentFormat } from '../../common/export/document-format';
 import { parseExportFormat } from '../../common/export/export-query.dto';
-import { type ColumnDef, writeCsv, writeXlsx } from '../../common/export/tabular';
+import { MAINTENANCE_REPORT_TEMPLATE } from '../../common/export/templates/maintenance-report.template';
+import { TenantBrandingProvider } from '../../common/export/tenant-branding.provider';
+import {
+  setDownloadHeaders,
+  type ColumnDef,
+  writeCsv,
+  writeXlsx,
+} from '../../common/export/tabular';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import {
   BREAKDOWN_STATUSES,
@@ -70,7 +79,11 @@ export const BREAKDOWNS_EXPORT_COLUMNS: ColumnDef[] = [
 @Controller('maintenance')
 @Roles('TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER')
 export class MaintenanceController {
-  constructor(private readonly maintenanceService: MaintenanceService) {}
+  constructor(
+    private readonly maintenanceService: MaintenanceService,
+    private readonly pdfService: DocumentPdfService,
+    private readonly tenantBranding: TenantBrandingProvider,
+  ) {}
 
   @Get('contracts')
   @ApiOperation({
@@ -155,6 +168,40 @@ export class MaintenanceController {
     @Query('pageSize') pageSize?: string,
   ) {
     return this.maintenanceService.listVisits(user, id, { page, pageSize });
+  }
+
+  @Get('visits/:id/report')
+  @ApiOperation({
+    summary:
+      'Download the Maintenance Report for a service visit (?format=pdf). Printed for the customer to sign on paper.',
+  })
+  async visitReport(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('format') formatRaw: string | undefined,
+    @Res({ passthrough: false }) res: Response,
+  ): Promise<void> {
+    // Shared validator for the shape/message, then narrowed: this document
+    // has a PDF builder only — a service record is not a spreadsheet.
+    if (parseDocumentFormat(formatRaw) !== 'pdf') {
+      throw new BadRequestException(
+        'The maintenance report is available as pdf only',
+      );
+    }
+    const data = await this.maintenanceService.getVisitDocumentData(user, id);
+    const branding = await this.tenantBranding.get(user.tenantId);
+    const buf = await this.pdfService.renderDocumentPdf(
+      MAINTENANCE_REPORT_TEMPLATE,
+      data,
+      branding,
+    );
+    setDownloadHeaders(
+      res,
+      `maintenance-report-${id.slice(0, 8)}`,
+      'pdf',
+      'application/pdf',
+    );
+    res.end(buf);
   }
 
   @Get('breakdowns')

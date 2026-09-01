@@ -17,6 +17,7 @@ import {
   customers,
   maintenanceContracts,
   serviceVisits,
+  users,
 } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import type {
@@ -46,6 +47,22 @@ export type MaintenanceContractExportRow = Omit<
 
 /** `streamAllBreakdowns()`'s row shape: both FKs are replaced (not
  * appended) with their joined display names — see REC 5. */
+/** Everything the printed Maintenance Report needs about one visit. */
+export interface ServiceVisitDocumentRow {
+  id: string;
+  contractId: string;
+  visitedAt: Date;
+  notes: string | null;
+  inspectionResults: string | null;
+  partsReplaced: string | null;
+  recommendations: string | null;
+  assetName: string | null;
+  assetSerialNumber: string | null;
+  buildingName: string | null;
+  customerName: string | null;
+  technicianName: string | null;
+}
+
 export type BreakdownExportRow = Omit<
   BreakdownRecord,
   'assetId' | 'customerId'
@@ -276,6 +293,9 @@ export class MaintenanceRepository {
           tenantId,
           contractId,
           notes: dto.notes,
+          inspectionResults: dto.inspectionResults,
+          partsReplaced: dto.partsReplaced,
+          recommendations: dto.recommendations,
           performedByUserId,
           visitedAt: new Date(),
         })
@@ -341,6 +361,70 @@ export class MaintenanceRepository {
         page,
         pageSize,
       );
+    });
+  }
+
+  /**
+   * One service visit with everything the printed Maintenance Report needs,
+   * in one query: the visit's own fields plus the contract's asset,
+   * customer, and the technician who performed it.
+   */
+  async findVisitForDocument(
+    tenantId: string,
+    visitId: string,
+  ): Promise<ServiceVisitDocumentRow> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const rows = await tx
+        .select({
+          id: serviceVisits.id,
+          contractId: serviceVisits.contractId,
+          visitedAt: serviceVisits.visitedAt,
+          notes: serviceVisits.notes,
+          inspectionResults: serviceVisits.inspectionResults,
+          partsReplaced: serviceVisits.partsReplaced,
+          recommendations: serviceVisits.recommendations,
+          assetName: assets.name,
+          assetSerialNumber: assets.serialNumber,
+          buildingName: assets.buildingName,
+          customerName: customers.name,
+          technicianName: users.fullName,
+        })
+        .from(serviceVisits)
+        .innerJoin(
+          maintenanceContracts,
+          and(
+            eq(serviceVisits.tenantId, maintenanceContracts.tenantId),
+            eq(serviceVisits.contractId, maintenanceContracts.id),
+          ),
+        )
+        .leftJoin(
+          assets,
+          and(
+            eq(maintenanceContracts.tenantId, assets.tenantId),
+            eq(maintenanceContracts.assetId, assets.id),
+          ),
+        )
+        .leftJoin(
+          customers,
+          and(
+            eq(maintenanceContracts.tenantId, customers.tenantId),
+            eq(maintenanceContracts.customerId, customers.id),
+          ),
+        )
+        .leftJoin(
+          users,
+          and(
+            eq(serviceVisits.tenantId, users.tenantId),
+            eq(serviceVisits.performedByUserId, users.id),
+          ),
+        )
+        .where(eq(serviceVisits.id, visitId))
+        .limit(1);
+      const row = rows[0];
+      if (!row) {
+        throw new NotFoundException('Service visit not found');
+      }
+      return row;
     });
   }
 

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import type { MaintenanceReportTemplateData } from '../../common/export/templates/maintenance-report.template';
 import { MaintenanceReminderService } from '../reminders/maintenance-reminders.service';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type {
@@ -72,6 +73,39 @@ export class MaintenanceService {
       user.userId,
       dto,
     );
+  }
+
+  /**
+   * One service visit shaped for the printed Maintenance Report. The
+   * mapping lives here rather than in a mapper file because it is a
+   * field rename and nothing else — the repository already joins in the
+   * asset, customer and technician.
+   */
+  async getVisitDocumentData(
+    user: AuthenticatedUser,
+    visitId: string,
+  ): Promise<MaintenanceReportTemplateData & { visitId: string }> {
+    const row = await this.maintenanceRepository.findVisitForDocument(
+      user.tenantId,
+      visitId,
+    );
+    return {
+      visitId: row.id,
+      contractRef: row.contractId,
+      // The client's form says "Elevator Number": the serial is what is
+      // stamped on the machine, the name is the fallback for an asset
+      // registered without one.
+      elevatorNumber: row.assetSerialNumber ?? row.assetName ?? '—',
+      assetName: row.assetName ?? '—',
+      buildingName: row.buildingName,
+      customerName: row.customerName ?? '—',
+      visitedAt: row.visitedAt,
+      technicianName: row.technicianName,
+      inspectionResults: row.inspectionResults,
+      partsReplaced: row.partsReplaced,
+      recommendations: row.recommendations,
+      notes: row.notes,
+    };
   }
 
   listVisits(

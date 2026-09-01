@@ -112,12 +112,36 @@ export class UpdateMaintenanceContractDto {
   notes?: string | null;
 }
 
+/**
+ * `notes` stays the free-text catch-all it has always been — the three
+ * fields below are an ADDITION (the client's own Maintenance Form asks for
+ * them separately, and the report document prints them as labelled blocks).
+ * Visits logged before they existed keep their notes.
+ */
 export class LogServiceVisitDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   @MaxLength(2000)
   notes?: string;
+
+  @ApiPropertyOptional({ example: 'Door operator within tolerance.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  inspectionResults?: string;
+
+  @ApiPropertyOptional({ example: 'Door roller x2' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  partsReplaced?: string;
+
+  @ApiPropertyOptional({ example: 'Replace landing door guide shoes next visit.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  recommendations?: string;
 }
 
 export class CreateBreakdownDto {

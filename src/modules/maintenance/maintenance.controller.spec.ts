@@ -9,6 +9,15 @@ import {
 } from './maintenance.controller';
 import type { MaintenanceService } from './maintenance.service';
 
+// The report route is covered by its own describe below; every other route
+// never touches these, so one shared pair of stubs is enough.
+const pdfService = {
+  renderDocumentPdf: jest.fn(),
+} as unknown as import('../../common/export/document-pdf.service').DocumentPdfService;
+const tenantBranding = {
+  get: jest.fn(),
+} as unknown as import('../../common/export/tenant-branding.provider').TenantBrandingProvider;
+
 jest.mock('../../common/export/tabular');
 const mockWriteCsv = jest.mocked(writeCsv);
 const mockWriteXlsx = jest.mocked(writeXlsx);
@@ -29,6 +38,9 @@ describe('MaintenanceController.listContracts — status validation', () => {
 
   const controller = new MaintenanceController(
     service as unknown as MaintenanceService,
+    // Document deps — unused by the export/list paths under test here.
+    pdfService,
+    tenantBranding,
   );
 
   beforeEach(() => {
@@ -81,6 +93,9 @@ describe('MaintenanceController.listContracts — format wiring', () => {
 
   const controller = new MaintenanceController(
     service as unknown as MaintenanceService,
+    // Document deps — unused by the export/list paths under test here.
+    pdfService,
+    tenantBranding,
   );
 
   beforeEach(() => {
@@ -147,6 +162,9 @@ describe('MaintenanceController.listBreakdowns — status validation', () => {
 
   const controller = new MaintenanceController(
     service as unknown as MaintenanceService,
+    // Document deps — unused by the export/list paths under test here.
+    pdfService,
+    tenantBranding,
   );
 
   beforeEach(() => {
@@ -199,6 +217,9 @@ describe('MaintenanceController.listBreakdowns — format wiring', () => {
 
   const controller = new MaintenanceController(
     service as unknown as MaintenanceService,
+    // Document deps — unused by the export/list paths under test here.
+    pdfService,
+    tenantBranding,
   );
 
   beforeEach(() => {
@@ -246,5 +267,54 @@ describe('MaintenanceController.listBreakdowns — format wiring', () => {
     ).rejects.toThrow(/format must be one of/);
     expect(service.listBreakdowns).not.toHaveBeenCalled();
     expect(service.streamAllBreakdowns).not.toHaveBeenCalled();
+  });
+});
+
+describe('MaintenanceController.visitReport', () => {
+  const user: AuthenticatedUser = {
+    userId: '11111111-1111-1111-1111-111111111111',
+    tenantId: '22222222-2222-2222-2222-222222222222',
+    role: 'FIELD_ENGINEER',
+  };
+  const visitId = '33333333-3333-3333-3333-333333333333';
+
+  const service = { getVisitDocumentData: jest.fn() };
+  const pdf = { renderDocumentPdf: jest.fn() };
+  const branding = { get: jest.fn() };
+  const res = { end: jest.fn(), setHeader: jest.fn() };
+
+  const controller = new MaintenanceController(
+    service as unknown as MaintenanceService,
+    pdf as unknown as import('../../common/export/document-pdf.service').DocumentPdfService,
+    branding as unknown as import('../../common/export/tenant-branding.provider').TenantBrandingProvider,
+  );
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('renders the maintenance-report template and writes the pdf', async () => {
+    const data = { contractRef: 'c', customerName: 'Acme' };
+    service.getVisitDocumentData.mockResolvedValue(data);
+    branding.get.mockResolvedValue(null);
+    const buf = Buffer.from('%PDF');
+    pdf.renderDocumentPdf.mockResolvedValue(buf);
+
+    await controller.visitReport(user, visitId, 'pdf', res as never);
+
+    expect(service.getVisitDocumentData).toHaveBeenCalledWith(user, visitId);
+    expect(pdf.renderDocumentPdf).toHaveBeenCalledWith(
+      'maintenance-report',
+      data,
+      null,
+    );
+    expect(res.end).toHaveBeenCalledWith(buf);
+  });
+
+  it('400s on any format other than pdf, before loading the visit', async () => {
+    await expect(
+      controller.visitReport(user, visitId, 'xlsx', res as never),
+    ).rejects.toThrow(BadRequestException);
+    expect(service.getVisitDocumentData).not.toHaveBeenCalled();
   });
 });

@@ -88,6 +88,12 @@ export const serviceVisits = pgTable(
       .notNull()
       .defaultNow(),
     notes: text('notes'),
+    // The client's own Maintenance Form asks for these three separately.
+    // `notes` stays as the free-text catch-all and keeps every visit
+    // logged before this existed — it is not a rename.
+    inspectionResults: text('inspection_results'),
+    partsReplaced: text('parts_replaced'),
+    recommendations: text('recommendations'),
     performedByUserId: uuid('performed_by_user_id'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
