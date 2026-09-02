@@ -21,6 +21,18 @@ export interface Flow {
   note?: string;
 }
 
+/**
+ * One step of a walkthrough: what to do, and what the screen must show if it
+ * worked. Written so a non-engineer can follow it without being told where
+ * anything is — the action always names the route it starts from.
+ */
+export interface Check {
+  /** What the tester does. Starts with a verb. */
+  action: string;
+  /** What must be true afterwards. If it is not, the step failed. */
+  expect: string;
+}
+
 export interface Fact {
   label: string;
   value: string;
@@ -36,6 +48,8 @@ export interface DocSection {
   facts?: Fact[];
   flows?: Flow[];
   rules?: string[];
+  /** A numbered walkthrough. Rendered as a do-this / expect-that table. */
+  checks?: Check[];
   endpoints?: Endpoint[];
 }
 
@@ -769,6 +783,281 @@ export const DOC_GROUPS: DocGroup[] = [
           'Run the tests before every commit — CI runs the full suite regardless.',
           'Never commit .env, credentials or generated artefacts.',
           'Conventional commits; branches named type/short-description; squash-merge into main.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'testing',
+    title: 'Acceptance testing',
+    blurb:
+      'Walk the whole system the way a user would, before a demo or a release. Every step names where it starts and what the screen must show if it worked.',
+    sections: [
+      {
+        id: 'test-setup',
+        title: 'Before you start',
+        tagline: 'Get a clean system up, and know what you are signing in as',
+        icon: ICON.terminal,
+        body: [
+          'The walkthrough below takes about twenty minutes and touches every module a client would ask about. Do it in order — the sales run creates the records the finance and operations runs depend on.',
+          'Run `pnpm run dev` from the repository root. It frees the ports, starts the database in Docker, applies migrations, then brings up the API on 3002 and this admin UI on 3003. Wait until both report ready before signing in.',
+          'If you want to start from nothing, `pnpm run db:seed:dev` reloads the demo tenant. `pnpm run db:seed:document-content` reloads the standing document text on its own, which is the faster fix if only the boilerplate looks wrong.',
+        ],
+        facts: [
+          { label: 'Admin UI', value: 'http://localhost:3003' },
+          { label: 'API', value: 'http://localhost:3002' },
+          { label: 'Workspace', value: 'demo' },
+          { label: 'Sign in as', value: 'ceo@demo.example.com' },
+        ],
+        rules: [
+          'The CEO and ADMIN roles pass every permission check, so sign in as one of them for the happy path and switch to a narrower role only for the permissions test at the end.',
+          'Amounts are always ETB and always carry thousands separators. A number without them is a bug worth reporting.',
+          'A step that fails is worth stopping on. Later steps usually depend on the record the failed one was supposed to create.',
+        ],
+      },
+      {
+        id: 'test-sales',
+        title: 'Test 1 — Quote to proforma',
+        tagline: 'The main path, and the one to demo first',
+        icon: ICON.doc,
+        body: [
+          'This is the run that matters most: it is how a sales manager actually spends their day, and it exercises the calculator, the negotiated price, the line items and the customer-facing document in one pass.',
+          'The price step is the heart of it. The calculator proposes a figure; the sales manager types the round number they actually agreed with the customer, and the system works the VAT split backwards from it so the three figures on the page always add up to the cent.',
+        ],
+        checks: [
+          {
+            action: 'Sign in at /login with the demo workspace and the CEO account.',
+            expect: 'The dashboard loads with charts and the sidebar shows your name and role at the bottom.',
+          },
+          {
+            action: 'Open Projects. Pick any project at Lead and press → Site survey.',
+            expect: 'The stage cell changes immediately and the available transition buttons change with it.',
+          },
+          {
+            action: 'Open Quotations → New quotation, choose a project, press Start the offer.',
+            expect: 'A DRAFT quotation is created and you land on its edit page with one lift already on it.',
+          },
+          {
+            action: 'On the first lift, set the capacity, speed and floors, then press Save & price this lift.',
+            expect: 'The lift row shows a price and a one-line description built from the fields you typed.',
+          },
+          {
+            action: 'Type the floor labels as B,G,M,1,2,3,4,5,6,7,8,9,10.',
+            expect: 'The stop count and the floors/stops/doors summary fill themselves in — you never type 13/13/13 by hand.',
+          },
+          {
+            action: 'Press + Add lift and change something on the copy, then save it.',
+            expect: 'Two lifts are listed, the reorder arrows become usable, and the total covers both.',
+          },
+          {
+            action: 'In the Price box, type the round figure the customer pays — try 7,835,000 — and press Apply this price.',
+            expect: 'Subtotal, VAT and Grand total appear beneath it and add up exactly. The discount against the calculator is shown, labelled Internal — not printed.',
+          },
+          {
+            action: 'Fill in the commercial terms: reference, delivery days, validity, parts warranty, free service.',
+            expect: 'Each accepts a value and the form saves without complaint.',
+          },
+          {
+            action: 'Set the payment milestones so the percentages total 100, then save.',
+            expect: 'The running total reads 100%. Saving a schedule that totals anything else is refused with a clear message.',
+          },
+          {
+            action: 'Submit the quotation, then approve it, then convert it to a proforma.',
+            expect: 'The status moves DRAFT → PENDING_APPROVAL → APPROVED → CONVERTED, and a proforma appears under the Proformas tab with a gapless number.',
+          },
+        ],
+      },
+      {
+        id: 'test-documents',
+        title: 'Test 2 — The offer document',
+        tagline: 'What the customer actually receives',
+        icon: ICON.stamp,
+        body: [
+          'The document is the deliverable. It is modelled directly on the client’s own eight-page proforma, so the fastest way to check it is to hold the two side by side.',
+          'The single most important check is that page one adds up. The line table and the totals block sit on the same page; if the line total and the "Total price" line differ, the customer can subtract them and read the company’s margin.',
+        ],
+        checks: [
+          {
+            action: 'From the Quotations list, use Download… on your quotation and pick PDF.',
+            expect: 'A PDF downloads and opens.',
+          },
+          {
+            action: 'On page 1, add up the line table and compare it to the Total price line above the VAT.',
+            expect: 'They are identical. Total price + VAT = Grand total, to the cent.',
+          },
+          {
+            action: 'Look for the words margin, discount, or the calculator’s original figure anywhere on the document.',
+            expect: 'None of them appear. The customer never sees what the price was before negotiation.',
+          },
+          {
+            action: 'Check the letterhead and the footer on every page, including the last.',
+            expect: 'Both appear on every page in the same position, with page numbers reading 1 / n.',
+          },
+          {
+            action: 'Read page 2 against the client’s own spec sheet.',
+            expect: 'The rows match theirs: capacity, speed, travel height, floors/stops/doors, pit, overhead, shaft, car, door, roping, traction machine, control system.',
+          },
+          {
+            action: 'Scroll to the appendix pages.',
+            expect: 'The standing text and the numbered component/brand table are there, in the order set under Settings.',
+          },
+          {
+            action: 'Select text in the PDF and copy it — try the company name and the document title.',
+            expect: 'Words copy as words. Letters separated by spaces mean the text layer has broken and the document is no longer searchable.',
+          },
+          {
+            action: 'Download the same quotation as Word, and download the proforma as PDF.',
+            expect: 'Both open, both show the line items, and neither discloses the margin.',
+          },
+        ],
+      },
+      {
+        id: 'test-finance',
+        title: 'Test 3 — Invoice, payment, receivables',
+        tagline: 'Money in, and what is still owed',
+        icon: ICON.money,
+        body: [
+          'The finance run starts from the proforma the sales run produced. Invoices and payments are an append-only ledger: nothing is ever edited or deleted, and a mistake is corrected by a reversing entry, so expect to be refused if you try to delete something.',
+        ],
+        checks: [
+          {
+            action: 'Open Invoices → New invoice and raise one against your proforma.',
+            expect: 'The invoice carries the proforma’s figures and claims its own gapless number.',
+          },
+          {
+            action: 'Download the invoice PDF.',
+            expect: 'It prints, and it carries the NOT A FISCAL RECEIPT notice while the fiscal fields are empty.',
+          },
+          {
+            action: 'Record a part payment against it from Payments → New payment.',
+            expect: 'The invoice moves to partly paid and the outstanding figure drops by exactly what you entered.',
+          },
+          {
+            action: 'Record a second payment that settles the remainder.',
+            expect: 'The invoice reads settled and the outstanding figure is zero.',
+          },
+          {
+            action: 'Open Receivables.',
+            expect: 'The ageing buckets reflect what is genuinely outstanding, and your settled invoice has left them.',
+          },
+          {
+            action: 'Download the customer statement and the ageing report.',
+            expect: 'Both render, and the statement’s closing balance matches what Receivables shows.',
+          },
+        ],
+      },
+      {
+        id: 'test-operations',
+        title: 'Test 4 — Contracts, maintenance, assets',
+        tagline: 'After the sale',
+        icon: ICON.wrench,
+        body: [
+          'The contract is the record that unlocks the warranty certificate, the completion certificate and the payment schedule — all three read their dates from it, so test it before them.',
+        ],
+        checks: [
+          {
+            action: 'Open Contracts and issue one from your accepted proforma.',
+            expect: 'A DRAFT contract appears with its own number and the proforma’s value copied onto it.',
+          },
+          {
+            action: 'Download the contract while it is still a draft.',
+            expect: 'It prints as CONTRACT DRAFT, with no signature date and a line saying it is not binding until signed.',
+          },
+          {
+            action: 'Sign the contract, then download it again.',
+            expect: 'It now prints as CONTRACT, carries the signature date, and has a two-column signature block.',
+          },
+          {
+            action: 'Open the contract’s payment schedule and agree the instalments.',
+            expect: 'The instalments save as a set and the schedule totals the contract value.',
+          },
+          {
+            action: 'Record the handover, naming who accepted it.',
+            expect: 'The completion certificate and the warranty certificate both become downloadable, and the warranty expiry is counted from the handover date.',
+          },
+          {
+            action: 'Open Assets, add a lift, then Maintenance → New contract against it.',
+            expect: 'The asset saves and the maintenance contract schedules its first visit.',
+          },
+          {
+            action: 'Log a service visit, filling in what was inspected, what was replaced and what you recommend.',
+            expect: 'The maintenance report prints those three as separate sections, not as one block of prose.',
+          },
+          {
+            action: 'Raise a breakdown at EMERGENCY severity.',
+            expect: 'It appears with a 30-minute SLA and, if a technician with a phone and consent is assigned, an SMS is queued in Messages.',
+          },
+        ],
+      },
+      {
+        id: 'test-settings',
+        title: 'Test 5 — Standing document text',
+        tagline: 'Edited once, printed on everything',
+        icon: ICON.sliders,
+        body: [
+          'These are the pages of the offer that used to be pasted in by hand for every quote. Editing them here is the whole point: change a paragraph once and every document issued afterwards carries the change.',
+        ],
+        checks: [
+          {
+            action: 'Open Settings → Document text.',
+            expect: 'The standing sections are listed in print order, each showing the first line of its text.',
+          },
+          {
+            action: 'Edit one section, change a sentence, and save.',
+            expect: 'The list shows the new opening line.',
+          },
+          {
+            action: 'Download any quotation PDF again.',
+            expect: 'The appendix carries your edit. Nothing else on the document moved.',
+          },
+          {
+            action: 'Move a section up or down the print order.',
+            expect: 'The next document you download prints the sections in the new order.',
+          },
+          {
+            action: 'Stop a section printing, then download again.',
+            expect: 'The section is gone from the document but its text is still on the settings screen, ready to switch back on.',
+          },
+          {
+            action: 'Open Settings → Components & brands and change a brand.',
+            expect: 'The numbered component table on the appendix pages shows the change.',
+          },
+        ],
+      },
+      {
+        id: 'test-permissions',
+        title: 'Test 6 — Permissions and tenant isolation',
+        tagline: 'The checks that matter most and are tested least',
+        icon: ICON.shield,
+        body: [
+          'Everything above was done as a CEO, which passes every permission check. This last run is the one that proves the system is safe to give to a whole company rather than to one trusted person.',
+          'Tenant isolation is enforced by the database itself, not only by the application, so the strongest version of this test is to sign in as a second workspace and confirm the first one’s records are simply not there.',
+        ],
+        checks: [
+          {
+            action: 'Sign out and sign back in as a technician or a finance user rather than the CEO.',
+            expect: 'The sidebar shows fewer sections. Nothing they cannot use is offered to them.',
+          },
+          {
+            action: 'As a non-sales user, try to reach a quotation edit page by typing its URL directly.',
+            expect: 'The request is refused. Hiding the button is not the control; the API is.',
+          },
+          {
+            action: 'As a finance user, try to sign a contract or approve a quotation.',
+            expect: 'Refused, with a message naming the role that is allowed to.',
+          },
+          {
+            action: 'Set a discount approval threshold under Settings, then quote a discount larger than it.',
+            expect: 'The quotation cannot be submitted until someone signs the discount off.',
+          },
+          {
+            action: 'Re-price that quotation to a much larger discount after it has been approved.',
+            expect: 'The old approval no longer counts and the discount must be signed off again.',
+          },
+          {
+            action: 'Sign in to a second workspace and look for the first workspace’s customers and quotations.',
+            expect: 'None of them exist. Not hidden — absent.',
+          },
         ],
       },
     ],

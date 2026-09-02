@@ -21,6 +21,7 @@ const haystack = (section: DocSection): string =>
     ...(section.rules ?? []),
     ...(section.facts ?? []).flatMap((f) => [f.label, f.value]),
     ...(section.flows ?? []).flatMap((f) => [f.title, ...f.steps, f.note ?? '']),
+    ...(section.checks ?? []).flatMap((c) => [c.action, c.expect]),
     ...(section.endpoints ?? []).flatMap((e) => [e.path, e.roles, e.note]),
   ]
     .join(' ')
@@ -313,6 +314,35 @@ function SectionCard({ section }: { section: DocSection }) {
               </li>
             ))}
           </ul>
+        )}
+
+        {section.checks && (
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="w-full min-w-[640px] border-collapse text-left">
+              <thead>
+                <tr className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-400">
+                  <th className="w-10 px-4 py-2 font-semibold">#</th>
+                  <th className="px-4 py-2 font-semibold">Do this</th>
+                  <th className="px-4 py-2 font-semibold">It worked if…</th>
+                </tr>
+              </thead>
+              <tbody>
+                {section.checks.map((check, index) => (
+                  <tr key={check.action} className="border-t border-slate-100 align-top">
+                    <td className="px-4 py-2.5 font-mono text-[12px] text-slate-400">
+                      {index + 1}
+                    </td>
+                    <td className="px-4 py-2.5 text-[12.5px] text-slate-700">
+                      {check.action}
+                    </td>
+                    <td className="px-4 py-2.5 text-[12.5px] text-slate-500">
+                      {check.expect}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {section.endpoints && (
