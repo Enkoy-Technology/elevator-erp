@@ -11,8 +11,33 @@ import { ApiError, login } from '@/lib/api';
 import logo from '../../../public/shining-star-logo.jpg';
 
 // Demo credentials are a dev convenience only; production builds ship an
-// empty form and no hint. NODE_ENV is inlined at build time.
+// empty form and no picker. NODE_ENV is inlined at build time, so the whole
+// block below is dropped from a production bundle rather than merely hidden.
 const IS_DEV = process.env.NODE_ENV !== 'production';
+
+const DEMO_TENANT = 'demo';
+const DEMO_PASSWORD = 'Demo!Passw0rd';
+
+/**
+ * One seat per role, so a demo can be given from each in turn instead of
+ * entirely as the CEO — who passes every permission check and therefore
+ * demonstrates none of them.
+ *
+ * Duplicated from src/database/demo-accounts.ts, which is what the seed
+ * actually creates: `web/` builds separately and cannot import across the
+ * boundary. demo-accounts.spec.ts fails if the two lists drift apart.
+ */
+const DEMO_ACCOUNTS: readonly { role: string; label: string; email: string; blurb: string }[] = [
+  { role: 'CEO', label: 'CEO', email: 'ceo@demo.example.com', blurb: 'Sees everything' },
+  { role: 'SALES_MANAGER', label: 'Sales manager', email: 'sales@demo.example.com', blurb: 'Quotes and contracts' },
+  { role: 'FINANCE', label: 'Finance', email: 'finance@demo.example.com', blurb: 'Invoices and payments' },
+  { role: 'TECHNICAL_LEAD', label: 'Technical lead', email: 'technical@demo.example.com', blurb: 'Specs and maintenance' },
+  { role: 'FIELD_ENGINEER', label: 'Field engineer', email: 'engineer@demo.example.com', blurb: 'Visits and breakdowns' },
+  { role: 'DISPATCHER', label: 'Dispatcher', email: 'dispatcher@demo.example.com', blurb: 'Assigns the work' },
+  { role: 'WAREHOUSE_MANAGER', label: 'Warehouse', email: 'warehouse@demo.example.com', blurb: 'Assets and parts' },
+  { role: 'ADMIN', label: 'Administrator', email: 'admin@demo.example.com', blurb: 'Employees and settings' },
+  { role: 'CUSTOMER', label: 'Customer', email: 'customer@demo.example.com', blurb: 'No screens yet' },
+];
 
 export default function LoginPage() {
   const router = useRouter();
@@ -212,11 +237,43 @@ export default function LoginPage() {
           {IS_DEV && (
             <div className="mt-8 rounded-xl bg-slate-50 px-4 py-3">
               <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                Demo workspace
+                Demo workspace — sign in as
               </p>
-              <p className="mt-1 font-mono text-xs leading-relaxed text-slate-500">
-                demo · ceo@demo.example.com · Demo!Passw0rd
+              <p className="mt-1 text-xs text-slate-500">
+                Pick a seat and the form fills itself. Every account uses the same
+                password.
               </p>
+              <div className="mt-3 grid grid-cols-2 gap-1.5">
+                {DEMO_ACCOUNTS.map((account) => {
+                  const active = email === account.email;
+                  return (
+                    <button
+                      key={account.role}
+                      type="button"
+                      onClick={() => {
+                        setTenantSlug(DEMO_TENANT);
+                        setEmail(account.email);
+                        setPassword(DEMO_PASSWORD);
+                        setError(null);
+                      }}
+                      aria-pressed={active}
+                      title={`${account.email} · ${account.blurb}`}
+                      className={`rounded-lg border px-2.5 py-1.5 text-left transition ${
+                        active
+                          ? 'border-gold-500 bg-white ring-1 ring-gold-500'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <span className="block text-xs font-semibold text-slate-800">
+                        {account.label}
+                      </span>
+                      <span className="block truncate text-[10px] text-slate-500">
+                        {account.blurb}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

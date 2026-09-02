@@ -7,6 +7,7 @@ import { Pool } from 'pg';
 import { RatesRepository } from '../modules/rates/rates.repository';
 import { seedRates } from '../modules/rates/seed-rates';
 import { seedDocumentContent } from '../modules/settings/seed-document-content';
+import { DEMO_ACCOUNTS, DEMO_PASSWORD } from './demo-accounts';
 import * as schema from './schema';
 
 const BCRYPT_ROUNDS = 12;
@@ -21,6 +22,42 @@ export const assertSeedAllowed = (env: NodeJS.ProcessEnv): void => {
       'Refusing to seed demo data. Set ALLOW_DEMO_SEED=1 to override.',
     );
   }
+};
+
+/**
+ * Inserts any demo account this tenant is missing, leaving existing ones
+ * alone (their password may have been changed deliberately).
+ *
+ * Per-ACCOUNT rather than per-tenant, for the same reason seedRates and
+ * seedDocumentContent are: a tenant seeded before a role existed should gain
+ * that role on the next run, not be skipped wholesale. Getting this wrong is
+ * how a demo ends up with a login button for an account that was never
+ * created.
+ */
+const seedDemoAccounts = async (
+  db: ReturnType<typeof drizzle>,
+  tenantId: string,
+): Promise<number> => {
+  const existing = await db
+    .select({ email: schema.users.email })
+    .from(schema.users)
+    .where(eq(schema.users.tenantId, tenantId));
+  const have = new Set(existing.map((row) => row.email));
+  const missing = DEMO_ACCOUNTS.filter((account) => !have.has(account.email));
+  if (missing.length === 0) {
+    return 0;
+  }
+  const passwordHash = await hash(DEMO_PASSWORD, BCRYPT_ROUNDS);
+  await db.insert(schema.users).values(
+    missing.map((account) => ({
+      tenantId,
+      email: account.email,
+      passwordHash,
+      fullName: account.fullName,
+      role: account.role,
+    })),
+  );
+  return missing.length;
 };
 
 const main = async (): Promise<void> => {
@@ -53,7 +90,16 @@ const main = async (): Promise<void> => {
       // and never overwrites edited text, so re-running tops up a demo tenant
       // that predates it instead of silently skipping.
       await seedDocumentContent(db, alreadySeeded.id);
-      console.log('Demo tenant already seeded, skipping.');
+      const added = await seedDemoAccounts(db, alreadySeeded.id);
+      console.log(
+        added > 0
+          ? `Demo tenant already seeded; added ${added} missing role account(s).`
+          : 'Demo tenant already seeded, skipping.',
+      );
+      console.log(`Password for every demo account: ${DEMO_PASSWORD}`);
+      for (const account of DEMO_ACCOUNTS) {
+        console.log(`  ${account.role.padEnd(18)} ${account.email}`);
+      }
       return;
     }
 
@@ -73,20 +119,24 @@ const main = async (): Promise<void> => {
 
     await db.insert(schema.tenantBranding).values({ tenantId: tenant.id });
 
-    await db.insert(schema.users).values({
-      tenantId: tenant.id,
-      email: 'ceo@demo.example.com',
-      passwordHash: await hash('Demo!Passw0rd', BCRYPT_ROUNDS),
-      fullName: 'Demo CEO',
-      role: 'CEO',
-    });
+    // One account per role, so a demo can be given from each seat in turn
+    // rather than from the CEO's — which passes every permission check and so
+    // shows none of them working. Same password throughout: this tenant only
+    // exists behind ALLOW_DEMO_SEED.
+    //
+    // CUSTOMER is seeded for completeness but has no screens of its own yet;
+    // signing in as one lands on an empty sidebar. The login picker says so.
+    await seedDemoAccounts(db, tenant.id);
 
     // The demo tenant prints the same documents as a real one, so it gets the
     // same boilerplate; the production path is `pnpm run db:seed:document-content`.
     await seedDocumentContent(db, tenant.id);
 
     console.log(`Seeded demo tenant ${tenant.id} (slug: demo)`);
-    console.log('Login: ceo@demo.example.com / Demo!Passw0rd');
+    console.log(`Password for every account below: ${DEMO_PASSWORD}`);
+    for (const account of DEMO_ACCOUNTS) {
+      console.log(`  ${account.role.padEnd(18)} ${account.email}`);
+    }
   } finally {
     await pool.end();
   }
