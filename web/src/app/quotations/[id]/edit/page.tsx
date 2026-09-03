@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { Field, FormPage, FormSection } from '@/components/form-page';
+import { Stepper, type Step } from '@/components/stepper';
 import { btnGhost, fieldClass, labelClass } from '@/components/form-styles';
 import { Sidebar } from '@/components/sidebar';
 import {
@@ -20,7 +21,7 @@ import {
   type UpdateQuotationTermsPayload,
   type UserRole,
 } from '@/lib/api';
-import { isZeroEtb, subtractEtb, sumEtb } from '@/lib/money';
+import { formatEtb, formatNumber, isZeroEtb, subtractEtb, sumEtb } from '@/lib/money';
 
 import { NumberInput } from '../../number-input';
 import { LinesEditor } from './lines-editor';
@@ -81,6 +82,7 @@ export default function EditQuotationPage() {
   const [warrantyPartsMonths, setWarrantyPartsMonths] = useState('');
   const [warrantyFreeServiceMonths, setWarrantyFreeServiceMonths] = useState('');
   const [validityDays, setValidityDays] = useState('');
+  const [step, setStep] = useState('lifts');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -129,6 +131,52 @@ export default function EditQuotationPage() {
   );
   const termsBalanced =
     filledTerms.length === 0 || isZeroEtb(subtractEtb(termsTotal, '100'));
+
+  // Each step's summary is what it currently holds, so the four of them read
+  // together as a status line for the whole offer without opening anything.
+  const unitCount = lines.reduce((sum, line) => sum + (line.quantity ?? 1), 0);
+  const statedTerms = [
+    referenceCode.trim(),
+    deliveryDays.trim(),
+    validityDays.trim(),
+    warrantyPartsMonths.trim(),
+    warrantyFreeServiceMonths.trim(),
+  ].filter((value) => value !== '').length;
+
+  const steps: Step[] = [
+    {
+      id: 'lifts',
+      label: 'Lifts',
+      summary:
+        lines.length === 0
+          ? 'Nothing on the offer yet'
+          : `${formatNumber(lines.length)} lift${lines.length === 1 ? '' : 's'}, ${formatNumber(unitCount)} unit${unitCount === 1 ? '' : 's'}`,
+      done: lines.length > 0,
+    },
+    {
+      id: 'price',
+      label: 'Price',
+      summary: quotation ? `${formatEtb(quotation.totalPriceEtb)} incl. VAT` : null,
+      // Done means someone AGREED a figure, not that the calculator ran.
+      done: Boolean(quotation?.calculatedTotalEtb),
+    },
+    {
+      id: 'terms',
+      label: 'Terms',
+      summary: statedTerms === 0 ? 'None stated' : `${statedTerms} of 5 stated`,
+      done: statedTerms > 0,
+    },
+    {
+      id: 'payment',
+      label: 'Payment',
+      summary:
+        filledTerms.length === 0
+          ? 'No schedule'
+          : `${filledTerms.length} milestone${filledTerms.length === 1 ? '' : 's'}, ${termsTotal}%`,
+      done: filledTerms.length > 0 && termsBalanced,
+      invalid: !termsBalanced,
+    },
+  ];
 
   const setTerm = (index: number, field: keyof TermRow, value: string) =>
     setTerms((prev) =>
@@ -194,154 +242,164 @@ export default function EditQuotationPage() {
       submitLabel="Save terms"
       onSubmit={(event) => void onSubmit(event)}
     >
-      <LinesEditor
-        quotationId={id}
-        lines={lines}
-        onLinesChange={(next) => {
-          setLines(next);
-          setLinesDirty(true);
-        }}
-        editable={editable}
-      />
+      <Stepper steps={steps} currentId={step} onStepChange={setStep}>
+        {step === 'lifts' ? (
+        <LinesEditor
+          quotationId={id}
+          lines={lines}
+          onLinesChange={(next) => {
+            setLines(next);
+            setLinesDirty(true);
+          }}
+          editable={editable}
+        />
+      ) : null}
 
-      <PriceBox
-        quotationId={id}
-        quotation={quotation}
-        lines={lines}
-        onQuotationChange={(next) => {
-          setQuotation(next);
-          setLinesDirty(false);
-        }}
-        editable={editable}
-        staleAgainstLines={linesDirty}
-      />
+      {step === 'price' ? (
+        <PriceBox
+          quotationId={id}
+          quotation={quotation}
+          lines={lines}
+          onQuotationChange={(next) => {
+            setQuotation(next);
+            setLinesDirty(false);
+          }}
+          editable={editable}
+          staleAgainstLines={linesDirty}
+        />
+      ) : null}
 
-      <FormSection
-        title="Commercial terms"
-        description="Printed as prose on page 1. Leave anything you do not want stated blank."
-      >
-        <Field
-          label="Reference"
-          htmlFor="referenceCode"
-          wide
-          hint="Your own offer reference, e.g. Rodas FUJIHD-E02."
+      {step === 'terms' ? (
+        <FormSection
+          title="Commercial terms"
+          description="Printed as prose on page 1. Leave anything you do not want stated blank."
         >
-          <input
-            id="referenceCode"
-            className={fieldClass}
-            disabled={!editable}
-            value={referenceCode}
-            onChange={(e) => setReferenceCode(e.target.value)}
-          />
-        </Field>
-        <Field label="Delivery (days)" htmlFor="deliveryDays">
-          <NumberInput
-            id="deliveryDays"
-            disabled={!editable}
-            placeholder="120"
-            value={deliveryDays}
-            onValueChange={setDeliveryDays}
-          />
-        </Field>
-        <Field label="Offer valid for (days)" htmlFor="validityDays">
-          <NumberInput
-            id="validityDays"
-            disabled={!editable}
-            placeholder="5"
-            value={validityDays}
-            onValueChange={setValidityDays}
-          />
-        </Field>
-        <Field label="Parts warranty (months)" htmlFor="warrantyPartsMonths">
-          <NumberInput
-            id="warrantyPartsMonths"
-            disabled={!editable}
-            placeholder="12"
-            value={warrantyPartsMonths}
-            onValueChange={setWarrantyPartsMonths}
-          />
-        </Field>
-        <Field label="Free service (months)" htmlFor="warrantyFreeServiceMonths">
-          <NumberInput
-            id="warrantyFreeServiceMonths"
-            disabled={!editable}
-            placeholder="12"
-            value={warrantyFreeServiceMonths}
-            onValueChange={setWarrantyFreeServiceMonths}
-          />
-        </Field>
-      </FormSection>
+          <Field
+            label="Reference"
+            htmlFor="referenceCode"
+            wide
+            hint="Your own offer reference, e.g. Rodas FUJIHD-E02."
+          >
+            <input
+              id="referenceCode"
+              className={fieldClass}
+              disabled={!editable}
+              value={referenceCode}
+              onChange={(e) => setReferenceCode(e.target.value)}
+            />
+          </Field>
+          <Field label="Delivery (days)" htmlFor="deliveryDays">
+            <NumberInput
+              id="deliveryDays"
+              disabled={!editable}
+              placeholder="120"
+              value={deliveryDays}
+              onValueChange={setDeliveryDays}
+            />
+          </Field>
+          <Field label="Offer valid for (days)" htmlFor="validityDays">
+            <NumberInput
+              id="validityDays"
+              disabled={!editable}
+              placeholder="5"
+              value={validityDays}
+              onValueChange={setValidityDays}
+            />
+          </Field>
+          <Field label="Parts warranty (months)" htmlFor="warrantyPartsMonths">
+            <NumberInput
+              id="warrantyPartsMonths"
+              disabled={!editable}
+              placeholder="12"
+              value={warrantyPartsMonths}
+              onValueChange={setWarrantyPartsMonths}
+            />
+          </Field>
+          <Field label="Free service (months)" htmlFor="warrantyFreeServiceMonths">
+            <NumberInput
+              id="warrantyFreeServiceMonths"
+              disabled={!editable}
+              placeholder="12"
+              value={warrantyFreeServiceMonths}
+              onValueChange={setWarrantyFreeServiceMonths}
+            />
+          </Field>
+        </FormSection>
+      ) : null}
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <div className="flex items-center justify-between">
-          <h2 className={labelClass}>Payment terms</h2>
-          {editable ? (
-            <button
-              type="button"
-              onClick={() => setTerms((prev) => [...prev, { label: '', percent: '' }])}
-              className="text-xs font-semibold text-navy-800 hover:underline"
-            >
-              + Add milestone
-            </button>
-          ) : null}
-        </div>
-        <p className="mt-1 text-xs text-slate-500">
-          A percentage against an event, not a dated instalment. Saved with this
-          form.
-        </p>
-
-        <div className="mt-4 space-y-2">
-          {terms.map((row, index) => (
-            <div key={index} className="flex items-center gap-2">
-              <span className="w-4 shrink-0 font-mono text-xs text-slate-400">
-                {index + 1}
-              </span>
-              <input
-                className={fieldClass}
-                placeholder="Payable upon submission of shipping documents"
-                aria-label={`Milestone ${index + 1}`}
-                disabled={!editable}
-                value={row.label}
-                onChange={(e) => setTerm(index, 'label', e.target.value)}
-              />
-              <span className="w-24 shrink-0">
-                <NumberInput
-                  ariaLabel={`Milestone ${index + 1} percent`}
-                  disabled={!editable}
-                  placeholder="%"
-                  value={row.percent}
-                  onValueChange={(v) => setTerm(index, 'percent', v)}
-                />
-              </span>
-              {editable ? (
-                <button
-                  type="button"
-                  onClick={() => setTerms((prev) => prev.filter((_, i) => i !== index))}
-                  className={`${btnGhost} shrink-0 px-2 text-xs`}
-                >
-                  Remove
-                </button>
-              ) : null}
-            </div>
-          ))}
-
-          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            Scheduled:{' '}
-            <span className="font-semibold tabular-nums text-navy-800">
-              {termsTotal}%
-            </span>
-            {termsBalanced ? null : (
-              <>
-                <br />
-                <span className="text-xs text-red-700">
-                  A payment schedule must add up to exactly 100% before it can be
-                  saved.
-                </span>
-              </>
-            )}
+      {step === 'payment' ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="flex items-center justify-between">
+            <h2 className={labelClass}>Payment terms</h2>
+            {editable ? (
+              <button
+                type="button"
+                onClick={() => setTerms((prev) => [...prev, { label: '', percent: '' }])}
+                className="text-xs font-semibold text-navy-800 hover:underline"
+              >
+                + Add milestone
+              </button>
+            ) : null}
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            A percentage against an event, not a dated instalment. Saved with this
+            form.
           </p>
-        </div>
-      </section>
+
+          <div className="mt-4 space-y-2">
+            {terms.map((row, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <span className="w-4 shrink-0 font-mono text-xs text-slate-400">
+                  {index + 1}
+                </span>
+                <input
+                  className={fieldClass}
+                  placeholder="Payable upon submission of shipping documents"
+                  aria-label={`Milestone ${index + 1}`}
+                  disabled={!editable}
+                  value={row.label}
+                  onChange={(e) => setTerm(index, 'label', e.target.value)}
+                />
+                <span className="w-24 shrink-0">
+                  <NumberInput
+                    ariaLabel={`Milestone ${index + 1} percent`}
+                    disabled={!editable}
+                    placeholder="%"
+                    value={row.percent}
+                    onValueChange={(v) => setTerm(index, 'percent', v)}
+                  />
+                </span>
+                {editable ? (
+                  <button
+                    type="button"
+                    onClick={() => setTerms((prev) => prev.filter((_, i) => i !== index))}
+                    className={`${btnGhost} shrink-0 px-2 text-xs`}
+                  >
+                    Remove
+                  </button>
+                ) : null}
+              </div>
+            ))}
+
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              Scheduled:{' '}
+              <span className="font-semibold tabular-nums text-navy-800">
+                {termsTotal}%
+              </span>
+              {termsBalanced ? null : (
+                <>
+                  <br />
+                  <span className="text-xs text-red-700">
+                    A payment schedule must add up to exactly 100% before it can be
+                    saved.
+                  </span>
+                </>
+              )}
+            </p>
+          </div>
+        </section>
+        ) : null}
+      </Stepper>
     </FormPage>
   );
 }
