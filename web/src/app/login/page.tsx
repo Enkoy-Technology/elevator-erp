@@ -254,8 +254,15 @@ export default function LoginPage() {
                 Demo workspace — sign in as
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Pick a seat and the form fills itself. Every account uses the same
-                password.
+                Click a role to sign in as them. Every account uses the password{' '}
+                <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px] font-semibold text-slate-700">
+                  {DEMO_PASSWORD}
+                </code>{' '}
+                and the workspace{' '}
+                <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px] font-semibold text-slate-700">
+                  {DEMO_TENANT}
+                </code>
+                .
               </p>
               <div className="mt-3 grid grid-cols-2 gap-1.5">
                 {DEMO_ACCOUNTS.map((account) => {
@@ -281,8 +288,8 @@ export default function LoginPage() {
                       <span className="block text-xs font-semibold text-slate-800">
                         {account.label}
                       </span>
-                      <span className="block truncate text-[10px] text-slate-500">
-                        {account.blurb}
+                      <span className="block truncate font-mono text-[10px] text-slate-500">
+                        {account.email}
                       </span>
                     </button>
                   );
