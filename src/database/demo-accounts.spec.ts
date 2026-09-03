@@ -38,13 +38,27 @@ describe('demo accounts', () => {
     expect(LOGIN_PAGE).toContain(`const DEMO_PASSWORD = '${DEMO_PASSWORD}';`);
   });
 
-  it('keeps the picker out of production bundles', () => {
-    // NODE_ENV is inlined at build time, so this guard removes the block
-    // rather than hiding it. Without it, a production login screen would
-    // offer real-looking accounts to anyone who opened it.
+  it('keeps the picker out of an on-prem production bundle', () => {
+    // The picker shows in local development AND on the public demo, where a
+    // client is meant to look at the system as each role in turn. It must
+    // NOT show on the client's own installation.
+    //
+    // Both flags are inlined at BUILD time, so on-prem the block is dropped
+    // from the bundle rather than merely hidden — the account list never
+    // reaches a browser that should not have it. An on-prem build sets
+    // neither: NODE_ENV=production, and NEXT_PUBLIC_DEMO_MODE unset.
     expect(LOGIN_PAGE).toContain(
       "const IS_DEV = process.env.NODE_ENV !== 'production';",
     );
-    expect(LOGIN_PAGE).toContain('{IS_DEV && (');
+    expect(LOGIN_PAGE).toContain(
+      "const IS_DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === '1';",
+    );
+    expect(LOGIN_PAGE).toContain(
+      'const SHOW_DEMO_ACCOUNTS = IS_DEV || IS_DEMO;',
+    );
+    expect(LOGIN_PAGE).toContain('{SHOW_DEMO_ACCOUNTS && (');
+    // Nothing may gate it on a value read at RUNTIME: that would ship the
+    // list to on-prem browsers and merely decline to draw it.
+    expect(LOGIN_PAGE).not.toMatch(/\{\s*process\.env\.[A-Z_]+\s*&&/);
   });
 });

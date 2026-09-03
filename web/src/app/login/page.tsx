@@ -10,10 +10,16 @@ import { ApiError, login } from '@/lib/api';
 
 import logo from '../../../public/shining-star-logo.jpg';
 
-// Demo credentials are a dev convenience only; production builds ship an
-// empty form and no picker. NODE_ENV is inlined at build time, so the whole
-// block below is dropped from a production bundle rather than merely hidden.
+// The seat picker appears in local development AND on the public demo, where
+// the whole point is that a client can look at the system as each role in
+// turn. It is absent from a real on-prem build, which sets neither flag.
+//
+// Both values are inlined at BUILD time, so on a production install the block
+// below is dropped from the bundle rather than merely hidden — the account
+// list never reaches a browser that should not see it.
 const IS_DEV = process.env.NODE_ENV !== 'production';
+const IS_DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === '1';
+const SHOW_DEMO_ACCOUNTS = IS_DEV || IS_DEMO;
 
 const DEMO_TENANT = 'demo';
 const DEMO_PASSWORD = 'Demo!Passw0rd';
@@ -41,9 +47,17 @@ const DEMO_ACCOUNTS: readonly { role: string; label: string; email: string; blur
 
 export default function LoginPage() {
   const router = useRouter();
-  const [tenantSlug, setTenantSlug] = useState(IS_DEV ? 'demo' : '');
-  const [email, setEmail] = useState(IS_DEV ? 'ceo@demo.example.com' : '');
-  const [password, setPassword] = useState(IS_DEV ? 'Demo!Passw0rd' : '');
+  // Prefilled on the demo as well as locally: a client opening the link
+  // should be able to press Sign in, not hunt for credentials first.
+  const [tenantSlug, setTenantSlug] = useState(
+    SHOW_DEMO_ACCOUNTS ? DEMO_TENANT : '',
+  );
+  const [email, setEmail] = useState(
+    SHOW_DEMO_ACCOUNTS ? 'ceo@demo.example.com' : '',
+  );
+  const [password, setPassword] = useState(
+    SHOW_DEMO_ACCOUNTS ? DEMO_PASSWORD : '',
+  );
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -234,7 +248,7 @@ export default function LoginPage() {
             Forgotten your password? Ask your system administrator to reset it.
           </p>
 
-          {IS_DEV && (
+          {SHOW_DEMO_ACCOUNTS && (
             <div className="mt-8 rounded-xl bg-slate-50 px-4 py-3">
               <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                 Demo workspace — sign in as
