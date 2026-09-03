@@ -359,6 +359,11 @@ export const DOC_GROUPS: DocGroup[] = [
           'REJECTED, EXPIRED and CONVERTED_TO_PROFORMA are terminal. Converting is the only move out of APPROVED, and it is the proforma module that performs it.',
           'Any quotation can be exported as a branded PDF or DOCX carrying the tenant’s logo, colours and stamp.',
         ],
+        rules: [
+          'Floors served is a list of the landings the lift stops at, bottom to top: B is the basement, G the ground floor, M the mezzanine, then the numbered floors. So B,G,M,1,2,3,4,5,6,7,8,9,10 is thirteen landings.',
+          'That one field produces three things on the printed offer: the stop count, the "B+G+M+10" on page 1, and the "13/13/13" floors/stops/doors row on the specification sheet. They cannot disagree with each other because none of them is typed by hand.',
+          'Doors are stops multiplied by entrances per stop. A through-car lift opening on two sides has two doors per landing; the client\'s own quotation has one entrance, hence 13/13/13 rather than 13/13/26.',
+        ],
         flows: [
           {
             title: 'Quotation lifecycle',

@@ -407,13 +407,17 @@ export const LinesEditor = ({
                     </Field>
 
                     <Field
-                      label="Floors"
+                      label="Floors served"
                       htmlFor={`floors-${line.id}`}
                       wide
+                      // The empty hint has to TEACH the notation, not repeat
+                      // the placeholder: B/G/M are not obvious, and this one
+                      // field is what produces the stop count, the "B+G+M+10"
+                      // on page 1 and the "13/13/13" on the spec sheet.
                       hint={
                         plan
-                          ? `${plan.stops} stops · ${plan.displaySummary} · ${plan.floorsStopsDoors} (floors/stops/doors)`
-                          : 'Comma-separated, in print order: B,G,M,1,2,3,4,5,6,7,8,9,10'
+                          ? `${plan.stops} landings · prints as ${plan.displaySummary} · ${plan.floorsStopsDoors} floors/stops/doors`
+                          : 'Every landing the lift stops at, bottom to top. B = basement, G = ground, M = mezzanine, then the numbered floors.'
                       }
                     >
                       <input
