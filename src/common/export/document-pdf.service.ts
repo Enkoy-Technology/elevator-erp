@@ -154,6 +154,27 @@ export class DocumentPdfService implements OnModuleDestroy {
   // synchronously in the request. If PDF volume grows, move this to a
   // worker with a page pool.
   private browser: Browser | null = null;
+
+  /**
+   * Tail of the render queue. Renders run ONE AT A TIME.
+   *
+   * Chromium needs roughly a quarter of a gigabyte to lay out and print an
+   * A4 document, on top of whatever the Nest process is already holding.
+   * Measured in this project's own production image on Linux: one render
+   * alongside 180MB of app fits in a 512MB container, three concurrent ones
+   * do not — Chromium dies mid-print and the user gets
+   * "Protocol error (Page.printToPDF): Printing failed".
+   *
+   * Two people clicking Download at the same moment is not an unusual event,
+   * it is a Tuesday. Queueing makes the second one wait a second or two;
+   * not queueing makes it fail. On a larger host the queue costs nothing,
+   * because a render that has the memory it needs finishes immediately.
+   *
+   * Deliberately a promise chain rather than a semaphore library: the
+   * concurrency limit here is one, and one is the case a chain expresses
+   * exactly.
+   */
+  private renderQueue: Promise<unknown> = Promise.resolve();
   private launching: Promise<Browser> | null = null;
 
   private getBrowser(): Promise<Browser> {
@@ -207,6 +228,23 @@ export class DocumentPdfService implements OnModuleDestroy {
     if (!builder) {
       throw new TemplateNotImplementedError(templateName);
     }
+
+    // Join the queue BEFORE building the HTML, so a burst of requests does
+    // not all hold a document's worth of strings while they wait. The
+    // `.catch` keeps one failed render from poisoning the queue for every
+    // render after it — the failure still reaches its own caller.
+    const run = this.renderQueue.then(() =>
+      this.renderOne(builder, data, branding),
+    );
+    this.renderQueue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async renderOne(
+    builder: TemplateBuilder,
+    data: object,
+    branding: TenantBranding,
+  ): Promise<Buffer> {
     const html = builder(data, branding);
 
     const browser = await this.getBrowser();

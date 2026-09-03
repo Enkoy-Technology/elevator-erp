@@ -1,0 +1,95 @@
+# Render Blueprint — the FREE PUBLIC DEMO only.
+#
+# THIS IS NOT THE PRODUCTION DEPLOYMENT. The real one is the compose bundle
+# in docker-compose.prod.yml / docker-compose.uat.yml, run on a server in
+# Ethiopia. Ethiopian Personal Data Protection Proclamation 1321/2024
+# Art 22(1) requires personal data collected in Ethiopia to be stored on a
+# server in Ethiopia; Render is in the United States. This deployment is
+# lawful only while it holds the fictional seeded data, which is why the UI
+# carries a banner saying exactly that. Do not point real customer records
+# at it.
+#
+# ---------------------------------------------------------------------------
+# THE SERVICE NAMES BELOW ARE LOAD-BEARING.
+#
+# A Render service is published at https://<name>.onrender.com, and both
+# `NEXT_PUBLIC_API_URL` and `CORS_ORIGINS` have to be full public URLs:
+#   - NEXT_PUBLIC_API_URL is compiled into the browser bundle AND into the
+#     CSP's connect-src (next.config.ts), so it cannot be changed at runtime.
+#   - CORS_ORIGINS is matched against the Origin header the browser sends,
+#     which is the public origin.
+#
+# Render's `fromService` can only supply the PRIVATE network hostname, and
+# Blueprints do not support string interpolation, so neither value can be
+# derived — they are written out by hand and MUST match the service names.
+#
+# If Render reports a name as taken, change the name AND the two URLs that
+# reference it, in all three places, then redeploy the web service (a rebuild
+# is the only way to move the API URL — see web/Dockerfile).
+# ---------------------------------------------------------------------------
+
+services:
+  # --- API: NestJS + Chromium -----------------------------------------------
+  - name: shining-star-erp-api
+    type: web
+    runtime: docker
+    plan: free
+    region: ohio
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Neon, pooled endpoint, as the NON-OWNER app_user role so RLS actually
+      # applies. Set in the dashboard, never committed: it carries a password.
+      # (Render exposes env vars to Docker builds as build args, so anything
+      # here could end up in image history if a Dockerfile ARG named it —
+      # ours does not.)
+      - key: DATABASE_URL
+        sync: false
+
+      - key: JWT_SECRET
+        generateValue: true
+
+      # The web service's public origin. No trailing slash — the value is
+      # compared against the browser's Origin header verbatim.
+      - key: CORS_ORIGINS
+        value: https://shining-star-erp-web.onrender.com
+
+      # Render terminates TLS at its edge and forwards one hop, so the app
+      # must trust exactly one proxy to read the real client IP. Getting this
+      # wrong makes the login rate limiter see every request as one client.
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+
+      # No SMS provider on the demo: reminders are recorded in the outbox and
+      # visible under Messages, but nothing is actually sent. A demo must not
+      # be able to text a real phone number.
+      - key: SMS_LIVE
+        value: "0"
+
+  # --- Web: Next.js admin UI ------------------------------------------------
+  - name: shining-star-erp-web
+    type: web
+    runtime: docker
+    plan: free
+    region: ohio
+    dockerfilePath: ./web/Dockerfile
+    dockerContext: ./web
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # BUILD-TIME. Render passes env vars to Docker builds as build args,
+      # which is what makes a single-phase deploy possible here — the API's
+      # URL is knowable in advance because it is derived from its name above.
+      # Must include the /v1 prefix and must NOT have a trailing slash.
+      - key: NEXT_PUBLIC_API_URL
+        value: https://shining-star-erp-api.onrender.com/v1
+
+      # Turns on the "demonstration system, fictional data" banner. Absent in
+      # the on-prem build, which is why the banner cannot appear there.
+      - key: NEXT_PUBLIC_DEMO_MODE
+        value: "1"

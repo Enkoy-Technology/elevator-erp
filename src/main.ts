@@ -92,7 +92,10 @@ const bootstrap = async (): Promise<void> => {
   }
 
   const port = config.get('PORT', { infer: true });
-  await app.listen(port);
+  // Bind all interfaces, not the Node default's dual-stack guesswork:
+  // Cloud Run routes to the container over IPv4 and treats a container
+  // that is not accepting on the injected PORT as a failed start.
+  await app.listen(port, '0.0.0.0');
   Logger.log(`API listening on http://localhost:${port}/v1`, 'Bootstrap');
   if (!isProduction) {
     Logger.log(`Swagger UI at http://localhost:${port}/docs`, 'Bootstrap');

@@ -424,3 +424,201 @@ git pull && docker compose -f docker-compose.prod.yml up -d --build
 # back by itself after a power cut. `docker compose stop` is remembered
 # across reboots — use `down`/`up -d` if you want it to come back.
 ```
+
+---
+
+# Free public demo — Cloud Run + Neon (NOT the production path)
+
+Everything above this line is the real deployment: the client's own server in
+Addis Ababa, `docker-compose.prod.yml` / `.uat.yml` behind `Caddyfile`. This
+section is additive and does not change any of it.
+
+What this section is for: standing up a throwaway, publicly reachable demo on
+Google Cloud Run with a Neon database, so the client can click around before
+there is a server to install on. Two Cloud Run services, no custom domain —
+both answer on the `https://<service>-<hash>.<region>.run.app` URL Google
+issues.
+
+## Read this before you put a single row in it
+
+**Fictional data only. This is not where real customer records go.**
+
+Ethiopia's Personal Data Protection Proclamation 1321/2024, Art 22(1),
+requires personal data collected in Ethiopia to be stored on a server in
+Ethiopia. Cloud Run and Neon are both abroad. This demo is lawful for exactly
+as long as everything in it is invented — invented customers, invented
+employees, invented phone numbers and TINs.
+
+In practice that means:
+
+- Seed it with the fictional `Demo Elevators PLC` tenant and nothing else.
+  Never `db:bootstrap` a real tenant here.
+- Never import a real customer, employee or supplier list, not even a small
+  one, not even to "check the import works".
+- Tell the client, in the same sentence as the URL, that anything they type
+  into it is public and must not be a real person.
+- If a real name, phone number or TIN does get entered, the deployment is
+  unlawful from that moment. Delete it (see teardown below). Do not plan to
+  clean it up later.
+
+Every page carries an orange banner saying this, the deploy script prints it,
+and the seeding command prints it. Do not remove or soften any of them.
+
+## What you need before you start
+
+1. A Google account with billing enabled on a project. Billing has to be on
+   even to stay inside the free tier; nothing here works on a project without
+   it.
+2. `gcloud` installed and signed in (`gcloud auth login`), plus a running
+   Docker daemon and `openssl`. The script checks all of these and names the
+   missing one.
+3. A Neon project, and its **direct** connection string — the host *without*
+   `-pooler` in it. Neon's console shows both; the direct one is the default
+   when the "Pooled connection" box is unticked. Migrations do DDL and
+   `CREATE ROLE`, which Neon's pooled endpoint rejects, so the direct string
+   is the one the script wants. It derives the pooled host itself and prints
+   it for you to compare.
+4. `web/Dockerfile` must declare `ARG NEXT_PUBLIC_DEMO_MODE` / `ENV
+   NEXT_PUBLIC_DEMO_MODE=$NEXT_PUBLIC_DEMO_MODE` in its build stage. The
+   banner is compiled into the bundle at build time, and Docker silently
+   ignores a `--build-arg` with no matching `ARG` — so without those two
+   lines the demo would deploy with no legal warning on it. The script
+   refuses to run until they are there and prints them verbatim.
+
+You do not need to invent any passwords. The script generates the JWT signing
+secret and both database role passwords, stores them in Secret Manager, and
+prints them once — on the run that creates them.
+
+## Deploy
+
+One command, from the repository root:
+
+```sh
+GCP_PROJECT=my-demo-project \
+NEON_ADMIN_URL='postgresql://neondb_owner:PW@ep-xxx.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require' \
+  deploy/deploy-demo.sh
+```
+
+Optional overrides, all non-secret: `REGION` (default `europe-west1` — no
+Google region is in Ethiopia, so pick the one nearest your Neon region),
+`AR_REPO`, `API_SERVICE`, `WEB_SERVICE`, and `POOLED_HOST` if Neon's pooled
+hostname ever stops following the `-pooler`-before-the-first-dot convention.
+
+In order, and each step announces itself before it does anything billable or
+anything that writes:
+
+| Step | What it is for |
+|---|---|
+| Preflight | Refuses on a missing input, an unsigned-in `gcloud`, a stopped Docker, a pooled `NEON_ADMIN_URL`, a connection string with no `sslmode`, or a `web/Dockerfile` that would drop the legal banner. |
+| Enable APIs | Cloud Run, Artifact Registry, Secret Manager, IAM. No-op if already on. |
+| Artifact Registry | Creates the `elevator-erp` Docker repository once. This is the part that keeps costing money after the demo — see teardown. |
+| Service account | `erp-demo-run@…`, granted three secret reads and nothing else. Cloud Run's default identity is the Compute Engine service account, which carries project Editor; a world-readable demo must not run as that. |
+| Secrets | Generates the JWT secret and the `app_user` / `outbox_dispatcher` passwords, builds the two pooled connection strings, stores all three in Secret Manager. Printed once, here. On a re-run they are read back and reused, not regenerated — a new JWT secret would sign every live session out. |
+| Build + push API | `--platform linux/amd64`. Cloud Run refuses arm64, so a build on an Apple Silicon Mac must cross-build; the first one is slow. |
+| **Migrate + seed** | Runs `dist/database/demo-bootstrap.cli.js` out of the image just built: migrations, then rotating both role passwords to the generated ones, then the statutory rates and the fictional demo tenant. **This is the step that writes to the database.** It is deliberately its own command and not something the API does on boot — Cloud Run runs several instances against one database and they would race. Idempotent: re-running is how you repair a half-finished bootstrap. It prints the demo accounts and their shared password. |
+| Deploy API | 1 GiB, gen2, `--concurrency 8`, secrets from Secret Manager. See the flag notes below. |
+| Read back the API URL | It does not exist until the deploy succeeds, which is what forces this order. |
+| Build + push + deploy web | Built with `NEXT_PUBLIC_API_URL=<api>/v1` and `NEXT_PUBLIC_DEMO_MODE=1`. Both are compiled into the client bundle *and* into the CSP's `connect-src` (`web/next.config.ts`), so repointing the UI at another API is a rebuild — no runtime env var can move it. |
+| Set `CORS_ORIGINS` | Updates the API with the web service's real URL. Skipped, every browser call dies at the preflight. |
+
+At the end it prints both URLs. Give the client the **web** one. The API URL
+has no UI — `/` redirects to Swagger and Swagger is off when
+`NODE_ENV=production`, which is deliberate and is not being relaxed for a
+demo. `<api>/v1/health` is the one thing worth opening on it.
+
+Run the script again to ship a new build. It updates the two services in
+place; it does not create second copies of anything, and it does not
+regenerate the secrets or re-seed over the existing data.
+
+### The two flags that are not arbitrary
+
+- **`--memory 1Gi`.** Measured, do not lower. In this image on Linux, one
+  heavy PDF render alongside ~180 MB of app ballast fits in 512 MB; three
+  concurrent renders do not.
+- **`--execution-environment gen2`.** `document-pdf.service.ts` launches
+  Chromium with its own sandbox on (no `--no-sandbox`) and the image runs as
+  non-root, which needs the user namespaces gen1's gVisor sandbox does not
+  provide. The alternative is weakening Chromium's sandbox, which this
+  deployment does not do. gen2 cold starts are slower — see below.
+
+`deploy/cloud-run/README.md` has the same deployment written out as
+individual commands, plus the Neon-specific rough edges (no superuser, the
+`admin_bypass` fallback if seeding trips over RLS). Read it when a step fails.
+
+## What the free tier actually gives you, and what the client will notice
+
+**Cloud Run** gives, per billing account per month: 2 million requests,
+180,000 vCPU-seconds and 360,000 GiB-seconds. At 1 vCPU / 1 GiB that is
+roughly 50 CPU-hours and 100 GiB-hours of instance time, and CPU is only
+allocated while a request is in flight. A demo that a handful of people click
+through does not come close. What is *not* free at `europe-west1` is network
+egress — the free 1 GiB of egress applies only to services in North America,
+so a European service is billed for egress from the first byte. It is
+fractions of a cent for a demo, but it is not zero.
+
+**Artifact Registry** gives 0.5 GB free. The API image is around 1 GB on its
+own (Node plus a distro Chromium), so the images *do* exceed it, at roughly
+$0.10/GB/month. This is small, it is also the only thing that keeps billing
+after everyone stops using the demo, and it is what makes teardown matter.
+
+**Neon's free plan** gives 0.5 GB of storage and suspends the compute after
+about 5 minutes with no connections. The seeded demo tenant is a few MB, so
+storage is not the constraint; the autosuspend is.
+
+**Cold starts are what the client actually notices.** With
+`--min-instances 0`, a demo left alone for a while has to start a Cloud Run
+container *and* wake a suspended Neon compute before the first page renders —
+call it 10–20 seconds, and the first PDF export after that pays another
+couple of seconds launching Chromium. Everything after is fast. gen2 makes
+the container start slower than gen1 would; that is the price of keeping
+Chromium's sandbox.
+
+Practical mitigation: open the demo URL and sign in a few minutes before any
+call. Do not set `--min-instances 1` to hide it — a warm instance runs 24/7
+and is exactly how a free demo turns into a monthly bill.
+
+Scheduled work does not run while nothing is warm: the outbox dispatcher and
+the reminder sweeps are `@Cron` jobs that only fire when an instance happens
+to be up. Irrelevant here, since `SMS_PROVIDER` is left at its `noop` default
+and the demo must not be able to text a real handset. It would not be
+acceptable on the on-prem deployment, which is always on.
+
+## Tearing the demo down
+
+**This is the step people skip and then get billed for.** Deleting the two
+Cloud Run services is the obvious half and the cheap half — at
+`--min-instances 0` they already cost nothing idle. The stored container
+images are what keeps charging.
+
+```sh
+export PROJECT=my-demo-project REGION=europe-west1
+
+# 1. The services. The demo stops being reachable here.
+gcloud run services delete erp-demo-api  --project="$PROJECT" --region="$REGION" --quiet
+gcloud run services delete erp-demo-web  --project="$PROJECT" --region="$REGION" --quiet
+
+# 2. The images. THIS is the recurring charge — do not stop before it.
+gcloud artifacts repositories delete elevator-erp \
+  --project="$PROJECT" --location="$REGION" --quiet
+
+# 3. The secrets and the runtime identity.
+for s in erp-demo-jwt-secret erp-demo-database-url erp-demo-outbox-database-url; do
+  gcloud secrets delete "$s" --project="$PROJECT" --quiet
+done
+gcloud iam service-accounts delete \
+  "erp-demo-run@$PROJECT.iam.gserviceaccount.com" --project="$PROJECT" --quiet
+```
+
+Then, by hand, because they are not Google's to delete:
+
+4. **Delete the Neon project** in Neon's console. This is the copy of the
+   data. Leaving the Cloud Run side deleted and the database up means the
+   rows are still sitting on a server outside Ethiopia.
+5. Confirm nothing is left: `gcloud run services list --project="$PROJECT"`
+   and `gcloud artifacts repositories list --project="$PROJECT"` should both
+   come back empty. If this project exists only for the demo, deleting the
+   whole project is the surest version of all of the above.
+
+Check the billing report a day or two later. A demo you believe you deleted
+and a demo Google believes you deleted are different claims until you have
+looked.

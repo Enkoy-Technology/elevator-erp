@@ -202,3 +202,32 @@ body {
   --color-status-serious: #ec835a;
   --color-status-critical: #d03b3b;
 }
+
+/* Free public demo only (NEXT_PUBLIC_DEMO_MODE=1 — see components/demo-mode.ts).
+   `app/layout.tsx` puts `.demo-shell` on <body> and wraps the app in
+   `.demo-main`; without the class every rule below is inert, so the on-prem
+   build is untouched.
+
+   The bar has to be a row the app scrolls under, not a fixed overlay: every
+   page root is `flex min-h-screen`, and a banner sitting above 100vh of page
+   would push the sidebar's sign-out control permanently below the fold. So
+   the shell owns the viewport, the app scrolls inside it, and `min-h-screen`
+   is re-pointed at that container. `screen` only: an inner scroll container
+   would clip a printed quotation to one page. */
+@media screen {
+  .demo-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+
+  .demo-shell > .demo-main {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .demo-shell .min-h-screen {
+    min-height: 100%;
+  }
+}

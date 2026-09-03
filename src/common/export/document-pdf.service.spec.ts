@@ -120,6 +120,51 @@ describe('DocumentPdfService.renderDocumentPdf', () => {
     expect(puppeteer.launch).not.toHaveBeenCalled();
   });
 
+  it('renders one document at a time, however many are asked for at once', async () => {
+    // Chromium needs ~250MB to print an A4 page. Measured in this project's
+    // production image: one render fits a 512MB container, three concurrent
+    // ones kill it mid-print. Two people pressing Download together is a
+    // Tuesday, so the renders queue instead of racing.
+    const { browser } = mockLaunch();
+    let concurrent = 0;
+    let peak = 0;
+    const page = await browser.newPage();
+    (page.pdf as jest.Mock).mockImplementation(async () => {
+      concurrent += 1;
+      peak = Math.max(peak, concurrent);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      concurrent -= 1;
+      return Buffer.from('%PDF-1.4');
+    });
+
+    const service = new DocumentPdfService();
+    await Promise.all(
+      Array.from({ length: 5 }, () =>
+        service.renderDocumentPdf('proforma', {}, branding),
+      ),
+    );
+
+    expect(peak).toBe(1);
+  });
+
+  it('a failed render does not poison the queue for the next one', async () => {
+    // The queue is a promise chain; without a catch on the tail, one
+    // rejection would make every later render reject too — turning a single
+    // bad document into an outage.
+    const { browser } = mockLaunch();
+    const page = await browser.newPage();
+    (page.pdf as jest.Mock)
+      .mockRejectedValueOnce(new Error('Printing failed'))
+      .mockResolvedValue(Buffer.from('%PDF-1.4'));
+
+    const service = new DocumentPdfService();
+    const first = service.renderDocumentPdf('proforma', {}, branding);
+    const second = service.renderDocumentPdf('proforma', {}, branding);
+
+    await expect(first).rejects.toThrow('Printing failed');
+    await expect(second).resolves.toBeInstanceOf(Buffer);
+  });
+
   it('has a registered builder for "proforma" (Phase 3) — does not throw TemplateNotImplementedError', async () => {
     mockLaunch();
     const service = new DocumentPdfService();

@@ -12,3 +12,16 @@ next-env.d.ts
 .env
 .env.*
 !.env.example
+
+# Tests. They run from the REPO ROOT (`pnpm test` -> jest.web.config.js,
+# rootDir web/src), never from inside this image, so excluding them costs no
+# coverage. They must be excluded: web/ is an isolated pnpm workspace with no
+# jest dependency of its own, so the jest globals only resolve from the root
+# workspace's hoisted node_modules — present on a developer machine, absent
+# in this build context. Left in, `next build`'s lint/typecheck pass fails on
+# unresolved `describe`/`expect` and the image cannot be built at all.
+# The `**/` is load-bearing: .dockerignore uses Go filepath.Match, where a
+# bare `*` does not cross `/`, so `*.spec.ts` would silently match nothing
+# below the context root and the build would still fail.
+**/*.spec.ts
+**/*.spec.tsx
