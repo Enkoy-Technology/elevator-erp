@@ -296,10 +296,17 @@ export interface Customer {
   legalName: string | null;
   email: string | null;
   phone: string | null;
+  alternatePhone: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
   city: string | null;
+  region: string | null;
   country: string;
+  buildingName: string | null;
   customerType: CustomerType;
   creditLimitEtb: string;
+  /** numeric(5,0) — a string like every other numeric column, not a number. */
+  paymentTermsDays: string;
   /** Net account position (invoices owed minus unapplied cash) — not the same as the aging report's per-invoice total; the two legitimately disagree by unapplied cash. */
   outstandingBalanceEtb: string;
   /** ECA Directive 832/2021 recorded consent to receive SMS — null until given. Server-stamped only (see CreateCustomerPayload.smsConsentGiven's own doc comment); never set this directly. */
@@ -307,6 +314,7 @@ export interface Customer {
   /** When consent was revoked — null means never revoked (or never given). Revoking no longer clears smsConsentAt above (I10), so both fields matter for the current consent state. */
   smsConsentRevokedAt: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreateCustomerPayload {
@@ -358,6 +366,10 @@ export const createCustomer = (
     body: JSON.stringify(payload),
   });
 
+/** GET /customers/:id — the single record behind the detail and edit pages. */
+export const getCustomer = (id: string): Promise<Customer> =>
+  apiFetch<Customer>(`/customers/${encodeURIComponent(id)}`);
+
 export const updateCustomer = (
   id: string,
   payload: Partial<CreateCustomerPayload>,
@@ -369,6 +381,120 @@ export const updateCustomer = (
 
 export const deleteCustomer = (id: string): Promise<void> =>
   apiFetch<void>(`/customers/${id}`, { method: 'DELETE' });
+
+/**
+ * GET /customers/:id/overview — the one round trip behind the customer
+ * detail page. Every section carries the FULL `total` plus the newest five
+ * rows, so the heading count and the five-row table can never disagree.
+ *
+ * Mirrors CustomerOverview in src/modules/customers/customer-overview.ts.
+ * Money is always a fixed-2-decimal string; `timestamp` columns arrive as
+ * ISO strings and `date` columns (signedAt, dueDate, nextServiceAt) as
+ * plain 'YYYY-MM-DD'.
+ */
+export interface CustomerOverviewSection<TRow> {
+  /** Every matching row, NOT `recent.length`. */
+  total: number;
+  /** At most five, newest first. */
+  recent: TRow[];
+}
+
+export interface CustomerOverviewProject {
+  id: string;
+  name: string;
+  status: ProjectStatus;
+  /** projects.siteCity. */
+  city: string | null;
+  /** projects.contractAmountEtb. */
+  contractValueEtb: string | null;
+}
+
+export interface CustomerOverviewQuotation {
+  id: string;
+  quoteNumber: string;
+  status: QuoteStatus;
+  totalPriceEtb: string;
+  createdAt: string;
+}
+
+export interface CustomerOverviewProforma {
+  id: string;
+  proformaNumber: string;
+  status: ProformaStatus;
+  totalEtb: string;
+  issuedAt: string;
+}
+
+export interface CustomerOverviewContract {
+  id: string;
+  contractNumber: string;
+  status: ContractStatus;
+  contractValueEtb: string;
+  /** Null while the contract is still DRAFT. */
+  signedAt: string | null;
+}
+
+export interface CustomerOverviewInvoice {
+  id: string;
+  invoiceNumber: string;
+  status: InvoiceStatus;
+  totalEtb: string;
+  dueDate: string | null;
+}
+
+export interface CustomerOverviewPayment {
+  id: string;
+  amountEtb: string;
+  receivedAt: string;
+  method: PaymentMethod;
+}
+
+export interface CustomerOverviewAsset {
+  id: string;
+  category: AssetCategory;
+  buildingName: string | null;
+  serialNumber: string | null;
+  status: AssetStatus;
+}
+
+export interface CustomerOverviewMaintenance {
+  id: string;
+  status: 'ACTIVE' | 'PAUSED' | 'ENDED';
+  recurrence: MaintenanceRecurrence;
+  nextServiceAt: string;
+  assetId: string;
+}
+
+/**
+ * Every section is OPTIONAL, and absent means "this role may not see it" —
+ * the API omits sections the caller's role could not read from the module
+ * that owns them (visibleSections() in src/modules/customers). Absent is not
+ * the same as empty: empty says this customer has none, absent says it is not
+ * yours to know, and the page must not render one as the other.
+ */
+export interface CustomerOverview {
+  projects?: CustomerOverviewSection<CustomerOverviewProject>;
+  quotations?: CustomerOverviewSection<CustomerOverviewQuotation>;
+  proformas?: CustomerOverviewSection<CustomerOverviewProforma>;
+  contracts?: CustomerOverviewSection<CustomerOverviewContract>;
+  /** `outstandingEtb`: what this customer still owes across their invoices —
+   *  the aging report's per-invoice figure, not Customer.outstandingBalanceEtb
+   *  (which also nets off unapplied cash). */
+  invoices?: CustomerOverviewSection<CustomerOverviewInvoice> & {
+    outstandingEtb: string;
+  };
+  /** `receivedEtb`: what they have actually paid, net of reversals. */
+  payments?: CustomerOverviewSection<CustomerOverviewPayment> & {
+    receivedEtb: string;
+  };
+  assets?: CustomerOverviewSection<CustomerOverviewAsset>;
+  maintenance?: CustomerOverviewSection<CustomerOverviewMaintenance>;
+}
+
+export const getCustomerOverview = (id: string): Promise<CustomerOverview> =>
+  apiFetch<CustomerOverview>(
+    `/customers/${encodeURIComponent(id)}/overview`,
+  );
 
 export type ProjectStatus =
   | 'LEAD'
@@ -393,6 +519,7 @@ export interface Project {
   quotedAmountEtb: string | null;
   contractAmountEtb: string | null;
   createdAt: string;
+  updatedAt: string;
   statusChangedAt: string;
 }
 
@@ -407,12 +534,16 @@ export interface CreateProjectPayload {
 
 export const listProjects = (options?: {
   status?: ProjectStatus;
+  customerId?: string;
   page?: number;
   pageSize?: number;
 }): Promise<Paginated<Project>> => {
   const params = new URLSearchParams();
   if (options?.status) {
     params.set('status', options.status);
+  }
+  if (options?.customerId) {
+    params.set('customerId', options.customerId);
   }
   if (options?.page) {
     params.set('page', String(options.page));
@@ -487,6 +618,7 @@ export interface Employee {
   smsConsentRevokedAt: string | null;
   lastLoginAt: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreateEmployeePayload {
@@ -629,6 +761,7 @@ export interface Asset {
   status: AssetStatus;
   notes: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreateAssetPayload {
@@ -793,6 +926,7 @@ export interface MaintenanceContract {
   assignedUserId: string | null;
   notes: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface Breakdown {
@@ -810,12 +944,16 @@ export interface Breakdown {
 
 export const listMaintenanceContracts = (options?: {
   status?: string;
+  customerId?: string;
   page?: number;
   pageSize?: number;
 }): Promise<Paginated<MaintenanceContract>> => {
   const params = new URLSearchParams();
   if (options?.status) {
     params.set('status', options.status);
+  }
+  if (options?.customerId) {
+    params.set('customerId', options.customerId);
   }
   if (options?.page) {
     params.set('page', String(options.page));
@@ -1239,6 +1377,7 @@ export interface Quotation {
   approvedAt: string | null;
   rejectedReason: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 /** Same shape the calc engine takes, minus taxPercent — VAT is resolved
@@ -2170,11 +2309,15 @@ export interface ContractListRow extends Contract {
  *  filters — same shape as paymentListParams/outboxListParams. */
 const contractListParams = (options?: {
   projectId?: string;
+  customerId?: string;
   status?: ContractStatus;
 }): URLSearchParams => {
   const params = new URLSearchParams();
   if (options?.projectId) {
     params.set('projectId', options.projectId);
+  }
+  if (options?.customerId) {
+    params.set('customerId', options.customerId);
   }
   if (options?.status) {
     params.set('status', options.status);
@@ -2184,6 +2327,7 @@ const contractListParams = (options?: {
 
 export const listContracts = (options?: {
   projectId?: string;
+  customerId?: string;
   status?: ContractStatus;
   page?: number;
   pageSize?: number;
@@ -2205,7 +2349,7 @@ export type ContractExportFormat = 'csv' | 'xlsx';
  *  the whole filtered set, not just the loaded page. */
 export const downloadContracts = (
   format: ContractExportFormat,
-  options?: { projectId?: string; status?: ContractStatus },
+  options?: { projectId?: string; customerId?: string; status?: ContractStatus },
 ): Promise<void> => {
   const params = contractListParams(options);
   params.set('format', format);

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { updatedColumn } from '@/components/updated-column';
 import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -27,6 +28,7 @@ import { SideDrawer } from '@/components/side-drawer';
 import { Sidebar } from '@/components/sidebar';
 import { formatEtb, isPositiveEtb, isZeroEtb, subtractEtb, sumEtb } from '@/lib/money';
 import {
+  getCustomer,
   ApiError,
   allocatePayment,
   downloadInvoiceDocument,
@@ -232,6 +234,14 @@ export default function InvoicesPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>('invoices');
   const [role, setRole] = useState<UserRole | null>(null);
+  /**
+   * The URL can only be read in an effect (so the server and first client
+   * render match), and it carries `?tab=` and `?customerId=` — the latter is
+   * how "View all" from a customer's page arrives. Both lists hold off their
+   * first load until it has been read, so a deep link never shows every
+   * invoice for a moment before narrowing to one customer's.
+   */
+  const [urlRead, setUrlRead] = useState(false);
 
   const [invoices, setInvoices] = useState<InvoiceListRow[]>([]);
   const [page, setPage] = useState(1);
@@ -307,7 +317,20 @@ export default function InvoicesPage() {
             pageSize: size,
           }),
         ]);
-        setCustomers(customerPage.items);
+        // A deep link from a customer page (?customerId=…) can name someone
+        // outside this first page of options. Without them in the list the
+        // <select> falls back to showing "All customers" while the table is
+        // genuinely filtered — the filter is invisible and looks like a bug.
+        const options = customerPage.items;
+        if (customerId && !options.some((c) => c.id === customerId)) {
+          // A failure here must not take the page down: the filter still
+          // works, the dropdown just cannot name them.
+          const named = await getCustomer(customerId).catch(() => null);
+          if (named) {
+            options.unshift(named);
+          }
+        }
+        setCustomers(options);
         setCustomerMap(
           Object.fromEntries(customerPage.items.map((c) => [c.id, c.name] as const)),
         );
@@ -399,16 +422,30 @@ export default function InvoicesPage() {
       return;
     }
     setRole(getCurrentRole());
-    if (new URLSearchParams(window.location.search).get('tab') === 'payments') {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'payments') {
       setTab('payments');
     }
+    const customerId = params.get('customerId');
+    if (customerId) {
+      // Both tabs, so switching between them keeps the same customer.
+      setCustomerFilter(customerId);
+      setPaymentsCustomerFilter(customerId);
+    }
+    setUrlRead(true);
   }, [router]);
 
   useEffect(() => {
+    if (!urlRead) {
+      return;
+    }
     void refresh(page, statusFilter, customerFilter, q, pageSize);
-  }, [refresh, page, statusFilter, customerFilter, q, pageSize]);
+  }, [urlRead, refresh, page, statusFilter, customerFilter, q, pageSize]);
 
   useEffect(() => {
+    if (!urlRead) {
+      return;
+    }
     void refreshPayments(
       paymentsPage,
       paymentsCustomerFilter,
@@ -419,6 +456,7 @@ export default function InvoicesPage() {
       paymentsPageSize,
     );
   }, [
+    urlRead,
     refreshPayments,
     paymentsPage,
     paymentsCustomerFilter,
@@ -971,6 +1009,7 @@ export default function InvoicesPage() {
         />
       ),
     },
+    updatedColumn<InvoiceListRow>((row) => row.updatedAt),
     {
       id: 'actions',
       header: '',

@@ -9,6 +9,8 @@ import {
   type SortingState,
 } from '@tanstack/react-table';
 import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 /**
@@ -46,6 +48,19 @@ export interface DataTableProps<T> {
   loading?: boolean;
   /** Row click — makes the whole row a target. Keyboard-reachable. */
   onRowClick?: (row: T) => void;
+  /**
+   * Makes each row open a record. Opt-in: a list without it keeps behaving
+   * exactly as before.
+   *
+   * The real link is on the FIRST cell, not the `<tr>` — so the row is a tab
+   * stop for keyboard users, opens in a new tab on middle-click, and shows
+   * its destination on hover, none of which a bare click handler on a row
+   * gives you. The row-wide click is the mouse convenience on top, and it
+   * stands down for anything interactive inside the row (the Edit/Delete
+   * buttons, a checkbox, a nested link), so a row action never doubles as a
+   * navigation.
+   */
+  getRowHref?: (row: T) => string;
   /** Announced to screen readers and printed above the table. */
   caption?: string;
 
@@ -123,6 +138,7 @@ export const DataTable = <T,>({
   empty,
   loading = false,
   onRowClick,
+  getRowHref,
   caption,
   selectable = false,
   selectedIds,
@@ -130,6 +146,7 @@ export const DataTable = <T,>({
   bulkActions,
   getRowLabel,
 }: DataTableProps<T>) => {
+  const router = useRouter();
   const [sorting, setSorting] = useState<SortingState>([]);
 
   // Selection is only coherent with stable ids.
@@ -276,47 +293,83 @@ export const DataTable = <T,>({
                 </td>
               </tr>
             ) : (
-              table.getRowModel().rows.map((row) => (
-                <tr
-                  key={row.id}
-                  onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-                  // A clickable row is a real control: give it a tab stop and
-                  // an Enter handler rather than a mouse-only affordance.
-                  tabIndex={onRowClick ? 0 : undefined}
-                  onKeyDown={
-                    onRowClick
-                      ? (event) => {
-                          if (event.key === 'Enter') {
-                            onRowClick(row.original);
+              table.getRowModel().rows.map((row) => {
+                const href = getRowHref?.(row.original);
+                return (
+                  <tr
+                    key={row.id}
+                    onClick={
+                      href
+                        ? (event) => {
+                            // Anything interactive in the row speaks for
+                            // itself — an Edit button, a checkbox, a nested
+                            // link. Only bare cell clicks navigate.
+                            if (
+                              (event.target as HTMLElement).closest(
+                                'a, button, input, select, textarea, label, [role="button"]',
+                              )
+                            ) {
+                              return;
+                            }
+                            router.push(href);
                           }
-                        }
-                      : undefined
-                  }
-                  className={`border-b border-slate-100 last:border-0 ${
-                    onRowClick
-                      ? 'cursor-pointer transition hover:bg-slate-50 focus-visible:bg-slate-50'
-                      : 'transition hover:bg-slate-50/60'
-                  } print:hover:bg-transparent`}
-                >
-                  {canSelect && getRowId ? (
-                    <td className="w-10 px-4 py-3 align-middle print:hidden">
-                      <TriStateCheckbox
-                        checked={selected.has(getRowId(row.original))}
-                        onChange={() => toggleOne(getRowId(row.original))}
-                        label={`Select ${getRowLabel?.(row.original) ?? `row ${row.index + 1}`}`}
-                      />
-                    </td>
-                  ) : null}
-                  {row.getVisibleCells().map((cell) => (
-                    <td
-                      key={cell.id}
-                      className={`px-4 py-3 align-middle text-slate-700 ${alignClass[readAlign(cell.column.columnDef.meta)]}`}
-                    >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              ))
+                        : onRowClick
+                          ? () => onRowClick(row.original)
+                          : undefined
+                    }
+                    // A clickable row is a real control: give it a tab stop and
+                    // an Enter handler rather than a mouse-only affordance.
+                    // With `href` the first cell's <a> is already that tab stop,
+                    // so the row must not become a second one.
+                    tabIndex={onRowClick && !href ? 0 : undefined}
+                    onKeyDown={
+                      onRowClick && !href
+                        ? (event) => {
+                            if (event.key === 'Enter') {
+                              onRowClick(row.original);
+                            }
+                          }
+                        : undefined
+                    }
+                    className={`border-b border-slate-100 last:border-0 ${
+                      onRowClick || href
+                        ? 'cursor-pointer transition hover:bg-slate-50 focus-visible:bg-slate-50'
+                        : 'transition hover:bg-slate-50/60'
+                    } print:hover:bg-transparent`}
+                  >
+                    {canSelect && getRowId ? (
+                      <td className="w-10 px-4 py-3 align-middle print:hidden">
+                        <TriStateCheckbox
+                          checked={selected.has(getRowId(row.original))}
+                          onChange={() => toggleOne(getRowId(row.original))}
+                          label={`Select ${getRowLabel?.(row.original) ?? `row ${row.index + 1}`}`}
+                        />
+                      </td>
+                    ) : null}
+                    {row.getVisibleCells().map((cell, index) => (
+                      <td
+                        key={cell.id}
+                        className={`px-4 py-3 align-middle text-slate-700 ${alignClass[readAlign(cell.column.columnDef.meta)]}`}
+                      >
+                        {href && index === 0 ? (
+                          // `outline-none` with no replacement would leave a
+                          // keyboard user with no idea where they are — this
+                          // link is the ONLY way to reach the detail page
+                          // without a mouse, so it keeps a visible ring.
+                          <Link
+                            href={href}
+                            className="block rounded outline-none hover:text-slate-900 focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-1"
+                          >
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </Link>
+                        ) : (
+                          flexRender(cell.column.columnDef.cell, cell.getContext())
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

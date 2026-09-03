@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { updatedColumn } from '@/components/updated-column';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -180,6 +181,7 @@ export default function CustomersPage() {
       meta: { align: 'right' },
       cell: ({ row }) => formatEtb(row.original.outstandingBalanceEtb),
     },
+    updatedColumn<Customer>((row) => row.updatedAt),
     ...(canWrite
       ? ([
           {
@@ -275,6 +277,10 @@ export default function CustomersPage() {
             rows={customers}
             getRowId={(c) => c.id}
             getRowLabel={(c) => c.name}
+            // Opens the customer. The Edit/Delete buttons in the last column
+            // keep working — DataTable's row click stands down for anything
+            // interactive inside the row.
+            getRowHref={(c) => `/customers/${c.id}`}
             loading={loading}
             selectable
             selectedIds={selected}
