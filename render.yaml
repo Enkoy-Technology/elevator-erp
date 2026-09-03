@@ -50,6 +50,14 @@ services:
       - key: DATABASE_URL
         sync: false
 
+      # A SECOND database role, not a copy of DATABASE_URL. The outbox
+      # dispatcher connects as `outbox_dispatcher` (migration 0049), which
+      # can touch the message queue and nothing else — so a bug in the thing
+      # that sends SMS cannot read the customer table. The app refuses to
+      # boot without it (outbox.module.ts), which is why it is not optional.
+      - key: OUTBOX_DISPATCHER_DATABASE_URL
+        sync: false
+
       - key: JWT_SECRET
         generateValue: true
 
