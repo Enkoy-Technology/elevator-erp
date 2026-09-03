@@ -20,6 +20,7 @@ import {
 import { formatEtb } from '@/lib/money';
 
 import { describeFloorPlan } from '../../floor-plan';
+import { FloorPicker } from '../../floor-picker';
 import { NumberInput } from '../../number-input';
 
 /**
@@ -417,16 +418,13 @@ export const LinesEditor = ({
                       hint={
                         plan
                           ? `${plan.stops} landings · prints as ${plan.displaySummary} · ${plan.floorsStopsDoors} floors/stops/doors`
-                          : 'Every landing the lift stops at, bottom to top. B = basement, G = ground, M = mezzanine, then the numbered floors.'
+                          : 'Pick every landing the lift stops at. B = basement, G = ground, M = mezzanine.'
                       }
                     >
-                      <input
-                        id={`floors-${line.id}`}
-                        className={fieldClass}
-                        disabled={!editable}
-                        placeholder="B,G,M,1,2,3,4,5,6,7,8,9,10"
+                      <FloorPicker
                         value={draft.floorLabels}
-                        onChange={(e) => setField(line, 'floorLabels', e.target.value)}
+                        disabled={!editable}
+                        onChange={(next) => setField(line, 'floorLabels', next)}
                       />
                     </Field>
 
