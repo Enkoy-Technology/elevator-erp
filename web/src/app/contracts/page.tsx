@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { updatedColumn } from '@/components/updated-column';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -10,6 +11,7 @@ import { Ban, ListOrdered, PackageCheck, Pencil } from 'lucide-react';
 import { DataTable } from '@/components/data-table';
 import { btnGhost, btnPrimary, btnSecondary } from '@/components/form-styles';
 import {
+  FilterNotice,
   FilterSelect,
   ListToolbar,
   RowAction,
@@ -146,6 +148,10 @@ export default function ContractsPage() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [statusFilter, setStatusFilter] = useState<ContractStatus | ''>('');
+  /** `?customerId=` — "View all" from a customer's page. `null` until the URL
+   *  has been read in an effect; the first load waits for it rather than
+   *  fetching the unfiltered set and replacing it a moment later. */
+  const [customerFilter, setCustomerFilter] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -156,13 +162,19 @@ export default function ContractsPage() {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
   const refresh = useCallback(
-    async (nextPage: number, status: ContractStatus | '', size: number) => {
+    async (
+      nextPage: number,
+      status: ContractStatus | '',
+      size: number,
+      customerId: string,
+    ) => {
       setLoading(true);
       setError(null);
       setSelected(new Set());
       try {
         const result = await listContracts({
           status: status || undefined,
+          customerId: customerId || undefined,
           page: nextPage,
           pageSize: size,
         });
@@ -180,17 +192,32 @@ export default function ContractsPage() {
   );
 
   useEffect(() => {
+    setCustomerFilter(
+      new URLSearchParams(window.location.search).get('customerId') ?? '',
+    );
+  }, []);
+
+  useEffect(() => {
     if (!getAccessToken()) {
       router.replace('/login');
       return;
     }
     setRole(getCurrentRole());
-    void refresh(page, statusFilter, pageSize);
-  }, [router, refresh, page, statusFilter, pageSize]);
+    if (customerFilter === null) {
+      return;
+    }
+    void refresh(page, statusFilter, pageSize, customerFilter);
+  }, [router, refresh, page, statusFilter, pageSize, customerFilter]);
 
   const setFilter = (next: ContractStatus | '') => {
     setPage(1);
     setStatusFilter(next);
+  };
+
+  const clearCustomerFilter = () => {
+    setPage(1);
+    setCustomerFilter('');
+    router.replace('/contracts', { scroll: false });
   };
 
   const runAction = async (action: () => Promise<unknown>, id: string) => {
@@ -198,7 +225,7 @@ export default function ContractsPage() {
     setError(null);
     try {
       await action();
-      await refresh(page, statusFilter, pageSize);
+      await refresh(page, statusFilter, pageSize, customerFilter ?? '');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Action failed');
     } finally {
@@ -265,7 +292,11 @@ export default function ContractsPage() {
   const onExport = async (format: ContractExportFormat) => {
     setError(null);
     try {
-      await downloadContracts(format, { status: statusFilter || undefined });
+      // Exports the same filtered set the table is showing, customer included.
+      await downloadContracts(format, {
+        status: statusFilter || undefined,
+        customerId: customerFilter || undefined,
+      });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Export failed');
     }
@@ -408,6 +439,7 @@ export default function ContractsPage() {
         />
       ),
     },
+    updatedColumn<ContractListRow>((row) => row.updatedAt),
     {
       id: 'actions',
       header: '',
@@ -441,16 +473,27 @@ export default function ContractsPage() {
           <section>
             <ListToolbar
               filters={
-                <FilterSelect
-                  label="Status"
-                  value={statusFilter}
-                  onChange={setFilter}
-                  options={STATUS_FILTERS.map((s) => ({
-                    value: s,
-                    label: STATUS_LABEL[s],
-                  }))}
-                  allLabel="All statuses"
-                />
+                <>
+                  <FilterSelect
+                    label="Status"
+                    value={statusFilter}
+                    onChange={setFilter}
+                    options={STATUS_FILTERS.map((s) => ({
+                      value: s,
+                      label: STATUS_LABEL[s],
+                    }))}
+                    allLabel="All statuses"
+                  />
+                  {customerFilter ? (
+                    <FilterNotice
+                      label={
+                        contracts.find((c) => c.customerId === customerFilter)
+                          ?.customerName ?? 'One customer'
+                      }
+                      onClear={clearCustomerFilter}
+                    />
+                  ) : null}
+                </>
               }
               actions={(['csv', 'xlsx'] as const).map((format) => (
                 <button

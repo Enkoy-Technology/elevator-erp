@@ -1,12 +1,20 @@
 'use client';
 
+import { updatedColumn } from '@/components/updated-column';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { btnPrimary, btnSecondary } from '@/components/form-styles';
 import { DataTable } from '@/components/data-table';
-import { FilterSelect, ListToolbar, RowAction, SearchField, StatusPill } from '@/components/list-toolbar';
+import {
+  FilterNotice,
+  FilterSelect,
+  ListToolbar,
+  RowAction,
+  SearchField,
+  StatusPill,
+} from '@/components/list-toolbar';
 import { Check, Pencil, Trash2, X } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
@@ -63,6 +71,10 @@ export default function AssetsPage() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<AssetCategory | ''>('');
+  /** `?customerId=` — "View all" from a customer's page. `null` until the URL
+   *  has been read in an effect; the first load waits for it rather than
+   *  fetching every asset and replacing the list a moment later. */
+  const [customerFilter, setCustomerFilter] = useState<string | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,6 +90,7 @@ export default function AssetsPage() {
       size: number,
       q: string,
       categoryValue: AssetCategory | '',
+      customerId: string,
     ) => {
       setLoading(true);
       setError(null);
@@ -86,6 +99,7 @@ export default function AssetsPage() {
           listAssets({
             q,
             category: categoryValue || undefined,
+            customerId: customerId || undefined,
             page: nextPage,
             pageSize: size,
           }),
@@ -116,17 +130,32 @@ export default function AssetsPage() {
   );
 
   useEffect(() => {
+    setCustomerFilter(
+      new URLSearchParams(window.location.search).get('customerId') ?? '',
+    );
+  }, []);
+
+  useEffect(() => {
     if (!getAccessToken()) {
       router.replace('/login');
       return;
     }
     setRole(getCurrentRole());
-    void refresh(page, pageSize, search, categoryFilter);
-  }, [router, refresh, page, pageSize, search, categoryFilter]);
+    if (customerFilter === null) {
+      return;
+    }
+    void refresh(page, pageSize, search, categoryFilter, customerFilter);
+  }, [router, refresh, page, pageSize, search, categoryFilter, customerFilter]);
 
   const onSearch = () => {
     setPage(1);
     setSearch(searchInput.trim());
+  };
+
+  const clearCustomerFilter = () => {
+    setPage(1);
+    setCustomerFilter('');
+    router.replace('/assets', { scroll: false });
   };
 
   const onDelete = async (asset: Asset) => {
@@ -135,7 +164,7 @@ export default function AssetsPage() {
     try {
       await deleteAsset(asset.id);
       setConfirmingId(null);
-      await refresh(page, pageSize, search, categoryFilter);
+      await refresh(page, pageSize, search, categoryFilter, customerFilter ?? '');
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : `Could not delete ${asset.name}`,
@@ -161,7 +190,7 @@ export default function AssetsPage() {
     const results = await Promise.allSettled(ids.map((id) => deleteAsset(id)));
     const failed = results.filter((r) => r.status === 'rejected').length;
     setBusy(false);
-    await refresh(page, pageSize, search, categoryFilter);
+    await refresh(page, pageSize, search, categoryFilter, customerFilter ?? '');
     if (failed > 0) {
       setError(
         `Deleted ${ids.length - failed} of ${ids.length}. ${failed} could not be deleted.`,
@@ -228,6 +257,7 @@ export default function AssetsPage() {
         />
       ),
     },
+    updatedColumn<Asset>((row) => row.updatedAt),
     ...(canWrite
       ? ([
           {
@@ -313,19 +343,27 @@ export default function AssetsPage() {
               />
             }
             filters={
-              <FilterSelect
-                label="Category"
-                value={categoryFilter}
-                onChange={(value) => {
-                  setPage(1);
-                  setCategoryFilter(value);
-                }}
-                options={ASSET_CATEGORIES.map((value) => ({
-                  value,
-                  label: ASSET_CATEGORY_LABEL[value],
-                }))}
-                allLabel="All categories"
-              />
+              <>
+                <FilterSelect
+                  label="Category"
+                  value={categoryFilter}
+                  onChange={(value) => {
+                    setPage(1);
+                    setCategoryFilter(value);
+                  }}
+                  options={ASSET_CATEGORIES.map((value) => ({
+                    value,
+                    label: ASSET_CATEGORY_LABEL[value],
+                  }))}
+                  allLabel="All categories"
+                />
+                {customerFilter ? (
+                  <FilterNotice
+                    label={customerMap[customerFilter] ?? 'One customer'}
+                    onClear={clearCustomerFilter}
+                  />
+                ) : null}
+              </>
             }
             actions={
               <button type="button" onClick={onSearch} className={btnSecondary}>

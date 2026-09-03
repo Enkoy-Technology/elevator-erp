@@ -16,7 +16,12 @@ import {
 
 import { btnPrimary } from '@/components/form-styles';
 import { DataTable } from '@/components/data-table';
-import { ListToolbar, RowAction, StatusPill } from '@/components/list-toolbar';
+import {
+  FilterNotice,
+  ListToolbar,
+  RowAction,
+  StatusPill,
+} from '@/components/list-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
 import {
@@ -109,6 +114,15 @@ export default function MaintenancePage() {
   const [bulkNotice, setBulkNotice] = useState<string | null>(null);
   // Which row is mid-confirm; one at a time.
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  /**
+   * `?customerId=` — "View all" from a customer's page. `null` until the URL
+   * has been read in an effect, and the first load waits for it.
+   *
+   * Contracts only: GET /maintenance/breakdowns takes no customerId, so the
+   * breakdowns tab stays unfiltered (and shows no filter chip claiming
+   * otherwise).
+   */
+  const [customerFilter, setCustomerFilter] = useState<string | null>(null);
 
   const canWriteContracts = allows(role, CONTRACT_WRITE_ROLES);
   const canWorkField = allows(role, FIELD_WRITE_ROLES);
@@ -118,6 +132,7 @@ export default function MaintenancePage() {
       nextTab: 'contracts' | 'breakdowns',
       nextPage: number,
       nextPageSize: number,
+      customerId: string,
     ) => {
       setLoading(true);
       setError(null);
@@ -135,6 +150,7 @@ export default function MaintenancePage() {
 
         if (nextTab === 'contracts') {
           const result = await listMaintenanceContracts({
+            customerId: customerId || undefined,
             page: nextPage,
             pageSize: nextPageSize,
           });
@@ -173,13 +189,28 @@ export default function MaintenancePage() {
   }, []);
 
   useEffect(() => {
+    setCustomerFilter(
+      new URLSearchParams(window.location.search).get('customerId') ?? '',
+    );
+  }, []);
+
+  useEffect(() => {
     if (!getAccessToken()) {
       router.replace('/login');
       return;
     }
     setRole(getCurrentRole());
-    void refresh(tab, page, pageSize);
-  }, [router, refresh, tab, page, pageSize]);
+    if (customerFilter === null) {
+      return;
+    }
+    void refresh(tab, page, pageSize, customerFilter);
+  }, [router, refresh, tab, page, pageSize, customerFilter]);
+
+  const clearCustomerFilter = () => {
+    setPage(1);
+    setCustomerFilter('');
+    router.replace('/maintenance', { scroll: false });
+  };
 
   const switchTab = (next: 'contracts' | 'breakdowns') => {
     setPage(1);
@@ -197,7 +228,7 @@ export default function MaintenancePage() {
   ) => {
     try {
       await updateBreakdown(item.id, { status });
-      await refresh('breakdowns', page, pageSize);
+      await refresh('breakdowns', page, pageSize, customerFilter ?? '');
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : 'Failed to update breakdown',
@@ -209,7 +240,7 @@ export default function MaintenancePage() {
     setConfirmId(null);
     try {
       await updateMaintenanceContract(contract.id, { status: 'ENDED' });
-      await refresh('contracts', page, pageSize);
+      await refresh('contracts', page, pageSize, customerFilter ?? '');
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : 'Failed to end contract',
@@ -277,7 +308,7 @@ export default function MaintenancePage() {
         ? `Ended ${targets.length} contract(s).`
         : `Ended ${targets.length - failed} of ${targets.length}. ${failed} failed and are still running — try those again.`,
     );
-    await refresh('contracts', page, pageSize);
+    await refresh('contracts', page, pageSize, customerFilter ?? '');
   };
 
   const completeSelectedBreakdowns = async () => {
@@ -299,7 +330,7 @@ export default function MaintenancePage() {
         ? `Closed ${targets.length} ticket(s).`
         : `Closed ${targets.length - failed} of ${targets.length}. ${failed} failed and are still open — try those again.`,
     );
-    await refresh('breakdowns', page, pageSize);
+    await refresh('breakdowns', page, pageSize, customerFilter ?? '');
   };
 
   const today = todayIso();
@@ -513,26 +544,31 @@ export default function MaintenancePage() {
               stays a view switch and does not become a FilterSelect. */}
           <ListToolbar
             filters={
-              <div className="flex gap-2" role="tablist" aria-label="Maintenance view">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === 'contracts'}
-                  onClick={() => switchTab('contracts')}
-                  className={tabClass(tab === 'contracts')}
-                >
-                  Contracts
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === 'breakdowns'}
-                  onClick={() => switchTab('breakdowns')}
-                  className={tabClass(tab === 'breakdowns')}
-                >
-                  Breakdowns
-                </button>
-              </div>
+              <>
+                <div className="flex gap-2" role="tablist" aria-label="Maintenance view">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === 'contracts'}
+                    onClick={() => switchTab('contracts')}
+                    className={tabClass(tab === 'contracts')}
+                  >
+                    Contracts
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === 'breakdowns'}
+                    onClick={() => switchTab('breakdowns')}
+                    className={tabClass(tab === 'breakdowns')}
+                  >
+                    Breakdowns
+                  </button>
+                </div>
+                {customerFilter && tab === 'contracts' ? (
+                  <FilterNotice label="One customer" onClear={clearCustomerFilter} />
+                ) : null}
+              </>
             }
           />
 

@@ -73,6 +73,9 @@ export class EmployeesRepository {
           smsConsentRevokedAt: users.smsConsentRevokedAt,
           lastLoginAt: users.lastLoginAt,
           createdAt: users.createdAt,
+          // The list shows when a record last changed; without this column
+          // the Employees table is the only one that cannot say.
+          updatedAt: users.updatedAt,
         })
         .from(users)
         .where(where)

@@ -143,6 +143,38 @@ export const SearchField = ({
   );
 };
 
+/**
+ * A filter this list was handed in its URL rather than one picked from a
+ * control on the page — how "View all" from a customer's page arrives.
+ *
+ * It has to be visible: a list quietly showing 3 of 400 rows reads as a
+ * broken list. Clicking it clears the filter, so the way out is where the
+ * explanation is.
+ */
+export const FilterNotice = ({
+  label,
+  onClear,
+}: {
+  label: string;
+  onClear: () => void;
+}) => (
+  <div>
+    <p className="mb-1 block font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+      Filtered by
+    </p>
+    <button
+      type="button"
+      onClick={onClear}
+      aria-label={`Clear the ${label} filter`}
+      title={`Clear the ${label} filter`}
+      className="inline-flex items-center gap-2 rounded-lg border border-gold-500 bg-gold-500/10 px-3 py-2 text-sm font-medium text-slate-900 transition hover:bg-gold-500/20"
+    >
+      <span className="max-w-[16rem] truncate">{label}</span>
+      <X aria-hidden className="h-3.5 w-3.5 text-slate-500" />
+    </button>
+  </div>
+);
+
 /** Status chip. One place decides what a status looks like across the ERP. */
 export const StatusPill = ({
   label,

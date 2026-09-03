@@ -1,0 +1,255 @@
+- generic [active] [ref=f3e1]:
+  - generic [ref=f3e2]:
+    - complementary [ref=f3e3]:
+      - generic [ref=f3e4]:
+        - img "Shining Star Electromechanical" [ref=f3e6]
+        - generic [ref=f3e7]:
+          - paragraph [ref=f3e8]: Shining Star
+          - paragraph [ref=f3e9]: Electromechanical
+      - navigation [ref=f3e10]:
+        - group "Overview" [ref=f3e11]:
+          - paragraph [ref=f3e12]: Overview
+          - generic [ref=f3e13]:
+            - link "Dashboard" [ref=f3e14] [cursor=pointer]:
+              - /url: /
+            - link "Notifications" [ref=f3e18] [cursor=pointer]:
+              - /url: /notifications
+        - group "Sales" [ref=f3e83]:
+          - paragraph [ref=f3e84]: Sales
+          - generic [ref=f3e85]:
+            - link "Calculator" [ref=f3e86] [cursor=pointer]:
+              - /url: /calculator
+            - link "Customers" [ref=f3e90] [cursor=pointer]:
+              - /url: /customers
+            - link "Projects" [ref=f3e94] [cursor=pointer]:
+              - /url: /projects
+            - link "Quotations" [ref=f3e98] [cursor=pointer]:
+              - /url: /quotations
+            - link "Contracts" [ref=f3e102] [cursor=pointer]:
+              - /url: /contracts
+        - group "Finance" [ref=f3e106]:
+          - paragraph [ref=f3e107]: Finance
+          - generic [ref=f3e108]:
+            - link "Invoices" [ref=f3e109] [cursor=pointer]:
+              - /url: /invoices
+            - link "Payments" [ref=f3e113] [cursor=pointer]:
+              - /url: /invoices?tab=payments
+            - link "Receivables" [ref=f3e117] [cursor=pointer]:
+              - /url: /receivables
+            - link "Messages" [ref=f3e121] [cursor=pointer]:
+              - /url: /messages
+        - group "Operations" [ref=f3e125]:
+          - paragraph [ref=f3e126]: Operations
+          - generic [ref=f3e127]:
+            - link "Assets" [ref=f3e128] [cursor=pointer]:
+              - /url: /assets
+            - link "Maintenance" [ref=f3e132] [cursor=pointer]:
+              - /url: /maintenance
+        - group "People" [ref=f3e136]:
+          - paragraph [ref=f3e137]: People
+          - link "Employees" [ref=f3e139] [cursor=pointer]:
+            - /url: /employees
+        - group "Administration" [ref=f3e22]:
+          - paragraph [ref=f3e23]: Administration
+          - generic [ref=f3e24]:
+            - link "Settings" [ref=f3e143] [cursor=pointer]:
+              - /url: /settings
+            - link "Document text" [ref=f3e147] [cursor=pointer]:
+              - /url: /settings/boilerplate
+            - link "Components & brands" [ref=f3e151] [cursor=pointer]:
+              - /url: /settings/components
+            - link "Documentation" [ref=f3e25] [cursor=pointer]:
+              - /url: /docs
+      - generic [ref=f3e29]:
+        - generic [ref=f3e30]:
+          - generic "Demo CEO" [ref=f3e155]: DC
+          - generic [ref=f3e32]:
+            - paragraph [ref=f3e33]: Demo CEO
+            - paragraph [ref=f3e156]: Ceo
+          - button "Sign out" [ref=f3e34] [cursor=pointer]
+        - generic [ref=f3e37]:
+          - button "Collapse" [ref=f3e38] [cursor=pointer]
+          - button "Hide sidebar" [ref=f3e42] [cursor=pointer]
+    - generic [ref=f3e45]:
+      - banner [ref=f3e46]:
+        - generic [ref=f3e47]:
+          - generic [ref=f3e48]:
+            - paragraph [ref=f3e49]: Sales
+            - heading "Project pipeline" [level=1] [ref=f3e50]
+            - paragraph [ref=f3e51]: Every deal from LEAD to COMPLETED. Advancing a project here is what unlocks its quotation and invoice.
+          - link "Customers" [ref=f3e53] [cursor=pointer]:
+            - /url: /customers
+      - main [ref=f3e54]:
+        - generic [ref=f3e55]:
+          - generic [ref=f3e57]:
+            - generic [ref=f3e58]: Stage
+            - combobox "Stage" [ref=f3e59] [cursor=pointer]:
+              - option "All stages" [selected]
+              - option "Lead"
+              - option "Site survey"
+              - option "Quotation"
+              - option "Contract"
+              - option "Execution"
+              - option "Completed"
+          - link "Create project" [ref=f3e61] [cursor=pointer]:
+            - /url: /projects/new
+        - generic [ref=f3e62]:
+          - table [ref=f3e64]:
+            - caption [ref=f3e65]: Project pipeline
+            - rowgroup [ref=f3e66]:
+              - row [ref=f3e67]:
+                - columnheader [ref=f3e68]:
+                  - checkbox "Select every row on this page" [ref=f3e69] [cursor=pointer]
+                - columnheader [ref=f3e70]:
+                  - button "Project" [ref=f3e71] [cursor=pointer]
+                - columnheader "Customer" [ref=f3e75]
+                - columnheader "City" [ref=f3e76]
+                - columnheader "Stage" [ref=f3e77]
+                - columnheader "Value" [ref=f3e78]
+                - columnheader [ref=f3e79]
+            - rowgroup [ref=f3e80]:
+              - row [ref=f3e157]:
+                - cell [ref=f3e158]:
+                  - checkbox "Select Hayat Regency — Lift 2" [ref=f3e159] [cursor=pointer]
+                - cell "Hayat Regency — Lift 2" [ref=f3e160]
+                - cell "Hayat Regency Hotel" [ref=f3e161]
+                - cell "Addis Ababa" [ref=f3e162]
+                - cell "Contract" [ref=f3e163]
+                - cell "8,800,000.00 ETB" [ref=f3e165]
+                - cell "→ Execution → Cancelled" [ref=f3e166]:
+                  - generic [ref=f3e167]:
+                    - button "→ Execution" [ref=f3e168] [cursor=pointer]
+                    - button "→ Cancelled" [ref=f3e169] [cursor=pointer]
+              - row [ref=f3e170]:
+                - cell [ref=f3e171]:
+                  - checkbox "Select Zemen Tower — Lift 3" [ref=f3e172] [cursor=pointer]
+                - cell "Zemen Tower — Lift 3" [ref=f3e173]
+                - cell "Zemen Tower Management" [ref=f3e174]
+                - cell "Addis Ababa" [ref=f3e175]
+                - cell "Site survey" [ref=f3e176]
+                - cell "—" [ref=f3e178]
+                - cell "→ Spec calculation → Cancelled" [ref=f3e179]:
+                  - generic [ref=f3e180]:
+                    - button "→ Spec calculation" [ref=f3e181] [cursor=pointer]
+                    - button "→ Cancelled" [ref=f3e182] [cursor=pointer]
+              - row [ref=f3e183]:
+                - cell [ref=f3e184]:
+                  - checkbox "Select Lebu Estate — Lift B" [ref=f3e185] [cursor=pointer]
+                - cell "Lebu Estate — Lift B" [ref=f3e186]
+                - cell "Flintstone Homes" [ref=f3e187]
+                - cell "Addis Ababa" [ref=f3e188]
+                - cell "Spec calculation" [ref=f3e189]
+                - cell "—" [ref=f3e191]
+                - cell "→ Quotation → Cancelled" [ref=f3e192]:
+                  - generic [ref=f3e193]:
+                    - button "→ Quotation" [ref=f3e194] [cursor=pointer]
+                    - button "→ Cancelled" [ref=f3e195] [cursor=pointer]
+              - row [ref=f3e196]:
+                - cell [ref=f3e197]:
+                  - checkbox "Select Ayat Zone 4 — Lifts 1-2" [ref=f3e198] [cursor=pointer]
+                - cell "Ayat Zone 4 — Lifts 1-2" [ref=f3e199]
+                - cell "Ayat Share Company" [ref=f3e200]
+                - cell "Addis Ababa" [ref=f3e201]
+                - cell "Site survey" [ref=f3e202]
+                - cell "—" [ref=f3e204]
+                - cell "→ Spec calculation → Cancelled" [ref=f3e205]:
+                  - generic [ref=f3e206]:
+                    - button "→ Spec calculation" [ref=f3e207] [cursor=pointer]
+                    - button "→ Cancelled" [ref=f3e208] [cursor=pointer]
+              - row [ref=f3e209]:
+                - cell [ref=f3e210]:
+                  - checkbox "Select Gerji Mall — Escalators 1-4" [ref=f3e211] [cursor=pointer]
+                - cell "Gerji Mall — Escalators 1-4" [ref=f3e212]
+                - cell "Gerji Mall Management" [ref=f3e213]
+                - cell "Addis Ababa" [ref=f3e214]
+                - cell "Proforma" [ref=f3e215]
+                - cell "6,000,000.00 ETB" [ref=f3e217]
+                - cell "→ Contract → Cancelled" [ref=f3e218]:
+                  - generic [ref=f3e219]:
+                    - button "→ Contract" [ref=f3e220] [cursor=pointer]
+                    - button "→ Cancelled" [ref=f3e221] [cursor=pointer]
+              - row [ref=f3e222]:
+                - cell [ref=f3e223]:
+                  - checkbox "Select Summit Residences — Lift A" [ref=f3e224] [cursor=pointer]
+                - cell "Summit Residences — Lift A" [ref=f3e225]
+                - cell "Sunshine Construction PLC" [ref=f3e226]
+                - cell "Addis Ababa" [ref=f3e227]
+                - cell "Lead" [ref=f3e228]
+                - cell "—" [ref=f3e230]
+                - cell "→ Site survey → Cancelled" [ref=f3e231]:
+                  - generic [ref=f3e232]:
+                    - button "→ Site survey" [ref=f3e233] [cursor=pointer]
+                    - button "→ Cancelled" [ref=f3e234] [cursor=pointer]
+              - row [ref=f3e235]:
+                - cell [ref=f3e236]:
+                  - checkbox "Select Nib HQ — Lifts 1-2" [ref=f3e237] [cursor=pointer]
+                - cell "Nib HQ — Lifts 1-2" [ref=f3e238]
+                - cell "Nib International Bank" [ref=f3e239]
+                - cell "Addis Ababa" [ref=f3e240]
+                - cell "Quotation" [ref=f3e241]
+                - cell "9,600,000.00 ETB" [ref=f3e243]
+                - cell "→ Proforma → Cancelled" [ref=f3e244]:
+                  - generic [ref=f3e245]:
+                    - button "→ Proforma" [ref=f3e246] [cursor=pointer]
+                    - button "→ Cancelled" [ref=f3e247] [cursor=pointer]
+              - row [ref=f3e248]:
+                - cell [ref=f3e249]:
+                  - checkbox "Select AMC Wing C — Hospital lift" [ref=f3e250] [cursor=pointer]
+                - cell "AMC Wing C — Hospital lift" [ref=f3e251]
+                - cell "Addis Medical Centre" [ref=f3e252]
+                - cell "Addis Ababa" [ref=f3e253]
+                - cell "Quotation" [ref=f3e254]
+                - cell "12,680,000.00 ETB" [ref=f3e256]
+                - cell "→ Proforma → Cancelled" [ref=f3e257]:
+                  - generic [ref=f3e258]:
+                    - button "→ Proforma" [ref=f3e259] [cursor=pointer]
+                    - button "→ Cancelled" [ref=f3e260] [cursor=pointer]
+              - row [ref=f3e261]:
+                - cell [ref=f3e262]:
+                  - checkbox "Select CCD Plaza — Lift A" [ref=f3e263] [cursor=pointer]
+                - cell "CCD Plaza — Lift A" [ref=f3e264]
+                - cell "CCD Engineering PLC" [ref=f3e265]
+                - cell "Addis Ababa" [ref=f3e266]
+                - cell "Execution" [ref=f3e267]
+                - cell "7,720,000.00 ETB" [ref=f3e269]
+                - cell "→ Completed" [ref=f3e270]:
+                  - button "→ Completed" [ref=f3e272] [cursor=pointer]
+              - row [ref=f3e273]:
+                - cell [ref=f3e274]:
+                  - checkbox "Select Ayat Square — Lift 1" [ref=f3e275] [cursor=pointer]
+                - cell "Ayat Square — Lift 1" [ref=f3e276]
+                - cell "Ethio Real Estate PLC" [ref=f3e277]
+                - cell "Addis Ababa" [ref=f3e278]
+                - cell "Lead" [ref=f3e279]
+                - cell "—" [ref=f3e281]
+                - cell "→ Site survey → Cancelled" [ref=f3e282]:
+                  - generic [ref=f3e283]:
+                    - button "→ Site survey" [ref=f3e284] [cursor=pointer]
+                    - button "→ Cancelled" [ref=f3e285] [cursor=pointer]
+          - generic [ref=f3e286]:
+            - generic [ref=f3e287]:
+              - paragraph [ref=f3e288]: 1–10 of 13
+              - generic [ref=f3e289]:
+                - text: Rows
+                - combobox "Rows" [ref=f3e290] [cursor=pointer]:
+                  - option "5"
+                  - option "10" [selected]
+                  - option "25"
+                  - option "50"
+                  - option "100"
+            - navigation "Pagination" [ref=f3e291]:
+              - button "First page" [disabled] [ref=f3e292]: ‹‹
+              - button "Previous page" [disabled] [ref=f3e293]: ‹
+              - generic [ref=f3e294]: 1 / 2
+              - button "Next page" [ref=f3e295] [cursor=pointer]: ›
+              - button "Last page" [ref=f3e296] [cursor=pointer]: ››
+  - generic [ref=f3e301] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=f3e302]
+    - generic [ref=f3e306]:
+      - button "Open issues overlay" [ref=f3e307]:
+        - generic [ref=f3e308]:
+          - generic [ref=f3e309]: "0"
+          - generic [ref=f3e310]: "1"
+        - generic [ref=f3e311]: Issue
+      - button "Collapse issues badge" [ref=f3e312]
+  - alert [ref=f3e315]

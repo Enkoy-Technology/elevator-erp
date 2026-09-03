@@ -1,6 +1,7 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
+import { updatedColumn } from '@/components/updated-column';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -169,6 +170,7 @@ export default function EmployeesPage() {
         />
       ),
     },
+    updatedColumn<Employee>((row) => row.updatedAt),
     {
       id: 'actions',
       header: '',

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { updatedColumn } from '@/components/updated-column';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -753,6 +754,7 @@ export default function QuotationsPage() {
       header: 'Created',
       cell: ({ row }) => row.original.createdAt.slice(0, 10),
     },
+    updatedColumn<Quotation>((row) => row.updatedAt),
     {
       id: 'actions',
       header: '',

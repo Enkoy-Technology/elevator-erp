@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { updatedColumn } from '@/components/updated-column';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -8,7 +9,12 @@ import type { ColumnDef } from '@tanstack/react-table';
 
 import { btnGhost, btnPrimary, btnSecondary } from '@/components/form-styles';
 import { DataTable } from '@/components/data-table';
-import { FilterSelect, ListToolbar, StatusPill } from '@/components/list-toolbar';
+import {
+  FilterNotice,
+  FilterSelect,
+  ListToolbar,
+  StatusPill,
+} from '@/components/list-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
 import { csvRows, saveCsv } from '@/app/employees/csv';
@@ -123,19 +129,33 @@ export default function ProjectsPage() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | ''>('');
+  /**
+   * `?customerId=` — how "View all" from a customer's page arrives. `null`
+   * means the URL has not been read yet (that only happens in an effect, to
+   * keep server and first client render identical), and the list holds off
+   * loading until it has, so the unfiltered set is never fetched and then
+   * replaced.
+   */
+  const [customerFilter, setCustomerFilter] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [advancingId, setAdvancingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
   const refresh = useCallback(
-    async (nextPage: number, status: ProjectStatus | '', size: number) => {
+    async (
+      nextPage: number,
+      status: ProjectStatus | '',
+      size: number,
+      customerId: string,
+    ) => {
       setLoading(true);
       setError(null);
       try {
         const [projectPage, customerPage] = await Promise.all([
           listProjects({
             status: status || undefined,
+            customerId: customerId || undefined,
             page: nextPage,
             pageSize: size,
           }),
@@ -165,16 +185,31 @@ export default function ProjectsPage() {
   );
 
   useEffect(() => {
+    setCustomerFilter(
+      new URLSearchParams(window.location.search).get('customerId') ?? '',
+    );
+  }, []);
+
+  useEffect(() => {
     if (!getAccessToken()) {
       router.replace('/login');
       return;
     }
-    void refresh(page, statusFilter, pageSize);
-  }, [router, refresh, page, statusFilter, pageSize]);
+    if (customerFilter === null) {
+      return;
+    }
+    void refresh(page, statusFilter, pageSize, customerFilter);
+  }, [router, refresh, page, statusFilter, pageSize, customerFilter]);
 
   const setFilter = (next: ProjectStatus | '') => {
     setPage(1);
     setStatusFilter(next);
+  };
+
+  const clearCustomerFilter = () => {
+    setPage(1);
+    setCustomerFilter('');
+    router.replace('/projects', { scroll: false });
   };
 
   const onAdvance = async (project: Project, next: ProjectStatus) => {
@@ -191,7 +226,7 @@ export default function ProjectsPage() {
     setError(null);
     try {
       await updateProjectStatus(project.id, next, amounts);
-      await refresh(page, statusFilter, pageSize);
+      await refresh(page, statusFilter, pageSize, customerFilter ?? '');
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : 'Status update failed',
@@ -259,6 +294,7 @@ export default function ProjectsPage() {
         return amount ? formatEtb(amount) : '\u2014';
       },
     },
+    updatedColumn<Project>((row) => row.updatedAt),
     {
       id: 'actions',
       header: '',
@@ -316,16 +352,24 @@ export default function ProjectsPage() {
 
           <ListToolbar
             filters={
-              <FilterSelect<ProjectStatus>
-                label="Stage"
-                value={statusFilter}
-                onChange={setFilter}
-                options={STAGE_FILTERS.map((s) => ({
-                  value: s,
-                  label: STATUS_LABEL[s],
-                }))}
-                allLabel="All stages"
-              />
+              <>
+                <FilterSelect<ProjectStatus>
+                  label="Stage"
+                  value={statusFilter}
+                  onChange={setFilter}
+                  options={STAGE_FILTERS.map((s) => ({
+                    value: s,
+                    label: STATUS_LABEL[s],
+                  }))}
+                  allLabel="All stages"
+                />
+                {customerFilter ? (
+                  <FilterNotice
+                    label={customerMap[customerFilter] ?? 'One customer'}
+                    onClear={clearCustomerFilter}
+                  />
+                ) : null}
+              </>
             }
             actions={
               <Link href="/projects/new" className={btnPrimary}>
