@@ -1,5 +1,6 @@
 export const USER_ROLES = [
   'CEO',
+  'GENERAL_MANAGER',
   'SALES_MANAGER',
   'TECHNICAL_LEAD',
   'FIELD_ENGINEER',

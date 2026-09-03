@@ -36,10 +36,12 @@ const MACHINE_ROOM_LABELS: Record<string, string> = {
   MRL: 'Without machine room (MRL)',
 };
 
-const DOOR_TYPE_LABELS: Record<string, string> = {
+export const DOOR_TYPE_LABELS: Record<string, string> = {
   CENTER_OPEN: 'Center opening',
   TELESCOPIC: 'Telescopic',
-  SWING: 'Swing',
+  // Stored as SWING; the trade here calls it a side-opening door, and the
+  // printed specification has to read the way the customer says it.
+  SWING: 'Side opening',
 };
 
 /**

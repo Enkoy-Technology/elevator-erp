@@ -44,13 +44,37 @@ describe('RolesGuard', () => {
     );
   });
 
-  it.each(['CEO', 'ADMIN'] as const)(
-    'lets %s through any role gate',
-    (role) => {
-      const guard = guardWith({ requiredRoles: ['DISPATCHER'] });
-      expect(guard.canActivate(context({ role }))).toBe(true);
-    },
-  );
+  it.each(['CEO', 'ADMIN'] as const)('lets %s through any role gate', (role) => {
+    const guard = guardWith({ requiredRoles: ['DISPATCHER'] });
+    expect(guard.canActivate(context({ role }))).toBe(true);
+  });
+
+  // GENERAL_MANAGER is deliberately NOT a super role. It was briefly, and a
+  // super role passes EVERY gate — which handed a GM the three things this
+  // test now pins shut:
+  //
+  //   POST /rates writes rate_versions, the one GLOBAL RLS-free table, so a
+  //   GM in one tenant could rewrite the statutory VAT rate for all of them.
+  //   PATCH /employees/:id takes a password with no rank check, so a GM
+  //   could reset the CEO's and sign in as them.
+  //   IMPORTABLE_ROLES is USER_ROLES minus a deny-list, so a super role
+  //   became grantable from an uploaded spreadsheet.
+  //
+  // A general manager needs to SEE the business, and none of that is seeing.
+  // The role is listed explicitly on the business controllers instead.
+  it('refuses GENERAL_MANAGER on an ADMIN-only gate', () => {
+    const guard = guardWith({ requiredRoles: ['ADMIN'] });
+    expect(() =>
+      guard.canActivate(context({ role: 'GENERAL_MANAGER' })),
+    ).toThrow(ForbiddenException);
+  });
+
+  it('lets GENERAL_MANAGER through a gate that names it', () => {
+    const guard = guardWith({
+      requiredRoles: ['GENERAL_MANAGER', 'SALES_MANAGER'],
+    });
+    expect(guard.canActivate(context({ role: 'GENERAL_MANAGER' }))).toBe(true);
+  });
 
   it('does not treat other senior roles as super-roles', () => {
     const guard = guardWith({ requiredRoles: ['DISPATCHER'] });

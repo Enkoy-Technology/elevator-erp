@@ -120,7 +120,7 @@ export const AGING_EXPORT_COLUMNS: ColumnDef[] = [
 @ApiTags('invoices')
 @ApiBearerAuth('access-token')
 @Controller()
-@Roles('FINANCE')
+@Roles('GENERAL_MANAGER', 'FINANCE')
 export class InvoicesController {
   constructor(
     private readonly invoicesService: InvoicesService,

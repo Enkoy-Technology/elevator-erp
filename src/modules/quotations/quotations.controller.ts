@@ -52,7 +52,7 @@ const QUOTE_STATUSES = quoteStatusEnum.enumValues;
 @ApiTags('quotations')
 @ApiBearerAuth('access-token')
 @Controller()
-@Roles('SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
+@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
 export class QuotationsController {
   constructor(
     private readonly quotationsService: QuotationsService,
@@ -205,7 +205,7 @@ export class QuotationsController {
   }
 
   @Post('quotations/:id/lines')
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({
     summary:
       'Add a line to a DRAFT quotation. The line is priced by its own calculator run.',
@@ -220,7 +220,7 @@ export class QuotationsController {
 
   @Post('quotations/:id/lines/reorder')
   @HttpCode(200)
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({ summary: 'Set the print order of a DRAFT quotation\'s lines' })
   reorderLines(
     @CurrentUser() user: AuthenticatedUser,
@@ -231,7 +231,7 @@ export class QuotationsController {
   }
 
   @Patch('quotations/:id/lines/:lineId')
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({
     summary:
       'Update one line of a DRAFT quotation. Merged onto the stored spec, then re-priced.',
@@ -246,7 +246,7 @@ export class QuotationsController {
   }
 
   @Delete('quotations/:id/lines/:lineId')
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({
     summary:
       'Remove a line from a DRAFT quotation and close the gap in the print order',
@@ -265,7 +265,7 @@ export class QuotationsController {
 
   @Post('quotations/:id/price')
   @HttpCode(200)
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({
     summary:
       'Price a DRAFT quotation from the round VAT-inclusive total the customer pays. The ex-VAT line, the VAT line, each line amount and the discount are derived from it.',
@@ -280,7 +280,7 @@ export class QuotationsController {
 
   @Post('quotations/:id/approve-discount')
   @HttpCode(200)
-  @Roles('CEO', 'FINANCE')
+  @Roles('GENERAL_MANAGER', 'CEO', 'FINANCE')
   @ApiOperation({
     summary:
       "Sign off the negotiated discount, as yourself. Only needed when the tenant has set a discount approval threshold and this quotation is over it.",
@@ -302,7 +302,7 @@ export class QuotationsController {
   }
 
   @Patch('quotations/:id/terms')
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({
     summary:
       'Set the commercial terms of a DRAFT quotation (reference, delivery, warranty, validity) and optionally replace the payment schedule, whose percentages must total 100.',
@@ -316,7 +316,7 @@ export class QuotationsController {
   }
 
   @Post('projects/:projectId/quotations')
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({ summary: 'Generate a DRAFT quotation from calc for a project' })
   create(
     @CurrentUser() user: AuthenticatedUser,
@@ -328,7 +328,7 @@ export class QuotationsController {
 
   @Post('quotations/:id/submit')
   @HttpCode(200)
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({ summary: 'Submit a DRAFT quotation for approval' })
   submit(
     @CurrentUser() user: AuthenticatedUser,
@@ -339,7 +339,7 @@ export class QuotationsController {
 
   @Post('quotations/:id/approve')
   @HttpCode(200)
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({ summary: 'Approve a PENDING_APPROVAL quotation (Sales Manager+)' })
   approve(
     @CurrentUser() user: AuthenticatedUser,
@@ -350,7 +350,7 @@ export class QuotationsController {
 
   @Post('quotations/:id/reject')
   @HttpCode(200)
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({ summary: 'Reject a PENDING_APPROVAL quotation with a reason' })
   reject(
     @CurrentUser() user: AuthenticatedUser,
@@ -362,7 +362,7 @@ export class QuotationsController {
 
   @Post('quotations/:id/expire')
   @HttpCode(200)
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({ summary: 'Expire a DRAFT or PENDING_APPROVAL quotation' })
   expire(
     @CurrentUser() user: AuthenticatedUser,

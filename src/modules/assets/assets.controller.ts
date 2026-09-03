@@ -50,13 +50,11 @@ export const ASSETS_EXPORT_COLUMNS: ColumnDef[] = [
 @ApiTags('assets')
 @ApiBearerAuth('access-token')
 @Controller('assets')
-@Roles(
-  'SALES_MANAGER',
+@Roles('GENERAL_MANAGER', 'SALES_MANAGER',
   'TECHNICAL_LEAD',
   'FIELD_ENGINEER',
   'DISPATCHER',
-  'WAREHOUSE_MANAGER',
-)
+  'WAREHOUSE_MANAGER',)
 export class AssetsController {
   constructor(private readonly assetsService: AssetsService) {}
 
@@ -116,7 +114,7 @@ export class AssetsController {
   }
 
   @Post()
-  @Roles('SALES_MANAGER', 'TECHNICAL_LEAD')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD')
   @ApiOperation({ summary: 'Register asset under a customer' })
   create(
     @CurrentUser() user: AuthenticatedUser,
@@ -126,7 +124,7 @@ export class AssetsController {
   }
 
   @Patch(':id')
-  @Roles('SALES_MANAGER', 'TECHNICAL_LEAD')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD')
   @ApiOperation({ summary: 'Update asset' })
   update(
     @CurrentUser() user: AuthenticatedUser,
@@ -138,7 +136,7 @@ export class AssetsController {
 
   @Delete(':id')
   @HttpCode(204)
-  @Roles('SALES_MANAGER', 'TECHNICAL_LEAD')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD')
   @ApiOperation({ summary: 'Soft-delete asset' })
   async remove(
     @CurrentUser() user: AuthenticatedUser,

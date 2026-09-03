@@ -51,7 +51,7 @@ const bulkBtn =
 
 /** CEO and ADMIN bypass every @Roles list via RolesGuard's SUPER_ROLES. */
 const allows = (role: UserRole | null, allowed: readonly UserRole[]): boolean =>
-  role !== null && (role === 'CEO' || role === 'ADMIN' || allowed.includes(role));
+  role !== null && (role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN' || allowed.includes(role));
 
 /** Mirrors @Roles on PATCH /maintenance/contracts/:id. */
 const CONTRACT_WRITE_ROLES: readonly UserRole[] = [

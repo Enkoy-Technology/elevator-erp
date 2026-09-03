@@ -27,7 +27,7 @@ const WORKED_EXAMPLE: CalcInputPayload = {
   doorType: 'CENTER_OPEN',
   doorWidthMm: 900,
   buildingUsage: 'COMMERCIAL',
-  marginPercent: 25,
+  marginPercent: 0,
   // Statutory VAT. The §4.2.3 worked example uses 5%, but quotations always
   // recompute at the statutory rate from the rates table, so defaulting to 5
   // here made the same machine read two different totals on two screens.
@@ -251,7 +251,7 @@ export default function CalculatorPage() {
               >
                 <option value="CENTER_OPEN">Center open</option>
                 <option value="TELESCOPIC">Telescopic</option>
-                <option value="SWING">Swing</option>
+                <option value="SWING">Side opening</option>
               </select>
             </label>
 

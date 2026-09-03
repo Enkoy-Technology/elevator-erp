@@ -179,7 +179,7 @@ export const DOC_GROUPS: DocGroup[] = [
           'Every tenant-scoped table carries a composite primary key of (tenant_id, id), and every row is protected by a row-level-security policy keyed on the session variable app.tenant_id.',
           'All tenant-scoped queries go through withTenant(), which opens a transaction and sets app.tenant_id as a transaction-local setting before running the callback. Because the setting is transaction-local it cannot leak into the next query that borrows the same pooled connection.',
           'The application connects as a non-owner role, so RLS actually applies to it — a table owner would silently bypass its own policies. Migrations and seeds use the owner role through a separate admin connection string. The SMS dispatcher goes further and uses its own least-privilege role, because a background worker that only needs to read a queue should not hold the API’s grants.',
-          'Authentication is JWT. The token carries the tenant_id claim; TenantGuard validates it before any database work happens, and RolesGuard then checks the route’s @Roles() list, with CEO and ADMIN passing everything.',
+          'Authentication is JWT. The token carries the tenant_id claim; TenantGuard validates it before any database work happens, and RolesGuard then checks the route’s @Roles() list, with CEO, GENERAL_MANAGER and ADMIN passing everything.',
         ],
         flows: [
           {
@@ -205,14 +205,15 @@ export const DOC_GROUPS: DocGroup[] = [
       {
         id: 'roles',
         title: 'Roles & permissions',
-        tagline: 'Nine roles; the navigation mirrors the API',
+        tagline: 'Ten roles; the navigation mirrors the API',
         icon: ICON.users,
         body: [
-          'Roles are a database enum, so an unknown role cannot be stored. CEO and ADMIN are super-roles: RolesGuard lets them through every gate, which is why they do not appear in the per-module role lists below.',
+          'Roles are a database enum, so an unknown role cannot be stored. CEO, GENERAL_MANAGER and ADMIN are super-roles: RolesGuard lets them through every gate, which is why they do not appear in the per-module role lists below.',
           'The sidebar filters itself by the signed-in user’s role using the same lists that decorate the controllers. When a controller’s @Roles() changes, the navigation entry changes with it in the same commit — otherwise a user sees a menu item that answers 403.',
         ],
         facts: [
           { label: 'CEO', value: 'Full access (super-role)' },
+          { label: 'GENERAL_MANAGER', value: 'Full access (super-role) — runs the business day to day' },
           { label: 'ADMIN', value: 'Full access + employees, settings, SMS log' },
           { label: 'SALES_MANAGER', value: 'Customers, projects, quotes, proformas' },
           { label: 'TECHNICAL_LEAD', value: 'Calculator, specs, assets, maintenance' },

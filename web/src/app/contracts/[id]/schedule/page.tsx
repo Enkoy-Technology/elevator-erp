@@ -30,7 +30,7 @@ interface ContractHeader {
 }
 
 const canEditSchedule = (role: string | null): boolean =>
-  role === 'SALES_MANAGER' || role === 'CEO' || role === 'ADMIN';
+  role === 'SALES_MANAGER' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
 
 export default function ContractSchedulePage() {
   const router = useRouter();

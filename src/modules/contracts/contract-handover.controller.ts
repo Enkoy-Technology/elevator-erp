@@ -35,7 +35,7 @@ import { HandoverContractDto } from './dto/handover-contract.dto';
 @ApiTags('contracts')
 @ApiBearerAuth('access-token')
 @Controller('contracts')
-@Roles('SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
+@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
 export class ContractHandoverController {
   constructor(
     private readonly handoverService: ContractHandoverService,
@@ -45,7 +45,7 @@ export class ContractHandoverController {
 
   @Post(':id/handover')
   @HttpCode(200)
-  @Roles('SALES_MANAGER', 'TECHNICAL_LEAD')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD')
   @ApiOperation({
     summary:
       'Record the handover of a SIGNED contract (SIGNED -> COMPLETED, advances the project to COMPLETED in the same transaction)',

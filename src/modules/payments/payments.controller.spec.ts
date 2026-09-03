@@ -19,7 +19,7 @@ describe('PaymentsController — role gating', () => {
 
   it('class-level default is FINANCE, and no route needs a method-level override', () => {
     const classRoles = reflector.get<string[] | undefined>(ROLES_KEY, PaymentsController);
-    expect(classRoles).toEqual(['FINANCE']);
+    expect(classRoles).toEqual(['GENERAL_MANAGER', 'FINANCE']);
 
     for (const handler of [
       PaymentsController.prototype.record,

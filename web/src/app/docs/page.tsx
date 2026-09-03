@@ -382,8 +382,8 @@ function SectionCard({ section }: { section: DocSection }) {
               </tbody>
             </table>
             <p className="border-t border-slate-100 bg-slate-50 px-4 py-2 text-[11px] text-slate-400">
-              CEO and ADMIN pass every role gate and are omitted from the lists
-              above.
+              CEO, GENERAL_MANAGER and ADMIN pass every role gate and are
+              omitted from the lists above.
             </p>
           </div>
         )}

@@ -16,7 +16,7 @@ describe('ExpensesController — role gating', () => {
 
   it('class-level default is FINANCE, and every endpoint relies on it (no method-level override)', () => {
     const classRoles = reflector.get<string[] | undefined>(ROLES_KEY, ExpensesController);
-    expect(classRoles).toEqual(['FINANCE']);
+    expect(classRoles).toEqual(['GENERAL_MANAGER', 'FINANCE']);
 
     for (const handler of [
       ExpensesController.prototype.record,

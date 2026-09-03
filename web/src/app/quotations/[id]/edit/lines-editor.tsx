@@ -77,7 +77,7 @@ export const NEW_LINE: LineDraft = {
   doorType: 'CENTER_OPEN',
   doorWidthMm: '900',
   buildingUsage: 'COMMERCIAL',
-  marginPercent: '25',
+  marginPercent: '0',
   quantity: '1',
   machineRoomLabel: 'MRL',
   floorLabels: '',
@@ -524,7 +524,7 @@ export const LinesEditor = ({
                       >
                         <option value="CENTER_OPEN">Center open</option>
                         <option value="TELESCOPIC">Telescopic</option>
-                        <option value="SWING">Swing</option>
+                        <option value="SWING">Side opening</option>
                       </select>
                     </Field>
                     <Field label="Building usage" htmlFor={`usage-${line.id}`}>

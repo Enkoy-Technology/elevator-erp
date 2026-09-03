@@ -30,6 +30,12 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     blurb: 'Sees everything. The seat to open a demo from.',
   },
   {
+    email: 'gm@demo.example.com',
+    fullName: 'Demo General Manager',
+    role: 'GENERAL_MANAGER',
+    blurb: 'Runs the business day to day. Sees everything the CEO does.',
+  },
+  {
     email: 'sales@demo.example.com',
     fullName: 'Demo Sales Manager',
     role: 'SALES_MANAGER',

@@ -1,0 +1,11 @@
+-- The GM runs the business day to day beside the CEO and needs the same
+-- full visibility: pipeline, money, operations, people. Added BEFORE
+-- 'SALES_MANAGER' so the database's enum order matches the USER_ROLES array
+-- in src/types/auth.types.ts — nothing sorts by this column today, but the
+-- two lists are asserted to agree and reading one order in both is cheaper
+-- than discovering they diverged from an ORDER BY later.
+--
+-- Postgres cannot remove an enum value, so this is one-way. ADD VALUE inside
+-- a transaction is fine on PG 12+ (we are on 16) as long as the new value is
+-- not used in the same transaction — it is not.
+ALTER TYPE "public"."user_role" ADD VALUE IF NOT EXISTS 'GENERAL_MANAGER' BEFORE 'SALES_MANAGER';

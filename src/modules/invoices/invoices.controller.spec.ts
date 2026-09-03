@@ -32,7 +32,7 @@ describe('InvoicesController — role gating', () => {
 
   it('class-level default is FINANCE, and mutation endpoints do not need a method-level override', () => {
     const classRoles = reflector.get<string[] | undefined>(ROLES_KEY, InvoicesController);
-    expect(classRoles).toEqual(['FINANCE']);
+    expect(classRoles).toEqual(['GENERAL_MANAGER', 'FINANCE']);
 
     for (const handler of [
       InvoicesController.prototype.convertToInvoice,

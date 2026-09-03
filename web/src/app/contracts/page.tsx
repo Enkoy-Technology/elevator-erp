@@ -136,7 +136,7 @@ const downloadCsv = (
  *  ADMIN bypass via RolesGuard's SUPER_ROLES. TECHNICAL_LEAD and FINANCE
  *  reach the list read-only. */
 const canWrite = (role: UserRole | null): boolean =>
-  role === 'SALES_MANAGER' || role === 'CEO' || role === 'ADMIN';
+  role === 'SALES_MANAGER' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
 
 export default function ContractsPage() {
   const router = useRouter();

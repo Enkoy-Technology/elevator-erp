@@ -1,4 +1,5 @@
 import type { DocumentTemplate, TenantBranding } from '../document-pdf.service';
+import { DOOR_TYPE_LABELS } from './commercial-document';
 import {
   esc,
   renderLayout,
@@ -69,7 +70,14 @@ const DUTY_ROWS: readonly SpecRow[] = [
   { key: 'speedMs', label: 'Rated speed', unit: 'm/s' },
   // MR / MRL are the terms an elevator engineer writes — left uppercase.
   { key: 'machineRoomType', label: 'Machine room type' },
-  { key: 'doorType', label: 'Door type', format: humanize },
+  // DOOR_TYPE_LABELS, not humanize: the stored value is SWING but the trade
+  // calls it a side-opening door, and humanize would print "Swing" here
+  // while the quotation's own spec sheet says "Side opening".
+  {
+    key: 'doorType',
+    label: 'Door type',
+    format: (v) => DOOR_TYPE_LABELS[String(v)] ?? humanize(v),
+  },
   { key: 'doorWidthMm', label: 'Door width', unit: 'mm' },
   { key: 'buildingUsage', label: 'Building usage', format: humanize },
 ];

@@ -39,13 +39,13 @@ const PLACEHOLDER_LIFT: Omit<CreateQuotationPayload, 'validUntil' | 'notes'> = {
   doorType: 'CENTER_OPEN',
   doorWidthMm: 900,
   buildingUsage: 'COMMERCIAL',
-  marginPercent: 25,
+  marginPercent: 0,
 };
 
 /** Mirrors @Roles('SALES_MANAGER') on the quotations mutation routes;
  *  CEO and ADMIN bypass via RolesGuard's SUPER_ROLES. */
 const canWrite = (role: UserRole | null): boolean =>
-  role === 'SALES_MANAGER' || role === 'CEO' || role === 'ADMIN';
+  role === 'SALES_MANAGER' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
 
 export default function NewQuotationPage() {
   const router = useRouter();

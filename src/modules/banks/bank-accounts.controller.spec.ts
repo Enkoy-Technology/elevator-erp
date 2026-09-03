@@ -10,7 +10,7 @@ describe('BankAccountsController — role gating', () => {
 
   it('class-level default is FINANCE (ADMIN always passes RolesGuard.SUPER_ROLES), no method-level override', () => {
     const classRoles = reflector.get<string[] | undefined>(ROLES_KEY, BankAccountsController);
-    expect(classRoles).toEqual(['FINANCE']);
+    expect(classRoles).toEqual(['GENERAL_MANAGER', 'FINANCE']);
 
     for (const handler of [
       BankAccountsController.prototype.create,

@@ -78,7 +78,7 @@ const CONTRACT_DOCUMENT_COLUMNS: ColumnDef[] = [
 @ApiTags('contracts')
 @ApiBearerAuth('access-token')
 @Controller()
-@Roles('SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
+@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
 export class ContractsController {
   constructor(
     private readonly contractsService: ContractsService,
@@ -89,7 +89,7 @@ export class ContractsController {
 
   @Post('proformas/:id/contract')
   @HttpCode(201)
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({
     summary:
       'Issue a DRAFT contract from an ISSUED proforma (gapless numbering, one per proforma, one transaction)',
@@ -174,7 +174,7 @@ export class ContractsController {
     summary:
       'Edit the scope, terms and warranty period of a DRAFT contract. 409 once it is signed.',
   })
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   update(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -185,7 +185,7 @@ export class ContractsController {
 
   @Post('contracts/:id/sign')
   @HttpCode(200)
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({
     summary:
       'Record that both parties signed (DRAFT -> SIGNED, advances the project to CONTRACT in the same transaction)',
@@ -200,7 +200,7 @@ export class ContractsController {
 
   @Post('contracts/:id/cancel')
   @HttpCode(200)
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({
     summary:
       'Cancel a DRAFT or SIGNED contract with a reason (append-only — does not revert the source proforma)',

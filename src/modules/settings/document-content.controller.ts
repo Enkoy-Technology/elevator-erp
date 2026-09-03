@@ -48,7 +48,7 @@ const wholeList = <T>(items: T[]) =>
 @ApiTags('settings')
 @ApiBearerAuth('access-token')
 @Controller('settings')
-@Roles('SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
+@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
 export class DocumentContentController {
   constructor(private readonly documentContent: DocumentContentService) {}
 
@@ -62,7 +62,7 @@ export class DocumentContentController {
   }
 
   @Post('boilerplate')
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({ summary: 'Add a boilerplate section' })
   createBoilerplate(
     @CurrentUser() user: AuthenticatedUser,
@@ -72,7 +72,7 @@ export class DocumentContentController {
   }
 
   @Patch('boilerplate/:id')
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({ summary: 'Edit a boilerplate section title, body or order' })
   updateBoilerplate(
     @CurrentUser() user: AuthenticatedUser,
@@ -83,7 +83,7 @@ export class DocumentContentController {
   }
 
   @Post('boilerplate/reorder')
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @HttpCode(200)
   @ApiOperation({ summary: 'Set the print order of every boilerplate section' })
   async reorderBoilerplate(
@@ -94,7 +94,7 @@ export class DocumentContentController {
   }
 
   @Post('boilerplate/:id/deactivate')
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @HttpCode(200)
   @ApiOperation({
     summary: 'Stop printing a section without losing its text',
@@ -115,7 +115,7 @@ export class DocumentContentController {
   }
 
   @Post('components')
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({ summary: 'Add a component/brand row' })
   createComponent(
     @CurrentUser() user: AuthenticatedUser,
@@ -125,7 +125,7 @@ export class DocumentContentController {
   }
 
   @Patch('components/:id')
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({ summary: 'Edit a component/brand row' })
   updateComponent(
     @CurrentUser() user: AuthenticatedUser,
@@ -136,7 +136,7 @@ export class DocumentContentController {
   }
 
   @Post('components/reorder')
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @HttpCode(200)
   @ApiOperation({ summary: 'Set the print order of every component row' })
   async reorderComponents(
@@ -151,7 +151,7 @@ export class DocumentContentController {
    * grants DELETE here on purpose. Issued documents keep their own snapshot.
    */
   @Delete('components/:id')
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @HttpCode(204)
   @ApiNoContentResponse({ description: 'Component row removed' })
   @ApiOperation({ summary: 'Remove a component/brand row' })

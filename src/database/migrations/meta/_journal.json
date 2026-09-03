@@ -463,6 +463,20 @@
       "when": 1788282048615,
       "tag": "0065_low_sauron",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1788433201172,
+      "tag": "0066_user_role_general_manager",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1788435926442,
+      "tag": "0067_curly_kulan_gath",
+      "breakpoints": true
     }
   ]
 }

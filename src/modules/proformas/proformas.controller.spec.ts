@@ -32,7 +32,7 @@ describe('ProformasController — role gating', () => {
       ROLES_KEY,
       ProformasController.prototype.cancel,
     );
-    expect(roles).toEqual(['SALES_MANAGER']);
+    expect(roles).toEqual(['GENERAL_MANAGER', 'SALES_MANAGER']);
   });
 });
 

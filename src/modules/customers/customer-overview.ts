@@ -103,7 +103,7 @@ const SECTION_ROLES: Record<OverviewSection, readonly UserRole[]> = {
 };
 
 /** Mirrors RolesGuard's SUPER_ROLES. */
-const SUPER_ROLES: readonly UserRole[] = ['CEO', 'ADMIN'];
+const SUPER_ROLES: readonly UserRole[] = ['CEO', 'GENERAL_MANAGER', 'ADMIN'];
 
 /** The sections this role may be shown — and, therefore, the only ones worth querying. */
 export const visibleSections = (role: UserRole): OverviewSection[] =>

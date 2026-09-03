@@ -59,7 +59,7 @@ type Tone = 'neutral' | 'active' | 'good' | 'warn' | 'danger';
 /** Mirrors @Roles('SALES_MANAGER') on the customers PATCH/DELETE routes;
  *  CEO and ADMIN bypass via RolesGuard's SUPER_ROLES. */
 const canWriteCustomers = (role: UserRole | null): boolean =>
-  role === 'SALES_MANAGER' || role === 'CEO' || role === 'ADMIN';
+  role === 'SALES_MANAGER' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
 
 const CUSTOMER_TYPE_LABEL: Record<CustomerType, string> = {
   RESIDENTIAL: 'Residential',

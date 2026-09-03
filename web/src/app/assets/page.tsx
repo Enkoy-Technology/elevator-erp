@@ -48,7 +48,7 @@ const deleteAsset = (id: string): Promise<void> =>
 const canWriteAssets = (role: UserRole | null): boolean =>
   role === 'SALES_MANAGER' ||
   role === 'TECHNICAL_LEAD' ||
-  role === 'CEO' ||
+  role === 'CEO' || role === 'GENERAL_MANAGER' ||
   role === 'ADMIN';
 
 const CSV_HEADERS = [

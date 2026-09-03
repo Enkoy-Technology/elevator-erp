@@ -47,7 +47,7 @@ const OPEN_STATUSES = new Set<InvoiceStatus>(['ISSUED', 'PARTIALLY_PAID']);
 /** Mirrors PaymentsController's class-level @Roles('FINANCE');
  *  CEO/ADMIN bypass via RolesGuard's SUPER_ROLES. */
 const canManageFinance = (role: UserRole | null): boolean =>
-  role === 'FINANCE' || role === 'CEO' || role === 'ADMIN';
+  role === 'FINANCE' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
 
 interface AllocationDraft {
   invoiceId: string;

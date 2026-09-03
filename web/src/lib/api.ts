@@ -48,6 +48,7 @@ export const getAccessToken = (): string | null =>
 
 export type UserRole =
   | 'CEO'
+  | 'GENERAL_MANAGER'
   | 'ADMIN'
   | 'SALES_MANAGER'
   | 'TECHNICAL_LEAD'
@@ -594,6 +595,7 @@ export const NEXT_PROJECT_STATUSES: Record<
 
 export const EMPLOYEE_ROLES = [
   'CEO',
+  'GENERAL_MANAGER',
   'SALES_MANAGER',
   'TECHNICAL_LEAD',
   'FIELD_ENGINEER',

@@ -66,7 +66,7 @@ export const PROJECTS_EXPORT_COLUMNS: ColumnDef[] = [
 @ApiTags('projects')
 @ApiBearerAuth('access-token')
 @Controller('projects')
-@Roles('SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
+@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
@@ -136,7 +136,7 @@ export class ProjectsController {
   }
 
   @Post()
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({ summary: 'Create project/lead (starts at LEAD)' })
   create(
     @CurrentUser() user: AuthenticatedUser,
@@ -146,7 +146,7 @@ export class ProjectsController {
   }
 
   @Patch(':id/status')
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({
     summary: 'Advance or cancel project via status DAG, optionally with the deal value',
   })

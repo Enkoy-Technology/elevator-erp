@@ -43,7 +43,7 @@ export class NotificationsController {
   }
 
   @Post()
-  @Roles('SALES_MANAGER', 'TECHNICAL_LEAD', 'DISPATCHER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'DISPATCHER')
   @ApiOperation({ summary: 'Send a notification to a colleague' })
   create(
     @CurrentUser() user: AuthenticatedUser,

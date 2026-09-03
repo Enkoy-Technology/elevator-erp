@@ -201,7 +201,7 @@ const OPEN_STATUSES = new Set<InvoiceStatus>(['ISSUED', 'PARTIALLY_PAID']);
  *  @Roles('FINANCE') (no per-route override on any mutation route);
  *  CEO/ADMIN bypass via RolesGuard's SUPER_ROLES. */
 const canManageFinance = (role: UserRole | null): boolean =>
-  role === 'FINANCE' || role === 'CEO' || role === 'ADMIN';
+  role === 'FINANCE' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
 
 /**
  * The list's Outstanding column — GET /invoices now returns an exact,

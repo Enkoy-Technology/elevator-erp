@@ -39,7 +39,7 @@ const PAYMENT_SCHEDULE_TEMPLATE: DocumentTemplate = 'payment-schedule';
 @ApiTags('contracts')
 @ApiBearerAuth('access-token')
 @Controller()
-@Roles('SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
+@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
 export class ContractInstalmentsController {
   constructor(
     private readonly instalmentsService: ContractInstalmentsService,
@@ -59,7 +59,7 @@ export class ContractInstalmentsController {
 
   @Put('contracts/:id/instalments')
   @HttpCode(200)
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({
     summary:
       'Set or replace the whole payment schedule (DRAFT contracts only; instalments must total the contract value)',
@@ -74,7 +74,7 @@ export class ContractInstalmentsController {
 
   @Post('contracts/:id/instalments/:instalmentId/invoice')
   @HttpCode(200)
-  @Roles('FINANCE')
+  @Roles('GENERAL_MANAGER', 'FINANCE')
   @ApiOperation({
     summary:
       'Record the invoice raised for one instalment (PENDING -> INVOICED). The invoice is created through the invoices module; this only links it.',

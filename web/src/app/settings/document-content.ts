@@ -13,7 +13,7 @@ import type { UserRole } from '@/lib/api';
  * the list and no buttons rather than a locked page.
  */
 export const canEditDocumentContent = (role: UserRole | null): boolean =>
-  role === 'SALES_MANAGER' || role === 'CEO' || role === 'ADMIN';
+  role === 'SALES_MANAGER' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
 
 /**
  * The eight section keys the seed ships with. Offered as a `<datalist>` on

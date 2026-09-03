@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs';
 
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type { ImportEmployeesResultDto } from './dto/import-employees.dto';
+import { USER_ROLES } from '../../types/auth.types';
 import {
   EmployeesImportService,
   IMPORTABLE_ROLES,
@@ -135,8 +136,15 @@ describe('CEO/ADMIN cannot be granted by import', () => {
 
   it('keeps CEO and ADMIN out of the importable role list entirely', () => {
     expect(IMPORTABLE_ROLES).not.toContain('CEO');
+    expect(IMPORTABLE_ROLES).not.toContain('GENERAL_MANAGER');
     expect(IMPORTABLE_ROLES).not.toContain('ADMIN');
     expect(IMPORTABLE_ROLES).not.toContain('CUSTOMER');
+    // The list is built by SUBTRACTION from USER_ROLES, so a role added to
+    // the enum is importable unless someone remembers to exclude it — which
+    // is exactly how GENERAL_MANAGER briefly became grantable by
+    // spreadsheet. Asserting the COUNT means the next role added forces a
+    // decision here rather than defaulting to "anyone can be granted this".
+    expect(IMPORTABLE_ROLES).toHaveLength(USER_ROLES.length - 4);
     expect(IMPORTABLE_ROLES).toContain('SALES_MANAGER');
   });
 });

@@ -15,14 +15,26 @@ import type {
 import { EmployeesRepository } from './employees.repository';
 
 /**
- * Roles an import may grant. CEO and ADMIN administer the tenant, so granting
- * either from a spreadsheet is a privilege-escalation path — an attacker who
- * can get one row into the client's staff file would own the tenant. Those two
- * stay a deliberate, one-at-a-time action through POST /v1/employees.
- * CUSTOMER is not an employee at all.
+ * Roles an import may grant. CEO, GENERAL_MANAGER and ADMIN run the company,
+ * so granting any of them from a spreadsheet is a privilege-escalation path —
+ * an attacker who can get one row into the client's staff file would own the
+ * tenant. All three stay a deliberate, one-at-a-time action through
+ * POST /v1/employees. CUSTOMER is not an employee at all.
+ *
+ * This list is derived by SUBTRACTION from USER_ROLES, which means a new role
+ * is importable by default. GENERAL_MANAGER was added and silently became
+ * grantable by spreadsheet before anyone noticed; the test below now names
+ * every excluded role so the next one cannot slip through the same way.
  */
+const NOT_IMPORTABLE: readonly UserRole[] = [
+  'CEO',
+  'GENERAL_MANAGER',
+  'ADMIN',
+  'CUSTOMER',
+];
+
 export const IMPORTABLE_ROLES: readonly UserRole[] = USER_ROLES.filter(
-  (role) => role !== 'CEO' && role !== 'ADMIN' && role !== 'CUSTOMER',
+  (role) => !NOT_IMPORTABLE.includes(role),
 );
 
 /**

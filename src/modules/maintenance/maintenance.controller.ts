@@ -78,7 +78,7 @@ export const BREAKDOWNS_EXPORT_COLUMNS: ColumnDef[] = [
 @ApiTags('maintenance')
 @ApiBearerAuth('access-token')
 @Controller('maintenance')
-@Roles('TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER')
+@Roles('GENERAL_MANAGER', 'TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER')
 export class MaintenanceController {
   constructor(
     private readonly maintenanceService: MaintenanceService,
@@ -137,7 +137,7 @@ export class MaintenanceController {
   }
 
   @Post('contracts')
-  @Roles('TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER')
   @ApiOperation({ summary: 'Create maintenance contract on an asset' })
   createContract(
     @CurrentUser() user: AuthenticatedUser,
@@ -147,7 +147,7 @@ export class MaintenanceController {
   }
 
   @Patch('contracts/:id')
-  @Roles('TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER')
   @ApiOperation({ summary: 'Update maintenance contract' })
   updateContract(
     @CurrentUser() user: AuthenticatedUser,
@@ -158,7 +158,7 @@ export class MaintenanceController {
   }
 
   @Post('contracts/:id/visits')
-  @Roles('TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER')
+  @Roles('GENERAL_MANAGER', 'TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER')
   @ApiOperation({ summary: 'Log a service visit and advance schedule' })
   logVisit(
     @CurrentUser() user: AuthenticatedUser,
@@ -251,7 +251,7 @@ export class MaintenanceController {
   }
 
   @Post('breakdowns')
-  @Roles('TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER')
   @ApiOperation({ summary: 'Open a breakdown ticket' })
   createBreakdown(
     @CurrentUser() user: AuthenticatedUser,
@@ -261,7 +261,7 @@ export class MaintenanceController {
   }
 
   @Patch('breakdowns/:id')
-  @Roles('TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER')
+  @Roles('GENERAL_MANAGER', 'TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER')
   @ApiOperation({ summary: 'Update breakdown (assign / complete)' })
   updateBreakdown(
     @CurrentUser() user: AuthenticatedUser,

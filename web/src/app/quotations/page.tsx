@@ -183,14 +183,14 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 /** Mirrors @Roles('SALES_MANAGER') on the quotations/proformas mutation
  *  routes; CEO and ADMIN bypass via RolesGuard's SUPER_ROLES. */
 const canWrite = (role: UserRole | null): boolean =>
-  role === 'SALES_MANAGER' || role === 'CEO' || role === 'ADMIN';
+  role === 'SALES_MANAGER' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
 
 /** Mirrors @Roles('FINANCE') on InvoicesController (class-level, no
  *  per-route override) — POST /proformas/:id/convert-to-invoice lives on
  *  that controller, not ProformasController, so it needs its own gate
  *  distinct from canWrite's SALES_MANAGER check above. */
 const canConvertToInvoice = (role: UserRole | null): boolean =>
-  role === 'FINANCE' || role === 'CEO' || role === 'ADMIN';
+  role === 'FINANCE' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
 
 export default function QuotationsPage() {
   const router = useRouter();

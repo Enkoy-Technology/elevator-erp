@@ -30,7 +30,7 @@ const EMPTY_LINE: LineDraft = { description: '', quantity: '1', unitPriceEtb: '0
 /** Mirrors InvoicesController's class-level @Roles('FINANCE');
  *  CEO/ADMIN bypass via RolesGuard's SUPER_ROLES. */
 const canManageFinance = (role: UserRole | null): boolean =>
-  role === 'FINANCE' || role === 'CEO' || role === 'ADMIN';
+  role === 'FINANCE' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
 
 export default function NewInvoicePage() {
   const router = useRouter();

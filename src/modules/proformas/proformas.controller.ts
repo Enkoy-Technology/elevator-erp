@@ -64,7 +64,7 @@ export const PROFORMAS_EXPORT_COLUMNS: ColumnDef[] = [
 @ApiTags('proformas')
 @ApiBearerAuth('access-token')
 @Controller()
-@Roles('SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
+@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
 export class ProformasController {
   constructor(
     private readonly proformasService: ProformasService,
@@ -76,7 +76,7 @@ export class ProformasController {
 
   @Post('quotations/:id/convert-to-proforma')
   @HttpCode(201)
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({
     summary:
       'Convert an APPROVED quotation into an issued proforma (CAS + gapless numbering, one transaction)',
@@ -201,7 +201,7 @@ export class ProformasController {
 
   @Post('proformas/:id/cancel')
   @HttpCode(200)
-  @Roles('SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({
     summary:
       'Cancel an ISSUED proforma with a reason (append-only — does not revert the source quotation)',

@@ -96,17 +96,24 @@ export interface DashboardSummary {
 /** Roles that may see money: deal values and pipeline totals. */
 const SALES_ROLES: readonly UserRole[] = [
   'CEO',
+  'GENERAL_MANAGER',
   'ADMIN',
   'SALES_MANAGER',
   'FINANCE',
 ];
 
 /** Roles that may see the accounts-receivable book. */
-const FINANCE_ROLES: readonly UserRole[] = ['CEO', 'ADMIN', 'FINANCE'];
+const FINANCE_ROLES: readonly UserRole[] = [
+  'CEO',
+  'GENERAL_MANAGER',
+  'ADMIN',
+  'FINANCE',
+];
 
 /** Roles that run or dispatch service work. */
 const SERVICE_ROLES: readonly UserRole[] = [
   'CEO',
+  'GENERAL_MANAGER',
   'ADMIN',
   'TECHNICAL_LEAD',
   'FIELD_ENGINEER',
@@ -120,6 +127,7 @@ const SERVICE_ROLES: readonly UserRole[] = [
  */
 const TOTALS_ROLES: readonly UserRole[] = [
   'CEO',
+  'GENERAL_MANAGER',
   'ADMIN',
   'SALES_MANAGER',
   'FINANCE',

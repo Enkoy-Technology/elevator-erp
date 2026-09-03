@@ -35,6 +35,7 @@ const DEMO_PASSWORD = 'Demo!Passw0rd';
  */
 const DEMO_ACCOUNTS: readonly { role: string; label: string; email: string; blurb: string }[] = [
   { role: 'CEO', label: 'CEO', email: 'ceo@demo.example.com', blurb: 'Sees everything' },
+  { role: 'GENERAL_MANAGER', label: 'General manager', email: 'gm@demo.example.com', blurb: 'Runs the business; sees everything' },
   { role: 'SALES_MANAGER', label: 'Sales manager', email: 'sales@demo.example.com', blurb: 'Quotes and contracts' },
   { role: 'FINANCE', label: 'Finance', email: 'finance@demo.example.com', blurb: 'Invoices and payments' },
   { role: 'TECHNICAL_LEAD', label: 'Technical lead', email: 'technical@demo.example.com', blurb: 'Specs and maintenance' },

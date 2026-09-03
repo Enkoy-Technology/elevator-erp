@@ -36,7 +36,9 @@ export interface ModuleNavItem {
   roles: readonly UserRole[] | null;
 }
 
-/** CEO and ADMIN reach everything, matching RolesGuard's SUPER_ROLES. */
+/** CEO and ADMIN reach everything, matching RolesGuard's
+ *  SUPER_ROLES. Keep the two lists identical: a role missing here sees a
+ *  sidebar narrower than what the API would actually answer. */
 const SUPER_ROLES: readonly UserRole[] = ['CEO', 'ADMIN'];
 
 /** Modules this role can open. Unknown/absent role gets the public set only. */
@@ -68,7 +70,7 @@ export const MODULES: ModuleNavItem[] = [
     phase: null,
     href: '/calculator',
     icon: 'M9 7h6m-6 4h6m-6 4h3M5 3h14a1 1 0 011 1v16a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z',
-    roles: ['SALES_MANAGER', 'TECHNICAL_LEAD'],
+    roles: ['GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD'],
   },
   {
     nameKey: 'nav.customers',
@@ -77,7 +79,7 @@ export const MODULES: ModuleNavItem[] = [
     phase: null,
     href: '/customers',
     icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
-    roles: ['SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE', 'DISPATCHER'],
+    roles: ['GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE', 'DISPATCHER'],
   },
   {
     nameKey: 'nav.projects',
@@ -86,7 +88,7 @@ export const MODULES: ModuleNavItem[] = [
     phase: null,
     href: '/projects',
     icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
-    roles: ['SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
+    roles: ['GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
   },
   {
     nameKey: 'nav.quotations',
@@ -95,7 +97,7 @@ export const MODULES: ModuleNavItem[] = [
     phase: null,
     href: '/quotations',
     icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-    roles: ['SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
+    roles: ['GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
   },
   {
     nameKey: 'nav.contracts',
@@ -105,7 +107,7 @@ export const MODULES: ModuleNavItem[] = [
     href: '/contracts',
     icon: 'M9 12h6m-6 4h4m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z M8.5 8.5h3',
     // Mirrors ContractsController's class-level @Roles(...).
-    roles: ['SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
+    roles: ['GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
   },
   {
     nameKey: 'nav.invoices',
@@ -117,7 +119,7 @@ export const MODULES: ModuleNavItem[] = [
     // Mirrors InvoicesController's class-level @Roles('FINANCE') (no
     // per-route override) — CEO/ADMIN reach it via modulesForRole's
     // SUPER_ROLES check.
-    roles: ['FINANCE'],
+    roles: ['GENERAL_MANAGER', 'FINANCE'],
   },
   {
     nameKey: 'nav.payments',
@@ -127,7 +129,7 @@ export const MODULES: ModuleNavItem[] = [
     href: '/invoices?tab=payments',
     icon: 'M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3M4.5 19.5h15a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5h-15A1.5 1.5 0 003 6v12a1.5 1.5 0 001.5 1.5zM15 12a3 3 0 11-6 0 3 3 0 016 0z',
     // Mirrors PaymentsController's class-level @Roles('FINANCE').
-    roles: ['FINANCE'],
+    roles: ['GENERAL_MANAGER', 'FINANCE'],
   },
   {
     nameKey: 'nav.receivables',
@@ -139,7 +141,7 @@ export const MODULES: ModuleNavItem[] = [
     // Mirrors GET /invoices/aging (class-level @Roles('FINANCE')) and
     // GET /customers/:id/statement (route-level @Roles('FINANCE'),
     // narrower than CustomersController's own class-level roles).
-    roles: ['FINANCE'],
+    roles: ['GENERAL_MANAGER', 'FINANCE'],
   },
   {
     nameKey: 'nav.employees',
@@ -157,7 +159,7 @@ export const MODULES: ModuleNavItem[] = [
     phase: null,
     href: '/assets',
     icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
-    roles: ['SALES_MANAGER', 'TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'WAREHOUSE_MANAGER'],
+    roles: ['GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'WAREHOUSE_MANAGER'],
   },
   {
     nameKey: 'nav.notifications',
@@ -175,7 +177,7 @@ export const MODULES: ModuleNavItem[] = [
     phase: null,
     href: '/maintenance',
     icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
-    roles: ['TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER'],
+    roles: ['GENERAL_MANAGER', 'TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER'],
   },
   {
     nameKey: 'nav.messages',
@@ -207,7 +209,7 @@ export const MODULES: ModuleNavItem[] = [
     // Mirrors DocumentContentController's class-level
     // @Roles('SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'); writing is
     // SALES_MANAGER only and is gated inside the page, not here.
-    roles: ['SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
+    roles: ['GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
   },
   {
     nameKey: 'nav.components',
@@ -217,7 +219,7 @@ export const MODULES: ModuleNavItem[] = [
     href: '/settings/components',
     icon: 'M4 5h16v14H4z M4 10h16 M10 5v14',
     // Same controller, same class-level roles.
-    roles: ['SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
+    roles: ['GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
   },
   {
     nameKey: 'nav.docs',

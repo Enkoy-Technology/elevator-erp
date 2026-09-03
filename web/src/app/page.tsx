@@ -20,6 +20,7 @@ import { formatEtb, formatNumber } from '@/lib/money';
 
 const ROLE_LABELS: Record<string, string> = {
   CEO: 'Chief Executive',
+  GENERAL_MANAGER: 'General Manager',
   SALES_MANAGER: 'Sales Manager',
   TECHNICAL_LEAD: 'Technical Lead',
   FIELD_ENGINEER: 'Field Engineer',
