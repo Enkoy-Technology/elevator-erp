@@ -68,6 +68,25 @@ export type BreakdownExportRow = Omit<
   'assetId' | 'customerId'
 > & { assetName: string | null; customerName: string | null };
 
+/** The filters `listContracts()` and `streamAllContracts()` both honor, in
+ * one place — so a new filter cannot land on one path and silently miss the
+ * other. `customerId` reads maintenance_contracts.customer_id directly (the
+ * table carries its own FK, see schema/maintenance.ts) rather than joining
+ * through assets. */
+const contractListFilters = (options: {
+  status?: MaintenanceContractStatus;
+  customerId?: string;
+}) => {
+  const filters = [isNull(maintenanceContracts.deletedAt)];
+  if (options.status) {
+    filters.push(eq(maintenanceContracts.status, options.status));
+  }
+  if (options.customerId) {
+    filters.push(eq(maintenanceContracts.customerId, options.customerId));
+  }
+  return filters;
+};
+
 @Injectable()
 export class MaintenanceRepository {
   constructor(private readonly tenantDb: TenantDbService) {}
@@ -78,6 +97,7 @@ export class MaintenanceRepository {
       page?: string;
       pageSize?: string;
       status?: MaintenanceContractStatus;
+      customerId?: string;
     },
   ): Promise<PaginatedResult<MaintenanceContractRecord>> {
     const { page, pageSize, offset } = normalizePageQuery(
@@ -85,11 +105,7 @@ export class MaintenanceRepository {
       options.pageSize,
     );
     return this.tenantDb.withTenant(tenantId, async (tx) => {
-      const filters = [isNull(maintenanceContracts.deletedAt)];
-      if (options.status) {
-        filters.push(eq(maintenanceContracts.status, options.status));
-      }
-      const where = and(...filters);
+      const where = and(...contractListFilters(options));
       const [totalRow] = await tx
         .select({ value: count() })
         .from(maintenanceContracts)
@@ -128,7 +144,7 @@ export class MaintenanceRepository {
    */
   async *streamAllContracts(
     tenantId: string,
-    options: { status?: MaintenanceContractStatus },
+    options: { status?: MaintenanceContractStatus; customerId?: string },
   ): AsyncGenerator<MaintenanceContractExportRow> {
     const BATCH_SIZE = 500;
     let offset = 0;
@@ -139,10 +155,6 @@ export class MaintenanceRepository {
     } = getTableColumns(maintenanceContracts);
     for (;;) {
       const batch = await this.tenantDb.withTenant(tenantId, (tx) => {
-        const filters = [isNull(maintenanceContracts.deletedAt)];
-        if (options.status) {
-          filters.push(eq(maintenanceContracts.status, options.status));
-        }
         return tx
           .select({
             ...contractColumns,
@@ -164,7 +176,7 @@ export class MaintenanceRepository {
               eq(maintenanceContracts.customerId, customers.id),
             ),
           )
-          .where(and(...filters))
+          .where(and(...contractListFilters(options)))
           .orderBy(maintenanceContracts.nextServiceAt, asc(maintenanceContracts.id))
           .limit(BATCH_SIZE)
           .offset(offset);

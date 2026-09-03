@@ -104,7 +104,7 @@ export class ContractsController {
   @Get('contracts')
   @ApiOperation({
     summary:
-      'List contracts (project/status filter + pagination), or stream a CSV/XLSX export with ?format=',
+      'List contracts (project/customer/status filter + pagination), or stream a CSV/XLSX export with ?format=',
   })
   @ApiOkResponse({ description: 'Paginated contract list' })
   async list(
@@ -115,9 +115,15 @@ export class ContractsController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('format') formatRaw?: string,
+    // Declared last on purpose: named query params, so HTTP order is
+    // irrelevant, and appending keeps existing positional callers compiling.
+    @Query('customerId') customerId?: string,
   ): Promise<void> {
     if (projectId !== undefined && !isUUID(projectId)) {
       throw new BadRequestException('projectId must be a UUID');
+    }
+    if (customerId !== undefined && !isUUID(customerId)) {
+      throw new BadRequestException('customerId must be a UUID');
     }
     if (
       status !== undefined &&
@@ -133,6 +139,7 @@ export class ContractsController {
       res.json(
         await this.contractsService.list(user, {
           projectId,
+          customerId,
           status: parsedStatus,
           page,
           pageSize,
@@ -142,6 +149,7 @@ export class ContractsController {
     }
     const rows = this.contractsService.streamAll(user, {
       projectId,
+      customerId,
       status: parsedStatus,
     });
     const filename = `contracts-${todayIso()}`;

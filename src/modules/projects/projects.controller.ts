@@ -16,6 +16,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { isUUID } from 'class-validator';
 import type { Response } from 'express';
 
 import { todayIso } from '../../common/business-time';
@@ -72,7 +73,7 @@ export class ProjectsController {
   @Get()
   @ApiOperation({
     summary:
-      'List projects (status/name-search filter + pagination), or stream a CSV/XLSX export with ?format=',
+      'List projects (status/customerId/name-search filter + pagination), or stream a CSV/XLSX export with ?format=',
   })
   @ApiOkResponse({ description: 'Paginated project list' })
   async list(
@@ -83,6 +84,10 @@ export class ProjectsController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('format') formatRaw?: string,
+    // Declared last on purpose: these are named query params, so order is
+    // irrelevant over HTTP, and appending keeps every existing positional
+    // caller (controller specs) compiling unchanged.
+    @Query('customerId') customerId?: string,
   ): Promise<void> {
     if (
       status !== undefined &&
@@ -92,11 +97,15 @@ export class ProjectsController {
         `status must be one of: ${PROJECT_STATUSES.join(', ')}`,
       );
     }
+    if (customerId !== undefined && !isUUID(customerId)) {
+      throw new BadRequestException('customerId must be a UUID');
+    }
     const parsedStatus = status as (typeof PROJECT_STATUSES)[number] | undefined;
     const format = parseExportFormat(formatRaw);
     if (!format) {
       const result = await this.projectsService.list(user, {
         status: parsedStatus,
+        customerId,
         q,
         page,
         pageSize,
@@ -106,6 +115,7 @@ export class ProjectsController {
     }
     const rows = this.projectsService.streamAll(user, {
       status: parsedStatus,
+      customerId,
       q,
     });
     const filename = `projects-${todayIso()}`;

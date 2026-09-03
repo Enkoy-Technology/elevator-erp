@@ -37,6 +37,26 @@ export type ProjectInsert = typeof projects.$inferInsert;
 const nameSearchFilter = (q: string) =>
   sql`coalesce(${projects.nameNormalized}, lower(${projects.name})) like ${`%${normalizeEthiopic(q.trim())}%`}`;
 
+/** The filters `list()` and `streamAll()` both honor, in one place — so a
+ * new filter cannot land on one path and silently miss the other. */
+const listFilters = (options: {
+  status?: ProjectStatus;
+  customerId?: string;
+  q?: string;
+}) => {
+  const filters = [isNull(projects.deletedAt)];
+  if (options.status) {
+    filters.push(eq(projects.status, options.status));
+  }
+  if (options.customerId) {
+    filters.push(eq(projects.customerId, options.customerId));
+  }
+  if (options.q && options.q.trim().length > 0) {
+    filters.push(nameSearchFilter(options.q));
+  }
+  return filters;
+};
+
 /** `streamAll()`'s row shape: the raw `customerId` FK is replaced (not
  * appended) with the joined customer's display name — see REC 5. */
 export type ProjectExportRow = Omit<ProjectRecord, 'customerId'> & {
@@ -51,6 +71,7 @@ export class ProjectsRepository {
     tenantId: string,
     options: {
       status?: ProjectStatus;
+      customerId?: string;
       q?: string;
       page?: string;
       pageSize?: string;
@@ -61,14 +82,7 @@ export class ProjectsRepository {
       options.pageSize,
     );
     return this.tenantDb.withTenant(tenantId, async (tx) => {
-      const filters = [isNull(projects.deletedAt)];
-      if (options.status) {
-        filters.push(eq(projects.status, options.status));
-      }
-      if (options.q && options.q.trim().length > 0) {
-        filters.push(nameSearchFilter(options.q));
-      }
-      const where = and(...filters);
+      const where = and(...listFilters(options));
       const [totalRow] = await tx
         .select({ value: count() })
         .from(projects)
@@ -102,7 +116,7 @@ export class ProjectsRepository {
    */
   async *streamAll(
     tenantId: string,
-    options: { status?: ProjectStatus; q?: string },
+    options: { status?: ProjectStatus; customerId?: string; q?: string },
   ): AsyncGenerator<ProjectExportRow> {
     const BATCH_SIZE = 500;
     let offset = 0;
@@ -110,13 +124,6 @@ export class ProjectsRepository {
       getTableColumns(projects);
     for (;;) {
       const batch = await this.tenantDb.withTenant(tenantId, (tx) => {
-        const filters = [isNull(projects.deletedAt)];
-        if (options.status) {
-          filters.push(eq(projects.status, options.status));
-        }
-        if (options.q && options.q.trim().length > 0) {
-          filters.push(nameSearchFilter(options.q));
-        }
         return tx
           .select({ ...projectColumns, customerName: customers.name })
           .from(projects)
@@ -127,7 +134,7 @@ export class ProjectsRepository {
               eq(projects.customerId, customers.id),
             ),
           )
-          .where(and(...filters))
+          .where(and(...listFilters(options)))
           .orderBy(desc(projects.createdAt), asc(projects.id))
           .limit(BATCH_SIZE)
           .offset(offset);

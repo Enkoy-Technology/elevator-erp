@@ -268,3 +268,83 @@ describe('ContractsRepository.cancel', () => {
     ).rejects.toBeInstanceOf(WorkflowTransitionError);
   });
 });
+
+// customerId filter, added for the customer detail page's "View all
+// contracts" link. contracts carries its own customer_id FK, so this is a
+// plain column filter — no join through projects. list() and streamAll()
+// share `whereFor()`, so asserting list()'s WHERE proves both paths.
+describe('ContractsRepository.list — customerId filter', () => {
+  // Pulls the column names a drizzle WHERE fragment touches — same
+  // queryChunks walk used in projects.repository.spec.ts.
+  const whereColumnNames = (arg: unknown): string[] => {
+    const out: string[] = [];
+    const walk = (x: unknown): void => {
+      if (!x || typeof x !== 'object') return;
+      if (
+        'name' in x &&
+        typeof (x as { name?: unknown }).name === 'string' &&
+        'table' in x
+      ) {
+        out.push((x as { name: string }).name);
+      }
+      if ('queryChunks' in x) {
+        for (const chunk of (x as { queryChunks: unknown[] }).queryChunks) {
+          walk(chunk);
+        }
+      }
+    };
+    walk(arg);
+    return out;
+  };
+
+  /** Runs list() against a fake tx and returns the column names its WHERE
+   * clause actually touches. */
+  const whereColumnsFor = async (
+    options: Parameters<ContractsRepository['list']>[1],
+  ): Promise<string[]> => {
+    let where: unknown;
+    const countChain: Record<string, jest.Mock> = {};
+    countChain.from = jest.fn(() => countChain);
+    countChain.where = jest.fn((w: unknown) => {
+      where = w;
+      return Promise.resolve([{ value: 0 }]);
+    });
+    // makeSelectChain() resolves at .limit(), but list()'s item query ends
+    // in .offset() — so this path needs its own chain.
+    const itemsChain: Record<string, jest.Mock> = {};
+    itemsChain.from = jest.fn(() => itemsChain);
+    itemsChain.leftJoin = jest.fn(() => itemsChain);
+    itemsChain.where = jest.fn(() => itemsChain);
+    itemsChain.orderBy = jest.fn(() => itemsChain);
+    itemsChain.limit = jest.fn(() => itemsChain);
+    itemsChain.offset = jest.fn(() => Promise.resolve([]));
+    const select = jest.fn();
+    select.mockReturnValueOnce(countChain).mockReturnValueOnce(itemsChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new ContractsRepository({ withTenant } as never);
+    await repo.list(TENANT_ID, options);
+    return whereColumnNames(where);
+  };
+
+  it('narrows the query with a customer_id leg when customerId is given', async () => {
+    expect(await whereColumnsFor({ customerId: CUSTOMER_ID })).toContain(
+      'customer_id',
+    );
+  });
+
+  it('leaves the query unchanged when customerId is omitted', async () => {
+    expect(await whereColumnsFor({})).not.toContain('customer_id');
+  });
+
+  it('composes with the projectId filter rather than replacing it', async () => {
+    const columns = await whereColumnsFor({
+      projectId: PROJECT_ID,
+      customerId: CUSTOMER_ID,
+    });
+    expect(columns).toContain('customer_id');
+    expect(columns).toContain('project_id');
+  });
+});

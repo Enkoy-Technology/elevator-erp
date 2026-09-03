@@ -21,6 +21,7 @@ export class ProjectsService {
     user: AuthenticatedUser,
     options: {
       status?: ProjectStatus;
+      customerId?: string;
       q?: string;
       page?: string;
       pageSize?: string;
@@ -31,7 +32,7 @@ export class ProjectsService {
 
   streamAll(
     user: AuthenticatedUser,
-    options: { status?: ProjectStatus; q?: string },
+    options: { status?: ProjectStatus; customerId?: string; q?: string },
   ): AsyncGenerator<ProjectExportRow> {
     return this.projectsRepository.streamAll(user.tenantId, options);
   }

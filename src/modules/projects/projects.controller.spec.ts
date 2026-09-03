@@ -95,6 +95,23 @@ describe('ProjectsController.list — format wiring', () => {
     expect(service.streamAll).not.toHaveBeenCalled();
   });
 
+  it('rejects a malformed customerId with a 400 before touching the service', async () => {
+    await expect(
+      controller.list(
+        user,
+        res as never,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'not-a-uuid',
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(service.list).not.toHaveBeenCalled();
+    expect(service.streamAll).not.toHaveBeenCalled();
+  });
+
   it('rejects an unknown format with a 400 before touching the service', async () => {
     await expect(
       controller.list(user, res as never, undefined, undefined, undefined, undefined, 'pdf'),

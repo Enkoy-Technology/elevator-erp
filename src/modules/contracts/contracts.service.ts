@@ -20,6 +20,7 @@ export class ContractsService {
     user: AuthenticatedUser,
     options: {
       projectId?: string;
+      customerId?: string;
       status?: ContractStatus;
       page?: string;
       pageSize?: string;
@@ -30,7 +31,7 @@ export class ContractsService {
 
   streamAll(
     user: AuthenticatedUser,
-    options: { projectId?: string; status?: ContractStatus },
+    options: { projectId?: string; customerId?: string; status?: ContractStatus },
   ): AsyncGenerator<ContractListRow> {
     return this.contractsRepository.streamAll(user.tenantId, options);
   }

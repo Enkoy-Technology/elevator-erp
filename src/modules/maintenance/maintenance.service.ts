@@ -31,6 +31,7 @@ export class MaintenanceService {
       page?: string;
       pageSize?: string;
       status?: MaintenanceContractStatus;
+      customerId?: string;
     },
   ) {
     return this.maintenanceRepository.listContracts(user.tenantId, options);
@@ -38,7 +39,7 @@ export class MaintenanceService {
 
   streamAllContracts(
     user: AuthenticatedUser,
-    options: { status?: MaintenanceContractStatus },
+    options: { status?: MaintenanceContractStatus; customerId?: string },
   ): AsyncGenerator<MaintenanceContractExportRow> {
     return this.maintenanceRepository.streamAllContracts(
       user.tenantId,

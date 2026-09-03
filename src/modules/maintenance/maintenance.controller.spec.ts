@@ -54,6 +54,21 @@ describe('MaintenanceController.listContracts — status validation', () => {
     expect(service.listContracts).not.toHaveBeenCalled();
   });
 
+  it('rejects a malformed customerId with a 400 before touching the service', async () => {
+    await expect(
+      controller.listContracts(
+        user,
+        res as never,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'not-a-uuid',
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(service.listContracts).not.toHaveBeenCalled();
+  });
+
   it('passes a valid status through to the service and replies with the JSON page', async () => {
     const page = 'ok';
     service.listContracts.mockResolvedValue(page);

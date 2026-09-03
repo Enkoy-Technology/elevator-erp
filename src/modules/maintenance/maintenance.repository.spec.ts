@@ -216,3 +216,63 @@ describe('MaintenanceRepository.streamAllBreakdowns — orderBy tiebreaker', () 
     }
   });
 });
+
+// customerId filter, added for the customer detail page's "View all
+// maintenance contracts" link. maintenance_contracts carries its own
+// customer_id FK (schema/maintenance.ts), so this is a plain column filter,
+// not a join through assets. listContracts() and streamAllContracts() share
+// `contractListFilters()`, so asserting listContracts()'s WHERE proves both.
+describe('MaintenanceRepository.listContracts — customerId filter', () => {
+  const CUSTOMER_ID = '66666666-6666-6666-6666-666666666666';
+
+  /** Runs listContracts() against a fake tx and returns the column names its
+   * WHERE clause actually touches. */
+  const whereColumnsFor = async (
+    options: Parameters<MaintenanceRepository['listContracts']>[1],
+  ): Promise<string[]> => {
+    let where: unknown;
+    const countChain: Record<string, jest.Mock> = {};
+    countChain.from = jest.fn(() => countChain);
+    countChain.where = jest.fn((w: unknown) => {
+      where = w;
+      return Promise.resolve([{ value: 0 }]);
+    });
+    const itemsChain: Record<string, jest.Mock> = {};
+    itemsChain.from = jest.fn(() => itemsChain);
+    itemsChain.where = jest.fn(() => itemsChain);
+    itemsChain.orderBy = jest.fn(() => itemsChain);
+    itemsChain.limit = jest.fn(() => itemsChain);
+    itemsChain.offset = jest.fn(() => Promise.resolve([]));
+    const select = jest.fn();
+    select.mockReturnValueOnce(countChain).mockReturnValueOnce(itemsChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new MaintenanceRepository({ withTenant } as never);
+    await repo.listContracts(TENANT_ID, options);
+    return extractOrderByColumnNames(where);
+  };
+
+  it('narrows the query with a customer_id leg when customerId is given', async () => {
+    expect(await whereColumnsFor({ customerId: CUSTOMER_ID })).toContain(
+      'customer_id',
+    );
+  });
+
+  it('leaves the query unchanged when customerId is omitted', async () => {
+    const columns = await whereColumnsFor({});
+    expect(columns).not.toContain('customer_id');
+    // The soft-delete leg is still the only filter, exactly as before.
+    expect(columns).toContain('deleted_at');
+  });
+
+  it('composes with the status filter rather than replacing it', async () => {
+    const columns = await whereColumnsFor({
+      status: 'ACTIVE',
+      customerId: CUSTOMER_ID,
+    });
+    expect(columns).toContain('customer_id');
+    expect(columns).toContain('status');
+  });
+});

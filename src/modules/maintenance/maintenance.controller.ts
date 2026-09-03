@@ -16,6 +16,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { isUUID } from 'class-validator';
 import type { Response } from 'express';
 
 import { todayIso } from '../../common/business-time';
@@ -88,7 +89,7 @@ export class MaintenanceController {
   @Get('contracts')
   @ApiOperation({
     summary:
-      'List maintenance contracts, or stream a CSV/XLSX export with ?format=',
+      'List maintenance contracts (status/customerId filter + pagination), or stream a CSV/XLSX export with ?format=',
   })
   @ApiOkResponse({ description: 'Paginated contracts' })
   async listContracts(
@@ -98,12 +99,18 @@ export class MaintenanceController {
     @Query('pageSize') pageSize?: string,
     @Query('status') status?: string,
     @Query('format') formatRaw?: string,
+    // Declared last on purpose: named query params, so HTTP order is
+    // irrelevant, and appending keeps existing positional callers compiling.
+    @Query('customerId') customerId?: string,
   ): Promise<void> {
     if (
       status &&
       !(MAINTENANCE_CONTRACT_STATUSES as readonly string[]).includes(status)
     ) {
       throw new BadRequestException(`Invalid status filter: ${status}`);
+    }
+    if (customerId !== undefined && !isUUID(customerId)) {
+      throw new BadRequestException('customerId must be a UUID');
     }
     const parsedStatus = status as MaintenanceContractStatus | undefined;
     const format = parseExportFormat(formatRaw);
@@ -112,12 +119,14 @@ export class MaintenanceController {
         page,
         pageSize,
         status: parsedStatus,
+        customerId,
       });
       res.json(result);
       return;
     }
     const rows = this.maintenanceService.streamAllContracts(user, {
       status: parsedStatus,
+      customerId,
     });
     const filename = `maintenance-contracts-${todayIso()}`;
     if (format === 'csv') {

@@ -53,6 +53,7 @@ const CANCELLABLE: readonly ContractStatus[] = ['DRAFT', 'SIGNED'];
 /** The filters `list`, `streamAll` and the export all honor, in one place. */
 interface ContractFilters {
   projectId?: string;
+  customerId?: string;
   status?: ContractStatus;
 }
 
@@ -423,6 +424,9 @@ const whereFor = (options: ContractFilters) => {
   const filters = [];
   if (options.projectId) {
     filters.push(eq(contracts.projectId, options.projectId));
+  }
+  if (options.customerId) {
+    filters.push(eq(contracts.customerId, options.customerId));
   }
   if (options.status) {
     filters.push(eq(contracts.status, options.status));

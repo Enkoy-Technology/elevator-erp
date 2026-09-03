@@ -313,3 +313,77 @@ describe('ProjectsRepository.updateStatus — atomic EXISTS guard for PROFORMA',
     expect(select).not.toHaveBeenCalled();
   });
 });
+
+// customerId filter, added for the customer detail page's "View all
+// projects" link. list() and streamAll() share one `listFilters()`, so
+// asserting the WHERE on list() proves both paths.
+describe('ProjectsRepository.list — customerId filter', () => {
+  const CUSTOMER_ID = '66666666-6666-6666-6666-666666666666';
+
+  /** Runs list() against a fake tx and returns the column names the WHERE
+   * clause actually touches. */
+  const whereColumnsFor = async (
+    options: Parameters<ProjectsRepository['list']>[1],
+  ): Promise<string[]> => {
+    let where: unknown;
+    const countChain: Record<string, jest.Mock> = {};
+    countChain.from = jest.fn(() => countChain);
+    countChain.where = jest.fn((w: unknown) => {
+      where = w;
+      return Promise.resolve([{ value: 0 }]);
+    });
+    const itemsChain: Record<string, jest.Mock> = {};
+    itemsChain.from = jest.fn(() => itemsChain);
+    itemsChain.where = jest.fn(() => itemsChain);
+    itemsChain.orderBy = jest.fn(() => itemsChain);
+    itemsChain.limit = jest.fn(() => itemsChain);
+    itemsChain.offset = jest.fn(() => Promise.resolve([]));
+    const select = jest.fn();
+    select.mockReturnValueOnce(countChain).mockReturnValueOnce(itemsChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new ProjectsRepository({ withTenant } as never);
+    await repo.list(TENANT_ID, options);
+    return extractOrderByColumnNames(where);
+  };
+
+  it('narrows the query with a customer_id leg when customerId is given', async () => {
+    expect(await whereColumnsFor({ customerId: CUSTOMER_ID })).toContain(
+      'customer_id',
+    );
+  });
+
+  it('leaves the query unchanged when customerId is omitted', async () => {
+    expect(await whereColumnsFor({})).not.toContain('customer_id');
+  });
+
+  it('composes with the name search rather than replacing it', async () => {
+    let where: unknown;
+    const countChain: Record<string, jest.Mock> = {};
+    countChain.from = jest.fn(() => countChain);
+    countChain.where = jest.fn((w: unknown) => {
+      where = w;
+      return Promise.resolve([{ value: 0 }]);
+    });
+    const itemsChain: Record<string, jest.Mock> = {};
+    itemsChain.from = jest.fn(() => itemsChain);
+    itemsChain.where = jest.fn(() => itemsChain);
+    itemsChain.orderBy = jest.fn(() => itemsChain);
+    itemsChain.limit = jest.fn(() => itemsChain);
+    itemsChain.offset = jest.fn(() => Promise.resolve([]));
+    const select = jest.fn();
+    select.mockReturnValueOnce(countChain).mockReturnValueOnce(itemsChain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new ProjectsRepository({ withTenant } as never);
+
+    await repo.list(TENANT_ID, { customerId: CUSTOMER_ID, q: 'ኃይሉ' });
+
+    expect(extractOrderByColumnNames(where)).toContain('customer_id');
+    expect(extractSqlLiterals(where)).toContain('%ሃይሉ%');
+  });
+});
