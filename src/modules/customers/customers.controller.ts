@@ -170,6 +170,28 @@ export class CustomersController {
     return this.customersService.getById(user, id);
   }
 
+  // No per-route @Roles, because a single role list cannot express what this
+  // route needs: it aggregates EIGHT modules, each with its own gate. A
+  // dispatcher may see the assets and the maintenance, and must not see the
+  // AR ledger that InvoicesController restricts to FINANCE. So the service
+  // narrows the response per section, via `visibleSections(user.role)`.
+  //
+  // Do not "simplify" this to a route-level @Roles: the class gate decides
+  // who may ask about a customer at all, and the per-section table decides
+  // what comes back. Both are needed.
+  @Get(':id/overview')
+  @ApiOperation({
+    summary:
+      "Everything hanging off one customer — projects, quotations, proformas, contracts, invoices, payments, assets and maintenance, each as a full count plus the newest five",
+  })
+  @ApiOkResponse({ description: 'Customer overview' })
+  overview(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.customersService.overview(user, id);
+  }
+
   @Get(':id/statement')
   @Roles('FINANCE')
   @ApiOperation({

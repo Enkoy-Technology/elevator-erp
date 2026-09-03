@@ -50,6 +50,7 @@ describe('CustomersService', () => {
     create: jest.fn(),
     update: jest.fn(),
     softDelete: jest.fn(),
+    overview: jest.fn(),
   };
 
   const service = new CustomersService(repo as never);
@@ -130,6 +131,70 @@ describe('CustomersService', () => {
     repo.softDelete.mockRejectedValue(new CustomerInUseError(1, 0, 0, 0, 0));
     await expect(service.softDelete(user, sample.id)).rejects.toBeInstanceOf(
       CustomerInUseError,
+    );
+  });
+
+  it('scopes the overview to the caller\'s tenant and passes the payload straight through', async () => {
+    const overview = {
+      projects: { total: 12, recent: [] },
+      quotations: { total: 0, recent: [] },
+      proformas: { total: 0, recent: [] },
+      contracts: { total: 0, recent: [] },
+      invoices: { total: 3, recent: [], outstandingEtb: '234567.90' },
+      payments: { total: 2, recent: [], receivedEtb: '1000.00' },
+      assets: { total: 0, recent: [] },
+      maintenance: { total: 0, recent: [] },
+    };
+    repo.overview.mockResolvedValue(overview);
+
+    await expect(service.overview(user, sample.id)).resolves.toBe(overview);
+    // CEO is a SUPER_ROLE, so every section is asked for.
+    expect(repo.overview).toHaveBeenCalledWith(user.tenantId, sample.id, [
+      'projects',
+      'quotations',
+      'proformas',
+      'contracts',
+      'invoices',
+      'payments',
+      'assets',
+      'maintenance',
+    ]);
+  });
+
+  it('asks for only the sections the caller may see', async () => {
+    // The whole point of the per-section gate. A dispatcher is barred from
+    // InvoicesController and PaymentsController, and from projects,
+    // quotations, proformas and contracts — so reaching that data through a
+    // customer page must not work either.
+    repo.overview.mockResolvedValue({});
+
+    await service.overview({ ...user, role: 'DISPATCHER' }, sample.id);
+
+    expect(repo.overview).toHaveBeenCalledWith(user.tenantId, sample.id, [
+      'assets',
+      'maintenance',
+    ]);
+  });
+
+  it('gives finance the AR ledger and nothing operational', async () => {
+    repo.overview.mockResolvedValue({});
+
+    await service.overview({ ...user, role: 'FINANCE' }, sample.id);
+
+    expect(repo.overview).toHaveBeenCalledWith(user.tenantId, sample.id, [
+      'projects',
+      'quotations',
+      'proformas',
+      'contracts',
+      'invoices',
+      'payments',
+    ]);
+  });
+
+  it('lets the repository 404 propagate — it does not swallow it into an empty overview', async () => {
+    repo.overview.mockRejectedValue(new NotFoundException('Customer not found'));
+    await expect(service.overview(user, sample.id)).rejects.toBeInstanceOf(
+      NotFoundException,
     );
   });
 });

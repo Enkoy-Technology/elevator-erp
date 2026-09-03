@@ -12,13 +12,29 @@ import {
 import { normalizeEthiopic } from '../../common/text/ethiopic-normalize';
 import {
   assets,
+  contracts,
   customers,
   invoices,
   maintenanceContracts,
+  paymentAllocations,
   payments,
+  proformas,
   projects,
+  quotations,
 } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
+import type {
+  CustomerOverview,
+  CustomerOverviewAsset,
+  CustomerOverviewContract,
+  CustomerOverviewInvoice,
+  CustomerOverviewMaintenance,
+  CustomerOverviewPayment,
+  CustomerOverviewProforma,
+  CustomerOverviewProject,
+  CustomerOverviewQuotation,
+  OverviewSection,
+} from './customer-overview';
 import {
   buildStatement,
   type StatementResult,
@@ -42,6 +58,31 @@ export interface SimilarCustomer {
 
 /** Enough digits to be a real phone rather than an area code. */
 const MIN_PHONE_DIGITS = 7;
+
+/** How many rows each `overview()` section shows. The page says "Projects 12"
+ * and lists five of them; `total` is what makes that first number honest. */
+const OVERVIEW_RECENT_LIMIT = 5;
+
+/**
+ * The match count across the whole filtered set, computed by Postgres before
+ * `limit` applies — so one query yields both `total` and `recent`. A fresh
+ * `sql` instance per call so drizzle never has to share one alias across
+ * queries.
+ */
+const overallTotal = () => sql<string>`count(*) over ()`;
+
+/**
+ * Splits `[{...row, overallTotal}]` into `{ total, recent }`. Every row
+ * carries the same window count, so row 0 answers for all of them; zero rows
+ * means zero matches, which is why the empty case is 0 rather than a missing
+ * total.
+ */
+const toSection = <TRow extends object>(
+  rows: (TRow & { overallTotal: string })[],
+): { total: number; recent: TRow[] } => ({
+  total: rows.length === 0 ? 0 : Number(rows[0]?.overallTotal ?? 0),
+  recent: rows.map(({ overallTotal: _overallTotal, ...rest }) => rest as unknown as TRow),
+});
 
 @Injectable()
 export class CustomersRepository {
@@ -466,6 +507,289 @@ export class CustomersRepository {
 
       const result = buildStatement({ from, to, sourceRows });
       return { customerId, customerName: customer.name, ...result };
+    });
+  }
+
+  /**
+   * Everything hanging off one customer, in a single tenant transaction:
+   * eight related-record sections, each a full `total` plus the newest five.
+   *
+   * Query budget is FIXED at 12 regardless of how much history the customer
+   * has — one per section, plus the existence check and three money sums.
+   * Each section query carries its own `count(*) over ()`, which Postgres
+   * computes across the whole match set BEFORE `limit`, so `total` and
+   * `recent` come from one query against one filter and cannot drift apart
+   * the way a separate COUNT eventually does.
+   *
+   * Ordering is `createdAt desc` in every section — deliberately the same
+   * ordering each module's own list endpoint uses, so "the five most recent"
+   * here means the same five that sit at the top of that module's list. Note
+   * `contracts.signedAt` and `maintenance.nextServiceAt` are NOT used for
+   * ordering: signedAt is null for every DRAFT, and nextServiceAt points
+   * forward, not back.
+   */
+  async overview(
+    tenantId: string,
+    customerId: string,
+    sections: readonly OverviewSection[],
+  ): Promise<CustomerOverview> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const [customer] = await tx
+        .select({ id: customers.id })
+        .from(customers)
+        .where(and(eq(customers.id, customerId), isNull(customers.deletedAt)))
+        .limit(1);
+      if (!customer) {
+        throw new NotFoundException('Customer not found');
+      }
+
+      // A section the caller may not see is never queried, let alone
+      // returned. This endpoint reads eight modules' data behind ONE
+      // controller's gate, so without this it hands a dispatcher the AR
+      // ledger that InvoicesController would refuse them.
+      const visible = new Set(sections);
+      const load = async <T>(
+        name: OverviewSection,
+        run: () => Promise<T[]>,
+      ): Promise<T[]> => (visible.has(name) ? run() : []);
+
+      const projectRows = await load('projects', () =>
+        tx
+        .select({
+          id: projects.id,
+          name: projects.name,
+          status: projects.status,
+          city: projects.siteCity,
+          contractValueEtb: projects.contractAmountEtb,
+          overallTotal: overallTotal(),
+        })
+        .from(projects)
+        .where(
+          and(eq(projects.customerId, customerId), isNull(projects.deletedAt)),
+        )
+        .orderBy(desc(projects.createdAt), asc(projects.id))
+        .limit(OVERVIEW_RECENT_LIMIT),
+      );
+
+      const quotationRows = await load('quotations', () =>
+        tx
+        .select({
+          id: quotations.id,
+          quoteNumber: quotations.quoteNumber,
+          status: quotations.status,
+          totalPriceEtb: quotations.totalPriceEtb,
+          createdAt: quotations.createdAt,
+          overallTotal: overallTotal(),
+        })
+        .from(quotations)
+        .where(
+          and(
+            eq(quotations.customerId, customerId),
+            isNull(quotations.deletedAt),
+          ),
+        )
+        .orderBy(desc(quotations.createdAt), asc(quotations.id))
+        .limit(OVERVIEW_RECENT_LIMIT),
+      );
+
+      // proformas/contracts/invoices/payments carry no deletedAt column —
+      // they are append-only document books where cancellation is a status
+      // (CANCELLED / VOID), not a soft delete. Those rows stay visible here
+      // on purpose: a cancelled proforma is history the customer page must
+      // still show. Only the money sums below exclude VOID.
+      const proformaRows = await load('proformas', () =>
+        tx
+        .select({
+          id: proformas.id,
+          proformaNumber: proformas.proformaNumber,
+          status: proformas.status,
+          totalEtb: proformas.totalEtb,
+          issuedAt: proformas.issuedAt,
+          overallTotal: overallTotal(),
+        })
+        .from(proformas)
+        .where(eq(proformas.customerId, customerId))
+        .orderBy(desc(proformas.createdAt), asc(proformas.id))
+        .limit(OVERVIEW_RECENT_LIMIT),
+      );
+
+      const contractRows = await load('contracts', () =>
+        tx
+        .select({
+          id: contracts.id,
+          contractNumber: contracts.contractNumber,
+          status: contracts.status,
+          contractValueEtb: contracts.contractValueEtb,
+          signedAt: contracts.signedAt,
+          overallTotal: overallTotal(),
+        })
+        .from(contracts)
+        .where(eq(contracts.customerId, customerId))
+        .orderBy(desc(contracts.createdAt), asc(contracts.id))
+        .limit(OVERVIEW_RECENT_LIMIT),
+      );
+
+      const invoiceRows = await load('invoices', () =>
+        tx
+        .select({
+          id: invoices.id,
+          invoiceNumber: invoices.invoiceNumber,
+          status: invoices.status,
+          totalEtb: invoices.totalEtb,
+          dueDate: invoices.dueDate,
+          overallTotal: overallTotal(),
+        })
+        .from(invoices)
+        .where(eq(invoices.customerId, customerId))
+        .orderBy(desc(invoices.createdAt), asc(invoices.id))
+        .limit(OVERVIEW_RECENT_LIMIT),
+      );
+
+      const paymentRows = await load('payments', () =>
+        tx
+        .select({
+          id: payments.id,
+          amountEtb: payments.amountEtb,
+          receivedAt: payments.receivedAt,
+          method: payments.method,
+          overallTotal: overallTotal(),
+        })
+        .from(payments)
+        .where(eq(payments.customerId, customerId))
+        .orderBy(desc(payments.createdAt), asc(payments.id))
+        .limit(OVERVIEW_RECENT_LIMIT),
+      );
+
+      const assetRows = await load('assets', () =>
+        tx
+        .select({
+          id: assets.id,
+          category: assets.category,
+          buildingName: assets.buildingName,
+          serialNumber: assets.serialNumber,
+          status: assets.status,
+          overallTotal: overallTotal(),
+        })
+        .from(assets)
+        .where(and(eq(assets.customerId, customerId), isNull(assets.deletedAt)))
+        .orderBy(desc(assets.createdAt), asc(assets.id))
+        .limit(OVERVIEW_RECENT_LIMIT),
+      );
+
+      const maintenanceRows = await load('maintenance', () =>
+        tx
+        .select({
+          id: maintenanceContracts.id,
+          status: maintenanceContracts.status,
+          recurrence: maintenanceContracts.recurrence,
+          nextServiceAt: maintenanceContracts.nextServiceAt,
+          assetId: maintenanceContracts.assetId,
+          overallTotal: overallTotal(),
+        })
+        .from(maintenanceContracts)
+        .where(
+          and(
+            eq(maintenanceContracts.customerId, customerId),
+            isNull(maintenanceContracts.deletedAt),
+          ),
+        )
+        .orderBy(asc(maintenanceContracts.nextServiceAt), asc(maintenanceContracts.id))
+        .limit(OVERVIEW_RECENT_LIMIT),
+      );
+
+      // --- money -------------------------------------------------------
+      // Summed by Postgres over `numeric` (exact decimal arithmetic, no
+      // float anywhere) and read back as a string, then normalized to 2dp
+      // with Decimal — never parsed into a JS number.
+      //
+      // outstandingEtb is Σ(totalEtb − whtEtb − allocated) over non-VOID
+      // invoices, split into two aggregates because joining allocations
+      // onto invoices in one query would multiply the invoice rows. That
+      // is the SAME per-invoice formula agingReport, withOutstanding and
+      // recomputeCustomerBalance already use, so this page can never
+      // disagree with the aging report about what a customer owes. It is
+      // deliberately NOT `customers.outstandingBalanceEtb`, which is the
+      // NET account position (it also subtracts unapplied cash) and would
+      // read as too low here for any customer holding advance payments.
+      const [invoicedRow] = await tx
+        .select({
+          value: sql<string>`coalesce(sum(${invoices.totalEtb} - ${invoices.whtEtb}), 0)`,
+        })
+        .from(invoices)
+        .where(
+          and(eq(invoices.customerId, customerId), ne(invoices.status, 'VOID')),
+        );
+
+      const [allocatedRow] = await tx
+        .select({
+          value: sql<string>`coalesce(sum(${paymentAllocations.amountEtb}), 0)`,
+        })
+        .from(paymentAllocations)
+        .innerJoin(
+          invoices,
+          and(
+            eq(paymentAllocations.tenantId, invoices.tenantId),
+            eq(paymentAllocations.invoiceId, invoices.id),
+          ),
+        )
+        .where(
+          and(eq(invoices.customerId, customerId), ne(invoices.status, 'VOID')),
+        );
+
+      // Unfiltered sum over every payment row, reversals included: a
+      // reversal is a second row holding the EXACT negation of the
+      // original's amount (PaymentsRepository.reverse -> `.negated()`), so
+      // a reversed pair sums to zero and this equals the sum over "live"
+      // payments by construction — not by coincidence. It also stays right
+      // if partial reversals ever land, which excluding both sides of the
+      // pair would not.
+      const [receivedRow] = await tx
+        .select({
+          value: sql<string>`coalesce(sum(${payments.amountEtb}), 0)`,
+        })
+        .from(payments)
+        .where(eq(payments.customerId, customerId));
+
+      const outstandingEtb = new Decimal(invoicedRow?.value ?? 0)
+        .minus(allocatedRow?.value ?? 0)
+        .toFixed(2);
+      const receivedEtb = new Decimal(receivedRow?.value ?? 0).toFixed(2);
+
+      // Sections are OMITTED, not emptied: absent means "not yours to see",
+      // empty means "nothing here", and the page says different things for
+      // the two.
+      return {
+        ...(visible.has('projects') && {
+          projects: toSection<CustomerOverviewProject>(projectRows),
+        }),
+        ...(visible.has('quotations') && {
+          quotations: toSection<CustomerOverviewQuotation>(quotationRows),
+        }),
+        ...(visible.has('proformas') && {
+          proformas: toSection<CustomerOverviewProforma>(proformaRows),
+        }),
+        ...(visible.has('contracts') && {
+          contracts: toSection<CustomerOverviewContract>(contractRows),
+        }),
+        ...(visible.has('invoices') && {
+          invoices: {
+            ...toSection<CustomerOverviewInvoice>(invoiceRows),
+            outstandingEtb,
+          },
+        }),
+        ...(visible.has('payments') && {
+          payments: {
+            ...toSection<CustomerOverviewPayment>(paymentRows),
+            receivedEtb,
+          },
+        }),
+        ...(visible.has('assets') && {
+          assets: toSection<CustomerOverviewAsset>(assetRows),
+        }),
+        ...(visible.has('maintenance') && {
+          maintenance: toSection<CustomerOverviewMaintenance>(maintenanceRows),
+        }),
+      };
     });
   }
 }

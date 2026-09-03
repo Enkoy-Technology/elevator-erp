@@ -1,3 +1,4 @@
+import { OVERVIEW_SECTIONS } from './customer-overview';
 import { NotFoundException } from '@nestjs/common';
 
 import { CustomerInUseError } from '../../common/exceptions';
@@ -450,5 +451,219 @@ describe('CustomersRepository.streamAll — orderBy tiebreaker', () => {
     const orderByArgs = itemsChain.orderBy.mock.calls[0] as unknown[];
     expect(orderByArgs).toHaveLength(2);
     expect(extractOrderByColumnNames(orderByArgs[1])).toContain('id');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// overview() — GET /customers/:id/overview
+// ---------------------------------------------------------------------------
+
+/**
+ * The exact order `overview()` issues its 12 queries in. The fake `select`
+ * hands back one chain per call, so this list IS the wiring — if a query is
+ * added, moved or removed, these tests fail loudly rather than silently
+ * feeding the wrong rows into the wrong section.
+ */
+const OVERVIEW_QUERIES = [
+  'customer',
+  'projects',
+  'quotations',
+  'proformas',
+  'contracts',
+  'invoices',
+  'payments',
+  'assets',
+  'maintenance',
+  'invoiced',
+  'allocated',
+  'received',
+] as const;
+
+type OverviewQuery = (typeof OVERVIEW_QUERIES)[number];
+
+/**
+ * A chain where every builder method returns itself and the chain itself is
+ * awaitable — so it does not matter whether the repository ends a query on
+ * `.limit()`, `.where()` or anything else.
+ */
+const makeAwaitableChain = (rows: unknown[]) => {
+  const chain: Record<string, unknown> = {
+    then: (resolve: (value: unknown[]) => unknown) => resolve(rows),
+  };
+  for (const method of ['from', 'innerJoin', 'where', 'orderBy', 'limit']) {
+    chain[method] = jest.fn(() => chain);
+  }
+  return chain as Record<string, jest.Mock> & { then: unknown };
+};
+
+const overviewRepo = (results: Partial<Record<OverviewQuery, unknown[]>> = {}) => {
+  const chains = OVERVIEW_QUERIES.map((key) => {
+    const fallback =
+      key === 'customer'
+        ? [{ id: CUSTOMER_ID }]
+        : key === 'invoiced' || key === 'allocated' || key === 'received'
+          ? [{ value: '0' }]
+          : [];
+    return makeAwaitableChain(results[key] ?? fallback);
+  });
+  const select = jest.fn();
+  chains.forEach((chain) => select.mockReturnValueOnce(chain));
+  const withTenant = jest.fn(
+    async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ select }),
+  );
+  const repo = new CustomersRepository({ withTenant } as never);
+  const chainFor = (key: OverviewQuery) => chains[OVERVIEW_QUERIES.indexOf(key)]!;
+  return { repo, select, chainFor };
+};
+
+const projectRow = (n: number, total: string) => ({
+  id: `project-${n}`,
+  name: `Tower ${n}`,
+  status: 'EXECUTION',
+  city: 'Addis Ababa',
+  contractValueEtb: '1000.00',
+  overallTotal: total,
+});
+
+describe('CustomersRepository.overview — sections', () => {
+  it('caps each section at five rows and reports the FULL count, not the capped length', async () => {
+    const { repo, chainFor } = overviewRepo({
+      // Seven rows would never come back from the real query (LIMIT 5), but
+      // the window count says twelve — `total` must follow the count, not
+      // the array.
+      projects: [1, 2, 3, 4, 5].map((n) => projectRow(n, '12')),
+      assets: [{ id: 'asset-1', category: 'ELEVATOR', buildingName: null, serialNumber: 'SN-1', status: 'ACTIVE', overallTotal: '3' }],
+    });
+
+    const result = await repo.overview(TENANT_ID, CUSTOMER_ID, [...OVERVIEW_SECTIONS]);
+
+    expect(result.projects!.total).toBe(12);
+    expect(result.projects!.recent).toHaveLength(5);
+    expect(chainFor('projects').limit).toHaveBeenCalledWith(5);
+    // One row shown, three exist — the count is not the array length.
+    expect(result.assets!.total).toBe(3);
+    expect(result.assets!.recent).toHaveLength(1);
+  });
+
+  it('strips the window-count column out of the rows it returns', async () => {
+    const { repo } = overviewRepo({ projects: [projectRow(1, '12')] });
+
+    const result = await repo.overview(TENANT_ID, CUSTOMER_ID, [...OVERVIEW_SECTIONS]);
+
+    expect(result.projects!.recent[0]).toEqual({
+      id: 'project-1',
+      name: 'Tower 1',
+      status: 'EXECUTION',
+      city: 'Addis Ababa',
+      contractValueEtb: '1000.00',
+    });
+    expect(result.projects!.recent[0]).not.toHaveProperty('overallTotal');
+  });
+
+  it('issues a fixed 12 queries no matter how many related rows exist — never one per row', async () => {
+    const { repo, select } = overviewRepo({
+      projects: [1, 2, 3, 4, 5].map((n) => projectRow(n, '4000')),
+      quotations: [1, 2, 3, 4, 5].map((n) => ({ id: `q-${n}`, overallTotal: '900' })),
+      invoices: [1, 2, 3, 4, 5].map((n) => ({ id: `i-${n}`, overallTotal: '7000' })),
+    });
+
+    await repo.overview(TENANT_ID, CUSTOMER_ID, [...OVERVIEW_SECTIONS]);
+
+    expect(select).toHaveBeenCalledTimes(OVERVIEW_QUERIES.length);
+    expect(OVERVIEW_QUERIES.length).toBe(12);
+  });
+
+  it('404s for a customer that does not exist or is soft-deleted, before running any section query', async () => {
+    const { repo, select } = overviewRepo({ customer: [] });
+
+    await expect(repo.overview(TENANT_ID, CUSTOMER_ID, [...OVERVIEW_SECTIONS])).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(select).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CustomersRepository.overview — money', () => {
+  it('outstanding is invoiced minus allocated, exact to the cent', async () => {
+    const { repo } = overviewRepo({
+      invoiced: [{ value: '1234567.89' }],
+      allocated: [{ value: '999999.99' }],
+    });
+
+    const result = await repo.overview(TENANT_ID, CUSTOMER_ID, [...OVERVIEW_SECTIONS]);
+
+    expect(result.invoices!.outstandingEtb).toBe('234567.90');
+    // Why decimal.js and not subtraction: the same sum through JS numbers
+    // does not even produce the right digits, let alone the trailing cent.
+    expect(String(Number('1234567.89') - Number('999999.99'))).not.toBe(
+      '234567.90',
+    );
+  });
+
+  it('keeps full precision at the top of numeric(14,2), where a rounded read would lose cents', async () => {
+    const { repo } = overviewRepo({
+      invoiced: [{ value: '999999999999.99' }],
+      allocated: [{ value: '0.07' }],
+      received: [{ value: '888888888888.80' }],
+    });
+
+    const result = await repo.overview(TENANT_ID, CUSTOMER_ID, [...OVERVIEW_SECTIONS]);
+
+    expect(result.invoices!.outstandingEtb).toBe('999999999999.92');
+    // Trailing zero cent survives — String(Number(...)) would print '...8.8'.
+    expect(result.payments!.receivedEtb).toBe('888888888888.80');
+  });
+
+  it("normalizes Postgres' bare integer sums to two decimals", async () => {
+    const { repo } = overviewRepo({
+      invoiced: [{ value: '5000' }],
+      allocated: [{ value: '0' }],
+      received: [{ value: '5000' }],
+    });
+
+    const result = await repo.overview(TENANT_ID, CUSTOMER_ID, [...OVERVIEW_SECTIONS]);
+
+    expect(result.invoices!.outstandingEtb).toBe('5000.00');
+    expect(result.payments!.receivedEtb).toBe('5000.00');
+  });
+
+  it('reports a customer in credit as a negative figure rather than flooring at zero', async () => {
+    const { repo } = overviewRepo({
+      invoiced: [{ value: '1000.00' }],
+      allocated: [{ value: '1500.00' }],
+    });
+
+    const result = await repo.overview(TENANT_ID, CUSTOMER_ID, [...OVERVIEW_SECTIONS]);
+
+    expect(result.invoices!.outstandingEtb).toBe('-500.00');
+  });
+});
+
+describe('CustomersRepository.overview — a customer with no history', () => {
+  it('returns zeroes and empty arrays rather than throwing, with money as "0.00" and never null', async () => {
+    const { repo } = overviewRepo();
+
+    const result = await repo.overview(TENANT_ID, CUSTOMER_ID, [...OVERVIEW_SECTIONS]);
+
+    expect(result).toEqual({
+      projects: { total: 0, recent: [] },
+      quotations: { total: 0, recent: [] },
+      proformas: { total: 0, recent: [] },
+      contracts: { total: 0, recent: [] },
+      invoices: { total: 0, recent: [], outstandingEtb: '0.00' },
+      payments: { total: 0, recent: [], receivedEtb: '0.00' },
+      assets: { total: 0, recent: [] },
+      maintenance: { total: 0, recent: [] },
+    });
+  });
+
+  it('still returns "0.00" when the aggregate rows come back empty entirely', async () => {
+    const { repo } = overviewRepo({ invoiced: [], allocated: [], received: [] });
+
+    const result = await repo.overview(TENANT_ID, CUSTOMER_ID, [...OVERVIEW_SECTIONS]);
+
+    expect(result.invoices!.outstandingEtb).toBe('0.00');
+    expect(result.payments!.receivedEtb).toBe('0.00');
   });
 });
