@@ -3,11 +3,13 @@
  * `app/layout.tsx` when `isDemoMode()` says so, and never in the on-prem
  * production build.
  *
- * Ethiopian Personal Data Protection Proclamation 1321/2024 Art 22(1)
- * requires personal data collected in Ethiopia to be stored on a server in
- * Ethiopia. The demo runs on Cloud Run and Neon, both abroad, so it is
- * lawful only while every row in it is invented. Do not remove or soften
- * this text; someone clicking through for twenty minutes has to still know.
+ * Says "demonstration system, fictional data" and stops there, by explicit
+ * product decision. The reason it matters is unchanged and is recorded in
+ * render.yaml and the deploy runbook: Proclamation 1321/2024 Art 22(1)
+ * requires personal data collected in Ethiopia to sit on a server in
+ * Ethiopia, and this one is in Virginia. The constraint binds whether or not
+ * the banner recites it — what keeps the deployment lawful is that the data
+ * stays invented, not the wording here.
  *
  * A slim bar rather than a modal, in the brand's own vocabulary: orange
  * carries black text (on #fb9d19 black reads ~11:1, white ~2.2:1), and the
@@ -21,12 +23,7 @@ export const DemoBanner = () => (
       Demo
     </span>
     <p className="min-w-0 text-[12px] leading-snug">
-      <strong className="font-semibold">
-        Demonstration system — every record here is fictional.
-      </strong>{' '}
-      Do not enter real customer, employee or supplier details: this server is
-      outside Ethiopia, where Proclamation 1321/2024 (Art 22) requires personal
-      data collected in Ethiopia to stay.
+      Demonstration system — every record here is fictional.
     </p>
   </div>
 );
