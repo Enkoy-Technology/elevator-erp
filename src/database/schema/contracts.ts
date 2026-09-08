@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   date,
   foreignKey,
   integer,
@@ -79,6 +80,32 @@ export const contracts = pgTable(
      * modernisation or a service-only agreement may carry none.
      */
     warrantyMonths: integer('warranty_months'),
+
+    // The clauses the company's own paper contract states as numbers (their
+    // Articles 3, 5, 6 and 7). Nullable: a clause with no value prints
+    // nothing rather than a blank to fill in by hand.
+    /** Article 3.2: equipment on site within N working days of the effective date. */
+    deliveryWorkingDays: integer('delivery_working_days'),
+    /** Article 3.3: erection and commissioning within N working days of site readiness. */
+    installationWorkingDays: integer('installation_working_days'),
+    /** Article 7.1: percent of the contract price per day of delay, e.g. 0.020. */
+    delayPenaltyPercentPerDay: numeric('delay_penalty_percent_per_day', {
+      precision: 6,
+      scale: 3,
+    }),
+    /** Article 7.1: the penalty ceiling as a percent of the contract price, e.g. 5.00. */
+    delayPenaltyCapPercent: numeric('delay_penalty_cap_percent', {
+      precision: 5,
+      scale: 2,
+    }),
+    /** Article 5.1: the advance is released only against a guarantee cheque of equal value. */
+    advanceGuaranteeRequired: boolean('advance_guarantee_required')
+      .notNull()
+      .default(false),
+    /** Article 6.2: months of free preventive service and repairs after handover. */
+    freeMaintenanceMonths: integer('free_maintenance_months'),
+    /** Article 8.2: where an unsettled dispute goes, e.g. the Addis Ababa Chamber of Commerce. */
+    disputeForum: text('dispute_forum'),
 
     status: contractStatusEnum('status').notNull().default('DRAFT'),
     /** Null while DRAFT. Set once, when the parties actually sign. */

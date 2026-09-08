@@ -82,7 +82,7 @@ export const PAYMENTS_EXPORT_COLUMNS: ColumnDef[] = [
 @ApiTags('payments')
 @ApiBearerAuth('access-token')
 @Controller('payments')
-@Roles('GENERAL_MANAGER', 'FINANCE')
+@Roles('GENERAL_MANAGER', 'FINANCE_OFFICER')
 export class PaymentsController {
   constructor(
     private readonly paymentsService: PaymentsService,

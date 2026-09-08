@@ -198,10 +198,10 @@ const downloadCsv = (
 const OPEN_STATUSES = new Set<InvoiceStatus>(['ISSUED', 'PARTIALLY_PAID']);
 
 /** Mirrors InvoicesController/PaymentsController's class-level
- *  @Roles('FINANCE') (no per-route override on any mutation route);
+ *  @Roles('FINANCE_OFFICER') (no per-route override on any mutation route);
  *  CEO/ADMIN bypass via RolesGuard's SUPER_ROLES. */
 const canManageFinance = (role: UserRole | null): boolean =>
-  role === 'FINANCE' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
+  role === 'FINANCE_OFFICER' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
 
 /**
  * The list's Outstanding column — GET /invoices now returns an exact,

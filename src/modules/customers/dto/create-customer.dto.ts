@@ -6,6 +6,7 @@ import {
   IsEnum,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
   Validate,
@@ -31,6 +32,11 @@ export class CreateCustomerDto {
   @IsString()
   @MaxLength(200)
   legalName?: string;
+
+  @ApiPropertyOptional({ example: '0067673517', description: 'Tax Identification Number, printed on contracts.' })
+  @IsOptional()
+  @Matches(/^\d{10}$/, { message: 'tinNumber must be the 10-digit Ethiopian TIN' })
+  tinNumber?: string;
 
   @ApiPropertyOptional({ example: 'ops@addisheights.et' })
   @IsOptional()

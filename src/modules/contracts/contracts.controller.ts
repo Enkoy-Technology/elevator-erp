@@ -78,7 +78,7 @@ const CONTRACT_DOCUMENT_COLUMNS: ColumnDef[] = [
 @ApiTags('contracts')
 @ApiBearerAuth('access-token')
 @Controller()
-@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
+@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER', 'SECRETARY')
 export class ContractsController {
   constructor(
     private readonly contractsService: ContractsService,

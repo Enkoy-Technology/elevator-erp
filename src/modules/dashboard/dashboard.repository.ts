@@ -99,7 +99,7 @@ const SALES_ROLES: readonly UserRole[] = [
   'GENERAL_MANAGER',
   'ADMIN',
   'SALES_MANAGER',
-  'FINANCE',
+  'FINANCE_OFFICER',
 ];
 
 /** Roles that may see the accounts-receivable book. */
@@ -107,7 +107,7 @@ const FINANCE_ROLES: readonly UserRole[] = [
   'CEO',
   'GENERAL_MANAGER',
   'ADMIN',
-  'FINANCE',
+  'FINANCE_OFFICER',
 ];
 
 /** Roles that run or dispatch service work. */
@@ -115,9 +115,8 @@ const SERVICE_ROLES: readonly UserRole[] = [
   'CEO',
   'GENERAL_MANAGER',
   'ADMIN',
-  'TECHNICAL_LEAD',
-  'FIELD_ENGINEER',
-  'DISPATCHER',
+  'TECHNICAL_MANAGER',
+  'MAINTENANCE_ENGINEER',
 ];
 
 /**
@@ -130,9 +129,9 @@ const TOTALS_ROLES: readonly UserRole[] = [
   'GENERAL_MANAGER',
   'ADMIN',
   'SALES_MANAGER',
-  'FINANCE',
-  'TECHNICAL_LEAD',
-  'WAREHOUSE_MANAGER',
+  'FINANCE_OFFICER',
+  'TECHNICAL_MANAGER',
+  'STORE_KEEPER',
 ];
 
 /** Stages a project can still be won from — excludes COMPLETED and CANCELLED. */

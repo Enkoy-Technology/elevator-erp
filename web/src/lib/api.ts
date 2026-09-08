@@ -49,14 +49,17 @@ export const getAccessToken = (): string | null =>
 export type UserRole =
   | 'CEO'
   | 'GENERAL_MANAGER'
-  | 'ADMIN'
+  | 'MARKETING_MANAGER'
   | 'SALES_MANAGER'
-  | 'TECHNICAL_LEAD'
-  | 'FIELD_ENGINEER'
-  | 'FINANCE'
-  | 'WAREHOUSE_MANAGER'
-  | 'DISPATCHER'
-  | 'CUSTOMER';
+  | 'SALESPERSON'
+  | 'FINANCE_OFFICER'
+  | 'OFFICE_MANAGER'
+  | 'TECHNICAL_MANAGER'
+  | 'MAINTENANCE_ENGINEER'
+  | 'STORE_KEEPER'
+  | 'SECRETARY'
+  | 'CUSTOMER'
+  | 'ADMIN';
 
 /**
  * Role straight off the access token, for deciding what to render. Presentation
@@ -295,6 +298,8 @@ export interface Customer {
   tenantId: string;
   name: string;
   legalName: string | null;
+  /** Tax Identification Number, printed on contracts. */
+  tinNumber: string | null;
   email: string | null;
   phone: string | null;
   alternatePhone: string | null;
@@ -320,6 +325,7 @@ export interface Customer {
 
 export interface CreateCustomerPayload {
   name: string;
+  tinNumber?: string;
   email?: string;
   phone?: string;
   city?: string;
@@ -596,12 +602,15 @@ export const NEXT_PROJECT_STATUSES: Record<
 export const EMPLOYEE_ROLES = [
   'CEO',
   'GENERAL_MANAGER',
+  'MARKETING_MANAGER',
   'SALES_MANAGER',
-  'TECHNICAL_LEAD',
-  'FIELD_ENGINEER',
-  'FINANCE',
-  'WAREHOUSE_MANAGER',
-  'DISPATCHER',
+  'SALESPERSON',
+  'FINANCE_OFFICER',
+  'OFFICE_MANAGER',
+  'TECHNICAL_MANAGER',
+  'MAINTENANCE_ENGINEER',
+  'STORE_KEEPER',
+  'SECRETARY',
   'ADMIN',
 ] as const;
 
@@ -759,6 +768,8 @@ export interface Asset {
   name: string;
   buildingName: string | null;
   serialNumber: string | null;
+  /** One attribute per line; printed as the elevator specification on the maintenance agreement. */
+  specSummary: string | null;
   locationNotes: string | null;
   status: AssetStatus;
   notes: string | null;
@@ -773,6 +784,7 @@ export interface CreateAssetPayload {
   name: string;
   buildingName?: string;
   serialNumber?: string;
+  specSummary?: string;
   locationNotes?: string;
   notes?: string;
 }
@@ -818,6 +830,7 @@ export const updateAsset = (
     name?: string;
     buildingName?: string | null;
     serialNumber?: string | null;
+    specSummary?: string | null;
     locationNotes?: string | null;
     status?: AssetStatus;
     notes?: string | null;
@@ -927,8 +940,26 @@ export interface MaintenanceContract {
   lastServiceAt: string | null;
   assignedUserId: string | null;
   notes: string | null;
+  monthlyFeeEtb: string | null;
+  feeIncludesVat: boolean;
+  termMonths: number;
+  autoRenews: boolean;
+  noticeDays: number;
+  cureDays: number;
+  scopeOfWork: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** The commercial terms printed on the Maintenance & Service Agreement. */
+export interface MaintenanceContractTerms {
+  monthlyFeeEtb?: string;
+  feeIncludesVat?: boolean;
+  termMonths?: number;
+  autoRenews?: boolean;
+  noticeDays?: number;
+  cureDays?: number;
+  scopeOfWork?: string;
 }
 
 export interface Breakdown {
@@ -969,14 +1000,19 @@ export const listMaintenanceContracts = (options?: {
   );
 };
 
-export const createMaintenanceContract = (payload: {
-  assetId: string;
-  recurrence?: MaintenanceRecurrence;
-  startDate: string;
-  nextServiceAt: string;
-  assignedUserId?: string;
-  notes?: string;
-}): Promise<MaintenanceContract> =>
+export const getMaintenanceContract = (id: string): Promise<MaintenanceContract> =>
+  apiFetch<MaintenanceContract>(`/maintenance/contracts/${id}`);
+
+export const createMaintenanceContract = (
+  payload: MaintenanceContractTerms & {
+    assetId: string;
+    recurrence?: MaintenanceRecurrence;
+    startDate: string;
+    nextServiceAt: string;
+    assignedUserId?: string;
+    notes?: string;
+  },
+): Promise<MaintenanceContract> =>
   apiFetch<MaintenanceContract>('/maintenance/contracts', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -990,12 +1026,26 @@ export const updateMaintenanceContract = (
     nextServiceAt?: string;
     assignedUserId?: string | null;
     notes?: string | null;
+    monthlyFeeEtb?: string | null;
+    feeIncludesVat?: boolean;
+    termMonths?: number;
+    autoRenews?: boolean;
+    noticeDays?: number;
+    cureDays?: number;
+    scopeOfWork?: string | null;
   },
 ): Promise<MaintenanceContract> =>
   apiFetch<MaintenanceContract>(`/maintenance/contracts/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
   });
+
+/** The printed Maintenance & Service Agreement, for signing on paper. */
+export const downloadMaintenanceAgreement = (id: string): Promise<void> =>
+  downloadDocument(
+    `/maintenance/contracts/${id}/agreement?format=pdf`,
+    `maintenance-agreement-${id.slice(0, 8)}.pdf`,
+  );
 
 /**
  * The three named fields are the client's own Maintenance Form; `notes`
@@ -1832,7 +1882,7 @@ export interface InvoiceListRow extends Invoice {
 }
 
 /** POST /proformas/:id/convert-to-invoice — lives on InvoicesController
- *  (@Roles('FINANCE')), not ProformasController, despite the URL prefix. */
+ *  (@Roles('FINANCE_OFFICER')), not ProformasController, despite the URL prefix. */
 export const convertProformaToInvoice = (
   proformaId: string,
   dueDate?: string,
@@ -2140,7 +2190,7 @@ export interface CustomerStatement {
   rows: StatementRow[];
 }
 
-/** GET /customers/:id/statement — narrowed to @Roles('FINANCE') at the
+/** GET /customers/:id/statement — narrowed to @Roles('FINANCE_OFFICER') at the
  *  route level, overriding CustomersController's wider class-level roles.
  *  customerId is encoded into the path and from/to go through
  *  URLSearchParams (not raw template interpolation) — both values only ever
@@ -2290,6 +2340,14 @@ export interface Contract {
   scopeOfWork: string | null;
   termsAndConditions: string | null;
   warrantyMonths: number | null;
+  deliveryWorkingDays: number | null;
+  installationWorkingDays: number | null;
+  /** Percent of the contract price per day, as a decimal string ("0.020"). */
+  delayPenaltyPercentPerDay: string | null;
+  delayPenaltyCapPercent: string | null;
+  advanceGuaranteeRequired: boolean;
+  freeMaintenanceMonths: number | null;
+  disputeForum: string | null;
   status: ContractStatus;
   signedAt: string | null;
   handedOverAt: string | null;
@@ -2368,6 +2426,13 @@ export const updateContract = (
     scopeOfWork?: string | null;
     termsAndConditions?: string | null;
     warrantyMonths?: number | null;
+    deliveryWorkingDays?: number | null;
+    installationWorkingDays?: number | null;
+    delayPenaltyPercentPerDay?: string | null;
+    delayPenaltyCapPercent?: string | null;
+    advanceGuaranteeRequired?: boolean;
+    freeMaintenanceMonths?: number | null;
+    disputeForum?: string | null;
   },
 ): Promise<Contract> =>
   apiFetch<Contract>(`/contracts/${id}`, {

@@ -66,7 +66,10 @@ export const PROJECTS_EXPORT_COLUMNS: ColumnDef[] = [
 @ApiTags('projects')
 @ApiBearerAuth('access-token')
 @Controller('projects')
-@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
+// Spec §5.3 Projects (View All): Sales and Technical; Field Engineer sees
+// them too (the spec says "assigned" — there is no crew assignment yet, so
+// all). Finance reads proformas and contracts instead.
+@Roles('GENERAL_MANAGER', 'MARKETING_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'SECRETARY')
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
@@ -136,7 +139,7 @@ export class ProjectsController {
   }
 
   @Post()
-  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'MARKETING_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER')
   @ApiOperation({ summary: 'Create project/lead (starts at LEAD)' })
   create(
     @CurrentUser() user: AuthenticatedUser,
@@ -146,7 +149,7 @@ export class ProjectsController {
   }
 
   @Patch(':id/status')
-  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER')
   @ApiOperation({
     summary: 'Advance or cancel project via status DAG, optionally with the deal value',
   })

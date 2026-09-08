@@ -183,14 +183,27 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 /** Mirrors @Roles('SALES_MANAGER') on the quotations/proformas mutation
  *  routes; CEO and ADMIN bypass via RolesGuard's SUPER_ROLES. */
 const canWrite = (role: UserRole | null): boolean =>
-  role === 'SALES_MANAGER' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
+  role === 'SALES_MANAGER' ||
+  role === 'SALESPERSON' ||
+  role === 'CEO' ||
+  role === 'GENERAL_MANAGER' ||
+  role === 'ADMIN';
 
-/** Mirrors @Roles('FINANCE') on InvoicesController (class-level, no
+/** Approval, conversion, contract issue and cancellation are the Sales
+ *  Manager's ("quotation approval, pricing approval" in the requirement
+ *  document); a Salesperson prepares and submits. */
+const canApproveQuotes = (role: UserRole | null): boolean =>
+  role === 'SALES_MANAGER' ||
+  role === 'CEO' ||
+  role === 'GENERAL_MANAGER' ||
+  role === 'ADMIN';
+
+/** Mirrors @Roles('FINANCE_OFFICER') on InvoicesController (class-level, no
  *  per-route override) — POST /proformas/:id/convert-to-invoice lives on
  *  that controller, not ProformasController, so it needs its own gate
  *  distinct from canWrite's SALES_MANAGER check above. */
 const canConvertToInvoice = (role: UserRole | null): boolean =>
-  role === 'FINANCE' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
+  role === 'FINANCE_OFFICER' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
 
 export default function QuotationsPage() {
   const router = useRouter();
@@ -501,6 +514,7 @@ export default function QuotationsPage() {
   };
 
   const canMutate = canWrite(role);
+  const canApprove = canApproveQuotes(role);
   const canInvoice = canConvertToInvoice(role);
 
   // Money goes out as the raw decimal string, not formatEtb's display form —
@@ -589,7 +603,7 @@ export default function QuotationsPage() {
             Submit
           </button>
         ) : null}
-        {canMutate && quote.status === 'PENDING_APPROVAL' ? (
+        {canApprove && quote.status === 'PENDING_APPROVAL' ? (
           <button
             type="button"
             disabled={busy}
@@ -599,7 +613,7 @@ export default function QuotationsPage() {
             Approve
           </button>
         ) : null}
-        {canMutate && quote.status === 'APPROVED' ? (
+        {canApprove && quote.status === 'APPROVED' ? (
           <button
             type="button"
             disabled={busy}
@@ -620,7 +634,7 @@ export default function QuotationsPage() {
             Reject already prompts for a mandatory reason, which IS its
             confirmation — a second confirm on top would just be a click to
             dismiss. Expire has no prompt, so it gets the two-step swap. */}
-        {canMutate && quote.status === 'PENDING_APPROVAL' ? (
+        {canApprove && quote.status === 'PENDING_APPROVAL' ? (
           <RowAction
             icon={XCircle}
             tone="danger"
@@ -629,7 +643,7 @@ export default function QuotationsPage() {
             onClick={() => onReject(quote)}
           />
         ) : null}
-        {canMutate && (quote.status === 'DRAFT' || quote.status === 'PENDING_APPROVAL') ? (
+        {canApprove && (quote.status === 'DRAFT' || quote.status === 'PENDING_APPROVAL') ? (
           confirmExpireId === quote.id ? (
             <>
               <RowAction
@@ -677,7 +691,7 @@ export default function QuotationsPage() {
             → Invoice
           </button>
         ) : null}
-        {canMutate && proforma.status === 'ISSUED' ? (
+        {canApprove && proforma.status === 'ISSUED' ? (
           <button
             type="button"
             disabled={busy}
@@ -696,7 +710,7 @@ export default function QuotationsPage() {
         )}
         {/* Cancel is a proforma's destructive equivalent — a proforma is
             never deleted. Its reason prompt is the confirmation step. */}
-        {canMutate && proforma.status === 'ISSUED' ? (
+        {canApprove && proforma.status === 'ISSUED' ? (
           <RowAction
             icon={Ban}
             tone="danger"

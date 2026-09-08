@@ -18,6 +18,7 @@ describe('CustomersService', () => {
     name: 'Addis Heights PLC',
     nameNormalized: 'addis heights plc',
     legalName: null,
+    tinNumber: null,
     email: 'ops@addisheights.et',
     phone: '+251949922604',
     alternatePhone: null,
@@ -168,7 +169,7 @@ describe('CustomersService', () => {
     // customer page must not work either.
     repo.overview.mockResolvedValue({});
 
-    await service.overview({ ...user, role: 'DISPATCHER' }, sample.id);
+    await service.overview({ ...user, role: 'MAINTENANCE_ENGINEER' }, sample.id);
 
     expect(repo.overview).toHaveBeenCalledWith(user.tenantId, sample.id, [
       'assets',
@@ -179,7 +180,7 @@ describe('CustomersService', () => {
   it('gives finance the AR ledger and nothing operational', async () => {
     repo.overview.mockResolvedValue({});
 
-    await service.overview({ ...user, role: 'FINANCE' }, sample.id);
+    await service.overview({ ...user, role: 'FINANCE_OFFICER' }, sample.id);
 
     expect(repo.overview).toHaveBeenCalledWith(user.tenantId, sample.id, [
       'projects',

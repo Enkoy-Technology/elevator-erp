@@ -24,6 +24,7 @@ import { CurrentUser, Roles } from '../../common/decorators';
 import { DocumentPdfService } from '../../common/export/document-pdf.service';
 import { parseDocumentFormat } from '../../common/export/document-format';
 import { parseExportFormat } from '../../common/export/export-query.dto';
+import { MAINTENANCE_AGREEMENT_TEMPLATE } from '../../common/export/templates/maintenance-agreement.template';
 import { MAINTENANCE_REPORT_TEMPLATE } from '../../common/export/templates/maintenance-report.template';
 import { TenantBrandingProvider } from '../../common/export/tenant-branding.provider';
 import {
@@ -78,7 +79,7 @@ export const BREAKDOWNS_EXPORT_COLUMNS: ColumnDef[] = [
 @ApiTags('maintenance')
 @ApiBearerAuth('access-token')
 @Controller('maintenance')
-@Roles('GENERAL_MANAGER', 'TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER')
+@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'SECRETARY')
 export class MaintenanceController {
   constructor(
     private readonly maintenanceService: MaintenanceService,
@@ -87,6 +88,7 @@ export class MaintenanceController {
   ) {}
 
   @Get('contracts')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'FINANCE_OFFICER')
   @ApiOperation({
     summary:
       'List maintenance contracts (status/customerId filter + pagination), or stream a CSV/XLSX export with ?format=',
@@ -137,7 +139,10 @@ export class MaintenanceController {
   }
 
   @Post('contracts')
-  @Roles('GENERAL_MANAGER', 'TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER')
+  // Spec §5.3 "Maint. Contracts (Create/Edit)": CEO, Sales, Finance, Admin.
+  // Field roles log visits and work tickets; the agreement itself is a
+  // commercial document.
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER')
   @ApiOperation({ summary: 'Create maintenance contract on an asset' })
   createContract(
     @CurrentUser() user: AuthenticatedUser,
@@ -147,7 +152,7 @@ export class MaintenanceController {
   }
 
   @Patch('contracts/:id')
-  @Roles('GENERAL_MANAGER', 'TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER')
   @ApiOperation({ summary: 'Update maintenance contract' })
   updateContract(
     @CurrentUser() user: AuthenticatedUser,
@@ -158,7 +163,7 @@ export class MaintenanceController {
   }
 
   @Post('contracts/:id/visits')
-  @Roles('GENERAL_MANAGER', 'TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER')
+  @Roles('GENERAL_MANAGER', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER')
   @ApiOperation({ summary: 'Log a service visit and advance schedule' })
   logVisit(
     @CurrentUser() user: AuthenticatedUser,
@@ -168,7 +173,18 @@ export class MaintenanceController {
     return this.maintenanceService.logVisit(user, id, dto);
   }
 
+  @Get('contracts/:id')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'FINANCE_OFFICER')
+  @ApiOperation({ summary: 'One maintenance contract' })
+  getContract(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.maintenanceService.getContract(user, id);
+  }
+
   @Get('contracts/:id/visits')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'FINANCE_OFFICER')
   @ApiOperation({ summary: 'List visits for a contract (paginated)' })
   listVisits(
     @CurrentUser() user: AuthenticatedUser,
@@ -177,6 +193,39 @@ export class MaintenanceController {
     @Query('pageSize') pageSize?: string,
   ) {
     return this.maintenanceService.listVisits(user, id, { page, pageSize });
+  }
+
+  @Get('contracts/:id/agreement')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'FINANCE_OFFICER')
+  @ApiOperation({
+    summary:
+      'Download the Maintenance & Service Agreement for a contract (?format=pdf). The signed paper copy is the binding one.',
+  })
+  async contractAgreement(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('format') formatRaw: string | undefined,
+    @Res({ passthrough: false }) res: Response,
+  ): Promise<void> {
+    if (parseDocumentFormat(formatRaw) !== 'pdf') {
+      throw new BadRequestException(
+        'The maintenance agreement is available as pdf only',
+      );
+    }
+    const data = await this.maintenanceService.getContractDocumentData(user, id);
+    const branding = await this.tenantBranding.get(user.tenantId);
+    const buf = await this.pdfService.renderDocumentPdf(
+      MAINTENANCE_AGREEMENT_TEMPLATE,
+      data,
+      branding,
+    );
+    setDownloadHeaders(
+      res,
+      `maintenance-agreement-${id.slice(0, 8)}`,
+      'pdf',
+      'application/pdf',
+    );
+    res.end(buf);
   }
 
   @Get('visits/:id/report')
@@ -251,7 +300,7 @@ export class MaintenanceController {
   }
 
   @Post('breakdowns')
-  @Roles('GENERAL_MANAGER', 'TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'SECRETARY')
   @ApiOperation({ summary: 'Open a breakdown ticket' })
   createBreakdown(
     @CurrentUser() user: AuthenticatedUser,
@@ -261,7 +310,7 @@ export class MaintenanceController {
   }
 
   @Patch('breakdowns/:id')
-  @Roles('GENERAL_MANAGER', 'TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER')
+  @Roles('GENERAL_MANAGER', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER')
   @ApiOperation({ summary: 'Update breakdown (assign / complete)' })
   updateBreakdown(
     @CurrentUser() user: AuthenticatedUser,

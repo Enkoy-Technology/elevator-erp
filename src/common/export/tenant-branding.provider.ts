@@ -33,12 +33,13 @@ export class TenantBrandingProvider {
         .where(eq(tenantBranding.tenantId, tenantId))
         .limit(1);
       const [tenant] = await tx
-        .select({ name: tenants.name })
+        .select({ name: tenants.name, taxId: tenants.taxId })
         .from(tenants)
         .where(eq(tenants.id, tenantId))
         .limit(1);
       return {
         name: tenant?.name ?? '',
+        taxId: tenant?.taxId ?? null,
         // renderLayout/docx both treat an empty slogan as "omit the line".
         slogan: branding?.slogan ?? '',
         logoUrl: branding?.logoUrl ?? null,

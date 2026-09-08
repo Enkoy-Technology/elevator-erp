@@ -10,6 +10,8 @@ import {
   Check,
   CheckCircle2,
   ClipboardCheck,
+  FileDown,
+  Pencil,
   UserPlus,
   X,
 } from 'lucide-react';
@@ -26,6 +28,7 @@ import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
 import {
   ApiError,
+  downloadMaintenanceAgreement,
   getAccessToken,
   getCurrentRole,
   listAssets,
@@ -54,18 +57,9 @@ const allows = (role: UserRole | null, allowed: readonly UserRole[]): boolean =>
   role !== null && (role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN' || allowed.includes(role));
 
 /** Mirrors @Roles on PATCH /maintenance/contracts/:id. */
-const CONTRACT_WRITE_ROLES: readonly UserRole[] = [
-  'TECHNICAL_LEAD',
-  'FIELD_ENGINEER',
-  'DISPATCHER',
-  'SALES_MANAGER',
-];
+const CONTRACT_WRITE_ROLES: readonly UserRole[] = ['SALES_MANAGER', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER'];
 /** POST contracts/:id/visits and PATCH breakdowns/:id — no SALES_MANAGER. */
-const FIELD_WRITE_ROLES: readonly UserRole[] = [
-  'TECHNICAL_LEAD',
-  'FIELD_ENGINEER',
-  'DISPATCHER',
-];
+const FIELD_WRITE_ROLES: readonly UserRole[] = ['TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER'];
 
 /** Severity is the response clock, so it reads as colour, not as text. */
 const SEVERITY_TONE: Record<
@@ -393,6 +387,24 @@ export default function MaintenancePage() {
         const label = assetName(contract.assetId);
         return (
           <div className="flex items-center justify-end gap-0.5">
+            <RowAction
+              icon={FileDown}
+              label={`Download the maintenance agreement for ${label}`}
+              onClick={() =>
+                void downloadMaintenanceAgreement(contract.id).catch((err: unknown) =>
+                  setError(err instanceof ApiError ? err.message : 'Download failed'),
+                )
+              }
+            />
+            {canWriteContracts && contract.status !== 'ENDED' ? (
+              <RowAction
+                icon={Pencil}
+                label={`Edit the contract on ${label}`}
+                onClick={() =>
+                  router.push(`/maintenance/contracts/${contract.id}/edit`)
+                }
+              />
+            ) : null}
             {canWorkField && contract.status === 'ACTIVE' ? (
               <RowAction
                 icon={ClipboardCheck}

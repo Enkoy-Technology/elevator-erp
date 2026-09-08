@@ -108,7 +108,7 @@ export const CUSTOMERS_EXPORT_COLUMNS: ColumnDef[] = [
 @Controller('customers')
 // Class-level @Roles is the read gate; per-route @Roles below narrows writes.
 // CEO and ADMIN bypass both (RolesGuard SUPER_ROLES).
-@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE', 'DISPATCHER')
+@Roles('GENERAL_MANAGER', 'MARKETING_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'FINANCE_OFFICER', 'SECRETARY')
 export class CustomersController {
   constructor(
     private readonly customersService: CustomersService,
@@ -150,7 +150,7 @@ export class CustomersController {
   }
 
   @Post('check-duplicate')
-  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'MARKETING_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'SECRETARY')
   @ApiOperation({
     summary: 'Warn about look-alike customers before create (advisory only)',
   })
@@ -193,7 +193,7 @@ export class CustomersController {
   }
 
   @Get(':id/statement')
-  @Roles('GENERAL_MANAGER', 'FINANCE')
+  @Roles('GENERAL_MANAGER', 'FINANCE_OFFICER')
   @ApiOperation({
     summary:
       'Chronological AR statement between from/to (inclusive) with a running balance, or a CSV/XLSX/PDF export with ?format=',
@@ -249,7 +249,7 @@ export class CustomersController {
   }
 
   @Post()
-  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'MARKETING_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'SECRETARY')
   @ApiOperation({ summary: 'Create customer' })
   create(
     @CurrentUser() user: AuthenticatedUser,
@@ -259,7 +259,7 @@ export class CustomersController {
   }
 
   @Patch(':id')
-  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
+  @Roles('GENERAL_MANAGER', 'MARKETING_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'SECRETARY')
   @ApiOperation({ summary: 'Update customer' })
   update(
     @CurrentUser() user: AuthenticatedUser,

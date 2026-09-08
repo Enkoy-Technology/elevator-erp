@@ -35,6 +35,7 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
   const [name, setName] = useState(customer?.name ?? '');
   const [email, setEmail] = useState(customer?.email ?? '');
   const [phone, setPhone] = useState(customer?.phone ?? '');
+  const [tinNumber, setTinNumber] = useState(customer?.tinNumber ?? '');
   const [city, setCity] = useState(customer?.city ?? (customer ? '' : 'Addis Ababa'));
   const [customerType, setCustomerType] = useState<CustomerType>(
     customer?.customerType ?? 'COMMERCIAL',
@@ -78,6 +79,7 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
         name,
         email: email || undefined,
         phone: phone || undefined,
+        tinNumber: tinNumber.trim() || undefined,
         city: city || undefined,
         customerType,
         // Omit unless the operator actually toggled it — this is a
@@ -235,6 +237,18 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
             className={fieldClass}
             value={city}
             onChange={(e) => setCity(e.target.value)}
+          />
+        </Field>
+        <Field label="TIN" htmlFor="tinNumber" hint="Printed in the parties clause of contracts.">
+          <input
+            id="tinNumber"
+            inputMode="numeric"
+            pattern="\d{10}"
+            title="10-digit TIN"
+            maxLength={10}
+            className={fieldClass}
+            value={tinNumber}
+            onChange={(e) => setTinNumber(e.target.value)}
           />
         </Field>
       </FormSection>

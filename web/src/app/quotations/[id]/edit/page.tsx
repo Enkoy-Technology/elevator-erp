@@ -39,7 +39,11 @@ import { PriceBox } from './price-box';
 
 /** Mirrors @Roles('SALES_MANAGER'); CEO and ADMIN bypass via SUPER_ROLES. */
 const canWrite = (role: UserRole | null): boolean =>
-  role === 'SALES_MANAGER' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
+  role === 'SALES_MANAGER' ||
+  role === 'SALESPERSON' ||
+  role === 'CEO' ||
+  role === 'GENERAL_MANAGER' ||
+  role === 'ADMIN';
 
 interface TermRow {
   label: string;

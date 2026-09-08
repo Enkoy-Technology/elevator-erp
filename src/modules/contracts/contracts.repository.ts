@@ -23,6 +23,7 @@ import {
   contracts,
   customers,
   documentSequences,
+  proformaLines,
   proformas,
   projects,
   tenants,
@@ -40,6 +41,27 @@ export type ContractListRow = ContractRecord & {
   projectName: string | null;
 };
 
+/** The customer's details as the contract's parties clause prints them. */
+export interface ContractCustomerDetails {
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  phone: string | null;
+  tinNumber: string | null;
+}
+
+/** One proforma line, as the contract's Article 2 prints it. */
+export type ContractEquipmentRow = Pick<
+  typeof proformaLines.$inferSelect,
+  | 'quantity'
+  | 'productType'
+  | 'specSummary'
+  | 'machineRoomLabel'
+  | 'tractionMachineType'
+  | 'controlSystem'
+  | 'powerSupply'
+>;
+
 /** `document_sequences.kind` for this document type — see the table's own doc comment. */
 const CONTRACT_SEQUENCE_KIND = 'CONTRACT';
 
@@ -49,6 +71,20 @@ const CONTRACT_SEQUENCE_KIND = 'CONTRACT';
  * certificates were issued against.
  */
 const CANCELLABLE: readonly ContractStatus[] = ['DRAFT', 'SIGNED'];
+
+/** The columns `updateDraft` may touch — the negotiable text and clauses of a DRAFT. */
+const DRAFT_EDITABLE = [
+  'scopeOfWork',
+  'termsAndConditions',
+  'warrantyMonths',
+  'deliveryWorkingDays',
+  'installationWorkingDays',
+  'delayPenaltyPercentPerDay',
+  'delayPenaltyCapPercent',
+  'advanceGuaranteeRequired',
+  'freeMaintenanceMonths',
+  'disputeForum',
+] as const;
 
 /** The filters `list`, `streamAll` and the export all honor, in one place. */
 interface ContractFilters {
@@ -273,23 +309,27 @@ export class ContractsRepository {
       scopeOfWork?: string | null;
       termsAndConditions?: string | null;
       warrantyMonths?: number | null;
+      deliveryWorkingDays?: number | null;
+      installationWorkingDays?: number | null;
+      delayPenaltyPercentPerDay?: string | null;
+      delayPenaltyCapPercent?: string | null;
+      advanceGuaranteeRequired?: boolean;
+      freeMaintenanceMonths?: number | null;
+      disputeForum?: string | null;
     },
   ): Promise<ContractRecord> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
+      // Only the negotiable clauses, by name: the allow-list is what keeps a
+      // future DTO field from becoming writable here by accident. undefined
+      // means "leave alone".
+      const set = Object.fromEntries(
+        DRAFT_EDITABLE.flatMap((key) =>
+          patch[key] === undefined ? [] : [[key, patch[key]]],
+        ),
+      );
       const [row] = await tx
         .update(contracts)
-        .set({
-          ...(patch.scopeOfWork !== undefined
-            ? { scopeOfWork: patch.scopeOfWork }
-            : {}),
-          ...(patch.termsAndConditions !== undefined
-            ? { termsAndConditions: patch.termsAndConditions }
-            : {}),
-          ...(patch.warrantyMonths !== undefined
-            ? { warrantyMonths: patch.warrantyMonths }
-            : {}),
-          updatedAt: new Date(),
-        })
+        .set({ ...set, updatedAt: new Date() })
         .where(and(eq(contracts.id, id), eq(contracts.status, 'DRAFT')))
         .returning();
       if (!row) {
@@ -368,6 +408,49 @@ export class ContractsRepository {
       }
       return row;
     });
+  }
+
+  /** The customer's address, phone and TIN for the parties clause. */
+  async findCustomerDetails(
+    tenantId: string,
+    customerId: string,
+  ): Promise<ContractCustomerDetails | null> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const [row] = await tx
+        .select({
+          addressLine1: customers.addressLine1,
+          addressLine2: customers.addressLine2,
+          city: customers.city,
+          phone: customers.phone,
+          tinNumber: customers.tinNumber,
+        })
+        .from(customers)
+        .where(eq(customers.id, customerId))
+        .limit(1);
+      return row ?? null;
+    });
+  }
+
+  /** The proforma's lines in print order — what the contract's Article 2 lists. */
+  async listEquipment(
+    tenantId: string,
+    proformaId: string,
+  ): Promise<ContractEquipmentRow[]> {
+    return this.tenantDb.withTenant(tenantId, (tx) =>
+      tx
+        .select({
+          quantity: proformaLines.quantity,
+          productType: proformaLines.productType,
+          specSummary: proformaLines.specSummary,
+          machineRoomLabel: proformaLines.machineRoomLabel,
+          tractionMachineType: proformaLines.tractionMachineType,
+          controlSystem: proformaLines.controlSystem,
+          powerSupply: proformaLines.powerSupply,
+        })
+        .from(proformaLines)
+        .where(eq(proformaLines.proformaId, proformaId))
+        .orderBy(asc(proformaLines.sequence)),
+    );
   }
 
   /** The contract columns plus the two party names, as one joined select. */

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import type { MaintenanceAgreementTemplateData } from '../../common/export/templates/maintenance-agreement.template';
 import type { MaintenanceReportTemplateData } from '../../common/export/templates/maintenance-report.template';
 import { MaintenanceReminderService } from '../reminders/maintenance-reminders.service';
 import type { AuthenticatedUser } from '../../types/auth.types';
@@ -47,6 +48,10 @@ export class MaintenanceService {
     );
   }
 
+  getContract(user: AuthenticatedUser, id: string) {
+    return this.maintenanceRepository.findContractById(user.tenantId, id);
+  }
+
   createContract(user: AuthenticatedUser, dto: CreateMaintenanceContractDto) {
     return this.maintenanceRepository.createContract(
       user.tenantId,
@@ -74,6 +79,42 @@ export class MaintenanceService {
       user.userId,
       dto,
     );
+  }
+
+  /** One maintenance contract shaped for the printed Maintenance & Service Agreement. */
+  async getContractDocumentData(
+    user: AuthenticatedUser,
+    id: string,
+  ): Promise<MaintenanceAgreementTemplateData> {
+    const row = await this.maintenanceRepository.findContractForDocument(
+      user.tenantId,
+      id,
+    );
+    return {
+      contractRef: row.id,
+      startDate: row.startDate,
+      customerName: row.customerName ?? '—',
+      customerAddress:
+        [row.customerAddressLine1, row.customerAddressLine2, row.customerCity]
+          .filter(Boolean)
+          .join(', ') || null,
+      customerPhone: row.customerPhone,
+      customerTin: row.customerTin,
+      assetName: row.assetName ?? '—',
+      buildingName: row.buildingName,
+      assetSerialNumber: row.assetSerialNumber,
+      specSummary: row.specSummary,
+      recurrence: row.recurrence,
+      monthlyFeeEtb: row.monthlyFeeEtb,
+      feeIncludesVat: row.feeIncludesVat,
+      termMonths: row.termMonths,
+      autoRenews: row.autoRenews,
+      noticeDays: row.noticeDays,
+      cureDays: row.cureDays,
+      // `notes` is deliberately NOT passed: it is the internal remark field
+      // and this document is the one the customer signs.
+      scopeOfWork: row.scopeOfWork,
+    };
   }
 
   /**

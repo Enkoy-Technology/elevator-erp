@@ -7,6 +7,7 @@ import { BarList, ColumnChart } from '@/components/charts';
 import { modulesForRole } from '@/components/module-nav';
 import { Sidebar } from '@/components/sidebar';
 import {
+  ApiError,
   AuthProfile,
   getAccessToken,
   getCurrentRole,
@@ -168,7 +169,13 @@ export default function DashboardPage() {
       .catch(() => router.replace('/login'));
     getDashboardSummary()
       .then(setSummary)
-      .catch(() => setError('Could not load dashboard figures'));
+      .catch((err: unknown) => {
+        // Spec §5.3: the warehouse role has no dashboard figures. The page
+        // is still their landing page with the modules they can open.
+        if (!(err instanceof ApiError && err.problem.status === 403)) {
+          setError('Could not load dashboard figures');
+        }
+      });
   }, [router]);
 
   if (!profile) {

@@ -256,6 +256,7 @@ export class CustomersRepository {
           name: dto.name,
           nameNormalized: normalizeEthiopic(dto.name),
           legalName: dto.legalName,
+          tinNumber: dto.tinNumber,
           email: dto.email?.toLowerCase(),
           phone: dto.phone,
           alternatePhone: dto.alternatePhone,
@@ -294,6 +295,7 @@ export class CustomersRepository {
             ? { name: dto.name, nameNormalized: normalizeEthiopic(dto.name) }
             : {}),
           ...(dto.legalName !== undefined ? { legalName: dto.legalName } : {}),
+          ...(dto.tinNumber !== undefined ? { tinNumber: dto.tinNumber } : {}),
           ...(dto.email !== undefined
             ? { email: dto.email?.toLowerCase() }
             : {}),

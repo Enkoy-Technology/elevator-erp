@@ -43,12 +43,15 @@ import {
 const deleteAsset = (id: string): Promise<void> =>
   apiFetch<void>(`/assets/${id}`, { method: 'DELETE' });
 
-/** Mirrors @Roles('SALES_MANAGER', 'TECHNICAL_LEAD') on the assets
+/** Mirrors @Roles('SALES_MANAGER', 'TECHNICAL_MANAGER') on the assets
  *  PATCH/DELETE routes; CEO and ADMIN bypass via RolesGuard's SUPER_ROLES. */
 const canWriteAssets = (role: UserRole | null): boolean =>
   role === 'SALES_MANAGER' ||
-  role === 'TECHNICAL_LEAD' ||
-  role === 'CEO' || role === 'GENERAL_MANAGER' ||
+  role === 'TECHNICAL_MANAGER' ||
+  role === 'MAINTENANCE_ENGINEER' ||
+  role === 'STORE_KEEPER' ||
+  role === 'CEO' ||
+  role === 'GENERAL_MANAGER' ||
   role === 'ADMIN';
 
 const CSV_HEADERS = [

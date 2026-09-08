@@ -193,6 +193,7 @@ export class AssetsRepository {
           name: dto.name,
           buildingName: dto.buildingName,
           serialNumber: dto.serialNumber,
+          specSummary: dto.specSummary,
           locationNotes: dto.locationNotes,
           notes: dto.notes,
           createdByUserId,
@@ -249,6 +250,9 @@ export class AssetsRepository {
             : {}),
           ...(dto.serialNumber !== undefined
             ? { serialNumber: dto.serialNumber }
+            : {}),
+          ...(dto.specSummary !== undefined
+            ? { specSummary: dto.specSummary }
             : {}),
           ...(dto.locationNotes !== undefined
             ? { locationNotes: dto.locationNotes }

@@ -83,7 +83,7 @@ const makeHandler = (returnValue: unknown, callCount: { count: number }): CallHa
 });
 
 describe('IdempotencyInterceptor', () => {
-  const user = { tenantId: TENANT_A, userId: 'u1', role: 'FINANCE' };
+  const user = { tenantId: TENANT_A, userId: 'u1', role: 'FINANCE_OFFICER' };
   let repository: FakeIdempotencyKeysRepository;
   let reflector: Reflector;
   let interceptor: IdempotencyInterceptor;
@@ -170,7 +170,7 @@ describe('IdempotencyInterceptor', () => {
 
   it('the same key from a different tenant does not collide', async () => {
     const calls = { count: 0 };
-    const userB = { tenantId: TENANT_B, userId: 'u2', role: 'FINANCE' };
+    const userB = { tenantId: TENANT_B, userId: 'u2', role: 'FINANCE_OFFICER' };
 
     const ctxA = makeContext({ 'idempotency-key': 'shared-key' }, { amountEtb: '10' }, user);
     const firstA$ = await interceptor.intercept(ctxA, makeHandler({ id: 'a' }, calls));

@@ -1,7 +1,10 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   date,
   foreignKey,
+  integer,
+  numeric,
   pgTable,
   primaryKey,
   text,
@@ -40,6 +43,25 @@ export const maintenanceContracts = pgTable(
     lastServiceAt: date('last_service_at'),
     assignedUserId: uuid('assigned_user_id'),
     notes: text('notes'),
+
+    // The commercial terms of the printed Maintenance & Periodic Service
+    // Agreement (the company's own paper form). All nullable or defaulted:
+    // a contract logged before these existed still prints, with the
+    // clauses it has no value for left out.
+    /** Article 6: the fixed monthly fee, ETB. */
+    monthlyFeeEtb: numeric('monthly_fee_etb', { precision: 14, scale: 2 }),
+    feeIncludesVat: boolean('fee_includes_vat').notNull().default(true),
+    /** Article 4: initial term, months. */
+    termMonths: integer('term_months').notNull().default(12),
+    /** Article 4: renews for successive terms unless notice is given. */
+    autoRenews: boolean('auto_renews').notNull().default(true),
+    /** Article 4: written notice before the term ends, days. */
+    noticeDays: integer('notice_days').notNull().default(30),
+    /** Article 4: days to cure a material breach before termination for cause. */
+    cureDays: integer('cure_days').notNull().default(7),
+    /** Article 3: free text; the template prints the standard scope when null. */
+    scopeOfWork: text('scope_of_work'),
+
     createdByUserId: uuid('created_by_user_id'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()

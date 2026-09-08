@@ -14,7 +14,7 @@ import type { CalcResult } from './types';
 @ApiTags('elevator-specs')
 @ApiBearerAuth('access-token')
 @Controller('elevator-specs')
-@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD')
+@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER')
 export class ElevatorCalcController {
   constructor(private readonly calcService: ElevatorCalcService) {}
 

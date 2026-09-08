@@ -25,6 +25,7 @@ export default function NewAssetPage() {
   const [name, setName] = useState('');
   const [buildingName, setBuildingName] = useState('');
   const [serialNumber, setSerialNumber] = useState('');
+  const [specSummary, setSpecSummary] = useState('');
   const [locationNotes, setLocationNotes] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +57,7 @@ export default function NewAssetPage() {
         name,
         buildingName: buildingName || undefined,
         serialNumber: serialNumber || undefined,
+        specSummary: specSummary || undefined,
         locationNotes: locationNotes || undefined,
         notes: notes || undefined,
       });
@@ -139,6 +141,21 @@ export default function NewAssetPage() {
       </FormSection>
 
       <FormSection title="Location">
+        <Field
+          label="Specification"
+          htmlFor="specSummary"
+          hint="One attribute per line. Printed on the maintenance agreement."
+          wide
+        >
+          <textarea
+            id="specSummary"
+            className={fieldClass}
+            rows={5}
+            placeholder={'Brand: Sigma\nDrive: Gearless traction\nCapacity: 630 kg\nStops: 12 (2B+G+9)\nSpeed: 1.5 m/s'}
+            value={specSummary}
+            onChange={(e) => setSpecSummary(e.target.value)}
+          />
+        </Field>
         <Field label="Building" htmlFor="buildingName">
           <input
             id="buildingName"

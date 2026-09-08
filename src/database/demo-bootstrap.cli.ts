@@ -22,7 +22,7 @@ import { assertSeedAllowed, openAdminPool, seedDemoData } from './seed';
  *     "$IMAGE" node dist/database/demo-bootstrap.js
  *
  * It runs: migrate → rotate the two application role passwords → seed rates,
- * the fictional demo tenant, its nine role accounts and the document
+ * the fictional demo tenant, its thirteen role accounts and the document
  * boilerplate. Every step is idempotent, so re-running it is the documented
  * way to repair a half-finished bootstrap.
  *

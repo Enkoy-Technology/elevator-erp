@@ -82,24 +82,23 @@ export type OverviewSection = (typeof OVERVIEW_SECTIONS)[number];
 const SECTION_ROLES: Record<OverviewSection, readonly UserRole[]> = {
   // ProjectsController / QuotationsController / ProformasController /
   // ContractsController
-  projects: ['SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
-  quotations: ['SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
-  proformas: ['SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
-  contracts: ['SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE'],
+  projects: ['SALES_MANAGER', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER'],
+  quotations: ['SALES_MANAGER', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER'],
+  proformas: ['SALES_MANAGER', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER'],
+  contracts: ['SALES_MANAGER', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER'],
   // InvoicesController / PaymentsController — the AR ledger is FINANCE only,
-  // which is also why GET /customers/:id/statement carries @Roles('FINANCE').
-  invoices: ['FINANCE'],
-  payments: ['FINANCE'],
+  // which is also why GET /customers/:id/statement carries @Roles('FINANCE_OFFICER').
+  invoices: ['FINANCE_OFFICER'],
+  payments: ['FINANCE_OFFICER'],
   // AssetsController
   assets: [
     'SALES_MANAGER',
-    'TECHNICAL_LEAD',
-    'FIELD_ENGINEER',
-    'DISPATCHER',
-    'WAREHOUSE_MANAGER',
+    'TECHNICAL_MANAGER',
+    'MAINTENANCE_ENGINEER',
+    'STORE_KEEPER',
   ],
   // MaintenanceController
-  maintenance: ['TECHNICAL_LEAD', 'FIELD_ENGINEER', 'DISPATCHER', 'SALES_MANAGER'],
+  maintenance: ['TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'SALES_MANAGER'],
 };
 
 /** Mirrors RolesGuard's SUPER_ROLES. */

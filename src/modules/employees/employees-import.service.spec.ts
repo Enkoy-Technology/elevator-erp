@@ -97,8 +97,8 @@ describe('header mapping', () => {
 describe('role mapping', () => {
   it('is forgiving about case and spacing', () => {
     expect(normalizeRole('sales manager')).toBe('SALES_MANAGER');
-    expect(normalizeRole('  Field-Engineer ')).toBe('FIELD_ENGINEER');
-    expect(normalizeRole('FINANCE')).toBe('FINANCE');
+    expect(normalizeRole('  Maintenance-Engineer ')).toBe('MAINTENANCE_ENGINEER');
+    expect(normalizeRole('FINANCE_OFFICER')).toBe('FINANCE_OFFICER');
   });
 
   it('refuses roles it cannot place', () => {
@@ -153,8 +153,8 @@ describe('duplicates', () => {
   it('a repeat inside the file is an ERROR on the second occurrence only', async () => {
     const result = await runCsv(
       'Name,Email,Role\n' +
-        'Abebe Kebede,abebe@shiningstar.et,FINANCE\n' +
-        'Abebe K.,ABEBE@shiningstar.et,DISPATCHER\n',
+        'Abebe Kebede,abebe@shiningstar.et,FINANCE_OFFICER\n' +
+        'Abebe K.,ABEBE@shiningstar.et,MAINTENANCE_ENGINEER\n',
     );
 
     expect(result.rows[0]?.status).toBe('READY');
@@ -169,8 +169,8 @@ describe('duplicates', () => {
 
     const result = await runCsv(
       'Name,Email,Role\n' +
-        'Abebe Kebede,abebe@shiningstar.et,FINANCE\n' +
-        'Kebede Alemu,kebede@shiningstar.et,DISPATCHER\n',
+        'Abebe Kebede,abebe@shiningstar.et,FINANCE_OFFICER\n' +
+        'Kebede Alemu,kebede@shiningstar.et,MAINTENANCE_ENGINEER\n',
     );
 
     expect(rowFor(result, 'abebe@shiningstar.et').status).toBe(
@@ -188,7 +188,7 @@ describe('duplicates', () => {
     );
 
     const result = await runCsv(
-      'Name,Email,Role\nAbebe Kebede,abebe@shiningstar.et,FINANCE\n',
+      'Name,Email,Role\nAbebe Kebede,abebe@shiningstar.et,FINANCE_OFFICER\n',
       true,
     );
 
@@ -203,10 +203,10 @@ describe('blank rows and stray whitespace', () => {
     const result = await runCsv(
       'Name,Email,Role\n' +
         '\n' +
-        'Abebe Kebede,abebe@shiningstar.et,FINANCE\n' +
+        'Abebe Kebede,abebe@shiningstar.et,FINANCE_OFFICER\n' +
         ',,\n' +
         '   ,  ,\n' +
-        'Kebede Alemu,kebede@shiningstar.et,DISPATCHER\n',
+        'Kebede Alemu,kebede@shiningstar.et,MAINTENANCE_ENGINEER\n',
     );
 
     expect(result.totalRows).toBe(2);
@@ -218,7 +218,7 @@ describe('blank rows and stray whitespace', () => {
 
 describe('row validation reuses CreateEmployeeDto', () => {
   it('rejects a malformed email', async () => {
-    const result = await runCsv('Name,Email,Role\nAbebe,not-an-email,FINANCE\n');
+    const result = await runCsv('Name,Email,Role\nAbebe,not-an-email,FINANCE_OFFICER\n');
 
     expect(result.rows[0]?.status).toBe('ERROR');
     expect(result.rows[0]?.message).toMatch(/email/i);
@@ -226,7 +226,7 @@ describe('row validation reuses CreateEmployeeDto', () => {
 
   it('rejects a phone the Ethiopian validator will not take', async () => {
     const result = await runCsv(
-      'Name,Email,Role,Phone\nAbebe Kebede,abebe@shiningstar.et,FINANCE,+1 555 0100\n',
+      'Name,Email,Role,Phone\nAbebe Kebede,abebe@shiningstar.et,FINANCE_OFFICER,+1 555 0100\n',
     );
 
     expect(result.rows[0]?.status).toBe('ERROR');
@@ -235,7 +235,7 @@ describe('row validation reuses CreateEmployeeDto', () => {
 
   it('accepts a blank phone', async () => {
     const result = await runCsv(
-      'Name,Email,Role,Phone\nAbebe Kebede,abebe@shiningstar.et,FINANCE,\n',
+      'Name,Email,Role,Phone\nAbebe Kebede,abebe@shiningstar.et,FINANCE_OFFICER,\n',
     );
 
     expect(result.rows[0]?.status).toBe('READY');
@@ -245,7 +245,7 @@ describe('row validation reuses CreateEmployeeDto', () => {
 describe('csv parsing', () => {
   it('a comma inside a quoted field does not split the row', async () => {
     const result = await runCsv(
-      'Name,Email,Role\n"Kebede, Abebe",abebe@shiningstar.et,FINANCE\n',
+      'Name,Email,Role\n"Kebede, Abebe",abebe@shiningstar.et,FINANCE_OFFICER\n',
     );
 
     expect(result.rows[0]).toMatchObject({
@@ -280,8 +280,8 @@ describe('csv parsing', () => {
 describe('dry run vs commit', () => {
   const twoGoodRows =
     'Name,Email,Role,Phone\n' +
-    'Abebe Kebede,abebe@shiningstar.et,FINANCE,0911234567\n' +
-    'Kebede Alemu,kebede@shiningstar.et,dispatcher,\n';
+    'Abebe Kebede,abebe@shiningstar.et,FINANCE_OFFICER,0911234567\n' +
+    'Kebede Alemu,kebede@shiningstar.et,maintenance engineer,\n';
 
   it('a dry run writes nothing and hands out no passwords', async () => {
     const result = await runCsv(twoGoodRows);
@@ -333,7 +333,7 @@ describe('dry run vs commit', () => {
       ).toBe(false);
       expect(record).not.toHaveProperty('password');
     }
-    expect(records.map((r) => r.role)).toEqual(['FINANCE', 'DISPATCHER']);
+    expect(records.map((r) => r.role)).toEqual(['FINANCE_OFFICER', 'MAINTENANCE_ENGINEER']);
     expect(records.map((r) => r.email)).toEqual([
       'abebe@shiningstar.et',
       'kebede@shiningstar.et',
@@ -345,8 +345,8 @@ describe('dry run vs commit', () => {
   it('an error row is never written, even on commit', async () => {
     const result = await runCsv(
       'Name,Email,Role\n' +
-        'Abebe Kebede,abebe@shiningstar.et,FINANCE\n' +
-        'Bad Row,nope,FINANCE\n' +
+        'Abebe Kebede,abebe@shiningstar.et,FINANCE_OFFICER\n' +
+        'Bad Row,nope,FINANCE_OFFICER\n' +
         'Boss Man,boss@shiningstar.et,CEO\n',
       true,
     );
@@ -381,7 +381,7 @@ describe('bad uploads', () => {
       'Name,Email,Role\n' +
       Array.from(
         { length: 600 },
-        (_unused, i) => `Person ${i},person${i}@shiningstar.et,FINANCE`,
+        (_unused, i) => `Person ${i},person${i}@shiningstar.et,FINANCE_OFFICER`,
       ).join('\n') +
       '\n';
 

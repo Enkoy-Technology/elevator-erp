@@ -21,6 +21,7 @@ import { csvRows, saveCsv } from '@/app/employees/csv';
 import {
   ApiError,
   getAccessToken,
+  getCurrentRole,
   listCustomers,
   listProjects,
   NEXT_PROJECT_STATUSES,
@@ -122,6 +123,16 @@ const promptForDealValue = (
 
 export default function ProjectsPage() {
   const router = useRouter();
+  /** Mirrors @Roles on POST /projects: Sales and Technical create; Field Engineer reads. */
+  const role = getCurrentRole();
+  const canCreate =
+    role === 'MARKETING_MANAGER' ||
+    role === 'SALES_MANAGER' ||
+    role === 'SALESPERSON' ||
+    role === 'TECHNICAL_MANAGER' ||
+    role === 'CEO' ||
+    role === 'GENERAL_MANAGER' ||
+    role === 'ADMIN';
   const [projects, setProjects] = useState<Project[]>([]);
   const [customerMap, setCustomerMap] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1);
@@ -372,9 +383,11 @@ export default function ProjectsPage() {
               </>
             }
             actions={
-              <Link href="/projects/new" className={btnPrimary}>
-                Create project
-              </Link>
+              canCreate ? (
+                <Link href="/projects/new" className={btnPrimary}>
+                  Create project
+                </Link>
+              ) : null
             }
           />
 
@@ -417,9 +430,11 @@ export default function ProjectsPage() {
                     ? `No project sits at ${STATUS_LABEL[statusFilter]}. Choose All stages to see every stage.`
                     : 'No projects yet. Create one against a customer from Customers, and it starts at LEAD.'}
                 </p>
-                <Link href="/projects/new" className={btnSecondary}>
+                {canCreate ? (
+<Link href="/projects/new" className={btnSecondary}>
                   Create project
                 </Link>
+) : null}
               </div>
             }
           />

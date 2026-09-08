@@ -9,6 +9,7 @@ import { Sidebar } from '@/components/sidebar';
 import {
   ApiError,
   EMPLOYEE_ROLES,
+  getCurrentRole,
   getAccessToken,
   listEmployees,
   updateEmployee,
@@ -42,6 +43,12 @@ export default function EditEmployeePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = params.id;
+  /** Mirrors EmployeesService.assertMayManage: below the super roles, only staff below management. */
+  const callerRole = getCurrentRole();
+  const grantableRoles =
+    callerRole === 'CEO' || callerRole === 'ADMIN'
+      ? EMPLOYEE_ROLES
+      : EMPLOYEE_ROLES.filter((r) => r !== 'CEO' && r !== 'GENERAL_MANAGER' && r !== 'ADMIN');
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
@@ -205,7 +212,7 @@ export default function EditEmployeePage() {
             value={role}
             onChange={(e) => setRole(e.target.value as EmployeeRole)}
           >
-            {EMPLOYEE_ROLES.map((value) => (
+            {grantableRoles.map((value) => (
               <option key={value} value={value}>
                 {ROLE_LABELS[value]}
               </option>

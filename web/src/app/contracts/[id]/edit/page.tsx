@@ -35,6 +35,13 @@ export default function EditContractPage() {
   const [scopeOfWork, setScopeOfWork] = useState('');
   const [termsAndConditions, setTermsAndConditions] = useState('');
   const [warrantyMonths, setWarrantyMonths] = useState('');
+  const [deliveryWorkingDays, setDeliveryWorkingDays] = useState('');
+  const [installationWorkingDays, setInstallationWorkingDays] = useState('');
+  const [delayPenaltyPercentPerDay, setDelayPenaltyPercentPerDay] = useState('');
+  const [delayPenaltyCapPercent, setDelayPenaltyCapPercent] = useState('');
+  const [advanceGuaranteeRequired, setAdvanceGuaranteeRequired] = useState(false);
+  const [freeMaintenanceMonths, setFreeMaintenanceMonths] = useState('');
+  const [disputeForum, setDisputeForum] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -53,6 +60,13 @@ export default function EditContractPage() {
         setWarrantyMonths(
           contract.warrantyMonths === null ? '' : String(contract.warrantyMonths),
         );
+        setDeliveryWorkingDays(contract.deliveryWorkingDays?.toString() ?? '');
+        setInstallationWorkingDays(contract.installationWorkingDays?.toString() ?? '');
+        setDelayPenaltyPercentPerDay(contract.delayPenaltyPercentPerDay ?? '');
+        setDelayPenaltyCapPercent(contract.delayPenaltyCapPercent ?? '');
+        setAdvanceGuaranteeRequired(contract.advanceGuaranteeRequired);
+        setFreeMaintenanceMonths(contract.freeMaintenanceMonths?.toString() ?? '');
+        setDisputeForum(contract.disputeForum ?? '');
         setLoaded(true);
       } catch (err) {
         setLoadError(
@@ -75,6 +89,15 @@ export default function EditContractPage() {
         scopeOfWork: scopeOfWork.trim() || null,
         termsAndConditions: termsAndConditions.trim() || null,
         warrantyMonths: warrantyMonths.trim() ? Number(warrantyMonths) : null,
+        deliveryWorkingDays: deliveryWorkingDays.trim() ? Number(deliveryWorkingDays) : null,
+        installationWorkingDays: installationWorkingDays.trim()
+          ? Number(installationWorkingDays)
+          : null,
+        delayPenaltyPercentPerDay: delayPenaltyPercentPerDay.trim() || null,
+        delayPenaltyCapPercent: delayPenaltyCapPercent.trim() || null,
+        advanceGuaranteeRequired,
+        freeMaintenanceMonths: freeMaintenanceMonths.trim() ? Number(freeMaintenanceMonths) : null,
+        disputeForum: disputeForum.trim() || null,
       });
       router.push('/contracts');
     } catch (err) {
@@ -111,7 +134,7 @@ export default function EditContractPage() {
     <FormPage
       eyebrow="Sales"
       title={`Edit contract ${contractNumber}`}
-      description="Scope, conditions and warranty period. The contract value comes from the proforma and cannot be changed here."
+      description="The clauses of the printed agreement. The contract value, equipment and payment schedule come from the proforma and the payment schedule page."
       backHref="/contracts"
       backLabel="Contracts"
       error={error}
@@ -134,7 +157,12 @@ export default function EditContractPage() {
         title="Terms"
         description="What the company has undertaken to deliver, and on what conditions."
       >
-        <Field label="Scope of work" htmlFor="scopeOfWork" wide>
+        <Field
+          label="Equipment notes"
+          htmlFor="scopeOfWork"
+          hint="Printed under the equipment table in Article 2: brand, rescue device, anything the proforma lines do not say."
+          wide
+        >
           <textarea
             id="scopeOfWork"
             className={fieldClass}
@@ -145,7 +173,12 @@ export default function EditContractPage() {
           />
         </Field>
 
-        <Field label="Terms and conditions" htmlFor="termsAndConditions" wide>
+        <Field
+          label="Additional terms"
+          htmlFor="termsAndConditions"
+          hint="Printed as Article 9. Leave blank to omit the article."
+          wide
+        >
           <textarea
             id="termsAndConditions"
             className={fieldClass}
@@ -172,6 +205,117 @@ export default function EditContractPage() {
             disabled={!editable}
             value={warrantyMonths}
             onChange={(e) => setWarrantyMonths(e.target.value)}
+          />
+        </Field>
+
+        <Field
+          label="Free maintenance (months)"
+          htmlFor="freeMaintenanceMonths"
+          hint="Article 6.2: monthly preventive service and repairs at no charge after handover."
+        >
+          <input
+            id="freeMaintenanceMonths"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={600}
+            step={1}
+            className={fieldClass}
+            disabled={!editable}
+            value={freeMaintenanceMonths}
+            onChange={(e) => setFreeMaintenanceMonths(e.target.value)}
+          />
+        </Field>
+      </FormSection>
+
+      <FormSection
+        title="Delivery and penalties"
+        description="Articles 3, 5 and 7 of the printed agreement. A blank field prints neutral wording."
+      >
+        <Field label="Delivery (working days)" htmlFor="deliveryWorkingDays" hint="From the effective date.">
+          <input
+            id="deliveryWorkingDays"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={1000}
+            step={1}
+            className={fieldClass}
+            disabled={!editable}
+            value={deliveryWorkingDays}
+            onChange={(e) => setDeliveryWorkingDays(e.target.value)}
+          />
+        </Field>
+        <Field
+          label="Installation (working days)"
+          htmlFor="installationWorkingDays"
+          hint="From the signed notice of site readiness."
+        >
+          <input
+            id="installationWorkingDays"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={1000}
+            step={1}
+            className={fieldClass}
+            disabled={!editable}
+            value={installationWorkingDays}
+            onChange={(e) => setInstallationWorkingDays(e.target.value)}
+          />
+        </Field>
+        <Field
+          label="Delay penalty (% per day)"
+          htmlFor="delayPenaltyPercentPerDay"
+          hint="Of the contract price, e.g. 0.02."
+        >
+          <input
+            id="delayPenaltyPercentPerDay"
+            inputMode="decimal"
+            pattern="(100(\.0{1,3})?|\d{1,2}(\.\d{1,3})?)"
+            className={fieldClass}
+            disabled={!editable}
+            value={delayPenaltyPercentPerDay}
+            onChange={(e) => setDelayPenaltyPercentPerDay(e.target.value)}
+          />
+        </Field>
+        <Field label="Penalty cap (%)" htmlFor="delayPenaltyCapPercent" hint="Of the contract price, e.g. 5.">
+          <input
+            id="delayPenaltyCapPercent"
+            inputMode="decimal"
+            pattern="(100(\.0{1,2})?|\d{1,2}(\.\d{1,2})?)"
+            className={fieldClass}
+            disabled={!editable}
+            value={delayPenaltyCapPercent}
+            onChange={(e) => setDelayPenaltyCapPercent(e.target.value)}
+          />
+        </Field>
+        <Field label="Advance guarantee" htmlFor="advanceGuaranteeRequired" wide>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              id="advanceGuaranteeRequired"
+              type="checkbox"
+              disabled={!editable}
+              checked={advanceGuaranteeRequired}
+              onChange={(e) => setAdvanceGuaranteeRequired(e.target.checked)}
+            />
+            The advance is released only against a guarantee cheque of equal value
+          </label>
+        </Field>
+        <Field
+          label="Dispute forum"
+          htmlFor="disputeForum"
+          hint="Article 8.2: where an unsettled dispute is referred."
+          wide
+        >
+          <input
+            id="disputeForum"
+            className={fieldClass}
+            maxLength={500}
+            placeholder="the Addis Ababa Chamber of Commerce and Sectoral Associations"
+            disabled={!editable}
+            value={disputeForum}
+            onChange={(e) => setDisputeForum(e.target.value)}
           />
         </Field>
       </FormSection>

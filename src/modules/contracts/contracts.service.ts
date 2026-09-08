@@ -10,11 +10,15 @@ import {
   type ContractListRow,
   type ContractRecord,
 } from './contracts.repository';
+import { ContractInstalmentsRepository } from './contract-instalments.repository';
 import type { UpdateContractDto } from './dto/update-contract.dto';
 
 @Injectable()
 export class ContractsService {
-  constructor(private readonly contractsRepository: ContractsRepository) {}
+  constructor(
+    private readonly contractsRepository: ContractsRepository,
+    private readonly instalmentsRepository: ContractInstalmentsRepository,
+  ) {}
 
   list(
     user: AuthenticatedUser,
@@ -106,6 +110,11 @@ export class ContractsService {
     if (!row) {
       throw new NotFoundException('Contract not found');
     }
+    const [customer, equipment, instalments] = await Promise.all([
+      this.contractsRepository.findCustomerDetails(user.tenantId, row.customerId),
+      this.contractsRepository.listEquipment(user.tenantId, row.proformaId),
+      this.instalmentsRepository.listByContract(user.tenantId, id),
+    ]);
     return {
       row,
       data: {
@@ -114,11 +123,32 @@ export class ContractsService {
         issuedAt: row.createdAt,
         signedAt: row.signedAt,
         customerName: row.customerName ?? '',
+        customer: {
+          address:
+            [customer?.addressLine1, customer?.addressLine2, customer?.city]
+              .filter(Boolean)
+              .join(', ') || null,
+          phone: customer?.phone ?? null,
+          tin: customer?.tinNumber ?? null,
+        },
         projectName: row.projectName ?? '',
         contractValueEtb: row.contractValueEtb,
+        equipment,
+        // The payment-schedule document prints cancelled rows for the audit
+        // trail; the agreement prints only what the parties are agreeing to.
+        instalments: instalments
+          .filter((i) => i.status !== 'CANCELLED')
+          .map((i) => ({ label: i.label, amountEtb: i.amountEtb, dueDate: i.dueDate })),
         scopeOfWork: row.scopeOfWork,
         termsAndConditions: row.termsAndConditions,
         warrantyMonths: row.warrantyMonths,
+        deliveryWorkingDays: row.deliveryWorkingDays,
+        installationWorkingDays: row.installationWorkingDays,
+        delayPenaltyPercentPerDay: row.delayPenaltyPercentPerDay,
+        delayPenaltyCapPercent: row.delayPenaltyCapPercent,
+        advanceGuaranteeRequired: row.advanceGuaranteeRequired,
+        freeMaintenanceMonths: row.freeMaintenanceMonths,
+        disputeForum: row.disputeForum,
       },
     };
   }

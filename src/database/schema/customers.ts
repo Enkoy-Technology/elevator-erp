@@ -34,6 +34,8 @@ export const customers = pgTable(
      */
     nameNormalized: text('name_normalized'),
     legalName: text('legal_name'),
+    /** Ethiopian Tax Identification Number, printed in the parties clause of every contract. */
+    tinNumber: text('tin_number'),
     email: text('email'),
     phone: text('phone'),
     alternatePhone: text('alternate_phone'),

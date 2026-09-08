@@ -81,7 +81,7 @@ describe('Bank accounts + transactions: link uniqueness against real Postgres', 
 
     const userResult = await adminPool.query<{ id: string }>(
       `insert into users (tenant_id, email, password_hash, full_name, role, is_active)
-       values ($1, $2, 'x', 'Bank E2E User', 'FINANCE', true) returning id`,
+       values ($1, $2, 'x', 'Bank E2E User', 'FINANCE_OFFICER', true) returning id`,
       [tenantId, `finance@${slug}.example.com`],
     );
     userId = userResult.rows[0]!.id;
@@ -101,7 +101,7 @@ describe('Bank accounts + transactions: link uniqueness against real Postgres', 
     );
     await app.init();
     accessToken = await app.get(JwtService).signAsync(
-      { sub: userId, tenantId, role: 'FINANCE', type: 'access' } satisfies JwtPayload,
+      { sub: userId, tenantId, role: 'FINANCE_OFFICER', type: 'access' } satisfies JwtPayload,
       { expiresIn: 900 },
     );
   });

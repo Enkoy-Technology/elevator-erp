@@ -97,7 +97,7 @@ describe('Payment allocation over-allocation under concurrency', () => {
 
     const userResult = await adminPool.query<{ id: string }>(
       `insert into users (tenant_id, email, password_hash, full_name, role, is_active)
-       values ($1, $2, 'x', 'Alloc Concurrency Test User', 'FINANCE', true) returning id`,
+       values ($1, $2, 'x', 'Alloc Concurrency Test User', 'FINANCE_OFFICER', true) returning id`,
       [tenantId, `finance@${slug}.example.com`],
     );
     userId = userResult.rows[0]!.id;

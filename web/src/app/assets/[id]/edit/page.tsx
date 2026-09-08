@@ -29,6 +29,7 @@ export default function EditAssetPage() {
   const [name, setName] = useState('');
   const [buildingName, setBuildingName] = useState('');
   const [serialNumber, setSerialNumber] = useState('');
+  const [specSummary, setSpecSummary] = useState('');
   const [locationNotes, setLocationNotes] = useState('');
   const [status, setStatus] = useState<AssetStatus>('ACTIVE');
   const [notes, setNotes] = useState('');
@@ -47,6 +48,7 @@ export default function EditAssetPage() {
         setName(asset.name);
         setBuildingName(asset.buildingName ?? '');
         setSerialNumber(asset.serialNumber ?? '');
+        setSpecSummary(asset.specSummary ?? '');
         setLocationNotes(asset.locationNotes ?? '');
         setStatus(asset.status);
         setNotes(asset.notes ?? '');
@@ -71,6 +73,7 @@ export default function EditAssetPage() {
         name,
         buildingName: buildingName || null,
         serialNumber: serialNumber || null,
+        specSummary: specSummary || null,
         locationNotes: locationNotes || null,
         status,
         notes: notes || null,
@@ -173,6 +176,21 @@ export default function EditAssetPage() {
       </FormSection>
 
       <FormSection title="Location">
+        <Field
+          label="Specification"
+          htmlFor="specSummary"
+          hint="One attribute per line. Printed on the maintenance agreement."
+          wide
+        >
+          <textarea
+            id="specSummary"
+            className={fieldClass}
+            rows={5}
+            placeholder={'Brand: Sigma\nDrive: Gearless traction\nCapacity: 630 kg\nStops: 12 (2B+G+9)\nSpeed: 1.5 m/s'}
+            value={specSummary}
+            onChange={(e) => setSpecSummary(e.target.value)}
+          />
+        </Field>
         <Field label="Building" htmlFor="buildingName">
           <input
             id="buildingName"

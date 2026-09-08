@@ -8,7 +8,7 @@ type Db = NodePgDatabase<typeof schema>;
 /**
  * The customers and projects the demo opens with.
  *
- * `seed.ts` creates the tenant, its nine role accounts and the standing
+ * `seed.ts` creates the tenant, its thirteen role accounts and the standing
  * document text — everything the system needs to WORK. It deliberately
  * creates no business records, which is right for a fresh production tenant
  * and wrong for a demonstration: a client who opens the ERP to eight empty

@@ -26,6 +26,7 @@ describe('EmployeesService', () => {
     list: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    findRoleById: jest.fn(),
   };
 
   const service = new EmployeesService(repo as never);
@@ -69,5 +70,58 @@ describe('EmployeesService', () => {
     await expect(
       service.update(user, sample.id, { isActive: false }),
     ).rejects.toBeInstanceOf(LastAdminErrorStub);
+  });
+
+  describe('the management rank rule (spec §5.3 User Management)', () => {
+    const salesManager: AuthenticatedUser = { ...user, role: 'SALES_MANAGER' };
+
+    it('lets a Sales Manager create and edit staff below management', async () => {
+      repo.create.mockResolvedValue(sample);
+      repo.update.mockResolvedValue(sample);
+      repo.findRoleById.mockResolvedValue('MAINTENANCE_ENGINEER');
+
+      await service.create(salesManager, {
+        email: 'eng@shiningstar.et',
+        fullName: 'Kebede Alemu',
+        role: 'MAINTENANCE_ENGINEER',
+        password: 'TempPass!123',
+      });
+      await service.update(salesManager, sample.id, { role: 'MAINTENANCE_ENGINEER' });
+
+      expect(repo.create).toHaveBeenCalledTimes(1);
+      expect(repo.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops a Sales Manager granting CEO, GENERAL_MANAGER or ADMIN', async () => {
+      for (const role of ['CEO', 'GENERAL_MANAGER', 'ADMIN'] as const) {
+        await expect(
+          service.create(salesManager, {
+            email: 'x@shiningstar.et',
+            fullName: 'X',
+            role,
+            password: 'TempPass!123',
+          }),
+        ).rejects.toThrow(/Only the CEO or an admin/);
+      }
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it("stops a Sales Manager touching an executive's account, even to reset a password", async () => {
+      repo.findRoleById.mockResolvedValue('CEO');
+
+      await expect(
+        service.update(salesManager, sample.id, { password: 'NewTempPass!123' }),
+      ).rejects.toThrow(/Only the CEO or an admin/);
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('never consults the rank rule for the super roles', async () => {
+      repo.update.mockResolvedValue(sample);
+
+      await service.update(user, sample.id, { role: 'CEO' });
+
+      expect(repo.findRoleById).not.toHaveBeenCalled();
+      expect(repo.update).toHaveBeenCalledTimes(1);
+    });
   });
 });

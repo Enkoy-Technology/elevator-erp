@@ -108,7 +108,7 @@ describe('MaintenanceReminderService.runDailyReminders against real Postgres', (
 
     const technicianResult = await adminPool.query<{ id: string }>(
       `insert into users (tenant_id, email, password_hash, full_name, phone, role, sms_consent_at)
-       values ($1, 'tech@example.com', 'x', 'Abebe Kebede', $2, 'FIELD_ENGINEER', now())
+       values ($1, 'tech@example.com', 'x', 'Abebe Kebede', $2, 'MAINTENANCE_ENGINEER', now())
        returning id`,
       [tenantId, TEST_PHONE],
     );
@@ -218,7 +218,7 @@ describe('MaintenanceReminderService.runDailyReminders against real Postgres', (
 
     const deactivatedResult = await adminPool.query<{ id: string }>(
       `insert into users (tenant_id, email, password_hash, full_name, phone, role, sms_consent_at, is_active)
-       values ($1, 'left-the-company@example.com', 'x', 'Former Tech', $2, 'FIELD_ENGINEER', now(), false)
+       values ($1, 'left-the-company@example.com', 'x', 'Former Tech', $2, 'MAINTENANCE_ENGINEER', now(), false)
        returning id`,
       [tenantId, TEST_PHONE],
     );
@@ -226,7 +226,7 @@ describe('MaintenanceReminderService.runDailyReminders against real Postgres', (
 
     const deletedResult = await adminPool.query<{ id: string }>(
       `insert into users (tenant_id, email, password_hash, full_name, phone, role, sms_consent_at, deleted_at)
-       values ($1, 'offboarded@example.com', 'x', 'Offboarded Tech', $2, 'FIELD_ENGINEER', now(), now())
+       values ($1, 'offboarded@example.com', 'x', 'Offboarded Tech', $2, 'MAINTENANCE_ENGINEER', now(), now())
        returning id`,
       [tenantId, TEST_PHONE],
     );

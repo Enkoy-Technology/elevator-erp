@@ -58,7 +58,10 @@ export const EMPLOYEES_EXPORT_COLUMNS: ColumnDef[] = [
 @ApiTags('employees')
 @ApiBearerAuth('access-token')
 @Controller('employees')
-@Roles('ADMIN')
+// Spec §5.3 User Management: CEO, Sales Manager, Admin. A Sales Manager may
+// only grant or touch the staff roles below management — see
+// EmployeesService.assertMayManage.
+@Roles('ADMIN', 'GENERAL_MANAGER', 'OFFICE_MANAGER')
 export class EmployeesController {
   constructor(
     private readonly employeesService: EmployeesService,
@@ -99,7 +102,7 @@ export class EmployeesController {
   }
 
   @Post()
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'GENERAL_MANAGER', 'OFFICE_MANAGER')
   @ApiOperation({ summary: 'Add employee with role' })
   create(
     @CurrentUser() user: AuthenticatedUser,
@@ -109,7 +112,7 @@ export class EmployeesController {
   }
 
   @Post('import')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'GENERAL_MANAGER', 'OFFICE_MANAGER')
   @UseInterceptors(
     // No `storage` option: multer's default IS memory storage, so the upload
     // never touches disk. An explicit `memoryStorage()` would mean importing
@@ -166,7 +169,7 @@ export class EmployeesController {
   }
 
   @Patch(':id')
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'GENERAL_MANAGER', 'OFFICE_MANAGER')
   @ApiOperation({ summary: 'Update employee role / status' })
   update(
     @CurrentUser() user: AuthenticatedUser,

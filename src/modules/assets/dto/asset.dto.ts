@@ -55,6 +55,15 @@ export class CreateAssetDto {
   @MaxLength(100)
   serialNumber?: string;
 
+  @ApiPropertyOptional({
+    example: 'Brand: Sigma\nDrive: gearless traction\nCapacity: 630 kg\nStops: 12 (2B+G+9)\nSpeed: 1.5 m/s',
+    description: 'One attribute per line; printed as the elevator specification on the maintenance agreement.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  specSummary?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -97,6 +106,12 @@ export class UpdateAssetDto {
   @IsString()
   @MaxLength(100)
   serialNumber?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  specSummary?: string | null;
 
   @ApiPropertyOptional()
   @IsOptional()

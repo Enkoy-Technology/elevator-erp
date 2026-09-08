@@ -9,7 +9,7 @@ import type { UserRole } from '@/lib/api';
 /**
  * Mirrors `@Roles('SALES_MANAGER')` on the write routes of
  * DocumentContentController; CEO and ADMIN reach them through RolesGuard's
- * SUPER_ROLES. Reading is wider (TECHNICAL_LEAD, FINANCE), so those roles get
+ * SUPER_ROLES. Reading is wider (TECHNICAL_MANAGER, FINANCE), so those roles get
  * the list and no buttons rather than a locked page.
  */
 export const canEditDocumentContent = (role: UserRole | null): boolean =>

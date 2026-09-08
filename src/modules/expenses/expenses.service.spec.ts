@@ -5,7 +5,7 @@ import { ExpensesService } from './expenses.service';
 const USER: AuthenticatedUser = {
   userId: '11111111-1111-1111-1111-111111111111',
   tenantId: '22222222-2222-2222-2222-222222222222',
-  role: 'FINANCE',
+  role: 'FINANCE_OFFICER',
 };
 
 const RATE_VERSIONS: Record<string, { id: string; payload: Record<string, unknown> }> = {

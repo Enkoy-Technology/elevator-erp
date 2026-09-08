@@ -32,20 +32,31 @@ describe('InvoicesController — role gating', () => {
 
   it('class-level default is FINANCE, and mutation endpoints do not need a method-level override', () => {
     const classRoles = reflector.get<string[] | undefined>(ROLES_KEY, InvoicesController);
-    expect(classRoles).toEqual(['GENERAL_MANAGER', 'FINANCE']);
+    expect(classRoles).toEqual(['GENERAL_MANAGER', 'FINANCE_OFFICER']);
 
     for (const handler of [
       InvoicesController.prototype.convertToInvoice,
       InvoicesController.prototype.create,
-      InvoicesController.prototype.list,
       InvoicesController.prototype.aging,
-      InvoicesController.prototype.get,
-      InvoicesController.prototype.document,
       InvoicesController.prototype.voidInvoice,
       InvoicesController.prototype.patchFiscal,
       InvoicesController.prototype.recordWithholding,
     ]) {
       expect(reflector.get<string[] | undefined>(ROLES_KEY, handler)).toBeUndefined();
+    }
+  });
+
+  it('read endpoints widen to SALES_MANAGER (spec §5.3 Invoices View), never the mutations', () => {
+    for (const handler of [
+      InvoicesController.prototype.list,
+      InvoicesController.prototype.get,
+      InvoicesController.prototype.document,
+    ]) {
+      expect(reflector.get<string[] | undefined>(ROLES_KEY, handler)).toEqual([
+        'GENERAL_MANAGER',
+        'FINANCE_OFFICER',
+        'SALES_MANAGER',
+      ]);
     }
   });
 });
@@ -54,7 +65,7 @@ describe('InvoicesController.list — status validation and format routing', () 
   const user: AuthenticatedUser = {
     userId: '11111111-1111-1111-1111-111111111111',
     tenantId: '22222222-2222-2222-2222-222222222222',
-    role: 'FINANCE',
+    role: 'FINANCE_OFFICER',
   };
 
   const invoicesService = {
@@ -192,7 +203,7 @@ describe('InvoicesController.aging — format routing', () => {
   const user: AuthenticatedUser = {
     userId: '11111111-1111-1111-1111-111111111111',
     tenantId: '22222222-2222-2222-2222-222222222222',
-    role: 'FINANCE',
+    role: 'FINANCE_OFFICER',
   };
 
   const invoicesService = { agingReport: jest.fn() };
@@ -289,7 +300,7 @@ describe('InvoicesController.document — format routing and filenames', () => {
   const user: AuthenticatedUser = {
     userId: '11111111-1111-1111-1111-111111111111',
     tenantId: '22222222-2222-2222-2222-222222222222',
-    role: 'FINANCE',
+    role: 'FINANCE_OFFICER',
   };
 
   const row = {

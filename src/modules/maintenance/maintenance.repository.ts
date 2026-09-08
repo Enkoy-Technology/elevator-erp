@@ -63,6 +63,30 @@ export interface ServiceVisitDocumentRow {
   technicianName: string | null;
 }
 
+/** Everything the printed Maintenance & Service Agreement needs about one contract. */
+export interface MaintenanceContractDocumentRow {
+  id: string;
+  startDate: string;
+  recurrence: string;
+  monthlyFeeEtb: string | null;
+  feeIncludesVat: boolean;
+  termMonths: number;
+  autoRenews: boolean;
+  noticeDays: number;
+  cureDays: number;
+  scopeOfWork: string | null;
+  assetName: string | null;
+  assetSerialNumber: string | null;
+  buildingName: string | null;
+  specSummary: string | null;
+  customerName: string | null;
+  customerAddressLine1: string | null;
+  customerAddressLine2: string | null;
+  customerCity: string | null;
+  customerPhone: string | null;
+  customerTin: string | null;
+}
+
 export type BreakdownExportRow = Omit<
   BreakdownRecord,
   'assetId' | 'customerId'
@@ -217,6 +241,13 @@ export class MaintenanceRepository {
           nextServiceAt: dto.nextServiceAt,
           assignedUserId: dto.assignedUserId,
           notes: dto.notes,
+          monthlyFeeEtb: dto.monthlyFeeEtb,
+          feeIncludesVat: dto.feeIncludesVat,
+          termMonths: dto.termMonths,
+          autoRenews: dto.autoRenews,
+          noticeDays: dto.noticeDays,
+          cureDays: dto.cureDays,
+          scopeOfWork: dto.scopeOfWork,
           createdByUserId,
         })
         .returning();
@@ -247,6 +278,19 @@ export class MaintenanceRepository {
             ? { assignedUserId: dto.assignedUserId }
             : {}),
           ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+          ...(dto.monthlyFeeEtb !== undefined
+            ? { monthlyFeeEtb: dto.monthlyFeeEtb }
+            : {}),
+          ...(dto.feeIncludesVat !== undefined
+            ? { feeIncludesVat: dto.feeIncludesVat }
+            : {}),
+          ...(dto.termMonths !== undefined ? { termMonths: dto.termMonths } : {}),
+          ...(dto.autoRenews !== undefined ? { autoRenews: dto.autoRenews } : {}),
+          ...(dto.noticeDays !== undefined ? { noticeDays: dto.noticeDays } : {}),
+          ...(dto.cureDays !== undefined ? { cureDays: dto.cureDays } : {}),
+          ...(dto.scopeOfWork !== undefined
+            ? { scopeOfWork: dto.scopeOfWork }
+            : {}),
           updatedAt: new Date(),
         })
         .where(
@@ -373,6 +417,88 @@ export class MaintenanceRepository {
         page,
         pageSize,
       );
+    });
+  }
+
+  /** One maintenance contract, or 404. */
+  async findContractById(
+    tenantId: string,
+    id: string,
+  ): Promise<MaintenanceContractRecord> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(maintenanceContracts)
+        .where(
+          and(
+            eq(maintenanceContracts.id, id),
+            isNull(maintenanceContracts.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!row) {
+        throw new NotFoundException('Maintenance contract not found');
+      }
+      return row;
+    });
+  }
+
+  /** Everything the printed Maintenance & Service Agreement needs, in one joined query. */
+  async findContractForDocument(
+    tenantId: string,
+    id: string,
+  ): Promise<MaintenanceContractDocumentRow> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const rows = await tx
+        .select({
+          id: maintenanceContracts.id,
+          startDate: maintenanceContracts.startDate,
+          recurrence: maintenanceContracts.recurrence,
+          monthlyFeeEtb: maintenanceContracts.monthlyFeeEtb,
+          feeIncludesVat: maintenanceContracts.feeIncludesVat,
+          termMonths: maintenanceContracts.termMonths,
+          autoRenews: maintenanceContracts.autoRenews,
+          noticeDays: maintenanceContracts.noticeDays,
+          cureDays: maintenanceContracts.cureDays,
+          scopeOfWork: maintenanceContracts.scopeOfWork,
+          assetName: assets.name,
+          assetSerialNumber: assets.serialNumber,
+          buildingName: assets.buildingName,
+          specSummary: assets.specSummary,
+          customerName: customers.name,
+          customerAddressLine1: customers.addressLine1,
+          customerAddressLine2: customers.addressLine2,
+          customerCity: customers.city,
+          customerPhone: customers.phone,
+          customerTin: customers.tinNumber,
+        })
+        .from(maintenanceContracts)
+        .leftJoin(
+          assets,
+          and(
+            eq(maintenanceContracts.tenantId, assets.tenantId),
+            eq(maintenanceContracts.assetId, assets.id),
+          ),
+        )
+        .leftJoin(
+          customers,
+          and(
+            eq(maintenanceContracts.tenantId, customers.tenantId),
+            eq(maintenanceContracts.customerId, customers.id),
+          ),
+        )
+        .where(
+          and(
+            eq(maintenanceContracts.id, id),
+            isNull(maintenanceContracts.deletedAt),
+          ),
+        )
+        .limit(1);
+      const row = rows[0];
+      if (!row) {
+        throw new NotFoundException('Maintenance contract not found');
+      }
+      return row;
     });
   }
 

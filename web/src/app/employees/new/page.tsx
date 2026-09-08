@@ -9,6 +9,7 @@ import {
   ApiError,
   createEmployee,
   EMPLOYEE_ROLES,
+  getCurrentRole,
   getAccessToken,
   type EmployeeRole,
 } from '@/lib/api';
@@ -16,6 +17,12 @@ import { ROLE_LABELS } from '../labels';
 
 export default function NewEmployeePage() {
   const router = useRouter();
+  /** Mirrors EmployeesService.assertMayManage: below the super roles, only staff below management. */
+  const callerRole = getCurrentRole();
+  const grantableRoles =
+    callerRole === 'CEO' || callerRole === 'ADMIN'
+      ? EMPLOYEE_ROLES
+      : EMPLOYEE_ROLES.filter((r) => r !== 'CEO' && r !== 'GENERAL_MANAGER' && r !== 'ADMIN');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -109,7 +116,7 @@ export default function NewEmployeePage() {
             value={role}
             onChange={(e) => setRole(e.target.value as EmployeeRole)}
           >
-            {EMPLOYEE_ROLES.map((value) => (
+            {grantableRoles.map((value) => (
               <option key={value} value={value}>
                 {ROLE_LABELS[value]}
               </option>

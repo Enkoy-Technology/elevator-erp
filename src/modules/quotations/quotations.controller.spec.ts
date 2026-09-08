@@ -18,29 +18,29 @@ const mockSingleRow = jest.mocked(singleRow);
 
 describe('QuotationsController — role gating', () => {
   const reflector = new Reflector();
+  // Requirement document: sales prepares and approves, the technical manager
+  // specifies, finance invoices, the maintenance engineer and secretary read.
+  // Every read route carries the same list; mutations keep the narrower
+  // class-level default.
+  const READ_ROLES = ['GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER', 'MAINTENANCE_ENGINEER', 'SECRETARY'];
 
-  it('leaves the document download open to any of the class-level read roles (no method-level override)', () => {
-    const roles = reflector.get<string[] | undefined>(
-      ROLES_KEY,
-      QuotationsController.prototype.document,
-    );
-    expect(roles).toBeUndefined();
+  it.each([
+    ['list', QuotationsController.prototype.list],
+    ['get', QuotationsController.prototype.get],
+    ['document', QuotationsController.prototype.document],
+    ['technicalProposal', QuotationsController.prototype.technicalProposal],
+  ])('opens %s to every read role including the Maintenance Engineer and Secretary', (_name, handler) => {
+    expect(reflector.get<string[] | undefined>(ROLES_KEY, handler)).toEqual(READ_ROLES);
   });
 
-  it('gates the technical proposal on the same class-level read roles', () => {
-    const roles = reflector.get<string[] | undefined>(
-      ROLES_KEY,
-      QuotationsController.prototype.technicalProposal,
-    );
-    expect(roles).toBeUndefined();
-  });
-
-  it('leaves GET /quotations/:id open the same way, for comparison', () => {
-    const roles = reflector.get<string[] | undefined>(
-      ROLES_KEY,
-      QuotationsController.prototype.get,
-    );
-    expect(roles).toBeUndefined();
+  it('keeps the Maintenance Engineer off the mutations', () => {
+    for (const handler of [
+      QuotationsController.prototype.submit,
+      QuotationsController.prototype.approve,
+      QuotationsController.prototype.price,
+    ]) {
+      expect(reflector.get<string[] | undefined>(ROLES_KEY, handler)).not.toContain('MAINTENANCE_ENGINEER');
+    }
   });
 });
 
@@ -193,7 +193,7 @@ describe('QuotationsController.technicalProposal', () => {
   const user: AuthenticatedUser = {
     userId: '11111111-1111-1111-1111-111111111111',
     tenantId: '22222222-2222-2222-2222-222222222222',
-    role: 'TECHNICAL_LEAD',
+    role: 'TECHNICAL_MANAGER',
   };
 
   const row = {

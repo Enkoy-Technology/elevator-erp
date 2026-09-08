@@ -286,6 +286,21 @@ export class EmployeesRepository {
     });
   }
 
+  /** The role a user currently holds, or 404. Read by the management rank rule. */
+  async findRoleById(tenantId: string, id: string): Promise<UserRole> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const [row] = await tx
+        .select({ role: users.role })
+        .from(users)
+        .where(and(eq(users.id, id), isNull(users.deletedAt)))
+        .limit(1);
+      if (!row) {
+        throw new NotFoundException('Employee not found');
+      }
+      return row.role;
+    });
+  }
+
   async update(
     tenantId: string,
     id: string,

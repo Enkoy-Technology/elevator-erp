@@ -19,7 +19,7 @@ describe('PaymentsController — role gating', () => {
 
   it('class-level default is FINANCE, and no route needs a method-level override', () => {
     const classRoles = reflector.get<string[] | undefined>(ROLES_KEY, PaymentsController);
-    expect(classRoles).toEqual(['GENERAL_MANAGER', 'FINANCE']);
+    expect(classRoles).toEqual(['GENERAL_MANAGER', 'FINANCE_OFFICER']);
 
     for (const handler of [
       PaymentsController.prototype.record,
@@ -37,7 +37,7 @@ describe('PaymentsController.list — customerId/method/date validation and form
   const user: AuthenticatedUser = {
     userId: '11111111-1111-1111-1111-111111111111',
     tenantId: '22222222-2222-2222-2222-222222222222',
-    role: 'FINANCE',
+    role: 'FINANCE_OFFICER',
   };
 
   const paymentsService = { list: jest.fn(), streamAll: jest.fn() };
@@ -188,7 +188,7 @@ describe('PaymentsController.document — format routing, filenames, and xlsx re
   const user: AuthenticatedUser = {
     userId: '11111111-1111-1111-1111-111111111111',
     tenantId: '22222222-2222-2222-2222-222222222222',
-    role: 'FINANCE',
+    role: 'FINANCE_OFFICER',
   };
 
   const row = {

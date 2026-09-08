@@ -75,7 +75,7 @@ export const BANK_TRANSACTIONS_EXPORT_COLUMNS: ColumnDef[] = [
 @ApiTags('bank-accounts')
 @ApiBearerAuth('access-token')
 @Controller('bank-accounts')
-@Roles('GENERAL_MANAGER', 'FINANCE')
+@Roles('GENERAL_MANAGER', 'FINANCE_OFFICER')
 export class BankAccountsController {
   constructor(
     private readonly bankAccountsService: BankAccountsService,

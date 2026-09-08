@@ -1,13 +1,21 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsEnum,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
   Matches,
+  Max,
   MaxLength,
+  Min,
   MinLength,
+  Validate,
+  ValidateIf,
 } from 'class-validator';
+
+import { MONEY_RE, PositiveMoneyConstraint } from '../../../common/dto/money';
 
 /**
  * `CUSTOM` was removed in migration 0020: there was no interval column to
@@ -81,8 +89,58 @@ export class CreateMaintenanceContractDto {
   @IsString()
   @MaxLength(2000)
   notes?: string;
+
+  // The commercial terms printed on the Maintenance & Service Agreement.
+
+  @ApiPropertyOptional({ example: '6900.00', description: 'Fixed monthly fee, ETB.' })
+  @IsOptional()
+  @Matches(MONEY_RE, { message: 'monthlyFeeEtb must be a non-negative decimal string with up to 2 decimals' })
+  @Validate(PositiveMoneyConstraint)
+  monthlyFeeEtb?: string;
+
+  @ApiPropertyOptional({ default: true })
+  @ValidateIf((_, value) => value !== undefined)
+  @IsBoolean()
+  feeIncludesVat?: boolean;
+
+  @ApiPropertyOptional({ default: 12, description: 'Initial term, months.' })
+  @ValidateIf((_, value) => value !== undefined)
+  @IsInt()
+  @Min(1)
+  @Max(120)
+  termMonths?: number;
+
+  @ApiPropertyOptional({ default: true, description: 'Renews for successive terms unless notice is given.' })
+  @ValidateIf((_, value) => value !== undefined)
+  @IsBoolean()
+  autoRenews?: boolean;
+
+  @ApiPropertyOptional({ default: 30, description: 'Written notice before the term ends, days.' })
+  @ValidateIf((_, value) => value !== undefined)
+  @IsInt()
+  @Min(0)
+  @Max(365)
+  noticeDays?: number;
+
+  @ApiPropertyOptional({ default: 7, description: 'Days to cure a material breach before termination for cause.' })
+  @ValidateIf((_, value) => value !== undefined)
+  @IsInt()
+  @Min(0)
+  @Max(365)
+  cureDays?: number;
+
+  @ApiPropertyOptional({ description: 'Overrides the standard scope of work printed on the agreement.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(10000)
+  scopeOfWork?: string;
 }
 
+/**
+ * The clauses printed on the agreement are NOT NULL columns, so `null`
+ * must fail validation (`@ValidateIf` rather than `@IsOptional`, which
+ * skips every validator on null); absent leaves the column alone.
+ */
 export class UpdateMaintenanceContractDto {
   @ApiPropertyOptional({ enum: MAINTENANCE_RECURRENCES })
   @IsOptional()
@@ -110,6 +168,49 @@ export class UpdateMaintenanceContractDto {
   @IsString()
   @MaxLength(2000)
   notes?: string | null;
+
+  @ApiPropertyOptional({ example: '6900.00', nullable: true })
+  @IsOptional()
+  @Matches(MONEY_RE, { message: 'monthlyFeeEtb must be a non-negative decimal string with up to 2 decimals' })
+  @Validate(PositiveMoneyConstraint)
+  monthlyFeeEtb?: string | null;
+
+  @ApiPropertyOptional()
+  @ValidateIf((_, value) => value !== undefined)
+  @IsBoolean()
+  feeIncludesVat?: boolean;
+
+  @ApiPropertyOptional()
+  @ValidateIf((_, value) => value !== undefined)
+  @IsInt()
+  @Min(1)
+  @Max(120)
+  termMonths?: number;
+
+  @ApiPropertyOptional()
+  @ValidateIf((_, value) => value !== undefined)
+  @IsBoolean()
+  autoRenews?: boolean;
+
+  @ApiPropertyOptional()
+  @ValidateIf((_, value) => value !== undefined)
+  @IsInt()
+  @Min(0)
+  @Max(365)
+  noticeDays?: number;
+
+  @ApiPropertyOptional()
+  @ValidateIf((_, value) => value !== undefined)
+  @IsInt()
+  @Min(0)
+  @Max(365)
+  cureDays?: number;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(10000)
+  scopeOfWork?: string | null;
 }
 
 /**

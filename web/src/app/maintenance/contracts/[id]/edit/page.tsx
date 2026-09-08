@@ -1,46 +1,34 @@
 'use client';
 
+import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
 
 import { Field, FormPage, FormSection } from '@/components/form-page';
 import { fieldClass } from '@/components/form-styles';
+import { Sidebar } from '@/components/sidebar';
 import {
   ApiError,
-  createMaintenanceContract,
   getAccessToken,
-  listAssets,
+  getMaintenanceContract,
   MAINTENANCE_RECURRENCES,
-  optional,
-  type Asset,
+  updateMaintenanceContract,
   type MaintenanceRecurrence,
 } from '@/lib/api';
 
-const todayIso = (): string => new Date().toISOString().slice(0, 10);
-
-/** Mirrors the API's advanceServiceDate: clamp instead of overflowing a short
- *  month (Jan 31 + 1 month must be Feb 28, not Mar 3). */
-const addMonthsIso = (iso: string, months: number): string => {
-  const [y, m, d] = iso.split('-').map(Number);
-  const date = new Date(Date.UTC(y, m - 1, 1));
-  date.setUTCMonth(date.getUTCMonth() + months);
-  const lastDay = new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
-  ).getUTCDate();
-  date.setUTCDate(Math.min(d, lastDay));
-  return date.toISOString().slice(0, 10);
-};
-
-export default function NewMaintenanceContractPage() {
+/**
+ * The schedule and the agreement terms of a maintenance contract. The asset
+ * and customer are fixed at creation — a contract on the wrong lift is a
+ * new contract, not an edit. Ending a contract stays on the list page.
+ */
+export default function EditMaintenanceContractPage() {
   const router = useRouter();
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [assetId, setAssetId] = useState('');
-  const [recurrence, setRecurrence] =
-    useState<MaintenanceRecurrence>('MONTHLY');
-  const [startDate, setStartDate] = useState(todayIso());
-  const [nextServiceAt, setNextServiceAt] = useState(
-    addMonthsIso(todayIso(), 1),
-  );
+  const params = useParams<{ id: string }>();
+  const id = params.id;
+
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [recurrence, setRecurrence] = useState<MaintenanceRecurrence>('MONTHLY');
+  const [nextServiceAt, setNextServiceAt] = useState('');
   const [notes, setNotes] = useState('');
   const [monthlyFeeEtb, setMonthlyFeeEtb] = useState('');
   const [feeIncludesVat, setFeeIncludesVat] = useState(true);
@@ -57,84 +45,97 @@ export default function NewMaintenanceContractPage() {
       router.replace('/login');
       return;
     }
-    void optional(listAssets({ page: 1, pageSize: 100 })).then((result) => {
-      setAssets(result.items);
-      setAssetId((prev) => prev || result.items[0]?.id || '');
-    });
-  }, [router]);
+    void (async () => {
+      try {
+        const contract = await getMaintenanceContract(id);
+        setRecurrence(contract.recurrence);
+        setNextServiceAt(contract.nextServiceAt);
+        setNotes(contract.notes ?? '');
+        setMonthlyFeeEtb(contract.monthlyFeeEtb ?? '');
+        setFeeIncludesVat(contract.feeIncludesVat);
+        setTermMonths(String(contract.termMonths));
+        setAutoRenews(contract.autoRenews);
+        setNoticeDays(String(contract.noticeDays));
+        setCureDays(String(contract.cureDays));
+        setScopeOfWork(contract.scopeOfWork ?? '');
+        setLoaded(true);
+      } catch (err) {
+        setLoadError(
+          err instanceof ApiError
+            ? err.message
+            : 'That contract could not be loaded. It may have been ended.',
+        );
+      }
+    })();
+  }, [router, id]);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!assetId) {
-      setError('Register an asset first.');
-      return;
-    }
     setSubmitting(true);
     setError(null);
     try {
-      await createMaintenanceContract({
-        assetId,
+      await updateMaintenanceContract(id, {
         recurrence,
-        startDate,
         nextServiceAt,
-        notes: notes || undefined,
-        monthlyFeeEtb: monthlyFeeEtb.trim() || undefined,
+        notes: notes.trim() || null,
+        monthlyFeeEtb: monthlyFeeEtb.trim() || null,
         feeIncludesVat,
         termMonths: Number(termMonths),
         autoRenews,
         noticeDays: Number(noticeDays),
         cureDays: Number(cureDays),
-        scopeOfWork: scopeOfWork.trim() || undefined,
+        scopeOfWork: scopeOfWork.trim() || null,
       });
       router.push('/maintenance');
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : 'Failed to create contract',
-      );
+      setError(err instanceof ApiError ? err.message : 'Failed to save the contract');
     } finally {
       setSubmitting(false);
     }
   };
 
+  if (!loaded) {
+    return (
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="min-w-0 flex-1 p-6 sm:p-8">
+          {loadError ? (
+            <p
+              role="alert"
+              className="max-w-2xl rounded-xl border-l-2 border-red-600 bg-red-50 px-4 py-3 text-sm text-red-800"
+            >
+              {loadError}{' '}
+              <a href="/maintenance" className="font-semibold underline underline-offset-2">
+                Back to maintenance
+              </a>
+            </p>
+          ) : (
+            <p className="text-sm text-slate-500">Loading contract…</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <FormPage
       eyebrow="Operations"
-      title="New maintenance contract"
-      description="Link a service schedule to a registered asset."
+      title="Edit maintenance contract"
+      description="The service schedule and the terms printed on the Maintenance & Service Agreement."
       backHref="/maintenance"
       backLabel="Maintenance"
       error={error}
       submitting={submitting}
-      submitLabel="Create contract"
+      submitLabel="Save changes"
       onSubmit={(event) => void onSubmit(event)}
     >
       <FormSection title="Schedule">
-        <Field label="Asset" htmlFor="assetId" wide>
-          <select
-            id="assetId"
-            className={fieldClass}
-            value={assetId}
-            onChange={(e) => setAssetId(e.target.value)}
-          >
-            {assets.length === 0 ? (
-              <option value="">No assets</option>
-            ) : (
-              assets.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} ({a.category})
-                </option>
-              ))
-            )}
-          </select>
-        </Field>
         <Field label="Recurrence" htmlFor="recurrence">
           <select
             id="recurrence"
             className={fieldClass}
             value={recurrence}
-            onChange={(e) =>
-              setRecurrence(e.target.value as MaintenanceRecurrence)
-            }
+            onChange={(e) => setRecurrence(e.target.value as MaintenanceRecurrence)}
           >
             {MAINTENANCE_RECURRENCES.map((r) => (
               <option key={r} value={r}>
@@ -143,21 +144,7 @@ export default function NewMaintenanceContractPage() {
             ))}
           </select>
         </Field>
-        <Field label="Start date" htmlFor="startDate">
-          <input
-            id="startDate"
-            type="date"
-            className={fieldClass}
-            required
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-          />
-        </Field>
-        <Field
-          label="Next service"
-          htmlFor="nextServiceAt"
-          hint="Logging a visit rolls this forward by the recurrence."
-        >
+        <Field label="Next service" htmlFor="nextServiceAt">
           <input
             id="nextServiceAt"
             type="date"
@@ -167,9 +154,9 @@ export default function NewMaintenanceContractPage() {
             onChange={(e) => setNextServiceAt(e.target.value)}
           />
         </Field>
-        <Field label="Notes" htmlFor="contractNotes" wide>
+        <Field label="Internal notes" htmlFor="notes" hint="Not printed on the agreement." wide>
           <textarea
-            id="contractNotes"
+            id="notes"
             className={fieldClass}
             rows={3}
             value={notes}
@@ -180,7 +167,7 @@ export default function NewMaintenanceContractPage() {
 
       <FormSection
         title="Agreement terms"
-        description="Printed on the Maintenance & Service Agreement. The defaults are the company's standard terms."
+        description="Printed on the Maintenance & Service Agreement. Only management can change these."
       >
         <Field label="Monthly fee (ETB)" htmlFor="monthlyFeeEtb">
           <input

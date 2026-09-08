@@ -48,7 +48,7 @@ const wholeList = <T>(items: T[]) =>
 @ApiTags('settings')
 @ApiBearerAuth('access-token')
 @Controller('settings')
-@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
+@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER', 'SECRETARY')
 export class DocumentContentController {
   constructor(private readonly documentContent: DocumentContentService) {}
 

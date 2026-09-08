@@ -64,7 +64,7 @@ export const PROFORMAS_EXPORT_COLUMNS: ColumnDef[] = [
 @ApiTags('proformas')
 @ApiBearerAuth('access-token')
 @Controller()
-@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_LEAD', 'FINANCE')
+@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER', 'SECRETARY')
 export class ProformasController {
   constructor(
     private readonly proformasService: ProformasService,

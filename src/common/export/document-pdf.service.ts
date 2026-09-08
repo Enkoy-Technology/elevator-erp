@@ -10,6 +10,7 @@ import { buildAgingReportHtml } from './templates/aging.template';
 import { buildCompletionCertificateHtml } from './templates/completion-certificate.template';
 import { buildContractHtml } from './templates/contract.template';
 import { buildInvoiceHtml } from './templates/invoice.template';
+import { buildMaintenanceAgreementHtml } from './templates/maintenance-agreement.template';
 import { buildMaintenanceReportHtml } from './templates/maintenance-report.template';
 import { buildPaymentScheduleHtml } from './templates/payment-schedule.template';
 import { buildProformaHtml } from './templates/proforma.template';
@@ -38,6 +39,7 @@ export type DocumentTemplate =
   | 'payment-schedule'
   | 'technical-proposal'
   | 'maintenance-report'
+  | 'maintenance-agreement'
   | 'warranty-certificate'
   | 'completion-certificate'
   | 'aging-report'
@@ -50,6 +52,8 @@ export interface TenantBranding {
   address: string;
   phones: string[];
   primaryColor: string;
+  /** The company's TIN, printed in the parties clause of contracts. Optional so test fixtures need not carry it. */
+  taxId?: string | null;
 }
 
 // Templates tolerate a null branding (a tenant that hasn't configured
@@ -78,6 +82,7 @@ const TEMPLATE_BUILDERS: Record<DocumentTemplate, TemplateBuilder> = {
   'payment-schedule': buildPaymentScheduleHtml,
   'technical-proposal': buildTechnicalProposalHtml,
   'maintenance-report': buildMaintenanceReportHtml,
+  'maintenance-agreement': buildMaintenanceAgreementHtml,
   'warranty-certificate': buildWarrantyCertificateHtml,
   'completion-certificate': buildCompletionCertificateHtml,
   'aging-report': buildAgingReportHtml,

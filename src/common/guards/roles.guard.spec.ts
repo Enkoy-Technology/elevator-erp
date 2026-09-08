@@ -33,19 +33,19 @@ describe('RolesGuard', () => {
   };
 
   it('allows a user whose role is listed', () => {
-    const guard = guardWith({ requiredRoles: ['SALES_MANAGER', 'FINANCE'] });
-    expect(guard.canActivate(context({ role: 'FINANCE' }))).toBe(true);
+    const guard = guardWith({ requiredRoles: ['SALES_MANAGER', 'FINANCE_OFFICER'] });
+    expect(guard.canActivate(context({ role: 'FINANCE_OFFICER' }))).toBe(true);
   });
 
   it('denies a user whose role is not listed', () => {
     const guard = guardWith({ requiredRoles: ['SALES_MANAGER'] });
-    expect(() => guard.canActivate(context({ role: 'FIELD_ENGINEER' }))).toThrow(
+    expect(() => guard.canActivate(context({ role: 'MAINTENANCE_ENGINEER' }))).toThrow(
       ForbiddenException,
     );
   });
 
   it.each(['CEO', 'ADMIN'] as const)('lets %s through any role gate', (role) => {
-    const guard = guardWith({ requiredRoles: ['DISPATCHER'] });
+    const guard = guardWith({ requiredRoles: ['MAINTENANCE_ENGINEER'] });
     expect(guard.canActivate(context({ role }))).toBe(true);
   });
 
@@ -77,9 +77,9 @@ describe('RolesGuard', () => {
   });
 
   it('does not treat other senior roles as super-roles', () => {
-    const guard = guardWith({ requiredRoles: ['DISPATCHER'] });
+    const guard = guardWith({ requiredRoles: ['MAINTENANCE_ENGINEER'] });
     expect(() =>
-      guard.canActivate(context({ role: 'TECHNICAL_LEAD' })),
+      guard.canActivate(context({ role: 'TECHNICAL_MANAGER' })),
     ).toThrow(ForbiddenException);
   });
 

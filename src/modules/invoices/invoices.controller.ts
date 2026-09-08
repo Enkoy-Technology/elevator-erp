@@ -120,7 +120,7 @@ export const AGING_EXPORT_COLUMNS: ColumnDef[] = [
 @ApiTags('invoices')
 @ApiBearerAuth('access-token')
 @Controller()
-@Roles('GENERAL_MANAGER', 'FINANCE')
+@Roles('GENERAL_MANAGER', 'FINANCE_OFFICER')
 export class InvoicesController {
   constructor(
     private readonly invoicesService: InvoicesService,
@@ -160,6 +160,7 @@ export class InvoicesController {
   }
 
   @Get('invoices')
+  @Roles('GENERAL_MANAGER', 'FINANCE_OFFICER', 'SALES_MANAGER')
   @ApiOperation({
     summary:
       'List invoices (status/customerId/q filter + pagination), or stream a CSV/XLSX export with ?format=',
@@ -257,6 +258,7 @@ export class InvoicesController {
   }
 
   @Get('invoices/:id')
+  @Roles('GENERAL_MANAGER', 'FINANCE_OFFICER', 'SALES_MANAGER')
   @ApiOperation({ summary: 'Get invoice by id, with its lines' })
   get(
     @CurrentUser() user: AuthenticatedUser,
@@ -266,6 +268,7 @@ export class InvoicesController {
   }
 
   @Get('invoices/:id/document')
+  @Roles('GENERAL_MANAGER', 'FINANCE_OFFICER', 'SALES_MANAGER')
   @ApiOperation({
     summary:
       'Download an invoice as PDF, Word, or Excel (?format=pdf|docx|xlsx). Carries the fiscal-status notice/mirror block — see invoice.template.ts.',

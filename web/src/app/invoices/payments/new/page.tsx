@@ -44,10 +44,10 @@ const BANK_METHODS = new Set<PaymentMethod>([
 /** Invoices a payment can still be allocated against. */
 const OPEN_STATUSES = new Set<InvoiceStatus>(['ISSUED', 'PARTIALLY_PAID']);
 
-/** Mirrors PaymentsController's class-level @Roles('FINANCE');
+/** Mirrors PaymentsController's class-level @Roles('FINANCE_OFFICER');
  *  CEO/ADMIN bypass via RolesGuard's SUPER_ROLES. */
 const canManageFinance = (role: UserRole | null): boolean =>
-  role === 'FINANCE' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
+  role === 'FINANCE_OFFICER' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
 
 interface AllocationDraft {
   invoiceId: string;

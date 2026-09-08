@@ -26,7 +26,7 @@ describe('MaintenanceController.listContracts — status validation', () => {
   const user: AuthenticatedUser = {
     userId: '11111111-1111-1111-1111-111111111111',
     tenantId: '22222222-2222-2222-2222-222222222222',
-    role: 'DISPATCHER',
+    role: 'MAINTENANCE_ENGINEER',
   };
 
   const service = {
@@ -96,7 +96,7 @@ describe('MaintenanceController.listContracts — format wiring', () => {
   const user: AuthenticatedUser = {
     userId: '11111111-1111-1111-1111-111111111111',
     tenantId: '22222222-2222-2222-2222-222222222222',
-    role: 'DISPATCHER',
+    role: 'MAINTENANCE_ENGINEER',
   };
 
   const service = {
@@ -165,7 +165,7 @@ describe('MaintenanceController.listBreakdowns — status validation', () => {
   const user: AuthenticatedUser = {
     userId: '11111111-1111-1111-1111-111111111111',
     tenantId: '22222222-2222-2222-2222-222222222222',
-    role: 'DISPATCHER',
+    role: 'MAINTENANCE_ENGINEER',
   };
 
   const service = {
@@ -220,7 +220,7 @@ describe('MaintenanceController.listBreakdowns — format wiring', () => {
   const user: AuthenticatedUser = {
     userId: '11111111-1111-1111-1111-111111111111',
     tenantId: '22222222-2222-2222-2222-222222222222',
-    role: 'DISPATCHER',
+    role: 'MAINTENANCE_ENGINEER',
   };
 
   const service = {
@@ -289,7 +289,7 @@ describe('MaintenanceController.visitReport', () => {
   const user: AuthenticatedUser = {
     userId: '11111111-1111-1111-1111-111111111111',
     tenantId: '22222222-2222-2222-2222-222222222222',
-    role: 'FIELD_ENGINEER',
+    role: 'MAINTENANCE_ENGINEER',
   };
   const visitId = '33333333-3333-3333-3333-333333333333';
 

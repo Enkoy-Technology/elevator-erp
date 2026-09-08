@@ -88,7 +88,7 @@ export const EXPENSES_EXPORT_COLUMNS: ColumnDef[] = [
 @ApiTags('expenses')
 @ApiBearerAuth('access-token')
 @Controller('expenses')
-@Roles('GENERAL_MANAGER', 'FINANCE')
+@Roles('GENERAL_MANAGER', 'FINANCE_OFFICER')
 export class ExpensesController {
   constructor(private readonly expensesService: ExpensesService) {}
 

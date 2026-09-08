@@ -29,6 +29,15 @@ export const assets = pgTable(
     name: text('name').notNull(),
     buildingName: text('building_name'),
     serialNumber: text('serial_number'),
+    /**
+     * The machine as the maintenance agreement describes it, one attribute
+     * per line ("Brand: Sigma", "Capacity: 630 kg", "Stops: 12 (2B+G+9)").
+     * Same shape as proforma_lines.spec_summary, which is where the text
+     * usually comes from.
+     * ponytail: one text column; split into brand/capacity/speed/stops columns
+     * when something needs to filter or sort on them.
+     */
+    specSummary: text('spec_summary'),
     locationNotes: text('location_notes'),
     status: assetStatusEnum('status').notNull().default('ACTIVE'),
     notes: text('notes'),
