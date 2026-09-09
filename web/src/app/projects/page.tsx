@@ -347,11 +347,8 @@ export default function ProjectsPage() {
           eyebrow="Sales"
           title="Project pipeline"
           description="Every deal from LEAD to COMPLETED. Advancing a project here is what unlocks its quotation and invoice."
-          actions={
-            <Link href="/customers" className={btnGhost}>
-              Customers
-            </Link>
-          }
+          backHref="/customers"
+          backLabel="Customers"
         />
 
         <main className="flex-1 bg-slate-50 p-4 sm:p-8">

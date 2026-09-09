@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -63,11 +62,10 @@ export default function ContractSchedulePage() {
             contract ? `Payment schedule — ${contract.contractNumber}` : 'Payment schedule'
           }
           description="What the customer has agreed to pay, and when. An instalment is a plan; the invoice is raised separately when the milestone is actually reached."
+          backHref="/contracts"
+          backLabel="Contracts"
           actions={
             <>
-              <Link href="/contracts" className={btnSecondary}>
-                Back to contracts
-              </Link>
               {contract ? (
                 <button
                   type="button"

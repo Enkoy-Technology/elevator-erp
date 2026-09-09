@@ -1,7 +1,7 @@
 /** Shared control styles for admin list/drawer pages. */
 
 export const fieldClass =
-  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm ' +
+  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 ' +
   'outline-none transition focus:border-gold-500 focus:ring-2 focus:ring-gold-500/25';
 
 export const labelClass =

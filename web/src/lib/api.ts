@@ -1382,10 +1382,9 @@ const stampPrintDate = (): void => {
 };
 
 if (typeof document !== 'undefined') {
+  // Only on print. Stamping at module load wrote the attribute onto <body>
+  // before React hydrated, so every page reported a hydration mismatch.
   window.addEventListener('beforeprint', stampPrintDate);
-  if (document.body) {
-    stampPrintDate();
-  }
 }
 
 export type QuoteStatus =

@@ -12,7 +12,7 @@ import {
   ASSET_STATUS_TONE,
 } from '@/app/assets/labels';
 import { DataTable } from '@/components/data-table';
-import { btnGhost, btnSecondary, metaLabelClass } from '@/components/form-styles';
+import { btnSecondary, metaLabelClass } from '@/components/form-styles';
 import { StatusPill } from '@/components/list-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
@@ -653,11 +653,10 @@ export default function CustomerDetailPage() {
         eyebrow="Customer"
         title={customer.name}
         description={customer.legalName ?? undefined}
+        backHref="/customers"
+        backLabel="Customers"
         actions={
           <>
-            <Link href="/customers" className={btnGhost}>
-              All customers
-            </Link>
             {canWrite ? (
               <>
                 <Link href={`/customers/${customer.id}/edit`} className={btnSecondary}>
