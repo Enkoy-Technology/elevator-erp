@@ -257,7 +257,7 @@ const Section = <T,>({
   action?: ReactNode;
   empty: string;
 }) => (
-  <section>
+  <section id={title.toLowerCase()} className="scroll-mt-36">
     <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
       <h2 className="flex items-baseline gap-2">
         <span className={`${metaLabelClass} font-semibold`}>{title}</span>
@@ -684,6 +684,32 @@ export default function CustomerDetailPage() {
             {error}
           </p>
         ) : null}
+
+        {/* What this customer has with us, at a glance — each jumps to its list below. */}
+        <nav aria-label="Related records" className="flex flex-wrap gap-2">
+          {[
+            ['Projects', overview.projects?.total],
+            ['Quotations', overview.quotations?.total],
+            ['Proformas', overview.proformas?.total],
+            ['Contracts', overview.contracts?.total],
+            ['Invoices', overview.invoices?.total],
+            ['Assets', overview.assets?.total],
+            ['Maintenance', overview.maintenance?.total],
+          ]
+            .filter((entry): entry is [string, number] => typeof entry[1] === 'number')
+            .map(([label, total]) => (
+              <a
+                key={label}
+                href={`#${label.toLowerCase()}`}
+                className="flex min-w-[8.5rem] flex-col rounded-md border border-slate-200 bg-white px-4 py-2.5 transition hover:border-slate-400"
+              >
+                <span className="font-display text-xl font-semibold tabular-nums text-slate-900">
+                  {formatNumber(total)}
+                </span>
+                <span className="text-xs text-slate-500">{label}</span>
+              </a>
+            ))}
+        </nav>
 
         <div className="grid gap-4 lg:grid-cols-3">
           <section className="rounded-xl border border-slate-200 bg-white p-5 lg:col-span-2">
