@@ -20,22 +20,37 @@ export class CreateProductTypeDto {
   @MaxLength(80)
   name!: string;
 
-  @ApiProperty({ example: '8000000.00', description: 'Starting price, ETB, before margin and VAT.' })
+  @ApiProperty({
+    example: '8000000.00',
+    description: 'Starting price, ETB, before margin and VAT.',
+  })
   @Matches(MONEY_RE, { message: `basePriceEtb ${MONEY_MSG}` })
   @Validate(PositiveMoneyConstraint)
   basePriceEtb!: string;
 
-  @ApiPropertyOptional({ example: '80000.00', description: 'Added per stop above 10. 0 for a flat price.', default: '0' })
+  @ApiPropertyOptional({
+    example: '80000.00',
+    description: 'Added per stop above 10. 0 for a flat price.',
+    default: '0',
+  })
   @IsOptional()
   @Matches(MONEY_RE, { message: `perStopEtb ${MONEY_MSG}` })
   perStopEtb?: string;
 
-  @ApiPropertyOptional({ example: '1000.00', description: 'Added per kg above 630. 0 for a flat price.', default: '0' })
+  @ApiPropertyOptional({
+    example: '1000.00',
+    description: 'Added per kg above 630. 0 for a flat price.',
+    default: '0',
+  })
   @IsOptional()
   @Matches(MONEY_RE, { message: `perKgEtb ${MONEY_MSG}` })
   perKgEtb?: string;
 
-  @ApiPropertyOptional({ default: true, description: 'Compute the EN 81 lift geometry (car, shaft, pit). Off for escalators.' })
+  @ApiPropertyOptional({
+    default: true,
+    description:
+      'Compute the EN 81 lift geometry (car, shaft, pit). Off for escalators.',
+  })
   @IsOptional()
   @IsBoolean()
   liftGeometry?: boolean;

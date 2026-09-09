@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 
 import { tenantBranding, tenants } from '../../database/schema';
+import { DEFAULT_PRICING_FORMULA } from '../../common/formula';
 import { TenantDbService } from '../../database/tenant-db.service';
 import type { UpdateSettingsDto } from './dto/update-settings.dto';
 
@@ -11,6 +12,8 @@ export type SettingsRecord = typeof tenantBranding.$inferSelect & {
   fiscalYearStart: string;
   maintenanceReminderDays: number;
   paymentReminderOffsetDays: number[];
+  /** The stored formula, or the starter when none has been saved. */
+  pricingFormula: string;
   /** Last-run result of the nightly balance reconciliation (task-2 §2.5) —
    * both null until the job has ever run. Read-only: never part of
    * UpdateSettingsDto, only BalanceReconciliationService writes these. */
@@ -36,16 +39,22 @@ const TENANT_SETTINGS_COLUMNS = {
   fiscalYearStart: tenants.fiscalYearStart,
   maintenanceReminderDays: tenants.maintenanceReminderDays,
   paymentReminderOffsetDays: tenants.paymentReminderOffsetDays,
+  pricingFormula: tenants.pricingFormula,
   balanceReconciliationLastRunAt: tenants.balanceReconciliationLastRunAt,
-  balanceReconciliationMismatchCount: tenants.balanceReconciliationMismatchCount,
+  balanceReconciliationMismatchCount:
+    tenants.balanceReconciliationMismatchCount,
   maintenanceReminderConsentSkippedLastRunAt:
     tenants.maintenanceReminderConsentSkippedLastRunAt,
-  maintenanceReminderConsentSkippedCount: tenants.maintenanceReminderConsentSkippedCount,
-  paymentReminderConsentSkippedLastRunAt: tenants.paymentReminderConsentSkippedLastRunAt,
-  paymentReminderConsentSkippedCount: tenants.paymentReminderConsentSkippedCount,
+  maintenanceReminderConsentSkippedCount:
+    tenants.maintenanceReminderConsentSkippedCount,
+  paymentReminderConsentSkippedLastRunAt:
+    tenants.paymentReminderConsentSkippedLastRunAt,
+  paymentReminderConsentSkippedCount:
+    tenants.paymentReminderConsentSkippedCount,
   maintenanceReminderInvalidPhoneSkippedCount:
     tenants.maintenanceReminderInvalidPhoneSkippedCount,
-  paymentReminderInvalidPhoneSkippedCount: tenants.paymentReminderInvalidPhoneSkippedCount,
+  paymentReminderInvalidPhoneSkippedCount:
+    tenants.paymentReminderInvalidPhoneSkippedCount,
 };
 
 @Injectable()
@@ -67,7 +76,11 @@ export class SettingsRepository {
       if (!tenant) {
         throw new NotFoundException('Tenant not found');
       }
-      return { ...row, ...tenant };
+      return {
+        ...row,
+        ...tenant,
+        pricingFormula: tenant.pricingFormula ?? DEFAULT_PRICING_FORMULA,
+      };
     });
   }
 
@@ -115,7 +128,8 @@ export class SettingsRepository {
         dto.name !== undefined ||
         dto.fiscalYearStart !== undefined ||
         dto.maintenanceReminderDays !== undefined ||
-        dto.paymentReminderOffsetDays !== undefined;
+        dto.paymentReminderOffsetDays !== undefined ||
+        dto.pricingFormula !== undefined;
       const [tenant] = touchesTenant
         ? await tx
             .update(tenants)
@@ -130,6 +144,9 @@ export class SettingsRepository {
               ...(dto.paymentReminderOffsetDays !== undefined
                 ? { paymentReminderOffsetDays: dto.paymentReminderOffsetDays }
                 : {}),
+              ...(dto.pricingFormula !== undefined
+                ? { pricingFormula: dto.pricingFormula?.trim() ?? null }
+                : {}),
               updatedAt: new Date(),
             })
             .where(eq(tenants.id, tenantId))
@@ -143,7 +160,11 @@ export class SettingsRepository {
         throw new NotFoundException('Tenant not found');
       }
 
-      return { ...row, ...tenant };
+      return {
+        ...row,
+        ...tenant,
+        pricingFormula: tenant.pricingFormula ?? DEFAULT_PRICING_FORMULA,
+      };
     });
   }
 }

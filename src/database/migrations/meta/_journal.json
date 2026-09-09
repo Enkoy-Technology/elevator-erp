@@ -505,6 +505,13 @@
       "when": 1788951767278,
       "tag": "0071_uneven_bedlam",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1788954683036,
+      "tag": "0072_abnormal_warbird",
+      "breakpoints": true
     }
   ]
 }

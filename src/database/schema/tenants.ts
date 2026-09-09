@@ -44,6 +44,13 @@ export const tenants = pgTable('tenants', {
     .notNull()
     .default(sql`'{0,7,30}'`),
   /**
+   * The list-price formula the calculator evaluates, in the client's own
+   * words (see src/common/formula.ts for the language). Null means the
+   * starter, DEFAULT_PRICING_FORMULA. Same "tenant setting" path as the
+   * reminder cadence above.
+   */
+  pricingFormula: text('pricing_formula'),
+  /**
    * Last-run result of the nightly customer-balance reconciliation (task-2
    * brief §2.5) — the "somewhere an admin can see it" surface: read back
    * through GET /settings, written by BalanceReconciliationService after

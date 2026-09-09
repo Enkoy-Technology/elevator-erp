@@ -1,0 +1,1 @@
+ALTER TABLE "tenants" ADD COLUMN "pricing_formula" text;

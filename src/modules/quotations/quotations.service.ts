@@ -16,7 +16,7 @@ import type { QuoteStatus } from '../../database/schema';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { D, money } from '../elevator-calc/calc-math';
 import { ElevatorCalcService } from '../elevator-calc/elevator-calc.service';
-import type { CalcInput, PricingBreakdown } from '../elevator-calc/types';
+import type { CalcRequest, PricingBreakdown } from '../elevator-calc/types';
 import { ProjectsService } from '../projects/projects.service';
 import { ratePayloadSchemaFor } from '../rates/rate-payloads';
 import { RatesService } from '../rates/rates.service';
@@ -70,10 +70,7 @@ export class QuotationsService {
     return this.quotationsRepository.list(user.tenantId, options);
   }
 
-  async getById(
-    user: AuthenticatedUser,
-    id: string,
-  ): Promise<QuotationRecord> {
+  async getById(user: AuthenticatedUser, id: string): Promise<QuotationRecord> {
     const row = await this.quotationsRepository.findById(user.tenantId, id);
     if (!row) {
       throw new NotFoundException('Quotation not found');
@@ -108,7 +105,14 @@ export class QuotationsService {
     // calc's own taxPercent input is unused here — pass 0 as a placeholder
     // and override the tax/total lines below with the VAT computed above,
     // so the persisted snapshot matches the persisted numeric columns.
-    const result = await this.calcService.calculateSpecs(user.tenantId, { ...calcInput, taxPercent: 0 });
+    const result = await this.calcService.calculateSpecs(user.tenantId, {
+      ...calcInput,
+      taxPercent: 0,
+    });
+    // Store what was resolved, not what was typed: a standard passenger
+    // lift arrives as shaft + floors and the header must still carry the
+    // capacity and speed the technical proposal prints.
+    const { taxPercent: _placeholder, ...resolvedInput } = result.input;
 
     const subtotalWithMargin = D(result.pricing.subtotalWithMargin);
     const taxAmount = subtotalWithMargin.mul(vatPercent).div(100);
@@ -131,7 +135,7 @@ export class QuotationsService {
       quoteNumber: buildQuoteNumber(id),
       status: 'DRAFT',
       version: 1,
-      calcInput,
+      calcInput: resolvedInput,
       technicalSpec: result.technical,
       pricingBreakdown,
       rateVersionId: rateVersion.id,
@@ -469,17 +473,25 @@ export class QuotationsService {
     dto: CreateQuotationLineDto,
   ): Promise<QuotationLineValues> {
     const plan = describeFloorPlan(dto.floorLabels, dto.entranceCount);
-    const stops = plan?.stops ?? dto.stops;
+    const stops = plan?.stops ?? dto.stops ?? dto.floors;
     if (stops === undefined) {
       throw new BadRequestException(
         'A line needs either stops or floorLabels (the floor count is what fills stops).',
       );
     }
 
-    const calcInput: CalcInput = {
+    // The request may be a standard passenger lift (shaft + floors) or every
+    // figure typed; the calculator resolves either into a complete input.
+    const request: CalcRequest = {
       productType: dto.productType,
       capacityKg: dto.capacityKg,
       stops,
+      // The stop count is authoritative: an edit that changes the stops (or
+      // the floor labels) re-picks the speed band off the new count, never
+      // off the floors stored with the line last time.
+      floors: dto.shaftWidthMm !== undefined ? stops : undefined,
+      shaftWidthMm: dto.shaftWidthMm,
+      shaftDepthMm: dto.shaftDepthMm,
       travelHeightM: dto.travelHeightM,
       speedMs: dto.speedMs,
       machineRoomType: dto.machineRoomType,
@@ -492,7 +504,8 @@ export class QuotationsService {
       // decimal.js so no money round-trips through a float.
       taxPercent: 0,
     };
-    const result = await this.calcService.calculateSpecs(tenantId, calcInput);
+    const result = await this.calcService.calculateSpecs(tenantId, request);
+    const calcInput = result.input;
 
     const subtotalWithMargin = D(result.pricing.subtotalWithMargin);
     const taxAmount = subtotalWithMargin.mul(D(taxPercent)).div(100);
@@ -518,9 +531,9 @@ export class QuotationsService {
       specSummary:
         dto.specSummary ??
         buildSpecSummary({
-          capacityKg: dto.capacityKg,
+          capacityKg: calcInput.capacityKg,
           capacityPersons: result.technical.capacityPersons,
-          speedMs: dto.speedMs,
+          speedMs: calcInput.speedMs,
           plan,
         }),
       machineRoomLabel: dto.machineRoomLabel ?? null,
@@ -542,7 +555,10 @@ export class QuotationsService {
     id: string,
     to: QuoteStatus,
     extra: Partial<
-      Pick<QuotationInsert, 'approvedByUserId' | 'approvedAt' | 'rejectedReason'>
+      Pick<
+        QuotationInsert,
+        'approvedByUserId' | 'approvedAt' | 'rejectedReason'
+      >
     > = {},
   ): Promise<QuotationRecord> {
     const quote = await this.getById(user, id);

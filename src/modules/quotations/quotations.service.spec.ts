@@ -93,6 +93,20 @@ describe('QuotationsService', () => {
 
   describe('createForProject', () => {
     const calcResult: CalcResult = {
+      input: {
+        productType: 'PASSENGER',
+        capacityKg: 1000,
+        stops: 12,
+        travelHeightM: 45,
+        speedMs: 1.6,
+        machineRoomType: 'MRL',
+        doorType: 'CENTER_OPEN',
+        doorWidthMm: 900,
+        buildingUsage: 'COMMERCIAL',
+        marginPercent: 25,
+        taxPercent: 0,
+      },
+      notes: [],
       technical: { capacityPersons: 13 } as CalcResult['technical'],
       pricing: {
         // PASSENGER, 5 stops (floors to 0), 1000 kg: 7,000,000 + 370,000
@@ -146,7 +160,7 @@ describe('QuotationsService', () => {
       expect(values.rateVersionId).toBe('77777777-7777-7777-7777-777777777777');
     });
 
-    it('computes tax/total off the resolved VAT percent with decimal.js, not calc\'s placeholder', async () => {
+    it("computes tax/total off the resolved VAT percent with decimal.js, not calc's placeholder", async () => {
       await service.createForProject(user, project.id, dto);
 
       const [, values] = repo.create.mock.calls[0]!;
@@ -249,7 +263,10 @@ describe('QuotationsService', () => {
     });
 
     it('cannot resurrect a REJECTED quote', async () => {
-      repo.findById.mockResolvedValue({ ...draft, status: 'REJECTED' as const });
+      repo.findById.mockResolvedValue({
+        ...draft,
+        status: 'REJECTED' as const,
+      });
       await expect(service.approve(user, draft.id)).rejects.toBeInstanceOf(
         WorkflowTransitionError,
       );
@@ -448,7 +465,10 @@ describe('QuotationsService', () => {
     });
 
     it('leaves a discount at or under the threshold alone', async () => {
-      repo.findById.mockResolvedValue({ ...discounted, discountPercent: '5.00' });
+      repo.findById.mockResolvedValue({
+        ...discounted,
+        discountPercent: '5.00',
+      });
       repo.getDiscountApprovalThresholdPercent.mockResolvedValue('5.00');
       repo.updateStatus.mockResolvedValue({
         ...discounted,
@@ -563,6 +583,20 @@ describe('QuotationsService', () => {
 
   describe('addLine', () => {
     const calcResultForLine: CalcResult = {
+      input: {
+        productType: 'PASSENGER',
+        capacityKg: 800,
+        stops: 13,
+        travelHeightM: 39,
+        speedMs: 1.5,
+        machineRoomType: 'MR',
+        doorType: 'CENTER_OPEN',
+        doorWidthMm: 900,
+        buildingUsage: 'COMMERCIAL',
+        marginPercent: 0,
+        taxPercent: 0,
+      },
+      notes: [],
       technical: { capacityPersons: 10 } as CalcResult['technical'],
       pricing: {
         basePrice: '7000000.00',
@@ -596,11 +630,33 @@ describe('QuotationsService', () => {
       repo.addLine.mockImplementation(async () => ({}));
     });
 
-    it('fills the frozen formula\'s stops from the floor labels', async () => {
+    it("fills the frozen formula's stops from the floor labels", async () => {
       await service.addLine(user, draft.id, lineDto as never);
       expect(calc.calculateSpecs).toHaveBeenCalledWith(
         user.tenantId,
         expect.objectContaining({ stops: 13, taxPercent: 0 }),
+      );
+    });
+
+    it('re-picks a standard lift off the new stop count, not the floors stored last time', async () => {
+      repo.listLines.mockResolvedValue([
+        {
+          id: 'line-1',
+          quantity: 1,
+          calcInput: {
+            ...calcResultForLine.input,
+            shaftWidthMm: 1835,
+            shaftDepthMm: 1750,
+            floors: 8,
+            stops: 8,
+          },
+        },
+      ]);
+      repo.updateLine.mockImplementation(async () => ({}));
+      await service.updateLine(user, draft.id, 'line-1', { stops: 13 });
+      expect(calc.calculateSpecs).toHaveBeenLastCalledWith(
+        user.tenantId,
+        expect.objectContaining({ shaftWidthMm: 1835, stops: 13, floors: 13 }),
       );
     });
 

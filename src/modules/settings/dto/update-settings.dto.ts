@@ -1,4 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { MAX_FORMULA_LENGTH, formulaProblem } from '../../../common/formula';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -16,6 +17,7 @@ import {
   ValidatorConstraint,
   isDateString,
   type ValidatorConstraintInterface,
+  ValidateIf,
 } from 'class-validator';
 
 export const LOCALES = ['en', 'am'] as const;
@@ -30,15 +32,34 @@ const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
 // leap-day fiscal year boundary is inherently ambiguous, so it is never
 // valid regardless of which real year it's used in.
 @ValidatorConstraint({ name: 'isValidFiscalYearBoundary', async: false })
-class IsValidFiscalYearBoundaryConstraint
-  implements ValidatorConstraintInterface
-{
+class IsValidFiscalYearBoundaryConstraint implements ValidatorConstraintInterface {
   validate(value: unknown): boolean {
-    return typeof value === 'string' && isDateString(`2001-${value}`, { strict: true });
+    return (
+      typeof value === 'string' &&
+      isDateString(`2001-${value}`, { strict: true })
+    );
   }
 
   defaultMessage(): string {
     return 'fiscalYearStart must be a calendar-valid MM-DD';
+  }
+}
+
+/** A formula that does not parse is refused here, not discovered on the next quotation. */
+@ValidatorConstraint({ name: 'isPricingFormula', async: false })
+export class IsPricingFormulaConstraint implements ValidatorConstraintInterface {
+  private problem: string | null = null;
+
+  validate(value: unknown): boolean {
+    if (typeof value !== 'string') {
+      return false;
+    }
+    this.problem = formulaProblem(value);
+    return this.problem === null;
+  }
+
+  defaultMessage(): string {
+    return `pricingFormula: ${this.problem ?? 'is not a valid formula'}`;
   }
 }
 
@@ -141,4 +162,18 @@ export class UpdateSettingsDto {
   @Min(0, { each: true })
   @Max(365, { each: true })
   paymentReminderOffsetDays?: number[];
+
+  @ApiPropertyOptional({
+    example: 'Base price + (N - 10) * 80,000 + (C - 630kg) * 1,000',
+    description:
+      'The list-price formula the calculator evaluates. Names: base (product base price), N (stops), C (capacity kg), perStop and perKg (the product’s own rates). Supports + - * /, parentheses, max(), min(), round().',
+    maxLength: 500,
+  })
+  @ValidateIf((o: UpdateSettingsDto) => o.pricingFormula !== null)
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_FORMULA_LENGTH)
+  @Validate(IsPricingFormulaConstraint)
+  /** Null resets the tenant to the starter formula. */
+  pricingFormula?: string | null;
 }

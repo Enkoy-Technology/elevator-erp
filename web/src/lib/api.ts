@@ -251,11 +251,26 @@ export interface CalcInputPayload {
   buildingUsage: 'RESIDENTIAL' | 'COMMERCIAL' | 'HOSPITAL' | 'INDUSTRIAL';
   marginPercent: number;
   taxPercent: number;
+  /** Standard passenger lift: the shaft and floors that picked it. */
+  shaftWidthMm?: number;
+  shaftDepthMm?: number;
+  floors?: number;
 }
 
+/**
+ * What the calculator accepts: a passenger lift can be described by its
+ * shaft and floors alone; the classic figures are then filled in by the API.
+ */
+export type CalcRequestPayload = Pick<CalcInputPayload, 'productType' | 'marginPercent' | 'taxPercent'> &
+  Partial<Omit<CalcInputPayload, 'productType' | 'marginPercent' | 'taxPercent'>>;
+
 export interface CalcResult {
-  // Every technical field except productType is null for non-PASSENGER
-  // products — §4.1 is EN 81 lift geometry and an escalator has none of it.
+  /** The complete input the figures came from, derived fields filled in. */
+  input: CalcInputPayload;
+  /** A non-standard shaft, a capped speed: things the person quoting should know. */
+  notes: string[];
+  // Every technical field except productType is null for products without
+  // lift geometry — §4.1 is EN 81 lift geometry and an escalator has none of it.
   technical: {
     productType: ProductType;
     capacityPersons: number | null;
@@ -286,7 +301,7 @@ export interface CalcResult {
 }
 
 export const calculateSpecs = (
-  input: CalcInputPayload,
+  input: CalcRequestPayload,
 ): Promise<CalcResult> =>
   apiFetch<CalcResult>('/elevator-specs/calculate', {
     method: 'POST',
@@ -1183,6 +1198,8 @@ export interface TenantSettings {
   /** Days relative to an invoice's dueDate the payment-reminder cron fires
    * on — 0 is the due date itself, positive is days after (I7). */
   paymentReminderOffsetDays: number[];
+  /** The list-price formula the calculator evaluates, edited here. */
+  pricingFormula: string;
   /** Last-run result of the daily maintenance-reminder cron's consent gate
    * (task-3 §3.4) — both null until that cron has ever run once. Read-only. */
   maintenanceReminderConsentSkippedLastRunAt: string | null;
@@ -1629,7 +1646,7 @@ export interface QuotationLine extends QuotationLineSpecFields {
  * the other or the API 400s.
  */
 export interface CreateQuotationLinePayload
-  extends Omit<CalcInputPayload, 'taxPercent' | 'stops'>,
+  extends Omit<CalcRequestPayload, 'taxPercent' | 'stops'>,
     QuotationLineSpecInput {
   stops?: number;
   /** 1..999, defaults to 1. */
@@ -2272,6 +2289,7 @@ export const updateSettings = (payload: {
   defaultLocale?: AppLocale;
   maintenanceReminderDays?: number;
   paymentReminderOffsetDays?: number[];
+  pricingFormula?: string | null;
 }): Promise<TenantSettings> =>
   apiFetch<TenantSettings>('/settings', {
     method: 'PATCH',

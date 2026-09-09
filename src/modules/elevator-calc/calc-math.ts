@@ -1,9 +1,8 @@
 import { Decimal } from 'decimal.js';
 
-import type {
-  BuildingUsage,
-  MachineRoomType,
-} from './types';
+import { evaluateFormula } from '../../common/formula';
+
+import type { BuildingUsage, MachineRoomType } from './types';
 
 Decimal.set({ precision: 40, rounding: Decimal.ROUND_HALF_UP });
 
@@ -31,10 +30,8 @@ export const REFERENCE_STOPS = 10;
 export const REFERENCE_CAPACITY_KG = 630;
 
 /**
- * `base(N) + max(0, N - 10) × rate_stop + max(0, Q - 630) × rate_kg`.
- *
- * Both adjustments floor at the reference point: an under-spec machine still
- * costs the base, it never prices below it.
+ * The tenant's list-price formula over base, N (stops) and C (kg); the
+ * starter is `base + (N - 10) × perStop + (C - 630) × perKg`, unfloored.
  *
 
  * The base and both rates come from the tenant's product list, so a product
@@ -51,17 +48,31 @@ export const computeProductPrice = (
   rates: ProductRates,
   stops: number,
   capacityKg: number,
+  formula: string,
 ): {
   basePrice: Decimal;
   stopsAdjustment: Decimal;
   capacityAdjustment: Decimal;
 } => {
-  const stopsOver = Decimal.max(0, D(stops).minus(REFERENCE_STOPS));
-  const kgOver = Decimal.max(0, D(capacityKg).minus(REFERENCE_CAPACITY_KG));
+  const scope = {
+    base: rates.basePriceEtb,
+    perStop: rates.perStopEtb,
+    perKg: rates.perKgEtb,
+  };
+  const basePrice = D(rates.basePriceEtb);
+  const total = evaluateFormula(formula, { ...scope, N: stops, C: capacityKg });
+  // The formula is the tenant's and need not be additive. Splitting at the
+  // reference capacity keeps the printed breakdown honest for any formula:
+  // what the stops added, then what the capacity added on top of that.
+  const atReferenceCapacity = evaluateFormula(formula, {
+    ...scope,
+    N: stops,
+    C: REFERENCE_CAPACITY_KG,
+  });
   return {
-    basePrice: D(rates.basePriceEtb),
-    stopsAdjustment: stopsOver.mul(rates.perStopEtb),
-    capacityAdjustment: kgOver.mul(rates.perKgEtb),
+    basePrice,
+    stopsAdjustment: atReferenceCapacity.minus(basePrice),
+    capacityAdjustment: total.minus(atReferenceCapacity),
   };
 };
 
@@ -153,7 +164,10 @@ export const computeMotorPowerKw = (
   return Decimal.max(D(3), raw);
 };
 
-export const selectGuideRail = (capacityKg: number, speedMs: number): string => {
+export const selectGuideRail = (
+  capacityKg: number,
+  speedMs: number,
+): string => {
   const q = capacityKg;
   const v = speedMs;
   if (q <= 630 && v <= 1.0) return 'T75-3/B';

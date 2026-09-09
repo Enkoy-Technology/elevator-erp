@@ -49,6 +49,9 @@ export type MessageKey =
   | 'settings.localeEn'
   | 'settings.localeAm'
   | 'settings.reminders'
+  | 'settings.pricing'
+  | 'settings.pricingFormula'
+  | 'settings.pricingFormulaHelp'
   | 'settings.maintenanceReminderDays'
   | 'settings.maintenanceReminderDaysHelp'
   | 'settings.paymentReminderOffsetDays'
@@ -111,6 +114,10 @@ const en: Record<MessageKey, string> = {
   'settings.localeEn': 'English',
   'settings.localeAm': 'አማርኛ',
   'settings.reminders': 'Reminders',
+  'settings.pricing': 'Pricing',
+  'settings.pricingFormula': 'List-price formula',
+  'settings.pricingFormulaHelp':
+    'Evaluated exactly, per quotation line, before margin and VAT. Names: Base price (the product’s base), N (stops), C (capacity in kg), perStop and perKg (the product’s own rates). Use + − × ÷, brackets, and max(), min(), round(). Example: Base price + (N - 10) * 80,000 + (C - 630kg) * 1,000. Leave blank to go back to the starter.',
   'settings.maintenanceReminderDays': 'Maintenance reminder window (days)',
   'settings.maintenanceReminderDaysHelp':
     'How many days ahead of a scheduled visit the reminder SMS goes out.',
@@ -177,6 +184,10 @@ const am: Record<MessageKey, string> = {
   'settings.localeEn': 'English',
   'settings.localeAm': 'አማርኛ',
   'settings.reminders': 'ማስታወሻዎች',
+  'settings.pricing': 'የዋጋ አሰጣጥ',
+  'settings.pricingFormula': 'የዝርዝር ዋጋ ቀመር',
+  'settings.pricingFormulaHelp':
+    'በእያንዳንዱ የዋጋ ማቅረቢያ መስመር ላይ ከትርፍ እና ከቫት በፊት በትክክል ይሰላል። ስሞች፦ Base price፣ N (ፎቆች)፣ C (የመሸከም አቅም በኪግ)፣ perStop፣ perKg።',
   'settings.maintenanceReminderDays': 'የጥገና ማስታወሻ ጊዜ (ቀናት)',
   'settings.maintenanceReminderDaysHelp':
     'ከቀጠሮው ስንት ቀናት ቀደም ብሎ የማስታወሻ ኤስኤምኤስ እንደሚላክ።',

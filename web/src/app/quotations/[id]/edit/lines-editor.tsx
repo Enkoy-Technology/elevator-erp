@@ -1,10 +1,15 @@
-'use client';
+"use client";
 
-import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 
-import { Field } from '@/components/form-page';
-import { btnGhost, btnSecondary, fieldClass, labelClass } from '@/components/form-styles';
+import { Field } from "@/components/form-page";
+import {
+  btnGhost,
+  btnSecondary,
+  fieldClass,
+  labelClass,
+} from "@/components/form-styles";
 import {
   ApiError,
   addQuotationLine,
@@ -17,12 +22,12 @@ import {
   type CreateQuotationLinePayload,
   type ProductType,
   type QuotationLine,
-} from '@/lib/api';
-import { formatEtb } from '@/lib/money';
+} from "@/lib/api";
+import { formatEtb } from "@/lib/money";
 
-import { describeFloorPlan } from '../../floor-plan';
-import { FloorPicker } from '../../floor-picker';
-import { NumberInput } from '../../number-input';
+import { describeFloorPlan } from "../../floor-plan";
+import { FloorPicker } from "../../floor-picker";
+import { NumberInput } from "../../number-input";
 
 /**
  * Page 1 of the client's proforma is a line table with a "No of Units"
@@ -39,14 +44,17 @@ import { NumberInput } from '../../number-input';
 /** Everything a line holds, as strings — what the inputs actually carry. */
 interface LineDraft {
   productType: ProductType;
+  /** A passenger lift is picked from the standard table by its shaft. */
+  shaftWidthMm: string;
+  shaftDepthMm: string;
   capacityKg: string;
   stops: string;
   travelHeightM: string;
   speedMs: string;
-  machineRoomType: 'MR' | 'MRL';
-  doorType: 'CENTER_OPEN' | 'TELESCOPIC' | 'SWING';
+  machineRoomType: "MR" | "MRL";
+  doorType: "CENTER_OPEN" | "TELESCOPIC" | "SWING";
   doorWidthMm: string;
-  buildingUsage: 'RESIDENTIAL' | 'COMMERCIAL' | 'HOSPITAL' | 'INDUSTRIAL';
+  buildingUsage: "RESIDENTIAL" | "COMMERCIAL" | "HOSPITAL" | "INDUSTRIAL";
   marginPercent: string;
   quantity: string;
   machineRoomLabel: string;
@@ -69,36 +77,42 @@ interface LineDraft {
  * a lift is genuinely different, ignored otherwise.
  */
 export const NEW_LINE: LineDraft = {
-  productType: 'PASSENGER',
-  capacityKg: '1000',
-  stops: '12',
-  travelHeightM: '45',
-  speedMs: '1.6',
-  machineRoomType: 'MRL',
-  doorType: 'CENTER_OPEN',
-  doorWidthMm: '900',
-  buildingUsage: 'COMMERCIAL',
-  marginPercent: '0',
-  quantity: '1',
-  machineRoomLabel: 'MRL',
-  floorLabels: '',
-  doorHeightMm: '2100',
-  ropingRatio: '2:1',
-  tractionMachineType: 'Gearless',
-  controlSystem: 'Simplex',
-  powerSupply: '380V AC 50HZ 3-phase 4 lines',
-  lightSupply: '240V AC 50HZ Single phase',
-  entranceCount: '1',
-  specSummary: '',
+  productType: "PASSENGER",
+  shaftWidthMm: "1835",
+  shaftDepthMm: "1750",
+  capacityKg: "1000",
+  stops: "12",
+  travelHeightM: "45",
+  speedMs: "1.6",
+  machineRoomType: "MRL",
+  doorType: "CENTER_OPEN",
+  doorWidthMm: "900",
+  buildingUsage: "COMMERCIAL",
+  marginPercent: "0",
+  quantity: "1",
+  machineRoomLabel: "MRL",
+  floorLabels: "",
+  doorHeightMm: "2100",
+  ropingRatio: "2:1",
+  tractionMachineType: "Gearless",
+  controlSystem: "Simplex",
+  powerSupply: "380V AC 50HZ 3-phase 4 lines",
+  lightSupply: "240V AC 50HZ Single phase",
+  entranceCount: "1",
+  specSummary: "",
 };
 
-const str = (value: number | string | null | undefined, fallback = ''): string =>
-  value === null || value === undefined ? fallback : String(value);
+const str = (
+  value: number | string | null | undefined,
+  fallback = "",
+): string => (value === null || value === undefined ? fallback : String(value));
 
 const toDraft = (line: QuotationLine): LineDraft => {
   const calc = line.calcInput;
   return {
     productType: line.productType,
+    shaftWidthMm: str(calc?.shaftWidthMm, NEW_LINE.shaftWidthMm),
+    shaftDepthMm: str(calc?.shaftDepthMm, NEW_LINE.shaftDepthMm),
     capacityKg: str(calc?.capacityKg, NEW_LINE.capacityKg),
     stops: str(calc?.stops, NEW_LINE.stops),
     travelHeightM: str(calc?.travelHeightM, NEW_LINE.travelHeightM),
@@ -108,7 +122,7 @@ const toDraft = (line: QuotationLine): LineDraft => {
     doorWidthMm: str(calc?.doorWidthMm, NEW_LINE.doorWidthMm),
     buildingUsage: calc?.buildingUsage ?? NEW_LINE.buildingUsage,
     marginPercent: str(calc?.marginPercent, NEW_LINE.marginPercent),
-    quantity: str(line.quantity, '1'),
+    quantity: str(line.quantity, "1"),
     machineRoomLabel: str(line.machineRoomLabel),
     floorLabels: str(line.floorLabels),
     doorHeightMm: str(line.doorHeightMm),
@@ -124,24 +138,37 @@ const toDraft = (line: QuotationLine): LineDraft => {
 
 const num = (value: string, fallback: number): number => {
   const parsed = Number(value);
-  return Number.isFinite(parsed) && value.trim() !== '' ? parsed : fallback;
+  return Number.isFinite(parsed) && value.trim() !== "" ? parsed : fallback;
 };
 
 /** Blank means "leave it alone": the API's validators reject null on every
  *  spec field, so an empty box omits the key instead of blanking it. */
 const text = (value: string): string | undefined =>
-  value.trim() === '' ? undefined : value.trim();
+  value.trim() === "" ? undefined : value.trim();
+
+/** A passenger lift is described by its shaft; the standard table fills in the rest. */
+const isStandardLift = (draft: LineDraft): boolean =>
+  draft.productType === "PASSENGER";
 
 const toPayload = (draft: LineDraft): CreateQuotationLinePayload => {
   const floorLabels = text(draft.floorLabels);
   return {
     productType: draft.productType,
-    capacityKg: num(draft.capacityKg, 1000),
-    travelHeightM: num(draft.travelHeightM, 1),
-    speedMs: num(draft.speedMs, 1),
+    // Shaft and floors for a standard lift; the classic figures for the rest.
+    // Stops (or the floor labels) double as the floor count.
+    ...(isStandardLift(draft)
+      ? {
+          shaftWidthMm: num(draft.shaftWidthMm, 1835),
+          shaftDepthMm: num(draft.shaftDepthMm, 1750),
+        }
+      : {
+          capacityKg: num(draft.capacityKg, 1000),
+          travelHeightM: num(draft.travelHeightM, 1),
+          speedMs: num(draft.speedMs, 1),
+          doorType: draft.doorType,
+          doorWidthMm: num(draft.doorWidthMm, 900),
+        }),
     machineRoomType: draft.machineRoomType,
-    doorType: draft.doorType,
-    doorWidthMm: num(draft.doorWidthMm, 900),
     buildingUsage: draft.buildingUsage,
     marginPercent: num(draft.marginPercent, 0),
     quantity: num(draft.quantity, 1),
@@ -181,7 +208,9 @@ export const LinesEditor = ({
 }) => {
   const [products, setProducts] = useState<ProductTypeRow[]>([]);
   useEffect(() => {
-    void listProductTypes().then(setProducts).catch(() => undefined);
+    void listProductTypes()
+      .then(setProducts)
+      .catch(() => undefined);
   }, []);
 
   const [drafts, setDrafts] = useState<Record<string, LineDraft>>({});
@@ -208,7 +237,10 @@ export const LinesEditor = ({
 
   const isDirty = (line: QuotationLine): boolean => {
     const draft = drafts[line.id];
-    return draft !== undefined && JSON.stringify(draft) !== JSON.stringify(toDraft(line));
+    return (
+      draft !== undefined &&
+      JSON.stringify(draft) !== JSON.stringify(toDraft(line))
+    );
   };
 
   const run = async (action: () => Promise<void>, fallback: string) => {
@@ -228,11 +260,12 @@ export const LinesEditor = ({
       // Copying the last lift is the right default: a tower is usually two
       // or three of nearly the same machine, and retyping nineteen fields
       // to change the capacity is the burden this screen exists to remove.
-      const seed = lines.length > 0 ? draftFor(lines[lines.length - 1]) : NEW_LINE;
+      const seed =
+        lines.length > 0 ? draftFor(lines[lines.length - 1]) : NEW_LINE;
       const created = await addQuotationLine(quotationId, toPayload(seed));
       onLinesChange([...lines, created]);
       setOpenId(created.id);
-    }, 'Failed to add the lift');
+    }, "Failed to add the lift");
 
   const saveLine = (line: QuotationLine) =>
     void run(async () => {
@@ -246,7 +279,7 @@ export const LinesEditor = ({
         const { [line.id]: _dropped, ...rest } = prev;
         return rest;
       });
-    }, 'Failed to save the lift');
+    }, "Failed to save the lift");
 
   const deleteLine = (line: QuotationLine) =>
     void run(async () => {
@@ -255,7 +288,7 @@ export const LinesEditor = ({
         const { [line.id]: _dropped, ...rest } = prev;
         return rest;
       });
-    }, 'Failed to remove the lift');
+    }, "Failed to remove the lift");
 
   const move = (index: number, delta: number) =>
     void run(async () => {
@@ -263,7 +296,7 @@ export const LinesEditor = ({
       const target = index + delta;
       [order[index], order[target]] = [order[target], order[index]];
       onLinesChange(await reorderQuotationLines(quotationId, order));
-    }, 'Failed to reorder the lifts');
+    }, "Failed to reorder the lifts");
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -282,25 +315,33 @@ export const LinesEditor = ({
       </div>
       <p className="mt-1 text-xs text-slate-500">
         {editable
-          ? 'One row per lift, in the order they print. A new lift starts as a copy of the one above it — change what differs. Each lift is priced by the calculator the moment you save it.'
-          : 'This quotation has left DRAFT, so its lifts can no longer be changed.'}
+          ? "One row per lift, in the order they print. A new lift starts as a copy of the one above it — change what differs. Each lift is priced by the calculator the moment you save it."
+          : "This quotation has left DRAFT, so its lifts can no longer be changed."}
       </p>
 
       {error ? (
-        <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+        <p
+          role="alert"
+          className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800"
+        >
           {error}
         </p>
       ) : null}
 
       <div className="mt-4 space-y-2">
         {lines.length === 0 ? (
-          <p className="text-sm text-slate-500">No lifts yet — add the first one.</p>
+          <p className="text-sm text-slate-500">
+            No lifts yet — add the first one.
+          </p>
         ) : null}
 
         {lines.map((line, index) => {
           const draft = draftFor(line);
           const open = openId === line.id;
-          const plan = describeFloorPlan(draft.floorLabels, num(draft.entranceCount, 1));
+          const plan = describeFloorPlan(
+            draft.floorLabels,
+            num(draft.entranceCount, 1),
+          );
           const dirty = isDirty(line);
 
           return (
@@ -308,7 +349,9 @@ export const LinesEditor = ({
               {/* The always-visible row: what a salesperson scans before
                   deciding which lift they came here to change. */}
               <div className="flex items-center gap-2 p-3">
-                <span className="font-mono text-xs text-slate-400">{line.sequence}</span>
+                <span className="font-mono text-xs text-slate-400">
+                  {line.sequence}
+                </span>
                 <button
                   type="button"
                   onClick={() => setOpenId(open ? null : line.id)}
@@ -316,24 +359,33 @@ export const LinesEditor = ({
                   className="flex min-w-0 flex-1 items-center gap-2 text-left"
                 >
                   {open ? (
-                    <ChevronUp aria-hidden className="h-4 w-4 shrink-0 text-slate-400" />
+                    <ChevronUp
+                      aria-hidden
+                      className="h-4 w-4 shrink-0 text-slate-400"
+                    />
                   ) : (
-                    <ChevronDown aria-hidden className="h-4 w-4 shrink-0 text-slate-400" />
+                    <ChevronDown
+                      aria-hidden
+                      className="h-4 w-4 shrink-0 text-slate-400"
+                    />
                   )}
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold text-slate-900">
                       {line.specSummary ??
-                        `${productName(products, line.productType)} — ${draft.capacityKg}kg`}
+                        `${productName(products, line.productType)} — ${line.calcInput?.capacityKg ?? draft.capacityKg}kg`}
                     </span>
                     <span className="block text-xs text-slate-500">
-                      {draft.quantity} unit{num(draft.quantity, 1) === 1 ? '' : 's'}
-                      {plan ? ` · ${plan.displaySummary} · ${plan.floorsStopsDoors}` : ''}
-                      {dirty ? ' · unsaved' : ''}
+                      {draft.quantity} unit
+                      {num(draft.quantity, 1) === 1 ? "" : "s"}
+                      {plan
+                        ? ` · ${plan.displaySummary} · ${plan.floorsStopsDoors}`
+                        : ""}
+                      {dirty ? " · unsaved" : ""}
                     </span>
                   </span>
                 </button>
                 <span className="shrink-0 text-right text-sm font-semibold tabular-nums text-navy-800">
-                  {line.lineTotalEtb ? formatEtb(line.lineTotalEtb) : '—'}
+                  {line.lineTotalEtb ? formatEtb(line.lineTotalEtb) : "—"}
                 </span>
                 {editable ? (
                   <span className="flex shrink-0 items-center">
@@ -364,8 +416,8 @@ export const LinesEditor = ({
                       aria-label={`Remove lift ${line.sequence}`}
                       title={
                         lines.length === 1
-                          ? 'A quotation needs at least one lift'
-                          : 'Remove this lift'
+                          ? "A quotation needs at least one lift"
+                          : "Remove this lift"
                       }
                       className={`${btnGhost} px-1.5 text-slate-400 hover:text-red-600 disabled:opacity-25`}
                     >
@@ -385,7 +437,7 @@ export const LinesEditor = ({
                         disabled={!editable}
                         value={draft.productType}
                         onChange={(e) =>
-                          setField(line, 'productType', e.target.value)
+                          setField(line, "productType", e.target.value)
                         }
                       >
                         {products.map((p) => (
@@ -401,17 +453,60 @@ export const LinesEditor = ({
                         id={`qty-${line.id}`}
                         disabled={!editable}
                         value={draft.quantity}
-                        onValueChange={(v) => setField(line, 'quantity', v)}
+                        onValueChange={(v) => setField(line, "quantity", v)}
                       />
                     </Field>
-                    <Field label="Capacity (kg)" htmlFor={`cap-${line.id}`}>
-                      <NumberInput
-                        id={`cap-${line.id}`}
-                        disabled={!editable}
-                        value={draft.capacityKg}
-                        onValueChange={(v) => setField(line, 'capacityKg', v)}
-                      />
-                    </Field>
+                    {isStandardLift(draft) ? (
+                      <>
+                        <Field
+                          label="Shaft width (mm)"
+                          htmlFor={`sw-${line.id}`}
+                        >
+                          <NumberInput
+                            id={`sw-${line.id}`}
+                            disabled={!editable}
+                            value={draft.shaftWidthMm}
+                            onValueChange={(v) =>
+                              setField(line, "shaftWidthMm", v)
+                            }
+                          />
+                        </Field>
+                        <Field
+                          label="Shaft depth (mm)"
+                          htmlFor={`sd-${line.id}`}
+                          hint={
+                            line.calcInput?.floors !== undefined &&
+                            line.technicalSpec
+                              ? `Standard lift: ${line.technicalSpec.capacityPersons ?? "—"} persons · ${line.calcInput.capacityKg} kg · ${line.calcInput.speedMs} m/s · door ${line.calcInput.doorWidthMm} mm` +
+                                (line.technicalSpec.shaftWidthMm !==
+                                  line.calcInput.shaftWidthMm ||
+                                line.technicalSpec.shaftDepthMm !==
+                                  line.calcInput.shaftDepthMm
+                                  ? ` · fits a ${line.technicalSpec.shaftWidthMm} × ${line.technicalSpec.shaftDepthMm} standard shaft inside the ${line.calcInput.shaftWidthMm} × ${line.calcInput.shaftDepthMm} entered.`
+                                  : ".")
+                              : "Persons, load, speed, car and door follow from the shaft and the floors."
+                          }
+                        >
+                          <NumberInput
+                            id={`sd-${line.id}`}
+                            disabled={!editable}
+                            value={draft.shaftDepthMm}
+                            onValueChange={(v) =>
+                              setField(line, "shaftDepthMm", v)
+                            }
+                          />
+                        </Field>
+                      </>
+                    ) : (
+                      <Field label="Capacity (kg)" htmlFor={`cap-${line.id}`}>
+                        <NumberInput
+                          id={`cap-${line.id}`}
+                          disabled={!editable}
+                          value={draft.capacityKg}
+                          onValueChange={(v) => setField(line, "capacityKg", v)}
+                        />
+                      </Field>
+                    )}
 
                     <Field
                       label="Floors served"
@@ -424,53 +519,67 @@ export const LinesEditor = ({
                       hint={
                         plan
                           ? `${plan.stops} landings · prints as ${plan.displaySummary} · ${plan.floorsStopsDoors} floors/stops/doors`
-                          : 'Pick every landing the lift stops at. B = basement, G = ground, M = mezzanine.'
+                          : "Pick every landing the lift stops at. B = basement, G = ground, M = mezzanine."
                       }
                     >
                       <FloorPicker
                         value={draft.floorLabels}
                         disabled={!editable}
-                        onChange={(next) => setField(line, 'floorLabels', next)}
+                        onChange={(next) => setField(line, "floorLabels", next)}
                       />
                     </Field>
 
                     <Field
                       label="Stops"
                       htmlFor={`stops-${line.id}`}
-                      hint={plan ? 'Counted from the floors above.' : undefined}
+                      hint={plan ? "Counted from the floors above." : undefined}
                     >
                       <NumberInput
                         id={`stops-${line.id}`}
                         disabled={!editable || plan !== null}
                         value={plan ? String(plan.stops) : draft.stops}
-                        onValueChange={(v) => setField(line, 'stops', v)}
+                        onValueChange={(v) => setField(line, "stops", v)}
                       />
                     </Field>
-                    <Field label="Entrances per stop" htmlFor={`entrances-${line.id}`}>
+                    <Field
+                      label="Entrances per stop"
+                      htmlFor={`entrances-${line.id}`}
+                    >
                       <NumberInput
                         id={`entrances-${line.id}`}
                         disabled={!editable}
                         value={draft.entranceCount}
-                        onValueChange={(v) => setField(line, 'entranceCount', v)}
+                        onValueChange={(v) =>
+                          setField(line, "entranceCount", v)
+                        }
                       />
                     </Field>
 
-                    <Field label="Travel height (m)" htmlFor={`travel-${line.id}`}>
-                      <NumberInput
-                        id={`travel-${line.id}`}
-                        disabled={!editable}
-                        value={draft.travelHeightM}
-                        onValueChange={(v) => setField(line, 'travelHeightM', v)}
-                      />
-                    </Field>
-                    <Field label="Speed (m/s)" htmlFor={`speed-${line.id}`}>
-                      <NumberInput
-                        id={`speed-${line.id}`}
-                        disabled={!editable}
-                        value={draft.speedMs}
-                        onValueChange={(v) => setField(line, 'speedMs', v)}
-                      />
-                    </Field>
+                    {isStandardLift(draft) ? null : (
+                      <>
+                        <Field
+                          label="Travel height (m)"
+                          htmlFor={`travel-${line.id}`}
+                        >
+                          <NumberInput
+                            id={`travel-${line.id}`}
+                            disabled={!editable}
+                            value={draft.travelHeightM}
+                            onValueChange={(v) =>
+                              setField(line, "travelHeightM", v)
+                            }
+                          />
+                        </Field>
+                        <Field label="Speed (m/s)" htmlFor={`speed-${line.id}`}>
+                          <NumberInput
+                            id={`speed-${line.id}`}
+                            disabled={!editable}
+                            value={draft.speedMs}
+                            onValueChange={(v) => setField(line, "speedMs", v)}
+                          />
+                        </Field>
+                      </>
+                    )}
 
                     <Field label="Machine room" htmlFor={`mr-${line.id}`}>
                       <select
@@ -479,7 +588,8 @@ export const LinesEditor = ({
                         disabled={!editable}
                         value={draft.machineRoomType}
                         onChange={(e) => {
-                          const machineRoomType = e.target.value as 'MR' | 'MRL';
+                          const machineRoomType = e.target.value as
+                            "MR" | "MRL";
                           setDrafts((prev) => ({
                             ...prev,
                             [line.id]: {
@@ -488,12 +598,12 @@ export const LinesEditor = ({
                               // The printed label follows the choice unless
                               // someone has worded it themselves.
                               machineRoomLabel:
-                                draftFor(line).machineRoomLabel === '' ||
-                                draftFor(line).machineRoomLabel === 'MRL' ||
-                                draftFor(line).machineRoomLabel === 'WITH MR'
-                                  ? machineRoomType === 'MRL'
-                                    ? 'MRL'
-                                    : 'WITH MR'
+                                draftFor(line).machineRoomLabel === "" ||
+                                draftFor(line).machineRoomLabel === "MRL" ||
+                                draftFor(line).machineRoomLabel === "WITH MR"
+                                  ? machineRoomType === "MRL"
+                                    ? "MRL"
+                                    : "WITH MR"
                                   : draftFor(line).machineRoomLabel,
                             },
                           }));
@@ -514,25 +624,33 @@ export const LinesEditor = ({
                         disabled={!editable}
                         placeholder="MRL"
                         value={draft.machineRoomLabel}
-                        onChange={(e) => setField(line, 'machineRoomLabel', e.target.value)}
+                        onChange={(e) =>
+                          setField(line, "machineRoomLabel", e.target.value)
+                        }
                       />
                     </Field>
 
-                    <Field label="Door type" htmlFor={`doortype-${line.id}`}>
-                      <select
-                        id={`doortype-${line.id}`}
-                        className={fieldClass}
-                        disabled={!editable}
-                        value={draft.doorType}
-                        onChange={(e) =>
-                          setField(line, 'doorType', e.target.value as LineDraft['doorType'])
-                        }
-                      >
-                        <option value="CENTER_OPEN">Center open</option>
-                        <option value="TELESCOPIC">Telescopic</option>
-                        <option value="SWING">Side opening</option>
-                      </select>
-                    </Field>
+                    {isStandardLift(draft) ? null : (
+                      <Field label="Door type" htmlFor={`doortype-${line.id}`}>
+                        <select
+                          id={`doortype-${line.id}`}
+                          className={fieldClass}
+                          disabled={!editable}
+                          value={draft.doorType}
+                          onChange={(e) =>
+                            setField(
+                              line,
+                              "doorType",
+                              e.target.value as LineDraft["doorType"],
+                            )
+                          }
+                        >
+                          <option value="CENTER_OPEN">Center open</option>
+                          <option value="TELESCOPIC">Telescopic</option>
+                          <option value="SWING">Side opening</option>
+                        </select>
+                      </Field>
+                    )}
                     <Field label="Building usage" htmlFor={`usage-${line.id}`}>
                       <select
                         id={`usage-${line.id}`}
@@ -542,8 +660,8 @@ export const LinesEditor = ({
                         onChange={(e) =>
                           setField(
                             line,
-                            'buildingUsage',
-                            e.target.value as LineDraft['buildingUsage'],
+                            "buildingUsage",
+                            e.target.value as LineDraft["buildingUsage"],
                           )
                         }
                       >
@@ -554,20 +672,24 @@ export const LinesEditor = ({
                       </select>
                     </Field>
 
-                    <Field label="Door width (mm)" htmlFor={`dw-${line.id}`}>
-                      <NumberInput
-                        id={`dw-${line.id}`}
-                        disabled={!editable}
-                        value={draft.doorWidthMm}
-                        onValueChange={(v) => setField(line, 'doorWidthMm', v)}
-                      />
-                    </Field>
+                    {isStandardLift(draft) ? null : (
+                      <Field label="Door width (mm)" htmlFor={`dw-${line.id}`}>
+                        <NumberInput
+                          id={`dw-${line.id}`}
+                          disabled={!editable}
+                          value={draft.doorWidthMm}
+                          onValueChange={(v) =>
+                            setField(line, "doorWidthMm", v)
+                          }
+                        />
+                      </Field>
+                    )}
                     <Field label="Door height (mm)" htmlFor={`dh-${line.id}`}>
                       <NumberInput
                         id={`dh-${line.id}`}
                         disabled={!editable}
                         value={draft.doorHeightMm}
-                        onValueChange={(v) => setField(line, 'doorHeightMm', v)}
+                        onValueChange={(v) => setField(line, "doorHeightMm", v)}
                       />
                     </Field>
 
@@ -578,10 +700,15 @@ export const LinesEditor = ({
                         disabled={!editable}
                         placeholder="2:1"
                         value={draft.ropingRatio}
-                        onChange={(e) => setField(line, 'ropingRatio', e.target.value)}
+                        onChange={(e) =>
+                          setField(line, "ropingRatio", e.target.value)
+                        }
                       />
                     </Field>
-                    <Field label="Traction machine" htmlFor={`traction-${line.id}`}>
+                    <Field
+                      label="Traction machine"
+                      htmlFor={`traction-${line.id}`}
+                    >
                       <input
                         id={`traction-${line.id}`}
                         className={fieldClass}
@@ -589,19 +716,24 @@ export const LinesEditor = ({
                         placeholder="Gearless"
                         value={draft.tractionMachineType}
                         onChange={(e) =>
-                          setField(line, 'tractionMachineType', e.target.value)
+                          setField(line, "tractionMachineType", e.target.value)
                         }
                       />
                     </Field>
 
-                    <Field label="Control system" htmlFor={`control-${line.id}`}>
+                    <Field
+                      label="Control system"
+                      htmlFor={`control-${line.id}`}
+                    >
                       <input
                         id={`control-${line.id}`}
                         className={fieldClass}
                         disabled={!editable}
                         placeholder="Simplex"
                         value={draft.controlSystem}
-                        onChange={(e) => setField(line, 'controlSystem', e.target.value)}
+                        onChange={(e) =>
+                          setField(line, "controlSystem", e.target.value)
+                        }
                       />
                     </Field>
                     <Field label="Margin (%)" htmlFor={`margin-${line.id}`}>
@@ -609,7 +741,9 @@ export const LinesEditor = ({
                         id={`margin-${line.id}`}
                         disabled={!editable}
                         value={draft.marginPercent}
-                        onValueChange={(v) => setField(line, 'marginPercent', v)}
+                        onValueChange={(v) =>
+                          setField(line, "marginPercent", v)
+                        }
                       />
                     </Field>
 
@@ -620,7 +754,9 @@ export const LinesEditor = ({
                         disabled={!editable}
                         placeholder="380V AC 50HZ 3-phase 4 lines"
                         value={draft.powerSupply}
-                        onChange={(e) => setField(line, 'powerSupply', e.target.value)}
+                        onChange={(e) =>
+                          setField(line, "powerSupply", e.target.value)
+                        }
                       />
                     </Field>
                     <Field label="Light supply" htmlFor={`light-${line.id}`}>
@@ -630,7 +766,9 @@ export const LinesEditor = ({
                         disabled={!editable}
                         placeholder="240V AC 50HZ Single phase"
                         value={draft.lightSupply}
-                        onChange={(e) => setField(line, 'lightSupply', e.target.value)}
+                        onChange={(e) =>
+                          setField(line, "lightSupply", e.target.value)
+                        }
                       />
                     </Field>
 
@@ -646,7 +784,9 @@ export const LinesEditor = ({
                         disabled={!editable}
                         placeholder="800KG -10persons / Speed 1.5m/s / B+G+M+10 / 13 floors/13 doors"
                         value={draft.specSummary}
-                        onChange={(e) => setField(line, 'specSummary', e.target.value)}
+                        onChange={(e) =>
+                          setField(line, "specSummary", e.target.value)
+                        }
                       />
                     </Field>
                   </div>
@@ -659,13 +799,15 @@ export const LinesEditor = ({
                         onClick={() => saveLine(line)}
                         className={`${btnSecondary} disabled:opacity-40`}
                       >
-                        {busy ? 'Pricing…' : 'Save & price this lift'}
+                        {busy ? "Pricing…" : "Save & price this lift"}
                       </button>
                     ) : null}
                     <span className="text-xs text-slate-500">
-                      Calculator: {line.unitPriceEtb ? formatEtb(line.unitPriceEtb) : '—'} per
-                      unit, {line.lineTotalEtb ? formatEtb(line.lineTotalEtb) : '—'} for the
-                      line (ex VAT)
+                      Calculator:{" "}
+                      {line.unitPriceEtb ? formatEtb(line.unitPriceEtb) : "—"}{" "}
+                      per unit,{" "}
+                      {line.lineTotalEtb ? formatEtb(line.lineTotalEtb) : "—"}{" "}
+                      for the line (ex VAT)
                     </span>
                   </div>
                 </div>

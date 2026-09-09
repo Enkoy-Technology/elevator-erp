@@ -135,7 +135,7 @@ export default function ProductTypesPage() {
         <PageHeader
           eyebrow="Settings"
           title="Products & prices"
-          description="What the company sells and what each starts at. The calculator prices a lift as base + per-stop above 10 + per-kilogram above 630, then margin and VAT. A product with both rates at zero is a flat price."
+          description="What the company sells and what each starts at. The list-price formula under Settings combines the base price with these rates, the stops and the capacity; then margin and VAT. A product with both rates at zero is a flat price under the starter formula."
           actions={
             canEdit ? (
               <Link href="/settings/product-types/new" className={btnPrimary}>

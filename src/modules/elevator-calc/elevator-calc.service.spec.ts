@@ -3,7 +3,8 @@ import {
   DEFAULT_PRODUCT_TYPES,
   type ProductTypesRepository,
 } from './product-types.repository';
-import type { CalcInput } from './types';
+import type { CalcInput, CalcRequest } from './types';
+import { DEFAULT_PRICING_FORMULA } from '../../common/formula';
 
 const TENANT_ID = '22222222-2222-2222-2222-222222222222';
 
@@ -13,6 +14,7 @@ const productTypes = {
     const row = DEFAULT_PRODUCT_TYPES.find((p) => p.code === code);
     return row ? { ...row, tenantId: TENANT_ID, id: code, sortOrder: 0 } : null;
   }),
+  pricingFormula: jest.fn(async () => DEFAULT_PRICING_FORMULA),
 } as unknown as ProductTypesRepository;
 
 /** §4.1 technical fixture; pricing comes from the §4.2 product price list. */
@@ -70,7 +72,24 @@ describe('ElevatorCalcService', () => {
   });
 
   describe('price list', () => {
-    it('floors both adjustments at the reference machine (10 stops, 630 kg)', async () => {
+    it("applies the tenant's formula exactly — the starter does not floor at the reference machine", async () => {
+      const result = await calc({
+        ...WORKED_EXAMPLE,
+        stops: 5,
+        capacityKg: 450,
+        marginPercent: 0,
+        taxPercent: 0,
+      });
+      // 7,000,000 + (5-10)×80,000 + (450-630)×1,000
+      expect(result.pricing.stopsAdjustment).toBe('-400000.00');
+      expect(result.pricing.capacityAdjustment).toBe('-180000.00');
+      expect(result.pricing.totalPrice).toBe('6420000.00');
+    });
+
+    it('floors at the reference machine when the formula says max(0, …)', async () => {
+      (productTypes.pricingFormula as jest.Mock).mockResolvedValueOnce(
+        'base + max(0, N - 10) * perStop + max(0, C - 630) * perKg',
+      );
       const result = await calc({
         ...WORKED_EXAMPLE,
         stops: 5,
@@ -83,10 +102,43 @@ describe('ElevatorCalcService', () => {
       expect(result.pricing.totalPrice).toBe('7000000.00');
     });
 
+    it('splits a non-additive formula into what the stops added and what the capacity added', async () => {
+      (productTypes.pricingFormula as jest.Mock).mockResolvedValueOnce(
+        'base + N * C * 10',
+      );
+      const result = await calc({
+        ...WORKED_EXAMPLE,
+        stops: 12,
+        capacityKg: 1000,
+        marginPercent: 0,
+        taxPercent: 0,
+      });
+      // at C=630: 7,000,000 + 75,600; total: 7,000,000 + 120,000
+      expect(result.pricing.stopsAdjustment).toBe('75600.00');
+      expect(result.pricing.capacityAdjustment).toBe('44400.00');
+      expect(result.pricing.totalPrice).toBe('7120000.00');
+    });
+
+    it('refuses to quote off a formula that cannot be evaluated', async () => {
+      (productTypes.pricingFormula as jest.Mock).mockResolvedValueOnce(
+        'base + price',
+      );
+      await expect(calc(WORKED_EXAMPLE)).rejects.toThrow(
+        /pricing formula under Settings/,
+      );
+    });
+
     it('reads the base from the product list: one base per product, no height tiers', async () => {
       const totalAt = async (stops: number): Promise<string> =>
-        (await calc({ ...WORKED_EXAMPLE, stops, capacityKg: 630, marginPercent: 0, taxPercent: 0 }))
-          .pricing.totalPrice;
+        (
+          await calc({
+            ...WORKED_EXAMPLE,
+            stops,
+            capacityKg: 630,
+            marginPercent: 0,
+            taxPercent: 0,
+          })
+        ).pricing.totalPrice;
 
       // 7,000,000 + (20-10)×80,000 — the base no longer jumps at 20 stops
       expect(await totalAt(20)).toBe('7800000.00');
@@ -96,8 +148,16 @@ describe('ElevatorCalcService', () => {
 
     it('prices every product in the company list from its own base', async () => {
       const baseOf = async (productType: string): Promise<string> =>
-        (await calc({ ...WORKED_EXAMPLE, productType, stops: 10, capacityKg: 630, marginPercent: 0, taxPercent: 0 }))
-          .pricing.totalPrice;
+        (
+          await calc({
+            ...WORKED_EXAMPLE,
+            productType,
+            stops: 10,
+            capacityKg: 630,
+            marginPercent: 0,
+            taxPercent: 0,
+          })
+        ).pricing.totalPrice;
 
       expect(await baseOf('HOSPITAL')).toBe('7000000.00');
       expect(await baseOf('PANORAMIC')).toBe('8000000.00');
@@ -107,15 +167,25 @@ describe('ElevatorCalcService', () => {
     });
 
     it('refuses a product that is not in the list', async () => {
-      await expect(calc({ ...WORKED_EXAMPLE, productType: 'SPACE_ELEVATOR' })).rejects.toThrow(
-        /Unknown product type/,
-      );
+      await expect(
+        calc({ ...WORKED_EXAMPLE, productType: 'SPACE_ELEVATOR' }),
+      ).rejects.toThrow(/Unknown product type/);
     });
 
     it('does not tier platform lifts or escalators by stops', async () => {
-      const totalAt = async (productType: string, stops: number): Promise<string> =>
-        (await calc({ ...WORKED_EXAMPLE, productType, stops, marginPercent: 0, taxPercent: 0 }))
-          .pricing.totalPrice;
+      const totalAt = async (
+        productType: string,
+        stops: number,
+      ): Promise<string> =>
+        (
+          await calc({
+            ...WORKED_EXAMPLE,
+            productType,
+            stops,
+            marginPercent: 0,
+            taxPercent: 0,
+          })
+        ).pricing.totalPrice;
 
       expect(await totalAt('CAR_PLATFORM_LIFT', 40)).toBe('3200000.00');
       expect(await totalAt('ESCALATOR', 40)).toBe('6000000.00');
@@ -243,6 +313,85 @@ describe('ElevatorCalcService', () => {
       expect(result.technical.productType).toBe('PASSENGER');
       expect(result.technical.guideRailSpec).toBe('T89-1/B');
       expect(result.technical.carWidthMm).toBe(1100);
+    });
+  });
+
+  describe('standard passenger lift (shaft + floors)', () => {
+    const standard = (extra: Partial<CalcRequest>) =>
+      service.calculateSpecs(TENANT_ID, {
+        productType: 'PASSENGER',
+        shaftWidthMm: 1835,
+        shaftDepthMm: 1750,
+        floors: 8,
+        marginPercent: 0,
+        taxPercent: 0,
+        ...extra,
+      });
+
+    it("reads the lift off the company's table from an exact shaft", async () => {
+      const result = await standard({});
+      expect(result.technical.capacityPersons).toBe(8);
+      expect(result.input).toMatchObject({
+        capacityKg: 630,
+        stops: 8,
+        travelHeightM: 21,
+        speedMs: 1.0,
+        doorType: 'CENTER_OPEN',
+        doorWidthMm: 800,
+        floors: 8,
+      });
+      expect(result.technical).toMatchObject({
+        carWidthMm: 1100,
+        carDepthMm: 1400,
+        carHeightMm: 2400,
+        shaftWidthMm: 1835,
+        shaftDepthMm: 1750,
+        pitDepthMm: null,
+        motorPowerKw: null,
+      });
+      expect(result.notes).toEqual([]);
+      // 7,000,000 + (8-10)×80,000 + 0
+      expect(result.pricing.totalPrice).toBe('6840000.00');
+    });
+
+    it('takes the speed band from the floors', async () => {
+      expect((await standard({ floors: 12 })).input.speedMs).toBe(1.5);
+      expect((await standard({ floors: 18 })).input.speedMs).toBe(1.75);
+      expect((await standard({ floors: 25 })).input.speedMs).toBe(2.0);
+      expect((await standard({ floors: 30 })).input.speedMs).toBe(2.0);
+    });
+
+    it("caps the speed at the lift's maximum and says so", async () => {
+      const result = await standard({
+        shaftWidthMm: 1650,
+        shaftDepthMm: 1450,
+        floors: 30,
+      });
+      expect(result.technical.capacityPersons).toBe(5);
+      expect(result.input.speedMs).toBe(1.75);
+      expect(result.notes[0]).toMatch(/maximum is 1.75/);
+    });
+
+    it('picks the largest lift that fits a non-standard shaft and says so', async () => {
+      const result = await standard({ shaftWidthMm: 2000, shaftDepthMm: 1800 });
+      expect(result.technical.capacityPersons).toBe(10);
+      expect(result.notes[0]).toMatch(/not a standard shaft/);
+    });
+
+    it('tells the salesperson when nothing fits', async () => {
+      await expect(
+        standard({ shaftWidthMm: 1200, shaftDepthMm: 1200 }),
+      ).rejects.toThrow(/No standard passenger lift fits/);
+    });
+
+    it('still wants every figure for a product outside the table', async () => {
+      await expect(
+        service.calculateSpecs(TENANT_ID, {
+          productType: 'CARGO',
+          marginPercent: 0,
+          taxPercent: 0,
+        }),
+      ).rejects.toThrow(/capacityKg/);
     });
   });
 });
