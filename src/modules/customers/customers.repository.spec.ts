@@ -490,7 +490,7 @@ const makeAwaitableChain = (rows: unknown[]) => {
   const chain: Record<string, unknown> = {
     then: (resolve: (value: unknown[]) => unknown) => resolve(rows),
   };
-  for (const method of ['from', 'innerJoin', 'where', 'orderBy', 'limit']) {
+  for (const method of ['from', 'innerJoin', 'leftJoin', 'where', 'orderBy', 'limit']) {
     chain[method] = jest.fn(() => chain);
   }
   return chain as Record<string, jest.Mock> & { then: unknown };

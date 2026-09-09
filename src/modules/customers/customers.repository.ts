@@ -581,9 +581,14 @@ export class CustomersRepository {
           status: quotations.status,
           totalPriceEtb: quotations.totalPriceEtb,
           createdAt: quotations.createdAt,
+          proformaNumber: proformas.proformaNumber,
           overallTotal: overallTotal(),
         })
         .from(quotations)
+        .leftJoin(
+          proformas,
+          and(eq(quotations.tenantId, proformas.tenantId), eq(quotations.id, proformas.quotationId)),
+        )
         .where(
           and(
             eq(quotations.customerId, customerId),

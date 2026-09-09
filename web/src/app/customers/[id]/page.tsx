@@ -31,13 +31,11 @@ import {
   type CustomerOverviewInvoice,
   type CustomerOverviewMaintenance,
   type CustomerOverviewPayment,
-  type CustomerOverviewProforma,
   type CustomerOverviewProject,
   type CustomerOverviewQuotation,
   type CustomerType,
   type InvoiceStatus,
   type PaymentMethod,
-  type ProformaStatus,
   type ProjectStatus,
   type QuoteStatus,
   type UserRole,
@@ -118,12 +116,7 @@ const QUOTE_LABEL: Record<QuoteStatus, string> = {
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
   EXPIRED: 'Expired',
-  CONVERTED_TO_PROFORMA: 'Converted',
-};
-
-const PROFORMA_TONE: Record<ProformaStatus, Tone> = {
-  ISSUED: 'good',
-  CANCELLED: 'neutral',
+  CONVERTED_TO_PROFORMA: 'Proforma issued',
 };
 
 const CONTRACT_TONE: Record<ContractStatus, Tone> = {
@@ -447,7 +440,12 @@ export default function CustomerDetailPage() {
       id: 'number',
       header: 'Quote',
       cell: ({ row }) => (
-        <span className="font-medium text-slate-900">{row.original.quoteNumber}</span>
+        <span className="flex flex-col">
+          <span className="font-medium text-slate-900">{row.original.quoteNumber}</span>
+          {row.original.proformaNumber ? (
+            <span className="text-xs text-slate-500">{row.original.proformaNumber}</span>
+          ) : null}
+        </span>
       ),
     },
     {
@@ -467,33 +465,6 @@ export default function CustomerDetailPage() {
       cell: ({ row }) => formatEtb(row.original.totalPriceEtb),
     },
     { id: 'created', header: 'Raised', cell: ({ row }) => day(row.original.createdAt) },
-  ];
-
-  const proformaColumns: ColumnDef<CustomerOverviewProforma, unknown>[] = [
-    {
-      id: 'number',
-      header: 'Proforma',
-      cell: ({ row }) => (
-        <span className="font-medium text-slate-900">{row.original.proformaNumber}</span>
-      ),
-    },
-    {
-      id: 'status',
-      header: 'Status',
-      cell: ({ row }) => (
-        <StatusPill
-          label={sentenceCase(row.original.status)}
-          tone={PROFORMA_TONE[row.original.status]}
-        />
-      ),
-    },
-    {
-      id: 'total',
-      header: 'Total',
-      meta: { align: 'right' },
-      cell: ({ row }) => formatEtb(row.original.totalEtb),
-    },
-    { id: 'issued', header: 'Issued', cell: ({ row }) => day(row.original.issuedAt) },
   ];
 
   const contractColumns: ColumnDef<CustomerOverviewContract, unknown>[] = [
@@ -690,7 +661,6 @@ export default function CustomerDetailPage() {
           {[
             ['Projects', overview.projects?.total],
             ['Quotations', overview.quotations?.total],
-            ['Proformas', overview.proformas?.total],
             ['Contracts', overview.contracts?.total],
             ['Invoices', overview.invoices?.total],
             ['Assets', overview.assets?.total],
@@ -818,22 +788,11 @@ export default function CustomerDetailPage() {
             rows={overview.quotations.recent}
             columns={quotationColumns}
             getRowId={(row) => row.id}
-            empty="No quotations — this customer has never been priced."
+            empty="No quotations yet — nothing has been priced for this customer."
           />
         ) : null}
 
-        {overview.proformas ? (
-          <Section
-            title="Proformas"
-            total={overview.proformas.total}
-            rows={overview.proformas.recent}
-            columns={proformaColumns}
-            getRowId={(row) => row.id}
-            empty="No proformas — nothing has gone out for signature."
-          />
-        ) : null}
-
-        {overview.contracts ? (
+                {overview.contracts ? (
           <Section
             title="Contracts"
             total={overview.contracts.total}

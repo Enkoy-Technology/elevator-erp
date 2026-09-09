@@ -419,6 +419,8 @@ export interface CustomerOverviewProject {
 export interface CustomerOverviewQuotation {
   id: string;
   quoteNumber: string;
+  /** The proforma issued on approval, if any. */
+  proformaNumber: string | null;
   status: QuoteStatus;
   totalPriceEtb: string;
   createdAt: string;

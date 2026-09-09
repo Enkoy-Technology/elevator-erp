@@ -131,6 +131,8 @@ export interface CustomerOverviewProject {
 
 type QuotationRow = typeof quotations.$inferSelect;
 export interface CustomerOverviewQuotation {
+  /** The proforma issued on approval, if any — one document, two numbers. */
+  proformaNumber: string | null;
   id: QuotationRow['id'];
   quoteNumber: QuotationRow['quoteNumber'];
   status: QuotationRow['status'];

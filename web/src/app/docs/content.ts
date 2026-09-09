@@ -356,12 +356,12 @@ export const DOC_GROUPS: DocGroup[] = [
       {
         id: 'quotations',
         title: 'Quotations',
-        tagline: 'Draft, submit, approve — then it becomes a proforma',
+        tagline: 'One document: draft, submit, approve. Approval issues the proforma.',
         icon: ICON.doc,
         body: [
           'A quotation snapshots the calculator output against a project: the technical block, the priced lines, the margin and the VAT as they stood the day it was quoted. Later price-list changes never rewrite an issued quote.',
           'Approval is an explicit two-step: a draft is submitted for approval and only then approved. A quote can also lapse — DRAFT and PENDING_APPROVAL both reach EXPIRED without a decision, which is the honest record of what usually happens.',
-          'REJECTED, EXPIRED and CONVERTED_TO_PROFORMA are terminal. Converting is the only move out of APPROVED, and it is the proforma module that performs it.',
+          'Approving a quotation issues its proforma in the same step: the quotation row gains the proforma number, a Proforma print and download, and the → Contract and → Invoice actions. There is no separate proforma screen. Proformas are never edited and never deleted; cancelling one (with a reason) leaves the quotation as it was. Numbers are claimed per fiscal year from a shared, gapless sequence.',
           'Any quotation can be exported as a branded PDF or DOCX carrying the tenant’s logo, colours and stamp.',
         ],
         rules: [
@@ -372,8 +372,8 @@ export const DOC_GROUPS: DocGroup[] = [
         flows: [
           {
             title: 'Quotation lifecycle',
-            steps: ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'CONVERTED_TO_PROFORMA'],
-            note: 'Branches: DRAFT and PENDING_APPROVAL can go EXPIRED; PENDING_APPROVAL can go REJECTED. All three are dead ends.',
+            steps: ['DRAFT', 'PENDING_APPROVAL', 'Proforma issued', '→ Contract / → Invoice'],
+            note: 'Branches: DRAFT and PENDING_APPROVAL can go EXPIRED; PENDING_APPROVAL can go REJECTED. Both are dead ends.',
           },
         ],
         endpoints: [
@@ -382,113 +382,11 @@ export const DOC_GROUPS: DocGroup[] = [
           { method: 'GET', path: '/quotations/:id/document', roles: 'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, FINANCE_OFFICER, MAINTENANCE_ENGINEER, SECRETARY', note: 'Branded PDF or DOCX.' },
           { method: 'POST', path: '/projects/:projectId/quotations', roles: 'SALES_MANAGER, SALESPERSON', note: 'Create a draft against a project.' },
           { method: 'POST', path: '/quotations/:id/submit', roles: 'SALES_MANAGER, SALESPERSON', note: 'DRAFT → PENDING_APPROVAL.' },
-          { method: 'POST', path: '/quotations/:id/approve', roles: 'SALES_MANAGER', note: 'PENDING_APPROVAL → APPROVED.' },
+          { method: 'POST', path: '/quotations/:id/convert-to-proforma', roles: 'SALES_MANAGER', note: 'Approve and issue the proforma in one transaction (what the Approve button calls).' },
+          { method: 'GET', path: '/proformas/:id/document', roles: 'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, FINANCE_OFFICER, SECRETARY', note: 'The proforma as branded PDF or DOCX.' },
+          { method: 'POST', path: '/proformas/:id/cancel', roles: 'SALES_MANAGER', note: 'Cancel the proforma with a reason. Never a deletion.' },
           { method: 'POST', path: '/quotations/:id/reject', roles: 'SALES_MANAGER', note: 'PENDING_APPROVAL → REJECTED.' },
           { method: 'POST', path: '/quotations/:id/expire', roles: 'SALES_MANAGER', note: 'Lapse an undecided quote.' },
-        ],
-      },
-      {
-        id: 'proformas',
-        title: 'Proformas',
-        tagline: 'An append-only book with gapless numbering',
-        icon: ICON.stamp,
-        body: [
-          'Converting an approved quotation issues a proforma. Proformas are never edited and never deleted — the only statuses are ISSUED and CANCELLED, and cancelling one does not revert the quotation it came from.',
-          'Numbers are claimed per tenant per fiscal year from a shared sequence table, using a single atomic insert-on-conflict that returns the issued number. Because the claim and the return are the same statement, two concurrent issues can never receive the same number and the series never skips one.',
-          'The Ethiopian fiscal year boundary is configuration, not a constant — the same date arithmetic backs both rate lookups and document numbering.',
-        ],
-        endpoints: [
-          { method: 'POST', path: '/quotations/:id/convert-to-proforma', roles: 'SALES_MANAGER', note: 'Issues the proforma and claims its number.' },
-          { method: 'GET', path: '/proformas', roles: 'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, FINANCE_OFFICER, SECRETARY', note: 'Paginated list.' },
-          { method: 'GET', path: '/proformas/:id', roles: 'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, FINANCE_OFFICER, SECRETARY', note: 'Single proforma.' },
-          { method: 'GET', path: '/proformas/:id/document', roles: 'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, FINANCE_OFFICER, SECRETARY', note: 'Branded PDF or DOCX.' },
-          { method: 'POST', path: '/proformas/:id/cancel', roles: 'SALES_MANAGER', note: 'ISSUED → CANCELLED. Never a deletion.' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'finance',
-    title: 'Finance',
-    blurb:
-      'Receivables, cash in, cash out, and the statutory rates that shape both.',
-    sections: [
-      {
-        id: 'contracts',
-        title: 'How to create & print contracts',
-        tagline: 'The two agreements the company signs on paper, prepared by the system.',
-        icon: ICON.stamp,
-        body: [
-          'The system prints two signed agreements: the supply and installation contract (issued from a proforma, one per elevator project) and the Maintenance & Service Agreement (one per maintenance contract on an elevator). Both follow the company’s own paper templates article by article: parties with address, phone and TIN, the equipment, the clauses, the price in figures and words, the signature lines and two witnesses.',
-          'A supply contract is a DRAFT until it is signed. A draft prints with a “CONTRACT DRAFT” title and a “not binding” note so the customer’s lawyer can read it first; once Sign is pressed, the same record prints as the agreement with the signature date. The wording cannot be edited after signing — cancel and re-issue instead.',
-          'Every printable is branded from Settings: company name, address, phone and TIN come from there. Customer details come from the customer record, so fill in the customer’s TIN and address before printing.',
-        ],
-        flows: [
-          {
-            title: 'Supply & installation contract',
-            steps: ['Quotation approved (proforma issued)', 'Issue contract (DRAFT)', 'Edit clauses', 'Payment schedule', 'Print / download', 'Sign', 'Print the signed agreement'],
-          },
-          {
-            title: 'Maintenance & Service Agreement',
-            steps: ['Register the asset with its specification', 'New maintenance contract with fee and term', 'Download the agreement', 'Sign on paper'],
-          },
-        ],
-        checks: [
-          {
-            action: 'Open Customers, open the customer, press Edit and fill in the TIN and address. Save.',
-            expect: 'The customer record shows the TIN. It will print in the parties clause of every contract.',
-          },
-          {
-            action: 'Open Quotations. On a quotation that is pending approval press Approve (this issues its proforma), then on the same row press → Contract.',
-            expect: 'You land on Contracts with a new DRAFT contract carrying the proforma’s value and equipment lines.',
-          },
-          {
-            action: 'On the contract row press Edit. Fill delivery days, installation days, delay penalty and cap, the guarantee cheque box, warranty, free maintenance months and the dispute forum. Save.',
-            expect: 'The row still shows DRAFT; the clauses are stored for printing.',
-          },
-          {
-            action: 'On the contract row press Schedule and enter the instalments (for example 80% advance on signing, 20% on commissioning). Save.',
-            expect: 'The instalments add up to the contract value and are listed in order.',
-          },
-          {
-            action: 'On the contract row press Print, or choose PDF from the Download menu.',
-            expect: 'A PDF titled CONTRACT DRAFT opens: parties with TIN, Article 2 equipment table, price in figures and words, Article 5 payment schedule with the share of each instalment, warranty, penalties, dispute forum, signature and witness lines.',
-          },
-          {
-            action: 'Press Sign on the row, confirm the date, then print again.',
-            expect: 'The title is now CONTRACT, the reference plate shows the signed date, and the “not binding” note is gone.',
-          },
-          {
-            action: 'Open Assets, register (or edit) the elevator and fill the Specification box one attribute per line: Brand, Drive, Capacity, Stops, Speed.',
-            expect: 'The asset saves with the specification text.',
-          },
-          {
-            action: 'Open Maintenance → New maintenance contract. Choose the asset, set the recurrence, then fill Agreement terms: monthly fee, VAT, initial term, renewal, notice and cure days. Create.',
-            expect: 'The contract appears in the Maintenance list.',
-          },
-          {
-            action: 'On the maintenance contract row press the download icon (Download the maintenance agreement).',
-            expect: 'A PDF titled MAINTENANCE & SERVICE AGREEMENT opens: parties with TIN, Article 2 elevator specification, scope of work, term and termination, the monthly fee in figures and words, signature and witness lines.',
-          },
-          {
-            action: 'To change the fee or term later, press Edit on the maintenance contract row.',
-            expect: 'The agreement terms section is editable for the roles that may set them; the next download reflects the change.',
-          },
-        ],
-        rules: [
-          'Supply contract clauses (delivery days, penalties, warranty, dispute forum) are editable only while DRAFT, by the Sales Manager or management.',
-          'The payment schedule printed in Article 5 is the contract’s instalments; cancelled instalments are left off the agreement.',
-          'Maintenance agreement terms (fee, VAT, term, renewal, notice, cure, scope) are set by the Sales Manager, Technical Manager or Maintenance Engineer.',
-          'Both PDFs are generated on request from the current record — nothing is stored as a file, so the signed paper copy is the binding one.',
-        ],
-        endpoints: [
-          { method: 'POST', path: '/proformas/:id/contract', roles: 'SALES_MANAGER', note: 'Issue a DRAFT contract from an issued proforma.' },
-          { method: 'PATCH', path: '/contracts/:id', roles: 'SALES_MANAGER', note: 'Edit the clauses of a DRAFT.' },
-          { method: 'PATCH', path: '/contracts/:id/instalments', roles: 'SALES_MANAGER', note: 'Replace the payment schedule.' },
-          { method: 'POST', path: '/contracts/:id/sign', roles: 'SALES_MANAGER', note: 'DRAFT → SIGNED with the signature date.' },
-          { method: 'GET', path: '/contracts/:id/document', roles: 'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, FINANCE_OFFICER, SECRETARY', note: 'The contract as PDF (?format=pdf), Word or Excel.' },
-          { method: 'GET', path: '/contracts/:id/payment-schedule', roles: 'Same as document', note: 'The payment schedule as its own document.' },
-          { method: 'GET', path: '/maintenance/contracts/:id/agreement', roles: 'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, FINANCE_OFFICER', note: 'The Maintenance & Service Agreement PDF (?format=pdf).' },
         ],
       },
       {
