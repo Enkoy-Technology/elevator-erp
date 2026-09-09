@@ -9,6 +9,7 @@ import {
   ApiError,
   checkCustomerDuplicate,
   createCustomer,
+  createProject,
   deleteCustomer,
   updateCustomer,
   type Customer,
@@ -36,6 +37,9 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
   const [email, setEmail] = useState(customer?.email ?? '');
   const [phone, setPhone] = useState(customer?.phone ?? '');
   const [tinNumber, setTinNumber] = useState(customer?.tinNumber ?? '');
+  // Create only: a customer arrives with the building they want a lift in,
+  // so the first project is opened on the same form.
+  const [projectName, setProjectName] = useState('');
   const [city, setCity] = useState(customer?.city ?? (customer ? '' : 'Addis Ababa'));
   const [customerType, setCustomerType] = useState<CustomerType>(
     customer?.customerType ?? 'COMMERCIAL',
@@ -91,10 +95,18 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
       };
       if (editId) {
         await updateCustomer(editId, payload);
+        router.push(`/customers/${editId}`);
       } else {
-        await createCustomer(payload);
+        const created = await createCustomer(payload);
+        if (projectName.trim()) {
+          await createProject({
+            customerId: created.id,
+            name: projectName.trim(),
+            siteCity: city || undefined,
+          });
+        }
+        router.push(`/customers/${created.id}`);
       }
-      router.push('/customers');
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -252,6 +264,39 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
           />
         </Field>
       </FormSection>
+
+      {!editId ? (
+
+        <FormSection
+
+          title="First project"
+
+          description="The building or site this customer wants a lift for. It opens at Lead; leave blank to add projects later from the customer's page."
+
+        >
+
+          <Field label="Project name" htmlFor="projectName" hint="Usually the building: “Bole Twin Towers — Lift A”." wide>
+
+            <input
+
+              id="projectName"
+
+              className={fieldClass}
+
+              maxLength={200}
+
+              value={projectName}
+
+              onChange={(e) => setProjectName(e.target.value)}
+
+            />
+
+          </Field>
+
+        </FormSection>
+
+      ) : null}
+
 
       <FormSection title="Contact">
         <Field label="Email" htmlFor="email">

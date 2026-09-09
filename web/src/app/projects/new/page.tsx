@@ -33,7 +33,9 @@ export default function NewProjectPage() {
       const page = await optional(listCustomers({ page: 1, pageSize: 100 }));
       if (!cancelled) {
         setCustomers(page.items);
-        setCustomerId((prev) => prev || page.items[0]?.id || '');
+        // Arriving from a customer's page: that customer, not the first in the list.
+        const preset = new URLSearchParams(window.location.search).get('customerId') ?? '';
+        setCustomerId((prev) => prev || preset || page.items[0]?.id || '');
       }
     };
     void load();
@@ -56,7 +58,7 @@ export default function NewProjectPage() {
         name,
         siteCity: siteCity || undefined,
       });
-      router.push('/projects');
+      router.push(`/customers/${customerId}`);
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : 'Failed to create project',

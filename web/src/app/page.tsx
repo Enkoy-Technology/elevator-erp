@@ -164,10 +164,17 @@ export default function DashboardPage() {
       return;
     }
     const mine = modulesForRole(getCurrentRole()).filter(
-      (module) => module.href !== null && module.href !== '/' && module.href !== '/docs',
+      (module) =>
+        module.href !== null && module.href !== '/' && module.href !== '/docs' && !module.hidden,
     );
     setModules(mine);
-    setOpenable(new Set(mine.map((module) => module.href as string)));
+    setOpenable(
+      new Set(
+        modulesForRole(getCurrentRole())
+          .map((module) => module.href)
+          .filter((href): href is string => href !== null),
+      ),
+    );
     getProfile()
       .then(setProfile)
       .catch(() => router.replace('/login'));

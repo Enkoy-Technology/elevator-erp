@@ -34,6 +34,9 @@ export interface ModuleNavItem {
   /** Roles that may open it; null = everyone. Mirrors the class-level
    *  `@Roles()` on the matching API controller — update both together. */
   roles: readonly UserRole[] | null;
+  /** Reachable (dashboard links, deep links) but not listed in the sidebar:
+   *  the client wants projects reached through the customer, not beside it. */
+  hidden?: boolean;
 }
 
 /** CEO and ADMIN reach everything, matching RolesGuard's
@@ -75,7 +78,7 @@ export const MODULES: ModuleNavItem[] = [
   {
     nameKey: 'nav.customers',
     group: 'sales',
-    description: 'CRM accounts',
+    description: 'Customers and their projects',
     phase: null,
     href: '/customers',
     icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
@@ -85,6 +88,7 @@ export const MODULES: ModuleNavItem[] = [
     nameKey: 'nav.projects',
     group: 'sales',
     description: 'Sales pipeline',
+    hidden: true,
     phase: null,
     href: '/projects',
     icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',

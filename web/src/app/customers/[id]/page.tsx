@@ -241,6 +241,7 @@ const Section = <T,>({
   columns,
   getRowId,
   viewAllHref,
+  action,
   empty,
 }: {
   title: string;
@@ -252,6 +253,8 @@ const Section = <T,>({
   /** The module list, filtered to this customer. Omitted where the list API
    *  has no customerId filter to honour. */
   viewAllHref?: string;
+  /** A create link for this list, shown whether or not it is empty. */
+  action?: ReactNode;
   empty: string;
 }) => (
   <section>
@@ -262,14 +265,17 @@ const Section = <T,>({
           {formatNumber(total)}
         </span>
       </h2>
-      {viewAllHref && total > 0 ? (
-        <Link
-          href={viewAllHref}
-          className="text-xs font-medium text-gold-600 hover:underline"
-        >
-          View all →
-        </Link>
-      ) : null}
+      <span className="flex items-center gap-3">
+        {action}
+        {viewAllHref && total > 0 ? (
+          <Link
+            href={viewAllHref}
+            className="text-xs font-medium text-gold-600 hover:underline"
+          >
+            View all →
+          </Link>
+        ) : null}
+      </span>
     </div>
     {total === 0 ? (
       <p className="rounded-xl border border-dashed border-slate-300 bg-white/60 px-4 py-3 text-sm text-slate-500">
@@ -760,7 +766,17 @@ export default function CustomerDetailPage() {
             columns={projectColumns}
             getRowId={(row) => row.id}
             viewAllHref={`/projects?customerId=${customer.id}`}
-            empty="No projects — nothing has been opened for this customer yet."
+            action={
+              canWrite ? (
+                <Link
+                  href={`/projects/new?customerId=${customer.id}`}
+                  className="text-xs font-medium text-gold-600 hover:underline"
+                >
+                  + New project
+                </Link>
+              ) : null
+            }
+            empty="No projects yet. Open the first one with + New project."
           />
         ) : null}
 

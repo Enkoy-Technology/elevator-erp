@@ -32,11 +32,11 @@ export function Sidebar() {
   const { collapsed, hidden } = useSidebarState();
   const { t } = useLocale();
   // Read after mount: localStorage is unavailable during the server render.
-  const [modules, setModules] = useState(() => modulesForRole(null));
+  const [modules, setModules] = useState(() => modulesForRole(null).filter((m) => !m.hidden));
   const [profile, setProfile] = useState<AuthProfile | null>(null);
 
   useEffect(() => {
-    setModules(modulesForRole(getCurrentRole()));
+    setModules(modulesForRole(getCurrentRole()).filter((m) => !m.hidden));
   }, [pathname]);
 
   useEffect(() => {

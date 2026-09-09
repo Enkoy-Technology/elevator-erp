@@ -326,6 +326,7 @@ export const DOC_GROUPS: DocGroup[] = [
         tagline: 'The sales pipeline, enforced as a DAG',
         icon: ICON.folder,
         body: [
+          'There is no Projects menu: a project is opened on the customer form (the first one) or from the customer’s page (+ New project), and the customer’s page lists all of them with their stage. The pipeline view at /projects still exists for moving projects between stages; “View all” on a customer’s page leads there.',
           'A project is one opportunity for one customer. Its status is not a free-text field: the allowed transitions are a directed acyclic graph, and an illegal move raises a WorkflowTransitionError rather than silently corrupting the pipeline.',
           'Any status except EXECUTION can be cancelled. COMPLETED and CANCELLED are terminal — nothing moves out of them, which is what makes historical reporting trustworthy.',
         ],
