@@ -1,0 +1,70 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+
+import { CurrentUser, Roles } from '../../common/decorators';
+import type { AuthenticatedUser } from '../../types/auth.types';
+import { CreateProductTypeDto, UpdateProductTypeDto } from './dto/product-type.dto';
+import { ProductTypesRepository } from './product-types.repository';
+
+/**
+ * The product list behind the calculator and the quotation lines. Anyone who
+ * quotes reads it; changing a price is a management act (the requirement
+ * document's "pricing approval" sits with the Sales Manager, and the CEO and
+ * admin pass everything).
+ */
+@ApiTags('product-types')
+@ApiBearerAuth('access-token')
+@Controller('product-types')
+@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'FINANCE_OFFICER', 'SECRETARY')
+export class ProductTypesController {
+  constructor(private readonly productTypes: ProductTypesRepository) {}
+
+  @Get()
+  @ApiOperation({ summary: 'Products and their prices, in display order. Seeds the company list on first use.' })
+  list(@CurrentUser() user: AuthenticatedUser) {
+    return this.productTypes.list(user.tenantId);
+  }
+
+  @Post()
+  @HttpCode(201)
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
+  @ApiOperation({ summary: 'Add a product. Its code is derived from the name and then fixed.' })
+  create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateProductTypeDto) {
+    return this.productTypes.create(user.tenantId, {
+      name: dto.name,
+      basePriceEtb: dto.basePriceEtb,
+      perStopEtb: dto.perStopEtb ?? '0',
+      perKgEtb: dto.perKgEtb ?? '0',
+      liftGeometry: dto.liftGeometry ?? true,
+    });
+  }
+
+  @Patch(':id')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
+  @ApiOperation({ summary: 'Change a product name or its prices. Existing quotations keep the price they were given.' })
+  update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateProductTypeDto,
+  ) {
+    return this.productTypes.update(user.tenantId, id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
+  @ApiOperation({ summary: 'Retire a product. Quotations that used it are untouched.' })
+  remove(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.productTypes.remove(user.tenantId, id);
+  }
+}

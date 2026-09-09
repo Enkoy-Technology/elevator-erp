@@ -199,18 +199,45 @@ export const logout = async (): Promise<void> => {
 export const getProfile = (): Promise<AuthProfile> =>
   apiFetch<AuthProfile>('/auth/me');
 
-export const PRODUCT_TYPES = [
-  'PASSENGER',
-  'CAR_PLATFORM_LIFT',
-  'ESCALATOR',
-] as const;
-export type ProductType = (typeof PRODUCT_TYPES)[number];
+/** A code from the tenant's product list (Settings → Products & prices). */
+export type ProductType = string;
 
-export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
-  PASSENGER: 'Passenger / hospital elevator',
-  CAR_PLATFORM_LIFT: 'Car platform lift',
-  ESCALATOR: 'Escalator',
-};
+/** One sellable product and the numbers the calculator prices it from. */
+export interface ProductTypeRow {
+  id: string;
+  code: string;
+  name: string;
+  basePriceEtb: string;
+  perStopEtb: string;
+  perKgEtb: string;
+  liftGeometry: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProductTypePayload {
+  name: string;
+  basePriceEtb: string;
+  perStopEtb?: string;
+  perKgEtb?: string;
+  liftGeometry?: boolean;
+}
+
+export const listProductTypes = (): Promise<ProductTypeRow[]> => apiFetch<ProductTypeRow[]>('/product-types');
+
+export const createProductType = (payload: ProductTypePayload): Promise<ProductTypeRow> =>
+  apiFetch<ProductTypeRow>('/product-types', { method: 'POST', body: JSON.stringify(payload) });
+
+export const updateProductType = (id: string, payload: Partial<ProductTypePayload>): Promise<ProductTypeRow> =>
+  apiFetch<ProductTypeRow>(`/product-types/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+
+export const deleteProductType = (id: string): Promise<void> =>
+  apiFetch<void>(`/product-types/${id}`, { method: 'DELETE' });
+
+/** Name for a code, falling back to the code itself for a retired product. */
+export const productName = (rows: readonly ProductTypeRow[], code: string): string =>
+  rows.find((row) => row.code === code)?.name ?? code;
 
 export interface CalcInputPayload {
   productType: ProductType;

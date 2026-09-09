@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 
 import {
   computeCarDimensions,
@@ -15,6 +15,7 @@ import {
   qty2,
   selectGuideRail,
 } from './calc-math';
+import { ProductTypesRepository } from './product-types.repository';
 import type { CalcInput, CalcResult, TechnicalSpecs } from './types';
 
 /**
@@ -41,14 +42,19 @@ const EMPTY_GEOMETRY: Omit<TechnicalSpecs, 'productType'> = {
 
 @Injectable()
 export class ElevatorCalcService {
-  calculateSpecs(input: CalcInput): CalcResult {
-    const technical =
-      input.productType === 'PASSENGER'
-        ? computeLiftGeometry(input)
-        : EMPTY_GEOMETRY;
+  constructor(private readonly productTypes: ProductTypesRepository) {}
+
+  async calculateSpecs(tenantId: string, input: CalcInput): Promise<CalcResult> {
+    const product = await this.productTypes.findByCode(tenantId, input.productType);
+    if (!product) {
+      throw new BadRequestException(
+        `Unknown product type "${input.productType}" — add it under Settings → Products & prices`,
+      );
+    }
+    const technical = product.liftGeometry ? computeLiftGeometry(input) : EMPTY_GEOMETRY;
 
     const { basePrice, stopsAdjustment, capacityAdjustment } =
-      computeProductPrice(input.productType, input.stops, input.capacityKg);
+      computeProductPrice(product, input.stops, input.capacityKg);
 
     const totalBeforeMargin = basePrice
       .plus(stopsAdjustment)
@@ -75,7 +81,7 @@ export class ElevatorCalcService {
 
 }
 
-/** The §4.1 EN 81 lift block. Passenger (incl. hospital) lifts only. */
+/** The §4.1 EN 81 lift block, for every product with lift geometry on. */
 const computeLiftGeometry = (
   input: CalcInput,
 ): Omit<TechnicalSpecs, 'productType'> => {

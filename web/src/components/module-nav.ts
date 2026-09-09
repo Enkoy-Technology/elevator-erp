@@ -216,6 +216,15 @@ export const MODULES: ModuleNavItem[] = [
     roles: ['GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER', 'SECRETARY'],
   },
   {
+    nameKey: 'nav.productTypes',
+    group: 'admin',
+    description: 'What we sell and what each starts at',
+    phase: null,
+    href: '/settings/product-types',
+    icon: 'M4 7h16 M4 12h16 M4 17h10',
+    roles: ['GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'FINANCE_OFFICER', 'SECRETARY'],
+  },
+  {
     nameKey: 'nav.components',
     group: 'admin',
     description: 'Brand appendix printed on every document',

@@ -13,19 +13,12 @@ export const BUILDING_USAGES = [
 export type BuildingUsage = (typeof BUILDING_USAGES)[number];
 
 /**
- * What is being sold. Drives pricing only — the technical block is still
- * computed with the EN 81 lift formulas regardless.
- *
- * PASSENGER covers hospital lifts: the product owner prices them identically,
- * and `buildingUsage: 'HOSPITAL'` already carries the distinction (taller car,
- * and it is what the quote document reads).
+ * What is being sold: the `code` of a row in the tenant's product list
+ * (`product_types`, editable under Settings). Drives the base price and the
+ * per-stop / per-kg rates; the technical block is still computed with the
+ * EN 81 lift formulas for any product whose `liftGeometry` is on.
  */
-export const PRODUCT_TYPES = [
-  'PASSENGER',
-  'CAR_PLATFORM_LIFT',
-  'ESCALATOR',
-] as const;
-export type ProductType = (typeof PRODUCT_TYPES)[number];
+export type ProductType = string;
 
 export interface CalcInput {
   productType: ProductType;
@@ -42,7 +35,7 @@ export interface CalcInput {
 }
 
 /**
- * Every field except `productType` is null for non-PASSENGER products: §4.1
+ * Every field except `productType` is null for products without lift geometry: §4.1
  * defines EN 81 *lift* geometry, and an escalator has no car, counterweight
  * or guide rail. Nulling them here — at the one place that produces them —
  * is what keeps a counterweight mass off an escalator quotation, since both

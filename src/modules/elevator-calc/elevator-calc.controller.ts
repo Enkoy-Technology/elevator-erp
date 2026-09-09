@@ -6,7 +6,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
-import { Roles } from '../../common/decorators';
+import { CurrentUser, Roles } from '../../common/decorators';
+import type { AuthenticatedUser } from '../../types/auth.types';
 import { CalculateSpecsDto } from './dto/calculate-specs.dto';
 import { ElevatorCalcService } from './elevator-calc.service';
 import type { CalcResult } from './types';
@@ -26,7 +27,7 @@ export class ElevatorCalcController {
       'Applies EN 81-derived formulas with decimal.js. Does not persist.',
   })
   @ApiOkResponse({ description: 'Technical specs and pricing breakdown' })
-  calculate(@Body() dto: CalculateSpecsDto): CalcResult {
-    return this.calcService.calculateSpecs(dto);
+  calculate(@CurrentUser() user: AuthenticatedUser, @Body() dto: CalculateSpecsDto): Promise<CalcResult> {
+    return this.calcService.calculateSpecs(user.tenantId, dto);
   }
 }

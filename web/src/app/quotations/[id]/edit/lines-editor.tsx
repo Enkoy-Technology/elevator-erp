@@ -1,15 +1,16 @@
 'use client';
 
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Field } from '@/components/form-page';
 import { btnGhost, btnSecondary, fieldClass, labelClass } from '@/components/form-styles';
 import {
   ApiError,
   addQuotationLine,
-  PRODUCT_TYPE_LABELS,
-  PRODUCT_TYPES,
+  listProductTypes,
+  productName,
+  type ProductTypeRow,
   removeQuotationLine,
   reorderQuotationLines,
   updateQuotationLine,
@@ -178,6 +179,11 @@ export const LinesEditor = ({
   /** DRAFT only — mirrors the API's own gate on every line endpoint. */
   editable: boolean;
 }) => {
+  const [products, setProducts] = useState<ProductTypeRow[]>([]);
+  useEffect(() => {
+    void listProductTypes().then(setProducts).catch(() => undefined);
+  }, []);
+
   const [drafts, setDrafts] = useState<Record<string, LineDraft>>({});
   // A lift with no floors yet has never been described — it is the
   // placeholder the create screen opened the quotation with, so open it
@@ -317,7 +323,7 @@ export const LinesEditor = ({
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold text-slate-900">
                       {line.specSummary ??
-                        `${PRODUCT_TYPE_LABELS[line.productType]} — ${draft.capacityKg}kg`}
+                        `${productName(products, line.productType)} — ${draft.capacityKg}kg`}
                     </span>
                     <span className="block text-xs text-slate-500">
                       {draft.quantity} unit{num(draft.quantity, 1) === 1 ? '' : 's'}
@@ -379,12 +385,12 @@ export const LinesEditor = ({
                         disabled={!editable}
                         value={draft.productType}
                         onChange={(e) =>
-                          setField(line, 'productType', e.target.value as ProductType)
+                          setField(line, 'productType', e.target.value)
                         }
                       >
-                        {PRODUCT_TYPES.map((t) => (
-                          <option key={t} value={t}>
-                            {PRODUCT_TYPE_LABELS[t]}
+                        {products.map((p) => (
+                          <option key={p.code} value={p.code}>
+                            {p.name}
                           </option>
                         ))}
                       </select>

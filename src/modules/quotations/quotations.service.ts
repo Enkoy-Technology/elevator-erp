@@ -108,7 +108,7 @@ export class QuotationsService {
     // calc's own taxPercent input is unused here — pass 0 as a placeholder
     // and override the tax/total lines below with the VAT computed above,
     // so the persisted snapshot matches the persisted numeric columns.
-    const result = this.calcService.calculateSpecs({ ...calcInput, taxPercent: 0 });
+    const result = await this.calcService.calculateSpecs(user.tenantId, { ...calcInput, taxPercent: 0 });
 
     const subtotalWithMargin = D(result.pricing.subtotalWithMargin);
     const taxAmount = subtotalWithMargin.mul(vatPercent).div(100);
@@ -220,7 +220,7 @@ export class QuotationsService {
     return this.quotationsRepository.addLine(
       user.tenantId,
       id,
-      this.buildLineValues(quote.taxPercent, dto),
+      await this.buildLineValues(user.tenantId, quote.taxPercent, dto),
     );
   }
 
@@ -262,7 +262,7 @@ export class QuotationsService {
       user.tenantId,
       id,
       lineId,
-      this.buildLineValues(quote.taxPercent, merged),
+      await this.buildLineValues(user.tenantId, quote.taxPercent, merged),
     );
   }
 
@@ -463,10 +463,11 @@ export class QuotationsService {
    * the price is untouched — the frozen formula is called with the same
    * field it has always been called with.
    */
-  private buildLineValues(
+  private async buildLineValues(
+    tenantId: string,
     taxPercent: string,
     dto: CreateQuotationLineDto,
-  ): QuotationLineValues {
+  ): Promise<QuotationLineValues> {
     const plan = describeFloorPlan(dto.floorLabels, dto.entranceCount);
     const stops = plan?.stops ?? dto.stops;
     if (stops === undefined) {
@@ -491,7 +492,7 @@ export class QuotationsService {
       // decimal.js so no money round-trips through a float.
       taxPercent: 0,
     };
-    const result = this.calcService.calculateSpecs(calcInput);
+    const result = await this.calcService.calculateSpecs(tenantId, calcInput);
 
     const subtotalWithMargin = D(result.pricing.subtotalWithMargin);
     const taxAmount = subtotalWithMargin.mul(D(taxPercent)).div(100);

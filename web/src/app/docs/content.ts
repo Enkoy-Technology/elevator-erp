@@ -259,7 +259,7 @@ export const DOC_GROUPS: DocGroup[] = [
         icon: ICON.calc,
         body: [
           'The calculator takes what the salesperson knows — product type, capacity, stops, travel height, speed, machine-room type, door type and usage — and returns both the technical block (car and shaft dimensions, pit depth, overhead clearance, counterweight mass, motor power, guide-rail spec, machine-room dimensions) and the commercial block (base price, adjustments, margin, VAT, grand total).',
-          'The technical formulas follow the EN 81-20/50 lift geometry regardless of what is being sold; product type drives pricing only. Hospital lifts are priced as passenger lifts, but a HOSPITAL building usage still produces the taller car and prints as a hospital lift on the quotation.',
+          'What can be sold, and what each product starts at, lives under Settings → Products & prices: passenger, hospital, panoramic, home and cargo elevators, car lift, car platform lift and escalator by default, each with a base price and the per-stop (above 10) and per-kilogram (above 630 kg) rates. Management adds, renames, reprices or retires products there; the calculator and the quotation lines read the list. A product with both rates at zero is a flat price. The EN 81 geometry block is computed for any product marked as a lift.',
           'Pricing is the product owner’s ETB price list, not a cost model. The reference machine is 10 stops at 630 kg; more of either costs the per-unit rate on top. Both adjustments floor at the reference point, so an under-spec machine costs the base rather than pricing below it.',
         ],
         facts: [
@@ -687,6 +687,10 @@ export const DOC_GROUPS: DocGroup[] = [
         endpoints: [
           { method: 'GET', path: '/settings', roles: 'Every staff role', note: 'Current tenant settings (read-only below admin).' },
           { method: 'PATCH', path: '/settings', roles: 'ADMIN', note: 'Update branding, locale and reminder cadence.' },
+          { method: 'GET', path: '/product-types', roles: 'Every quoting role', note: 'Products and their base prices and rates; seeds the company list on first use.' },
+          { method: 'POST', path: '/product-types', roles: 'GENERAL_MANAGER, SALES_MANAGER', note: 'Add a product. The code is derived from the name.' },
+          { method: 'PATCH', path: '/product-types/:id', roles: 'GENERAL_MANAGER, SALES_MANAGER', note: 'Rename or reprice. Existing quotations keep their prices.' },
+          { method: 'DELETE', path: '/product-types/:id', roles: 'GENERAL_MANAGER, SALES_MANAGER', note: 'Retire a product; quotations that used it are untouched.' },
         ],
       },
     ],

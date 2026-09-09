@@ -18,6 +18,7 @@ export type MessageKey =
   | 'nav.settings'
   | 'nav.boilerplate'
   | 'nav.components'
+  | 'nav.productTypes'
   | 'nav.docs'
   | 'nav.collapse'
   | 'nav.expand'
@@ -80,6 +81,7 @@ const en: Record<MessageKey, string> = {
   'nav.settings': 'Settings',
   'nav.boilerplate': 'Document text',
   'nav.components': 'Components & brands',
+  'nav.productTypes': 'Products & prices',
   'nav.docs': 'Documentation',
   'nav.collapse': 'Collapse',
   'nav.expand': 'Expand sidebar',
@@ -145,6 +147,7 @@ const am: Record<MessageKey, string> = {
   'nav.settings': 'ቅንብሮች',
   'nav.boilerplate': 'የሰነድ ጽሑፍ',
   'nav.components': 'መለዋወጫዎች እና ብራንዶች',
+  'nav.productTypes': 'ምርቶች እና ዋጋዎች',
   'nav.docs': 'ሰነድ',
   'nav.collapse': 'ሰብስብ',
   'nav.expand': 'ሳይድባር አሳይ',

@@ -10,8 +10,9 @@ import { formatNumber } from '@/lib/money';
 import {
   ApiError,
   calculateSpecs,
-  PRODUCT_TYPES,
-  PRODUCT_TYPE_LABELS,
+  listProductTypes,
+  productName,
+  type ProductTypeRow,
   type CalcInputPayload,
   type CalcResult,
   getAccessToken,
@@ -49,11 +50,18 @@ const formatMoney = (value: string): string =>
 export default function CalculatorPage() {
   const router = useRouter();
   const [form, setForm] = useState<CalcInputPayload>(WORKED_EXAMPLE);
+  const [products, setProducts] = useState<ProductTypeRow[]>([]);
   const [result, setResult] = useState<CalcResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    void listProductTypes()
+      .then((rows) => {
+        setProducts(rows);
+        setForm((prev) => (rows.some((r) => r.code === prev.productType) ? prev : { ...prev, productType: rows[0]?.code ?? prev.productType }));
+      })
+      .catch(() => undefined);
     if (!getAccessToken()) {
       router.replace('/login');
     }
@@ -108,17 +116,17 @@ export default function CalculatorPage() {
                   setForm((prev) => ({
                     ...prev,
                     productType: e.target
-                      .value as CalcInputPayload['productType'],
+                      .value,
                   }))
                 }
               >
-                {PRODUCT_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {PRODUCT_TYPE_LABELS[t]}
+                {products.map((p) => (
+                  <option key={p.code} value={p.code}>
+                    {p.name}
                   </option>
                 ))}
               </select>
-              {form.productType !== 'PASSENGER' && (
+              {products.some((p) => p.code === form.productType && Number(p.perStopEtb) === 0 && Number(p.perKgEtb) === 0) && (
                 <span className="mt-1 block text-xs text-slate-500">
                   Flat price — stops and capacity do not change it.
                 </span>
@@ -335,7 +343,7 @@ export default function CalculatorPage() {
                   </h2>
                   {result.technical.capacityPersons === null ? (
                     <p className="text-sm text-slate-500">
-                      {PRODUCT_TYPE_LABELS[result.technical.productType]} is
+                      {productName(products, result.technical.productType)} is
                       priced as a flat product — the EN 81 shaft and machine
                       calculations apply to passenger lifts only.
                     </p>

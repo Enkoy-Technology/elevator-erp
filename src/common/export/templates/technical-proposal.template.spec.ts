@@ -98,7 +98,7 @@ describe('buildTechnicalProposalHtml', () => {
   it('drops the machine room rows on an MRL machine (null geometry never prints)', () => {
     const html = buildTechnicalProposalHtml(passenger, branding);
     expect(html).not.toContain('Machine room width');
-    expect(html).toContain('Passenger / hospital elevator');
+    expect(html).toContain('Passenger elevator');
   });
 
   it('renders the duty parameters the geometry was computed from', () => {

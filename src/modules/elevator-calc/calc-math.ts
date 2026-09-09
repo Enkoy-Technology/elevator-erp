@@ -3,7 +3,6 @@ import { Decimal } from 'decimal.js';
 import type {
   BuildingUsage,
   MachineRoomType,
-  ProductType,
 } from './types';
 
 Decimal.set({ precision: 40, rounding: Decimal.ROUND_HALF_UP });
@@ -28,40 +27,6 @@ const qty2 = (value: Decimal): string =>
  * without conversion, which under-quoted every machine by ~100x).
  */
 /** Rows are ordered high-to-low; the first the machine reaches wins. */
-type BaseTier = { readonly fromStops: number; readonly base: string };
-
-/** Passenger/hospital base steps up with building height. */
-const PASSENGER_BASE_TIERS: readonly BaseTier[] = [
-  { fromStops: 31, base: '11000000' },
-  { fromStops: 20, base: '8000000' },
-  { fromStops: 0, base: '7000000' },
-];
-
-const PRICE_LIST: Record<
-  ProductType,
-  {
-    baseTiers: readonly BaseTier[];
-    perStopAbove10: string;
-    perKgAbove630: string;
-  }
-> = {
-  PASSENGER: {
-    baseTiers: PASSENGER_BASE_TIERS,
-    perStopAbove10: '80000',
-    perKgAbove630: '1000',
-  },
-  CAR_PLATFORM_LIFT: {
-    baseTiers: [{ fromStops: 0, base: '5200000' }],
-    perStopAbove10: '0',
-    perKgAbove630: '0',
-  },
-  ESCALATOR: {
-    baseTiers: [{ fromStops: 0, base: '6000000' }],
-    perStopAbove10: '0',
-    perKgAbove630: '0',
-  },
-};
-
 export const REFERENCE_STOPS = 10;
 export const REFERENCE_CAPACITY_KG = 630;
 
@@ -71,13 +36,19 @@ export const REFERENCE_CAPACITY_KG = 630;
  * Both adjustments floor at the reference point: an under-spec machine still
  * costs the base, it never prices below it.
  *
- * The stop reference stays at 10 in every tier — a 20-stop passenger lift is
- * 8,000,000 + 10 × 80,000, not 8,000,000 flat. That is the literal reading of
- * "same formula, different base"; the tier boundary is where the base jumps,
- * not where the per-stop count restarts.
+
+ * The base and both rates come from the tenant's product list, so a product
+ * with both rates at zero is a flat price whatever the machine.
  */
+/** The three numbers a product row contributes to a price. */
+export interface ProductRates {
+  basePriceEtb: string;
+  perStopEtb: string;
+  perKgEtb: string;
+}
+
 export const computeProductPrice = (
-  productType: ProductType,
+  rates: ProductRates,
   stops: number,
   capacityKg: number,
 ): {
@@ -85,15 +56,12 @@ export const computeProductPrice = (
   stopsAdjustment: Decimal;
   capacityAdjustment: Decimal;
 } => {
-  const rates = PRICE_LIST[productType];
-  // Every tier list ends at fromStops: 0, so one row always matches.
-  const tier = rates.baseTiers.find((t) => stops >= t.fromStops)!;
   const stopsOver = Decimal.max(0, D(stops).minus(REFERENCE_STOPS));
   const kgOver = Decimal.max(0, D(capacityKg).minus(REFERENCE_CAPACITY_KG));
   return {
-    basePrice: D(tier.base),
-    stopsAdjustment: stopsOver.mul(rates.perStopAbove10),
-    capacityAdjustment: kgOver.mul(rates.perKgAbove630),
+    basePrice: D(rates.basePriceEtb),
+    stopsAdjustment: stopsOver.mul(rates.perStopEtb),
+    capacityAdjustment: kgOver.mul(rates.perKgEtb),
   };
 };
 

@@ -26,7 +26,12 @@ import { formatAmount, formatEtb, formatQuantity } from './money-format';
 
 /** What the customer sees instead of the raw enum. */
 export const PRODUCT_LABELS: Record<string, string> = {
-  PASSENGER: 'Passenger / hospital elevator',
+  PASSENGER: 'Passenger elevator',
+  HOSPITAL: 'Hospital elevator',
+  PANORAMIC: 'Panoramic elevator',
+  HOME: 'Home elevator',
+  CARGO: 'Cargo elevator',
+  CAR_LIFT: 'Car lift',
   CAR_PLATFORM_LIFT: 'Car platform lift',
   ESCALATOR: 'Escalator',
 };

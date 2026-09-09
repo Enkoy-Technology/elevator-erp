@@ -1,5 +1,5 @@
 import type { DocumentTemplate, TenantBranding } from '../document-pdf.service';
-import { DOOR_TYPE_LABELS } from './commercial-document';
+import { DOOR_TYPE_LABELS, PRODUCT_LABELS } from './commercial-document';
 import {
   esc,
   renderLayout,
@@ -48,13 +48,6 @@ interface SpecRow {
   unit?: string;
   format?: (value: unknown) => string;
 }
-
-/** Mirrors quotation.template.ts's labels — that file is not ours to export from. */
-const PRODUCT_LABELS: Record<string, string> = {
-  PASSENGER: 'Passenger / hospital elevator',
-  CAR_PLATFORM_LIFT: 'Car platform lift',
-  ESCALATOR: 'Escalator',
-};
 
 /** `CENTER_OPEN` -> `Center open`. Enough for every enum printed here. */
 const humanize = (value: unknown): string => {

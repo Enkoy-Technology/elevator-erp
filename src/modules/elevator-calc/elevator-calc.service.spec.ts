@@ -1,5 +1,19 @@
 import { ElevatorCalcService } from './elevator-calc.service';
+import {
+  DEFAULT_PRODUCT_TYPES,
+  type ProductTypesRepository,
+} from './product-types.repository';
 import type { CalcInput } from './types';
+
+const TENANT_ID = '22222222-2222-2222-2222-222222222222';
+
+/** The company's list, exactly as the repository would seed it. */
+const productTypes = {
+  findByCode: jest.fn(async (_tenantId: string, code: string) => {
+    const row = DEFAULT_PRODUCT_TYPES.find((p) => p.code === code);
+    return row ? { ...row, tenantId: TENANT_ID, id: code, sortOrder: 0 } : null;
+  }),
+} as unknown as ProductTypesRepository;
 
 /** §4.1 technical fixture; pricing comes from the §4.2 product price list. */
 const WORKED_EXAMPLE: CalcInput = {
@@ -17,12 +31,16 @@ const WORKED_EXAMPLE: CalcInput = {
 };
 
 describe('ElevatorCalcService', () => {
-  const service = new ElevatorCalcService();
+  const service = new ElevatorCalcService(productTypes);
+  const calc = (input: CalcInput) => service.calculateSpecs(TENANT_ID, input);
 
   describe('§4.2.3 worked example', () => {
-    const result = service.calculateSpecs(WORKED_EXAMPLE);
+    let result: Awaited<ReturnType<typeof calc>>;
+    beforeAll(async () => {
+      result = await calc(WORKED_EXAMPLE);
+    });
 
-    it('computes technical specs for the fixture', () => {
+    it('computes technical specs for the fixture', async () => {
       expect(result.technical.capacityPersons).toBe(13);
       expect(result.technical.carWidthMm).toBe(1100);
       expect(result.technical.carDepthMm).toBe(1400);
@@ -34,7 +52,7 @@ describe('ElevatorCalcService', () => {
       expect(result.technical.counterweightMassKg).toBe('450.00');
     });
 
-    it('prices off the product price list, not the retired TAD matrix', () => {
+    it('prices off the product price list, not the retired TAD matrix', async () => {
       // 12 stops, 1000 kg PASSENGER:
       //   7,000,000 + (12-10)×80,000 + (1000-630)×1,000 = 7,530,000
       expect(result.pricing.basePrice).toBe('7000000.00');
@@ -43,7 +61,7 @@ describe('ElevatorCalcService', () => {
       expect(result.pricing.totalBeforeMargin).toBe('7530000.00');
     });
 
-    it('applies margin then tax on top of the list price', () => {
+    it('applies margin then tax on top of the list price', async () => {
       // 7,530,000 × 1.25 = 9,412,500 ; × 1.05 = 9,883,125
       expect(result.pricing.marginAmount).toBe('1882500.00');
       expect(result.pricing.subtotalWithMargin).toBe('9412500.00');
@@ -52,8 +70,8 @@ describe('ElevatorCalcService', () => {
   });
 
   describe('price list', () => {
-    it('floors both adjustments at the reference machine (10 stops, 630 kg)', () => {
-      const result = service.calculateSpecs({
+    it('floors both adjustments at the reference machine (10 stops, 630 kg)', async () => {
+      const result = await calc({
         ...WORKED_EXAMPLE,
         stops: 5,
         capacityKg: 450,
@@ -65,76 +83,67 @@ describe('ElevatorCalcService', () => {
       expect(result.pricing.totalPrice).toBe('7000000.00');
     });
 
-    it('steps the passenger base up at 20 and 31 stops', () => {
-      // Held at 630 kg so the capacity term is zero and only the base moves.
-      const priceAt = (stops: number): string =>
-        service.calculateSpecs({
-          ...WORKED_EXAMPLE,
-          stops,
-          capacityKg: 630,
-          marginPercent: 0,
-          taxPercent: 0,
-        }).pricing.basePrice;
+    it('reads the base from the product list: one base per product, no height tiers', async () => {
+      const totalAt = async (stops: number): Promise<string> =>
+        (await calc({ ...WORKED_EXAMPLE, stops, capacityKg: 630, marginPercent: 0, taxPercent: 0 }))
+          .pricing.totalPrice;
 
-      expect(priceAt(19)).toBe('7000000.00');
-      expect(priceAt(20)).toBe('8000000.00');
-      expect(priceAt(30)).toBe('8000000.00');
-      expect(priceAt(31)).toBe('11000000.00');
+      // 7,000,000 + (20-10)×80,000 — the base no longer jumps at 20 stops
+      expect(await totalAt(20)).toBe('7800000.00');
+      // 7,000,000 + (31-10)×80,000
+      expect(await totalAt(31)).toBe('8680000.00');
     });
 
-    it('keeps the stop reference at 10 inside every base tier', () => {
-      const totalAt = (stops: number): string =>
-        service.calculateSpecs({
-          ...WORKED_EXAMPLE,
-          stops,
-          capacityKg: 630,
-          marginPercent: 0,
-          taxPercent: 0,
-        }).pricing.totalPrice;
+    it('prices every product in the company list from its own base', async () => {
+      const baseOf = async (productType: string): Promise<string> =>
+        (await calc({ ...WORKED_EXAMPLE, productType, stops: 10, capacityKg: 630, marginPercent: 0, taxPercent: 0 }))
+          .pricing.totalPrice;
 
-      // 8,000,000 + (20-10)×80,000
-      expect(totalAt(20)).toBe('8800000.00');
-      // 11,000,000 + (31-10)×80,000
-      expect(totalAt(31)).toBe('12680000.00');
+      expect(await baseOf('HOSPITAL')).toBe('7000000.00');
+      expect(await baseOf('PANORAMIC')).toBe('8000000.00');
+      expect(await baseOf('HOME')).toBe('8000000.00');
+      expect(await baseOf('CARGO')).toBe('8000000.00');
+      expect(await baseOf('CAR_LIFT')).toBe('12000000.00');
     });
 
-    it('does not tier platform lifts or escalators by stops', () => {
-      const totalAt = (productType: CalcInput['productType'], stops: number): string =>
-        service.calculateSpecs({
-          ...WORKED_EXAMPLE,
-          productType,
-          stops,
-          marginPercent: 0,
-          taxPercent: 0,
-        }).pricing.totalPrice;
-
-      expect(totalAt('CAR_PLATFORM_LIFT', 40)).toBe('5200000.00');
-      expect(totalAt('ESCALATOR', 40)).toBe('6000000.00');
+    it('refuses a product that is not in the list', async () => {
+      await expect(calc({ ...WORKED_EXAMPLE, productType: 'SPACE_ELEVATOR' })).rejects.toThrow(
+        /Unknown product type/,
+      );
     });
 
-    it('prices a car platform lift flat, ignoring stops and capacity', () => {
+    it('does not tier platform lifts or escalators by stops', async () => {
+      const totalAt = async (productType: string, stops: number): Promise<string> =>
+        (await calc({ ...WORKED_EXAMPLE, productType, stops, marginPercent: 0, taxPercent: 0 }))
+          .pricing.totalPrice;
+
+      expect(await totalAt('CAR_PLATFORM_LIFT', 40)).toBe('3200000.00');
+      expect(await totalAt('ESCALATOR', 40)).toBe('6000000.00');
+    });
+
+    it('prices a car platform lift flat, ignoring stops and capacity', async () => {
       const platformLift: CalcInput = {
         ...WORKED_EXAMPLE,
         productType: 'CAR_PLATFORM_LIFT',
         marginPercent: 0,
         taxPercent: 0,
       };
-      const small = service.calculateSpecs({
+      const small = await calc({
         ...platformLift,
         stops: 4,
         capacityKg: 630,
       });
-      const big = service.calculateSpecs({
+      const big = await calc({
         ...platformLift,
         stops: 20,
         capacityKg: 5000,
       });
-      expect(small.pricing.totalPrice).toBe('5200000.00');
-      expect(big.pricing.totalPrice).toBe('5200000.00');
+      expect(small.pricing.totalPrice).toBe('3200000.00');
+      expect(big.pricing.totalPrice).toBe('3200000.00');
     });
 
-    it('prices an escalator flat', () => {
-      const result = service.calculateSpecs({
+    it('prices an escalator flat', async () => {
+      const result = await calc({
         ...WORKED_EXAMPLE,
         productType: 'ESCALATOR',
         marginPercent: 0,
@@ -143,9 +152,9 @@ describe('ElevatorCalcService', () => {
       expect(result.pricing.totalPrice).toBe('6000000.00');
     });
 
-    it('does not vary price by speed, door, machine room or building usage', () => {
-      const plain = service.calculateSpecs({ ...WORKED_EXAMPLE });
-      const loaded = service.calculateSpecs({
+    it('does not vary price by speed, door, machine room or building usage', async () => {
+      const plain = await calc({ ...WORKED_EXAMPLE });
+      const loaded = await calc({
         ...WORKED_EXAMPLE,
         speedMs: 6,
         doorType: 'TELESCOPIC',
@@ -159,8 +168,8 @@ describe('ElevatorCalcService', () => {
   });
 
   describe('boundary cases', () => {
-    it('handles minimum capacity and MRL overhead reduction', () => {
-      const result = service.calculateSpecs({
+    it('handles minimum capacity and MRL overhead reduction', async () => {
+      const result = await calc({
         ...WORKED_EXAMPLE,
         capacityKg: 320,
         stops: 2,
@@ -178,8 +187,8 @@ describe('ElevatorCalcService', () => {
       );
     });
 
-    it('applies high-speed and INDUSTRIAL counterweight adjustments', () => {
-      const result = service.calculateSpecs({
+    it('applies high-speed and INDUSTRIAL counterweight adjustments', async () => {
+      const result = await calc({
         ...WORKED_EXAMPLE,
         capacityKg: 2500,
         speedMs: 2.5,
@@ -192,8 +201,8 @@ describe('ElevatorCalcService', () => {
       expect(result.technical.guideRailSpec).toBe('T127-2/B');
     });
 
-    it('drops to T140 rail when speed exceeds the T127 band', () => {
-      const result = service.calculateSpecs({
+    it('drops to T140 rail when speed exceeds the T127 band', async () => {
+      const result = await calc({
         ...WORKED_EXAMPLE,
         capacityKg: 2500,
         speedMs: 3.0,
@@ -201,8 +210,8 @@ describe('ElevatorCalcService', () => {
       });
       expect(result.technical.guideRailSpec).toBe('T140-3/B');
     });
-    it('raises HOSPITAL car height', () => {
-      const hospital = service.calculateSpecs({
+    it('raises HOSPITAL car height', async () => {
+      const hospital = await calc({
         ...WORKED_EXAMPLE,
         buildingUsage: 'HOSPITAL',
       });
@@ -215,8 +224,8 @@ describe('ElevatorCalcService', () => {
     // specification off an escalator quotation.
     it.each(['CAR_PLATFORM_LIFT', 'ESCALATOR'] as const)(
       'emits no lift geometry for %s, only the product type',
-      (productType) => {
-        const result = service.calculateSpecs({
+      async (productType) => {
+        const result = await calc({
           ...WORKED_EXAMPLE,
           productType,
         });
@@ -229,8 +238,8 @@ describe('ElevatorCalcService', () => {
       },
     );
 
-    it('keeps the full lift geometry for PASSENGER', () => {
-      const result = service.calculateSpecs(WORKED_EXAMPLE);
+    it('keeps the full lift geometry for PASSENGER', async () => {
+      const result = await calc(WORKED_EXAMPLE);
       expect(result.technical.productType).toBe('PASSENGER');
       expect(result.technical.guideRailSpec).toBe('T89-1/B');
       expect(result.technical.carWidthMm).toBe(1100);

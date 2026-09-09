@@ -180,7 +180,7 @@ describe('the client-shaped commercial document', () => {
       },
       branding,
     );
-    expect(html).toContain('Specification — 1. Passenger / hospital elevator');
+    expect(html).toContain('Specification — 1. Passenger elevator');
     expect(html).toContain('Specification — 2. Car platform lift');
   });
 
@@ -246,7 +246,7 @@ describe('the client-shaped commercial document', () => {
     const html = buildQuotationHtml({ ...data, lines: [] }, branding);
     expect(html).toContain('No of Units');
     expect(html).toContain('>6,813,043.48</td>'); // the unit price IS the ex-VAT total
-    expect(html).toContain('Passenger / hospital elevator');
+    expect(html).toContain('Passenger elevator');
   });
 
 });

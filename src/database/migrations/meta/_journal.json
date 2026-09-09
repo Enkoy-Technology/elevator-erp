@@ -498,6 +498,13 @@
       "when": 1788945492402,
       "tag": "0070_burly_iron_lad",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1788951767278,
+      "tag": "0071_uneven_bedlam",
+      "breakpoints": true
     }
   ]
 }

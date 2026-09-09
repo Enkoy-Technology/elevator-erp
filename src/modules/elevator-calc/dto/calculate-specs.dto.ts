@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  MaxLength,
+  IsString,
   IsEnum,
   IsInt,
   IsNumber,
@@ -11,7 +13,6 @@ import {
   BUILDING_USAGES,
   DOOR_TYPES,
   MACHINE_ROOM_TYPES,
-  PRODUCT_TYPES,
   type BuildingUsage,
   type DoorType,
   type MachineRoomType,
@@ -19,8 +20,9 @@ import {
 } from '../types';
 
 export class CalculateSpecsDto {
-  @ApiProperty({ enum: PRODUCT_TYPES, example: 'PASSENGER' })
-  @IsEnum(PRODUCT_TYPES)
+  @ApiProperty({ example: 'PASSENGER', description: 'A code from GET /product-types.' })
+  @IsString()
+  @MaxLength(40)
   productType!: ProductType;
 
   @ApiProperty({ minimum: 320, maximum: 5000, example: 1000 })

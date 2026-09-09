@@ -84,7 +84,7 @@ describe('QuotationsService', () => {
 
   const service = new QuotationsService(
     repo as never,
-    calc,
+    calc as never,
     projectsService as never,
     rates as never,
   );
@@ -161,6 +161,7 @@ describe('QuotationsService', () => {
     it('never passes the client a way to set taxPercent — calc is called with a 0 placeholder', async () => {
       await service.createForProject(user, project.id, dto);
       expect(calc.calculateSpecs).toHaveBeenCalledWith(
+        user.tenantId,
         expect.objectContaining({ taxPercent: 0 }),
       );
     });
@@ -598,6 +599,7 @@ describe('QuotationsService', () => {
     it('fills the frozen formula\'s stops from the floor labels', async () => {
       await service.addLine(user, draft.id, lineDto as never);
       expect(calc.calculateSpecs).toHaveBeenCalledWith(
+        user.tenantId,
         expect.objectContaining({ stops: 13, taxPercent: 0 }),
       );
     });
@@ -643,6 +645,7 @@ describe('QuotationsService', () => {
         stops: 6,
       } as never);
       expect(calc.calculateSpecs).toHaveBeenCalledWith(
+        user.tenantId,
         expect.objectContaining({ stops: 6 }),
       );
     });

@@ -75,7 +75,7 @@ describe('buildWarrantyCertificateHtml', () => {
     expect(html).toContain('24 months');
     expect(html).toContain('2026-08-14');
     expect(html).toContain('2028-08-14');
-    expect(html).toContain('Passenger / hospital elevator');
+    expect(html).toContain('Passenger elevator');
   });
 
   it('states which date the period ran from', () => {
