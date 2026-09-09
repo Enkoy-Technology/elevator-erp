@@ -37,11 +37,10 @@ const WORKED_EXAMPLE: CalcInputPayload = {
   doorType: "CENTER_OPEN",
   doorWidthMm: 900,
   buildingUsage: "COMMERCIAL",
+  // The calculator shows the list price only; margin and VAT belong to the
+  // quotation, where the statutory rate and the agreed price live.
   marginPercent: 0,
-  // Statutory VAT. The §4.2.3 worked example uses 5%, but quotations always
-  // recompute at the statutory rate from the rates table, so defaulting to 5
-  // here made the same machine read two different totals on two screens.
-  taxPercent: 15,
+  taxPercent: 0,
 };
 
 const field =
@@ -298,36 +297,6 @@ export default function CalculatorPage() {
                   </label>
                 </>
               )}
-              <label>
-                <span className={label}>Margin %</span>
-                <input
-                  className={field}
-                  type="number"
-                  min={0}
-                  max={100}
-                  step="0.01"
-                  value={form.marginPercent}
-                  onChange={setNumber("marginPercent")}
-                  required
-                />
-              </label>
-              <label>
-                <span className={label}>Tax %</span>
-                <input
-                  className={field}
-                  type="number"
-                  min={0}
-                  max={50}
-                  step="0.01"
-                  value={form.taxPercent}
-                  onChange={setNumber("taxPercent")}
-                  required
-                />
-                <span className="mt-1 block text-xs text-slate-500">
-                  Scenario only — a quotation always uses the statutory VAT rate
-                  from Settings.
-                </span>
-              </label>
             </div>
 
             <label className="block">
@@ -421,23 +390,20 @@ export default function CalculatorPage() {
           <div className="space-y-6">
             {!result && (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-16 text-center text-sm text-slate-500">
-                Enter parameters and calculate to see technical specs and
-                pricing. Defaults match the §4.2.3 worked example, at the
-                statutory 15% VAT.
+                Enter the lift and calculate to see its technical specs and list
+                price.
               </div>
             )}
 
             {result && (
               <>
                 <section className="rounded-2xl bg-navy-800 p-6 text-white">
-                  <p className="text-sm text-navy-100/70">Total price</p>
+                  <p className="text-sm text-navy-100/70">List price</p>
                   <p className="font-display mt-1 text-3xl font-bold tracking-tight text-gold-400">
-                    {formatMoney(result.pricing.totalPrice)}
+                    {formatMoney(result.pricing.totalBeforeMargin)}
                   </p>
                   <p className="mt-2 text-xs text-navy-100/60">
-                    List {formatMoney(result.pricing.totalBeforeMargin)} ·
-                    Margin {formatMoney(result.pricing.marginAmount)} · Tax{" "}
-                    {formatMoney(result.pricing.taxAmount)}
+                    Before VAT. The quotation adds the statutory rate.
                   </p>
                 </section>
 
@@ -562,9 +528,7 @@ export default function CalculatorPage() {
                           "Additional capacity",
                           result.pricing.capacityAdjustment,
                         ],
-                        ["Before margin", result.pricing.totalBeforeMargin],
-                        ["Margin", result.pricing.marginAmount],
-                        ["Tax", result.pricing.taxAmount],
+                        ["List price", result.pricing.totalBeforeMargin],
                       ] as const
                     ).map(([k, v]) => (
                       <div
