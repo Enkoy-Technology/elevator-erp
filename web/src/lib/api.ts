@@ -1430,6 +1430,10 @@ export interface Quotation {
   rejectedReason: string | null;
   createdAt: string;
   updatedAt: string;
+  /** The proforma issued on approval, joined onto the list row. Null until approved. */
+  proformaId: string | null;
+  proformaNumber: string | null;
+  proformaStatus: ProformaStatus | null;
 }
 
 /** Same shape the calc engine takes, minus taxPercent — VAT is resolved
@@ -2320,6 +2324,10 @@ export const downloadOutbox = (
 /** Which SmsProvider is actually wired up — 'noop' means nothing on this page really sent (task-3 §3.3). */
 export const getOutboxProvider = (): Promise<{ provider: string }> =>
   apiFetch<{ provider: string }>('/outbox/provider');
+
+/** Queue a test SMS to a handset the operator holds; shows up in the log within a minute. */
+export const sendTestSms = (phone: string): Promise<OutboundMessage> =>
+  apiFetch<OutboundMessage>('/outbox/test', { method: 'POST', body: JSON.stringify({ phone }) });
 
 /** Retry a FAILED message: QUEUED, due immediately, attempts NOT reset. */
 export const retryOutboxMessage = (id: string): Promise<OutboundMessage> =>

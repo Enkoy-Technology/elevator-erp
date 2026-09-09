@@ -1,4 +1,5 @@
 import {
+  Body,
   BadRequestException,
   Controller,
   Get,
@@ -24,6 +25,7 @@ import { type ColumnDef, writeCsv, writeXlsx } from '../../common/export/tabular
 import { messageChannelEnum, messageStatusEnum } from '../../database/schema';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type { OutboxListFilter } from './outbox.repository';
+import { SendTestSmsDto } from './dto/send-test-sms.dto';
 import { OutboxService } from './outbox.service';
 
 const MESSAGE_STATUSES = messageStatusEnum.enumValues;
@@ -145,6 +147,16 @@ export class OutboxController {
     } else {
       await writeXlsx(res, filename, OUTBOX_EXPORT_COLUMNS, rows);
     }
+  }
+
+  @Post('test')
+  @HttpCode(201)
+  @ApiOperation({
+    summary:
+      'Queue a test SMS to a phone the operator holds. Dispatched within a minute; while SMS_LIVE=0 only allowlisted numbers are delivered, and the row shows why otherwise.',
+  })
+  sendTest(@CurrentUser() user: AuthenticatedUser, @Body() dto: SendTestSmsDto) {
+    return this.outboxService.sendTest(user, dto.phone);
   }
 
   @Post(':id/retry')

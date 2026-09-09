@@ -53,6 +53,27 @@ export class OutboxService {
   ) {}
 
   /**
+   * A test message an administrator sends to a phone they hold, to prove
+   * the configured gateway delivers before any customer depends on it.
+   * Goes through `enqueue` like everything else, so the allowlist, the
+   * dispatcher and the message log all apply — the result is visible on
+   * the Messages page within a minute, success or failure. Consent is the
+   * operator's own: they typed the number of a handset they control.
+   */
+  sendTest(user: AuthenticatedUser, phone: string): Promise<OutboundMessageRecord> {
+    return this.enqueue({
+      tenantId: user.tenantId,
+      channel: 'SMS',
+      recipient: phone,
+      consentAt: new Date(),
+      body: 'Shining Star ERP: test message. SMS delivery is working.',
+      dedupeKey: `test:${user.userId}:${Date.now()}`,
+      subjectKind: 'TEST',
+      createdByUserId: user.userId,
+    });
+  }
+
+  /**
    * The only way anything in this codebase enqueues an outbound message
    * (task brief 5.4) — internal, no HTTP surface; Task 2 (reminders) and
    * Task 3 (message-log UI) are the callers. Refuses an SMS with no consent

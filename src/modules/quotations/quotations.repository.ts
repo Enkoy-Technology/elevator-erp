@@ -11,6 +11,7 @@ import {
 import type { TenantTransaction } from '../../database/database.types';
 import {
   customers,
+  proformas,
   projects,
   quotationLines,
   quotationPaymentTerms,
@@ -24,6 +25,13 @@ import type { QuotationDocumentRow } from './quotation-document.mapper';
 import { buildSpecSummary } from './quote-spec';
 
 export type QuotationRecord = typeof quotations.$inferSelect;
+
+/** A list row: the quotation plus the proforma issued from it, if any. */
+export type QuotationListRow = QuotationRecord & {
+  proformaId: string | null;
+  proformaNumber: string | null;
+  proformaStatus: (typeof proformas.$inferSelect)['status'] | null;
+};
 export type QuotationInsert = typeof quotations.$inferInsert;
 export type QuotationLineRecord = typeof quotationLines.$inferSelect;
 export type QuotationLineInsert = typeof quotationLines.$inferInsert;
@@ -85,7 +93,7 @@ export class QuotationsRepository {
       page?: string;
       pageSize?: string;
     },
-  ): Promise<PaginatedResult<QuotationRecord>> {
+  ): Promise<PaginatedResult<QuotationListRow>> {
     const { page, pageSize, offset } = normalizePageQuery(
       options.page,
       options.pageSize,
@@ -104,9 +112,21 @@ export class QuotationsRepository {
         .from(quotations)
         .where(where);
       const total = Number(totalRow?.value ?? 0);
+      // The proforma rides on the quotation row: one list, one status, the
+      // proforma's number and documents reachable from the quote itself.
+      // (proformas.quotation_id is unique, so the join cannot fan out.)
       const items = await tx
-        .select()
+        .select({
+          ...getTableColumns(quotations),
+          proformaId: proformas.id,
+          proformaNumber: proformas.proformaNumber,
+          proformaStatus: proformas.status,
+        })
         .from(quotations)
+        .leftJoin(
+          proformas,
+          and(eq(quotations.tenantId, proformas.tenantId), eq(quotations.id, proformas.quotationId)),
+        )
         .where(where)
         .orderBy(desc(quotations.createdAt))
         .limit(pageSize)

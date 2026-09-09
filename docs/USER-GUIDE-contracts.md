@@ -16,10 +16,11 @@ Who: Sales Manager (or CEO, General Manager, Admin). A Salesperson can prepare
 the quotation but not issue the contract.
 
 1. **Quotations.** Create the quotation for the project, add the elevator
-   line(s), price it, submit it, and approve it.
-2. On the approved quotation press **Convert to proforma**.
-3. On the proforma row press **Issue contract**. You land on **Contracts**
-   with a new DRAFT contract that carries the proforma's value and equipment.
+   line(s), price it and submit it.
+2. Press **Approve** on the row. Approval issues the proforma: the proforma
+   number appears under the status and the row gains a Proforma print button.
+3. On the same row press **→ Contract**. You land on **Contracts** with a
+   new DRAFT contract that carries the proforma's value and equipment.
 4. On the contract row press **Edit** and fill the clauses:
    - Equipment notes (brand, rescue device, anything the lines do not say)
    - Delivery in working days, installation in working days

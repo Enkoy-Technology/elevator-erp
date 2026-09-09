@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 
 import { BarList, ColumnChart } from '@/components/charts';
-import { modulesForRole } from '@/components/module-nav';
+import { modulesForRole, type ModuleNavItem } from '@/components/module-nav';
+import { useLocale } from '@/components/locale-provider';
 import { Sidebar } from '@/components/sidebar';
 import {
   ApiError,
@@ -22,14 +23,17 @@ import { formatEtb, formatNumber } from '@/lib/money';
 const ROLE_LABELS: Record<string, string> = {
   CEO: 'Chief Executive',
   GENERAL_MANAGER: 'General Manager',
+  MARKETING_MANAGER: 'Marketing Manager',
   SALES_MANAGER: 'Sales Manager',
-  TECHNICAL_LEAD: 'Technical Lead',
-  FIELD_ENGINEER: 'Field Engineer',
-  FINANCE: 'Finance',
-  WAREHOUSE_MANAGER: 'Warehouse Manager',
-  DISPATCHER: 'Dispatcher',
+  SALESPERSON: 'Salesperson',
+  FINANCE_OFFICER: 'Finance Officer',
+  OFFICE_MANAGER: 'Office Manager',
+  TECHNICAL_MANAGER: 'Technical Manager',
+  MAINTENANCE_ENGINEER: 'Maintenance Engineer',
+  STORE_KEEPER: 'Store Keeper',
+  SECRETARY: 'Secretary',
   CUSTOMER: 'Customer',
-  ADMIN: 'Administrator',
+  ADMIN: 'System Administrator',
 };
 
 const STAGE_LABELS: Record<PipelineStage['status'], string> = {
@@ -132,7 +136,7 @@ const Kpi = ({
     </>
   );
   return (
-    <div className="min-w-0 flex-1 border-slate-200 px-5 py-4 first:pl-0 sm:border-l sm:first:border-l-0">
+    <div className="min-w-0 px-4 py-4 sm:px-5">
       {href ? (
         <a href={href} className="block rounded-lg outline-none transition hover:opacity-75">
           {body}
@@ -151,19 +155,19 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   /** Hrefs this role can actually open, so no tile links somewhere that 403s. */
   const [openable, setOpenable] = useState<ReadonlySet<string>>(new Set());
+  const [modules, setModules] = useState<ModuleNavItem[]>([]);
+  const { t } = useLocale();
 
   useEffect(() => {
     if (!getAccessToken()) {
       router.replace('/login');
       return;
     }
-    setOpenable(
-      new Set(
-        modulesForRole(getCurrentRole())
-          .map((module) => module.href)
-          .filter((href): href is string => href !== null),
-      ),
+    const mine = modulesForRole(getCurrentRole()).filter(
+      (module) => module.href !== null && module.href !== '/' && module.href !== '/docs',
     );
+    setModules(mine);
+    setOpenable(new Set(mine.map((module) => module.href as string)));
     getProfile()
       .then(setProfile)
       .catch(() => router.replace('/login'));
@@ -230,6 +234,8 @@ export default function DashboardPage() {
       ]
     : [];
 
+  const cardCount = (finance ? 2 : 0) + (sales ? 1 : 0) + (service ? 2 : 0);
+
   const serviceTiles = service
     ? [
         { label: 'Due in 7 days', value: service.servicesDueThisWeek, note: 'Scheduled visits', bad: false },
@@ -289,7 +295,7 @@ export default function DashboardPage() {
               single current values, and a one-bar bar chart is never the
               right form for one. */}
           {sales || finance ? (
-            <section className="flex flex-col rounded-xl border border-slate-200 bg-white px-5 sm:flex-row sm:px-6">
+            <section className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] rounded-xl border border-slate-200 bg-white px-5 sm:px-6">
               {sales ? (
                 <Kpi
                   label="Open pipeline"
@@ -334,11 +340,18 @@ export default function DashboardPage() {
             </section>
           ) : null}
 
-          <div className="grid gap-5 lg:grid-cols-3">
+          {/* Column count follows the number of cards this role gets, so a
+              lone pipeline card fills the row instead of sitting in a third
+              of it. */}
+          <div
+            className={`grid gap-5 ${
+              cardCount >= 3 ? 'md:grid-cols-2 xl:grid-cols-3' : cardCount === 2 ? 'md:grid-cols-2' : ''
+            }`}
+          >
             {finance ? (
               <Card
                 title="Collections · last 12 months"
-                className="lg:col-span-2"
+                className="md:col-span-2"
                 action={<CardLink href={linkTo('/invoices')}>Payments</CardLink>}
               >
                 <div className="mb-4 flex items-baseline gap-3">
@@ -371,9 +384,7 @@ export default function DashboardPage() {
                 />
               </Card>
             ) : null}
-          </div>
 
-          <div className="grid gap-5 lg:grid-cols-3">
             {finance ? (
               <Card
                 title="Receivables ageing"
@@ -449,6 +460,43 @@ export default function DashboardPage() {
               </Card>
             ) : null}
           </div>
+
+          {/* What this seat can open. For a role with no figures above
+              (office manager, store keeper) this IS the dashboard; for the
+              rest it is the launcher under the numbers. */}
+          {modules.length > 0 ? (
+            <Card title="Your workspace">
+              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {modules.map((module) => (
+                  <li key={module.href}>
+                    <a
+                      href={module.href ?? '/'}
+                      className="flex items-start gap-3 rounded-lg border border-slate-200 px-3.5 py-3 transition hover:border-slate-400 hover:bg-slate-50"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.6}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mt-0.5 h-5 w-5 shrink-0 text-gold-600"
+                        aria-hidden="true"
+                      >
+                        <path d={module.icon} />
+                      </svg>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-slate-900">
+                          {t(module.nameKey)}
+                        </span>
+                        <span className="block text-xs text-slate-500">{module.description}</span>
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
 
           {/* Register counts. A slim strip rather than three big tiles — they
               are context for everything above, not headline figures. */}

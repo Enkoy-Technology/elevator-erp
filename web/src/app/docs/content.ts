@@ -425,7 +425,7 @@ export const DOC_GROUPS: DocGroup[] = [
         flows: [
           {
             title: 'Supply & installation contract',
-            steps: ['Quotation approved', 'Convert to proforma', 'Issue contract (DRAFT)', 'Edit clauses', 'Payment schedule', 'Print / download', 'Sign', 'Print the signed agreement'],
+            steps: ['Quotation approved (proforma issued)', 'Issue contract (DRAFT)', 'Edit clauses', 'Payment schedule', 'Print / download', 'Sign', 'Print the signed agreement'],
           },
           {
             title: 'Maintenance & Service Agreement',
@@ -438,7 +438,7 @@ export const DOC_GROUPS: DocGroup[] = [
             expect: 'The customer record shows the TIN. It will print in the parties clause of every contract.',
           },
           {
-            action: 'Open Quotations. On an APPROVED quotation press Convert to proforma, then on the proforma row press Issue contract.',
+            action: 'Open Quotations. On a quotation that is pending approval press Approve (this issues its proforma), then on the same row press → Contract.',
             expect: 'You land on Contracts with a new DRAFT contract carrying the proforma’s value and equipment lines.',
           },
           {
@@ -746,6 +746,7 @@ export const DOC_GROUPS: DocGroup[] = [
         endpoints: [
           { method: 'GET', path: '/outbox', roles: 'ADMIN, OFFICE_MANAGER', note: 'Delivery log with status, segments and cost.' },
           { method: 'GET', path: '/outbox/provider', roles: 'ADMIN, OFFICE_MANAGER', note: 'Which provider is live, without reading server logs.' },
+          { method: 'POST', path: '/outbox/test', roles: 'ADMIN, OFFICE_MANAGER', note: 'Queue a test SMS to a handset you hold — proves the GeezSMS gateway before customers depend on it.' },
           { method: 'POST', path: '/outbox/:id/retry', roles: 'ADMIN, OFFICE_MANAGER', note: 'Requeue a failed message.' },
         ],
       },
@@ -950,8 +951,8 @@ export const DOC_GROUPS: DocGroup[] = [
             expect: 'The running total reads 100%. Saving a schedule that totals anything else is refused with a clear message.',
           },
           {
-            action: 'Submit the quotation, then approve it, then convert it to a proforma.',
-            expect: 'The status moves DRAFT → PENDING_APPROVAL → APPROVED → CONVERTED, and a proforma appears under the Proformas tab with a gapless number.',
+            action: 'Submit the quotation, then approve it.',
+            expect: 'The status moves DRAFT → PENDING_APPROVAL → Approved · proforma issued, and the proforma number appears under the status on the same row with its own Proforma print and download.',
           },
         ],
       },

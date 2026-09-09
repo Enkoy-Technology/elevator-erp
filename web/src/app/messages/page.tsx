@@ -11,6 +11,7 @@ import {
   metaLabelClass,
 } from '@/components/form-styles';
 import { DataTable } from '@/components/data-table';
+import { btnPrimary } from '@/components/form-styles';
 import { FilterSelect, ListToolbar, StatusPill } from '@/components/list-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
@@ -23,6 +24,7 @@ import {
   getSettings,
   listOutbox,
   retryOutboxMessage,
+  sendTestSms,
   type MessageChannel,
   type MessageStatus,
   type OutboundMessage,
@@ -129,6 +131,9 @@ const subjectLink = (kind: string | null, id: string | null): string | null => {
 export default function MessagesPage() {
   const router = useRouter();
   const [role, setRole] = useState<UserRole | null>(null);
+  const [testPhone, setTestPhone] = useState('');
+  const [testNotice, setTestNotice] = useState<string | null>(null);
+  const [sendingTest, setSendingTest] = useState(false);
 
   const [items, setItems] = useState<OutboundMessage[]>([]);
   const [page, setPage] = useState(1);
@@ -437,6 +442,46 @@ export default function MessagesPage() {
                 : '— this is a dev/test deployment. No SMS below actually left the building; set SMS_PROVIDER to a real gateway before relying on delivery.'}
             </p>
           ) : null}
+
+          {/* Prove the gateway before a customer depends on it: the queued
+              row appears below and the dispatcher picks it up within a
+              minute, so success and failure are both visible here. */}
+          <form
+            className="mb-4 flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setSendingTest(true);
+              setTestNotice(null);
+              void sendTestSms(testPhone.trim())
+                .then(() => {
+                  setTestNotice(
+                    'Queued. The dispatcher sends within a minute; watch the row below for SENT or the reason it failed.',
+                  );
+                  setTestPhone('');
+                  return refresh(page, statusFilter, channelFilter, fromDate, toDate, pageSize);
+                })
+                .catch((err: unknown) =>
+                  setTestNotice(err instanceof ApiError ? err.message : 'Could not queue the test message'),
+                )
+                .finally(() => setSendingTest(false));
+            }}
+          >
+            <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Send a test SMS to
+              <input
+                type="tel"
+                required
+                placeholder="+2519…"
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-normal normal-case tracking-normal text-slate-900"
+                value={testPhone}
+                onChange={(event) => setTestPhone(event.target.value)}
+              />
+            </label>
+            <button type="submit" disabled={sendingTest} className={`${btnPrimary} px-3 py-1.5 text-sm`}>
+              {sendingTest ? 'Queuing…' : 'Send test SMS'}
+            </button>
+            {testNotice ? <span className="text-xs text-slate-600">{testNotice}</span> : null}
+          </form>
 
           {hasSkipData && totalSkipped > 0 ? (
             <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">

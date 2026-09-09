@@ -31,6 +31,33 @@ describe('OutboxService.enqueue', () => {
     );
   });
 
+  it('sendTest queues a consented SMS to the operator-typed number, tagged TEST, through the same enqueue path', async () => {
+    const enqueue = jest.fn(async (_tenantId: string, values: unknown) => ({
+      id: 'm1',
+      ...(values as object),
+    }));
+    const service = new OutboxService(
+      { enqueue } as unknown as OutboxRepository,
+      { name: 'geezsms' } as never,
+    );
+
+    await service.sendTest(
+      { userId: '11111111-1111-1111-1111-111111111111', tenantId: TENANT_ID, role: 'ADMIN' },
+      '0949922604',
+    );
+
+    expect(enqueue).toHaveBeenCalledWith(
+      TENANT_ID,
+      expect.objectContaining({
+        channel: 'SMS',
+        recipient: '+251949922604',
+        subjectKind: 'TEST',
+        createdByUserId: '11111111-1111-1111-1111-111111111111',
+      }),
+    );
+    expect(String((enqueue.mock.calls[0]?.[1] as { body: string }).body)).toContain('test message');
+  });
+
   it('rejects an unrecognisable phone number before ever reaching the repository', async () => {
     const enqueue = jest.fn();
     const service = new OutboxService(

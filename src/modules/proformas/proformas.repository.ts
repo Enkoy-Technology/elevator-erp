@@ -8,6 +8,7 @@ import {
   eq,
   getTableColumns,
   gte,
+  inArray,
   isNull,
   lte,
   or,
@@ -220,18 +221,24 @@ export class ProformasRepository {
       const now = new Date();
       const today = todayIso(now);
 
-      // 1. CAS the quotation APPROVED -> CONVERTED_TO_PROFORMA.
+      // 1. CAS the quotation -> CONVERTED_TO_PROFORMA. Approving a quotation
+      // IS issuing its proforma (the client wants one document with one
+      // status, not a separate proforma step), so a PENDING_APPROVAL quote
+      // converts directly and is stamped approved here; a legacy APPROVED
+      // row still converts the old way.
       const [quote] = await tx
         .update(quotations)
         .set({
           status: 'CONVERTED_TO_PROFORMA',
           statusChangedAt: now,
           updatedAt: now,
+          approvedByUserId: sql`coalesce(${quotations.approvedByUserId}, ${userId}::uuid)`,
+          approvedAt: sql`coalesce(${quotations.approvedAt}, ${now})`,
         })
         .where(
           and(
             eq(quotations.id, quotationId),
-            eq(quotations.status, 'APPROVED'),
+            inArray(quotations.status, ['PENDING_APPROVAL', 'APPROVED']),
             isNull(quotations.deletedAt),
           ),
         )
@@ -246,7 +253,7 @@ export class ProformasRepository {
           .limit(1);
         if (exists[0]) {
           throw new WorkflowTransitionError(
-            'Quotation must be APPROVED to convert to a proforma — it may have already been converted, or changed concurrently',
+            'Quotation must be awaiting approval (or approved) to issue its proforma — it may have already been issued, or changed concurrently',
           );
         }
         throw new NotFoundException('Quotation not found');

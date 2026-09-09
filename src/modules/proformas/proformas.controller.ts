@@ -79,7 +79,7 @@ export class ProformasController {
   @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
   @ApiOperation({
     summary:
-      'Convert an APPROVED quotation into an issued proforma (CAS + gapless numbering, one transaction)',
+      'Approve a PENDING_APPROVAL (or legacy APPROVED) quotation and issue its proforma in one transaction (CAS + gapless numbering)',
   })
   convertToProforma(
     @CurrentUser() user: AuthenticatedUser,
