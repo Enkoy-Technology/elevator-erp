@@ -14,9 +14,9 @@ const mockWriteXlsx = jest.mocked(writeXlsx);
 describe('OutboxController — role gating', () => {
   const reflector = new Reflector();
 
-  it('class-level default is ADMIN plus the Office Manager (communication system), and no route needs a method-level override (CEO/ADMIN reach it via RolesGuard.SUPER_ROLES)', () => {
+  it('class-level default is ADMIN plus the roles that send messages (GM, Office Manager, Marketing), and no route needs a method-level override (CEO/ADMIN reach it via RolesGuard.SUPER_ROLES)', () => {
     const classRoles = reflector.get<string[] | undefined>(ROLES_KEY, OutboxController);
-    expect(classRoles).toEqual(['ADMIN', 'OFFICE_MANAGER']);
+    expect(classRoles).toEqual(['ADMIN', 'GENERAL_MANAGER', 'OFFICE_MANAGER', 'MARKETING_MANAGER']);
 
     for (const handler of [
       OutboxController.prototype.getProvider,

@@ -1000,6 +1000,16 @@ export const listMaintenanceContracts = (options?: {
   );
 };
 
+export interface Technician {
+  id: string;
+  fullName: string;
+  role: UserRole;
+  phone: string | null;
+}
+
+/** Active technical staff, for the assignment pickers. Open to every maintenance role. */
+export const listTechnicians = (): Promise<Technician[]> => apiFetch<Technician[]>('/maintenance/technicians');
+
 export const getMaintenanceContract = (id: string): Promise<MaintenanceContract> =>
   apiFetch<MaintenanceContract>(`/maintenance/contracts/${id}`);
 
@@ -2328,6 +2338,64 @@ export const getOutboxProvider = (): Promise<{ provider: string }> =>
 /** Queue a test SMS to a handset the operator holds; shows up in the log within a minute. */
 export const sendTestSms = (phone: string): Promise<OutboundMessage> =>
   apiFetch<OutboundMessage>('/outbox/test', { method: 'POST', body: JSON.stringify({ phone }) });
+
+/* ---- messaging: templates and broadcasts ---------------------------- */
+
+export interface MessageTemplate {
+  id: string;
+  name: string;
+  body: string;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StarterTemplate {
+  name: string;
+  body: string;
+}
+
+export type BroadcastAudience = 'EMPLOYEES' | 'CUSTOMERS';
+
+export interface BroadcastPayload {
+  audience: BroadcastAudience;
+  roles?: UserRole[];
+  body: string;
+  /** ISO 8601; omit to send now. */
+  sendAt?: string;
+  templateId?: string;
+}
+
+export interface BroadcastResult {
+  broadcastId: string;
+  audienceSize: number;
+  queued: number;
+  skippedNoConsent: number;
+  skippedNoPhone: number;
+  sendAt: string | null;
+}
+
+export const listMessageTemplates = (): Promise<{ saved: MessageTemplate[]; starters: StarterTemplate[] }> =>
+  apiFetch('/messaging/templates');
+
+export const createMessageTemplate = (payload: { name: string; body: string }): Promise<MessageTemplate> =>
+  apiFetch<MessageTemplate>('/messaging/templates', { method: 'POST', body: JSON.stringify(payload) });
+
+export const updateMessageTemplate = (
+  id: string,
+  payload: { name?: string; body?: string },
+): Promise<MessageTemplate> =>
+  apiFetch<MessageTemplate>(`/messaging/templates/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+
+export const deleteMessageTemplate = (id: string): Promise<void> =>
+  apiFetch<void>(`/messaging/templates/${id}`, { method: 'DELETE' });
+
+/** Counts only — who would be reached, who would be held. Sends nothing. */
+export const previewBroadcast = (payload: BroadcastPayload): Promise<BroadcastResult> =>
+  apiFetch<BroadcastResult>('/messaging/broadcasts/preview', { method: 'POST', body: JSON.stringify(payload) });
+
+export const sendBroadcast = (payload: BroadcastPayload): Promise<BroadcastResult> =>
+  apiFetch<BroadcastResult>('/messaging/broadcasts', { method: 'POST', body: JSON.stringify(payload) });
 
 /** Retry a FAILED message: QUEUED, due immediately, attempts NOT reset. */
 export const retryOutboxMessage = (id: string): Promise<OutboundMessage> =>

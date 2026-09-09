@@ -48,6 +48,10 @@ export class MaintenanceService {
     );
   }
 
+  listTechnicians(user: AuthenticatedUser) {
+    return this.maintenanceRepository.listTechnicians(user.tenantId);
+  }
+
   getContract(user: AuthenticatedUser, id: string) {
     return this.maintenanceRepository.findContractById(user.tenantId, id);
   }

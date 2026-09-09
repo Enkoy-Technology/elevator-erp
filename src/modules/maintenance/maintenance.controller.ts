@@ -173,6 +173,12 @@ export class MaintenanceController {
     return this.maintenanceService.logVisit(user, id, dto);
   }
 
+  @Get('technicians')
+  @ApiOperation({ summary: 'Active technical staff who can be assigned a contract or a breakdown' })
+  technicians(@CurrentUser() user: AuthenticatedUser) {
+    return this.maintenanceService.listTechnicians(user);
+  }
+
   @Get('contracts/:id')
   @Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'FINANCE_OFFICER')
   @ApiOperation({ summary: 'One maintenance contract' })

@@ -727,6 +727,8 @@ export const DOC_GROUPS: DocGroup[] = [
           'A message moves QUEUED → SENDING when claimed, then to SENT, or back to QUEUED with exponential backoff — one minute, five, thirty — and to FAILED after the fourth failed attempt. The claim step is what stops two dispatcher runs sending the same message twice.',
           'Two Ethiopian providers are supported, AfroMessage and GeezSMS, behind one interface, plus a no-op provider for environments that must never send. Outside production an allowlist guard blocks any number not explicitly permitted, so a restored production dump cannot text real customers from a laptop.',
           'SMS costs the tenant money and reaches a person, so the log records segment counts and cost per message, and customer consent is recorded before promotional traffic goes out. The channel is generic from the start — email is a later consumer of the same queue, not a second one.',
+          'Greetings and notices: Messages → Compose message. Pick the audience (employees by role, or customers), start from a template such as the Ethiopian New Year or Genna greeting, and either send now or schedule a date and time. The composer shows how many people will receive it before you press Send; anyone without a phone or SMS consent is held and counted, never silently skipped. Templates live under Messages → Templates.',
+          'Automatic messages need no one to press anything: the assigned technician gets an SMS and an in-app reminder for every maintenance visit inside the reminder window (Settings), the customer gets a service reminder, invoices due get a payment reminder, and warranties about to expire are announced. Assign the technician on the maintenance contract and make sure staff have a phone on file.',
         ],
         flows: [
           {
@@ -744,8 +746,12 @@ export const DOC_GROUPS: DocGroup[] = [
           { label: 'Database role', value: 'Dedicated least-privilege dispatcher' },
         ],
         endpoints: [
-          { method: 'GET', path: '/outbox', roles: 'ADMIN, OFFICE_MANAGER', note: 'Delivery log with status, segments and cost.' },
+          { method: 'GET', path: '/outbox', roles: 'ADMIN, GENERAL_MANAGER, OFFICE_MANAGER, MARKETING_MANAGER', note: 'Delivery log with status, segments and cost.' },
           { method: 'GET', path: '/outbox/provider', roles: 'ADMIN, OFFICE_MANAGER', note: 'Which provider is live, without reading server logs.' },
+          { method: 'GET', path: '/messaging/templates', roles: 'GENERAL_MANAGER, OFFICE_MANAGER, MARKETING_MANAGER', note: 'Saved templates plus the built-in starters (Enkutatash, Genna, Timkat, Eid, Meskel, announcements).' },
+          { method: 'POST', path: '/messaging/templates', roles: 'GENERAL_MANAGER, OFFICE_MANAGER, MARKETING_MANAGER', note: 'Save wording; {{name}} and {{company}} are filled per recipient.' },
+          { method: 'POST', path: '/messaging/broadcasts/preview', roles: 'GENERAL_MANAGER, OFFICE_MANAGER, MARKETING_MANAGER', note: 'How many would receive it and how many are held for no phone or consent. Sends nothing.' },
+          { method: 'POST', path: '/messaging/broadcasts', roles: 'GENERAL_MANAGER, OFFICE_MANAGER, MARKETING_MANAGER', note: 'One SMS per employee (by role) or customer; sendAt schedules it. Every row lands in the log tagged BROADCAST.' },
           { method: 'POST', path: '/outbox/test', roles: 'ADMIN, OFFICE_MANAGER', note: 'Queue a test SMS to a handset you hold — proves the GeezSMS gateway before customers depend on it.' },
           { method: 'POST', path: '/outbox/:id/retry', roles: 'ADMIN, OFFICE_MANAGER', note: 'Requeue a failed message.' },
         ],

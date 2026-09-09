@@ -2,6 +2,7 @@
 
 import type { ColumnDef } from '@tanstack/react-table';
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import {
@@ -414,9 +415,19 @@ export default function MessagesPage() {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <PageHeader
-          eyebrow="Money"
+          eyebrow="Communication"
           title="Messages"
-          description="The SMS delivery log: what was sent, what it cost in segments, and what failed. Retry a failure from its row."
+          description="Send greetings and notices to staff or customers, and follow every SMS the system sends: what went out, what it cost, what failed."
+          actions={
+            <>
+              <Link href="/messages/templates" className={btnSecondary}>
+                Templates
+              </Link>
+              <Link href="/messages/new" className={btnPrimary}>
+                Compose message
+              </Link>
+            </>
+          }
         />
 
         <main className="flex-1 bg-slate-50 p-4 sm:p-8">

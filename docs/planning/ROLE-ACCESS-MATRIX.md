@@ -20,12 +20,12 @@ for every role; the login screen lists them.
 | Role (document name) | Document says | Sidebar modules | Can do |
 | --- | --- | --- | --- |
 | CEO | Complete access to all modules and reports | Everything | Everything |
-| General Manager | Day-to-day operations: project monitoring, department coordination, operational approval, performance management, management reporting | Everything except Messages and Settings edit | Every module read; sales, project and maintenance approvals; staff accounts below management |
-| Marketing Manager | Access: customer database, lead management, marketing reports, campaign management | Dashboard, Customers, Projects, Settings (read) | Register and edit customers; create leads (projects at LEAD); post notifications. Campaigns are not built |
+| General Manager | Day-to-day operations: project monitoring, department coordination, operational approval, performance management, management reporting | Everything except Settings edit | Every module read; sales, project and maintenance approvals; staff accounts below management |
+| Marketing Manager | Access: customer database, lead management, marketing reports, campaign management | Dashboard, Customers, Projects, Messages, Settings (read) | Register and edit customers; create leads (projects at LEAD); compose SMS broadcasts to customers or staff from templates, now or scheduled; read the delivery log |
 | Sales Manager | Access: sales, quotation, customer modules, sales reports. Quotation and pricing approval | Dashboard, Calculator, Customers, Projects, Quotations, Contracts, Invoices (read), Assets, Maintenance, Settings (read), Boilerplate, Components | Everything a Salesperson can, plus approve, reject and expire quotes; issue proformas and contracts; sign and cancel; payment schedules; maintenance agreements; delete customers |
 | Salesperson | Customer registration, site survey requests, quotation preparation, customer follow-up, contract support, lead conversion | Dashboard, Calculator, Customers, Projects, Quotations, Contracts (read), Assets (read), Settings (read), Boilerplate, Components | Register customers; create projects and move them through survey and calculation; create, price, edit and submit quotations; read proformas and contracts |
 | Finance Officer | Access: finance, reporting, invoice modules | Dashboard, Customers, Quotations, Contracts, Invoices, Payments, Receivables, Maintenance (contracts, read), Settings (read), Boilerplate, Components | Invoices, payments, expenses, bank accounts, receivables, statements, instalment invoicing, discount approval |
-| Office Manager | Access: employee records, administrative reports, communication system | Dashboard, Employees, Messages, Settings (read) | Staff accounts below management; SMS message log; notifications. Attendance is not built |
+| Office Manager | Access: employee records, administrative reports, communication system | Dashboard, Employees, Messages, Settings (read) | Staff accounts below management; compose greetings and notices to staff or customers from templates; manage templates; SMS log and test sends. Attendance is not built |
 | Technical Manager | Installation planning, site supervision, installation reporting, quality control, testing and commissioning | Dashboard, Calculator, Customers, Projects, Quotations, Contracts, Assets, Maintenance, Settings (read), Boilerplate, Components | Quotation lines (specs); create projects and advance installation stages; contract handover; assets; maintenance contracts, visits and breakdowns |
 | Maintenance Engineer | Service scheduling, maintenance activities, emergency response, breakdown repair, service reporting | Dashboard, Calculator, Customers (read), Projects (read), Assets, Maintenance, Settings (read) | Maintenance contracts, service visits, breakdown tickets; assets; reads customers and specs |
 | Store Keeper | Inventory management, material issuance, stock monitoring, purchase requests, warehouse control | Dashboard, Assets, Settings (read) | The asset register. Inventory, issuance and purchase requests are not built |
@@ -53,7 +53,7 @@ for every role; the login screen lists them.
 
 ## In the document but not built yet
 
-Marketing campaigns and advertisement management, installation module
+Advertisement management and campaign analytics (SMS broadcasts to customers exist), installation module
 (checklists, engineer assignment, progress), inventory and suppliers,
 employee attendance, LAN chat and file sharing, the customer portal.
 The roles exist so these land under the right seat when built.

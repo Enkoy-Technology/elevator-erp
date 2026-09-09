@@ -97,7 +97,7 @@ export const OUTBOX_EXPORT_COLUMNS: ColumnDef[] = [
 @ApiTags('outbox')
 @ApiBearerAuth('access-token')
 @Controller('outbox')
-@Roles('ADMIN', 'OFFICE_MANAGER')
+@Roles('ADMIN', 'GENERAL_MANAGER', 'OFFICE_MANAGER', 'MARKETING_MANAGER')
 export class OutboxController {
   constructor(private readonly outboxService: OutboxService) {}
 

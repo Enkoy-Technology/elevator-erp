@@ -11,17 +11,17 @@ import {
   createBreakdown,
   getAccessToken,
   listAssets,
-  listEmployees,
+  listTechnicians,
   optional,
   type Asset,
   type BreakdownSeverity,
-  type Employee,
+  type Technician,
 } from '@/lib/api';
 
 export default function NewBreakdownPage() {
   const router = useRouter();
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employees, setEmployees] = useState<Technician[]>([]);
   const [assetId, setAssetId] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -37,10 +37,10 @@ export default function NewBreakdownPage() {
     }
     void Promise.all([
       optional(listAssets({ page: 1, pageSize: 100 })),
-      optional(listEmployees({ page: 1, pageSize: 100 })),
+      listTechnicians().catch(() => [] as Technician[]),
     ]).then(([assetPage, employeePage]) => {
       setAssets(assetPage.items);
-      setEmployees(employeePage.items);
+      setEmployees(employeePage);
       setAssetId((prev) => prev || assetPage.items[0]?.id || '');
     });
   }, [router]);

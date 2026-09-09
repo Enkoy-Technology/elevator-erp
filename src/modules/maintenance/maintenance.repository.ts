@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, count, desc, eq, getTableColumns, isNull } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getTableColumns, inArray, isNull } from 'drizzle-orm';
 
 import { todayIso } from '../../common/business-time';
 import {
@@ -418,6 +418,25 @@ export class MaintenanceRepository {
         pageSize,
       );
     });
+  }
+
+  /** Who can be assigned a contract or a breakdown: active technical staff. */
+  listTechnicians(
+    tenantId: string,
+  ): Promise<{ id: string; fullName: string; role: string; phone: string | null }[]> {
+    return this.tenantDb.withTenant(tenantId, (tx) =>
+      tx
+        .select({ id: users.id, fullName: users.fullName, role: users.role, phone: users.phone })
+        .from(users)
+        .where(
+          and(
+            eq(users.isActive, true),
+            isNull(users.deletedAt),
+            inArray(users.role, ['TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER']),
+          ),
+        )
+        .orderBy(asc(users.fullName)),
+    );
   }
 
   /** One maintenance contract, or 404. */

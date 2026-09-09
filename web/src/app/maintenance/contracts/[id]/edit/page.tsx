@@ -9,10 +9,12 @@ import { Sidebar } from '@/components/sidebar';
 import {
   ApiError,
   getAccessToken,
+  listTechnicians,
   getMaintenanceContract,
   MAINTENANCE_RECURRENCES,
   updateMaintenanceContract,
   type MaintenanceRecurrence,
+  type Technician,
 } from '@/lib/api';
 
 /**
@@ -30,6 +32,8 @@ export default function EditMaintenanceContractPage() {
   const [recurrence, setRecurrence] = useState<MaintenanceRecurrence>('MONTHLY');
   const [nextServiceAt, setNextServiceAt] = useState('');
   const [notes, setNotes] = useState('');
+  const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const [assignedUserId, setAssignedUserId] = useState('');
   const [monthlyFeeEtb, setMonthlyFeeEtb] = useState('');
   const [feeIncludesVat, setFeeIncludesVat] = useState(true);
   const [termMonths, setTermMonths] = useState('12');
@@ -45,12 +49,14 @@ export default function EditMaintenanceContractPage() {
       router.replace('/login');
       return;
     }
+    void listTechnicians().then(setTechnicians).catch(() => setTechnicians([]));
     void (async () => {
       try {
         const contract = await getMaintenanceContract(id);
         setRecurrence(contract.recurrence);
         setNextServiceAt(contract.nextServiceAt);
         setNotes(contract.notes ?? '');
+        setAssignedUserId(contract.assignedUserId ?? '');
         setMonthlyFeeEtb(contract.monthlyFeeEtb ?? '');
         setFeeIncludesVat(contract.feeIncludesVat);
         setTermMonths(String(contract.termMonths));
@@ -78,6 +84,7 @@ export default function EditMaintenanceContractPage() {
         recurrence,
         nextServiceAt,
         notes: notes.trim() || null,
+        assignedUserId: assignedUserId || null,
         monthlyFeeEtb: monthlyFeeEtb.trim() || null,
         feeIncludesVat,
         termMonths: Number(termMonths),
@@ -153,6 +160,26 @@ export default function EditMaintenanceContractPage() {
             value={nextServiceAt}
             onChange={(e) => setNextServiceAt(e.target.value)}
           />
+        </Field>
+        <Field
+          label="Assigned technician"
+          htmlFor="assignedUserId"
+          hint="Gets the service-due SMS and an in-app reminder automatically, from the reminder window until the visit is logged."
+        >
+          <select
+            id="assignedUserId"
+            className={fieldClass}
+            value={assignedUserId}
+            onChange={(e) => setAssignedUserId(e.target.value)}
+          >
+            <option value="">Not assigned</option>
+            {technicians.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.fullName}
+                {t.phone ? '' : ' (no phone on file)'}
+              </option>
+            ))}
+          </select>
         </Field>
         <Field label="Internal notes" htmlFor="notes" hint="Not printed on the agreement." wide>
           <textarea

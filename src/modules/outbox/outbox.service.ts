@@ -18,6 +18,8 @@ interface EnqueueMessageBase {
   subjectKind?: string;
   subjectId?: string;
   createdByUserId?: string;
+  /** Hold until this time; omit to send on the dispatcher's next minute. */
+  sendAt?: Date;
 }
 
 /**
@@ -109,6 +111,7 @@ export class OutboxService {
       subjectKind: input.subjectKind,
       subjectId: input.subjectId,
       createdByUserId: input.createdByUserId,
+      ...(input.sendAt ? { nextAttemptAt: input.sendAt } : {}),
     });
   }
 

@@ -39,6 +39,8 @@ export interface EnqueueMessageValues {
   subjectKind?: string;
   subjectId?: string;
   createdByUserId?: string;
+  /** A scheduled broadcast: the dispatcher only picks rows whose time has come. */
+  nextAttemptAt?: Date;
 }
 
 @Injectable()

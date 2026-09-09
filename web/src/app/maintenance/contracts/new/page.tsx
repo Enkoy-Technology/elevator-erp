@@ -9,11 +9,13 @@ import {
   ApiError,
   createMaintenanceContract,
   getAccessToken,
+  listTechnicians,
   listAssets,
   MAINTENANCE_RECURRENCES,
   optional,
   type Asset,
   type MaintenanceRecurrence,
+  type Technician,
 } from '@/lib/api';
 
 const todayIso = (): string => new Date().toISOString().slice(0, 10);
@@ -42,6 +44,8 @@ export default function NewMaintenanceContractPage() {
     addMonthsIso(todayIso(), 1),
   );
   const [notes, setNotes] = useState('');
+  const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const [assignedUserId, setAssignedUserId] = useState('');
   const [monthlyFeeEtb, setMonthlyFeeEtb] = useState('');
   const [feeIncludesVat, setFeeIncludesVat] = useState(true);
   const [termMonths, setTermMonths] = useState('12');
@@ -57,6 +61,7 @@ export default function NewMaintenanceContractPage() {
       router.replace('/login');
       return;
     }
+    void listTechnicians().then(setTechnicians).catch(() => setTechnicians([]));
     void optional(listAssets({ page: 1, pageSize: 100 })).then((result) => {
       setAssets(result.items);
       setAssetId((prev) => prev || result.items[0]?.id || '');
@@ -78,6 +83,7 @@ export default function NewMaintenanceContractPage() {
         startDate,
         nextServiceAt,
         notes: notes || undefined,
+        assignedUserId: assignedUserId || undefined,
         monthlyFeeEtb: monthlyFeeEtb.trim() || undefined,
         feeIncludesVat,
         termMonths: Number(termMonths),
@@ -166,6 +172,26 @@ export default function NewMaintenanceContractPage() {
             value={nextServiceAt}
             onChange={(e) => setNextServiceAt(e.target.value)}
           />
+        </Field>
+        <Field
+          label="Assigned technician"
+          htmlFor="assignedUserId"
+          hint="Gets the service-due SMS and an in-app reminder automatically, from the reminder window until the visit is logged."
+        >
+          <select
+            id="assignedUserId"
+            className={fieldClass}
+            value={assignedUserId}
+            onChange={(e) => setAssignedUserId(e.target.value)}
+          >
+            <option value="">Not assigned</option>
+            {technicians.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.fullName}
+                {t.phone ? '' : ' (no phone on file)'}
+              </option>
+            ))}
+          </select>
         </Field>
         <Field label="Notes" htmlFor="contractNotes" wide>
           <textarea

@@ -11,6 +11,9 @@ import { Pool } from 'pg';
 
 import type { Env } from '../../config';
 import * as schema from '../../database/schema';
+import { MessagingController } from './messaging.controller';
+import { MessagingRepository } from './messaging.repository';
+import { MessagingService } from './messaging.service';
 import { OutboxController } from './outbox.controller';
 import { OutboxDispatcherRepository } from './outbox-dispatcher.repository';
 import { OutboxDispatcherService } from './outbox-dispatcher.service';
@@ -27,10 +30,12 @@ import type { SmsProvider } from './providers/sms-provider.interface';
 import { parseSmsAllowlist, type SmsAllowlistRuntimeConfig } from './sms-allowlist';
 
 @Module({
-  controllers: [OutboxController],
+  controllers: [OutboxController, MessagingController],
   providers: [
     OutboxService,
     OutboxRepository,
+    MessagingService,
+    MessagingRepository,
     OutboxDispatcherService,
     OutboxDispatcherRepository,
     // The dispatcher's own connection — deliberately NOT part of the global

@@ -28,7 +28,9 @@ export default function NewEmployeePage() {
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<EmployeeRole>('SALES_MANAGER');
   const [password, setPassword] = useState('');
-  const [smsConsentGiven, setSmsConsentGiven] = useState(false);
+  // Staff are reached on their work phone for reminders and notices, so the
+  // box starts ticked; untick it for someone who must not be texted.
+  const [smsConsentGiven, setSmsConsentGiven] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 

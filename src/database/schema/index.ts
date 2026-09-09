@@ -6,6 +6,7 @@ export * from './projects';
 export * from './assets';
 export * from './notifications';
 export * from './maintenance';
+export * from './message-templates';
 export * from './rate-tables';
 export * from './quotations';
 export * from './document-sequences';
