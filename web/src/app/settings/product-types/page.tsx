@@ -1,16 +1,16 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-import type { ColumnDef } from "@tanstack/react-table";
-import { Pencil, Trash2 } from "lucide-react";
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
+import { Pencil, Trash2 } from 'lucide-react';
 
-import { DataTable } from "@/components/data-table";
-import { btnPrimary } from "@/components/form-styles";
-import { RowAction } from "@/components/list-toolbar";
-import { PageHeader } from "@/components/page-header";
-import { Sidebar } from "@/components/sidebar";
+import { DataTable } from '@/components/data-table';
+import { btnPrimary } from '@/components/form-styles';
+import { RowAction } from '@/components/list-toolbar';
+import { PageHeader } from '@/components/page-header';
+import { Sidebar } from '@/components/sidebar';
 import {
   ApiError,
   deleteProductType,
@@ -19,15 +19,15 @@ import {
   listProductTypes,
   type ProductTypeRow,
   type UserRole,
-} from "@/lib/api";
-import { formatEtb } from "@/lib/money";
+} from '@/lib/api';
+import { formatEtb } from '@/lib/money';
 
 /** Mirrors @Roles on the product-types write routes. */
 const canEditProducts = (role: UserRole | null): boolean =>
-  role === "SALES_MANAGER" ||
-  role === "GENERAL_MANAGER" ||
-  role === "CEO" ||
-  role === "ADMIN";
+  role === 'SALES_MANAGER' ||
+  role === 'GENERAL_MANAGER' ||
+  role === 'CEO' ||
+  role === 'ADMIN';
 
 export default function ProductTypesPage() {
   const router = useRouter();
@@ -42,7 +42,7 @@ export default function ProductTypesPage() {
       setRows(await listProductTypes());
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : "Failed to load the products",
+        err instanceof ApiError ? err.message : 'Failed to load the products',
       );
     } finally {
       setLoading(false);
@@ -51,7 +51,7 @@ export default function ProductTypesPage() {
 
   useEffect(() => {
     if (!getAccessToken()) {
-      router.replace("/login");
+      router.replace('/login');
       return;
     }
     setRole(getCurrentRole());
@@ -73,15 +73,15 @@ export default function ProductTypesPage() {
       await refresh();
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : "Failed to retire the product",
+        err instanceof ApiError ? err.message : 'Failed to retire the product',
       );
     }
   };
 
   const columns: ColumnDef<ProductTypeRow, unknown>[] = [
     {
-      accessorKey: "name",
-      header: "Product",
+      accessorKey: 'name',
+      header: 'Product',
       enableSorting: true,
       cell: ({ row }) => (
         <span className="flex flex-col">
@@ -95,62 +95,66 @@ export default function ProductTypesPage() {
       ),
     },
     {
-      id: "base",
-      header: "Base price",
-      meta: { align: "right" },
+      id: 'base',
+      header: 'Base price',
+      meta: { align: 'right' },
       cell: ({ row }) => (
         <span className="flex flex-col items-end">
           <span className="font-semibold text-slate-900">
             {formatEtb(row.original.basePriceEtb)}
           </span>
           <span className="text-[11px] text-slate-500">
-            {row.original.refStops} stops ·{" "}
-            {row.original.refCapacityKg.toLocaleString("en-ET")} kg
+            {row.original.refStops} stops ·{' '}
+            {row.original.refCapacityKg.toLocaleString('en-ET')} kg
           </span>
         </span>
       ),
     },
     {
-      id: "perStop",
-      header: "Per extra stop",
-      meta: { align: "right" },
+      id: 'perStop',
+      header: 'Per extra stop',
+      meta: { align: 'right' },
       cell: ({ row }) =>
         Number(row.original.perStopEtb) === 0
-          ? "—"
+          ? '—'
           : formatEtb(row.original.perStopEtb),
     },
     {
-      id: "perKg",
-      header: "Per extra kg",
-      meta: { align: "right" },
+      id: 'perKg',
+      header: 'Per extra kg',
+      meta: { align: 'right' },
       cell: ({ row }) =>
         Number(row.original.perKgEtb) === 0
-          ? "—"
+          ? '—'
           : formatEtb(row.original.perKgEtb),
     },
     {
-      id: "formula",
-      header: "Formula",
-      cell: ({ row }) =>
-        row.original.formula ? (
+      id: 'formula',
+      header: 'Formula',
+      cell: ({ row }) => (
+        <span className="flex flex-col">
           <span className="font-mono text-[11px] text-slate-700">
-            {row.original.formula}
+            {row.original.effectiveFormula}
           </span>
-        ) : (
-          <span className="text-xs text-slate-400">Company formula</span>
-        ),
+          {row.original.formula ? null : (
+            <span className="text-[11px] text-slate-400">
+              Company formula, this product&apos;s figures
+            </span>
+          )}
+        </span>
+      ),
     },
     {
-      id: "geometry",
-      header: "Lift geometry",
-      cell: ({ row }) => (row.original.liftGeometry ? "Yes" : "No"),
+      id: 'geometry',
+      header: 'Lift geometry',
+      cell: ({ row }) => (row.original.liftGeometry ? 'Yes' : 'No'),
     },
     ...(canEdit
       ? [
           {
-            id: "actions",
-            header: "",
-            meta: { align: "right" },
+            id: 'actions',
+            header: '',
+            meta: { align: 'right' },
             cell: ({ row }) => (
               <div className="flex items-center justify-end gap-0.5">
                 <RowAction

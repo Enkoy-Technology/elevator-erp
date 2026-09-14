@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 
-import { FormulaError } from '../../common/formula';
+import { FormulaError, renderFormula } from '../../common/formula';
 
 import {
   computeCarDimensions,
@@ -104,8 +104,26 @@ export class ElevatorCalcService {
     const taxAmount = subtotalWithMargin.mul(D(input.taxPercent).div(100));
     const totalPrice = subtotalWithMargin.plus(taxAmount);
 
+    const productValues = {
+      perStop: product.perStopEtb,
+      perKg: product.perKgEtb,
+      refN: product.refStops,
+      refC: product.refCapacityKg,
+    };
+    const applied = product.formula ?? formula;
+
     return {
       technical,
+      formula: {
+        text: renderFormula(applied, productValues),
+        working: `${renderFormula(applied, {
+          ...productValues,
+          base: product.basePriceEtb,
+          N: input.stops,
+          C: input.capacityKg,
+          rise: input.travelHeightM,
+        })} = ${renderFormula(money(totalBeforeMargin), {})}`,
+      },
       pricing: {
         basePrice: money(basePrice),
         stopsAdjustment: money(stopsAdjustment),

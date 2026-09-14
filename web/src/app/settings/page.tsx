@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { FormEvent, useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
-import { btnSecondary, fieldClass, labelClass } from "@/components/form-styles";
-import { useLocale } from "@/components/locale-provider";
-import { Sidebar } from "@/components/sidebar";
+import { btnSecondary, fieldClass, labelClass } from '@/components/form-styles';
+import { useLocale } from '@/components/locale-provider';
+import { Sidebar } from '@/components/sidebar';
 import {
   ApiError,
   getAccessToken,
@@ -15,14 +15,14 @@ import {
   updateSettings,
   type AppLocale,
   type TenantSettings,
-} from "@/lib/api";
+} from '@/lib/api';
 
 /** "0, 7, 30" -> [0, 7, 30] — non-numeric junk is dropped rather than
  * blocking the field entirely; the API's own validation is the final say
  * (surfaced through the existing error banner on submit). */
 const parseOffsetDays = (text: string): number[] =>
   text
-    .split(",")
+    .split(',')
     .map((part) => Number.parseInt(part.trim(), 10))
     .filter((n) => Number.isInteger(n));
 
@@ -30,24 +30,24 @@ export default function SettingsPage() {
   const router = useRouter();
   const { t, setLocale } = useLocale();
   const role = getCurrentRole();
-  const canEdit = role === "CEO" || role === "ADMIN";
+  const canEdit = role === 'CEO' || role === 'ADMIN';
   const [settings, setSettings] = useState<TenantSettings | null>(null);
-  const [name, setName] = useState("");
-  const [slogan, setSlogan] = useState("");
-  const [primaryColorHex, setPrimaryColorHex] = useState("#1B2A4A");
-  const [secondaryColorHex, setSecondaryColorHex] = useState("#E8B54D");
-  const [logoUrl, setLogoUrl] = useState("");
-  const [stampUrl, setStampUrl] = useState("");
-  const [officialAddress, setOfficialAddress] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
-  const [defaultLocale, setDefaultLocale] = useState<AppLocale>("en");
+  const [name, setName] = useState('');
+  const [slogan, setSlogan] = useState('');
+  const [primaryColorHex, setPrimaryColorHex] = useState('#1B2A4A');
+  const [secondaryColorHex, setSecondaryColorHex] = useState('#E8B54D');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [stampUrl, setStampUrl] = useState('');
+  const [officialAddress, setOfficialAddress] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [defaultLocale, setDefaultLocale] = useState<AppLocale>('en');
   const [maintenanceReminderDays, setMaintenanceReminderDays] = useState(3);
-  const [pricingFormula, setPricingFormula] = useState("");
+  const [pricingFormula, setPricingFormula] = useState('');
   // Comma-separated in the UI (e.g. "0, 7, 30") — parsed to number[] on
   // submit; simplest control for a short, small-cardinality list (I7).
   const [paymentReminderOffsetDaysText, setPaymentReminderOffsetDaysText] =
-    useState("0, 7, 30");
+    useState('0, 7, 30');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,20 +57,20 @@ export default function SettingsPage() {
     (data: TenantSettings) => {
       setSettings(data);
       setName(data.name);
-      setSlogan(data.slogan ?? "");
+      setSlogan(data.slogan ?? '');
       setPrimaryColorHex(data.primaryColorHex);
       setSecondaryColorHex(data.secondaryColorHex);
-      setLogoUrl(data.logoUrl ?? "");
-      setStampUrl(data.stampUrl ?? "");
-      setOfficialAddress(data.officialAddress ?? "");
-      setContactEmail(data.contactEmail ?? "");
-      setContactPhone(data.contactPhone ?? "");
+      setLogoUrl(data.logoUrl ?? '');
+      setStampUrl(data.stampUrl ?? '');
+      setOfficialAddress(data.officialAddress ?? '');
+      setContactEmail(data.contactEmail ?? '');
+      setContactPhone(data.contactPhone ?? '');
       setDefaultLocale(data.defaultLocale);
       setLocale(data.defaultLocale);
       setMaintenanceReminderDays(data.maintenanceReminderDays);
       setPricingFormula(data.pricingFormula);
       setPaymentReminderOffsetDaysText(
-        data.paymentReminderOffsetDays.join(", "),
+        data.paymentReminderOffsetDays.join(', '),
       );
     },
     [setLocale],
@@ -83,7 +83,7 @@ export default function SettingsPage() {
       const data = await getSettings();
       applySettings(data);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("settings.loadError"));
+      setError(err instanceof ApiError ? err.message : t('settings.loadError'));
     } finally {
       setLoading(false);
     }
@@ -91,7 +91,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!getAccessToken()) {
-      router.replace("/login");
+      router.replace('/login');
       return;
     }
     void refresh();
@@ -122,9 +122,9 @@ export default function SettingsPage() {
         pricingFormula: pricingFormula.trim() || null,
       });
       applySettings(data);
-      setSuccess(t("settings.saved"));
+      setSuccess(t('settings.saved'));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("settings.saveError"));
+      setError(err instanceof ApiError ? err.message : t('settings.saveError'));
     } finally {
       setSubmitting(false);
     }
@@ -136,9 +136,9 @@ export default function SettingsPage() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="border-b border-slate-200 bg-white px-8 py-4">
           <h1 className="font-display text-lg font-semibold">
-            {t("settings.title")}
+            {t('settings.title')}
           </h1>
-          <p className="text-sm text-slate-500">{t("settings.subtitle")}</p>
+          <p className="text-sm text-slate-500">{t('settings.subtitle')}</p>
         </header>
 
         <main className="flex-1 bg-slate-50 p-8">
@@ -159,17 +159,17 @@ export default function SettingsPage() {
               itself is ADMIN-only, they are not. */}
           <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-6">
             <h2 className="font-display text-base font-semibold text-slate-900">
-              {t("settings.documentContent")}
+              {t('settings.documentContent')}
             </h2>
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
-              {t("settings.documentContentHelp")}
+              {t('settings.documentContentHelp')}
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Link href="/settings/boilerplate" className={btnSecondary}>
-                {t("settings.boilerplateLink")}
+                {t('settings.boilerplateLink')}
               </Link>
               <Link href="/settings/components" className={btnSecondary}>
-                {t("settings.componentsLink")}
+                {t('settings.componentsLink')}
               </Link>
             </div>
           </section>
@@ -186,12 +186,12 @@ export default function SettingsPage() {
               <fieldset disabled={!canEdit} className="space-y-8">
                 <section className="space-y-4">
                   <h2 className="font-display text-base font-semibold text-slate-900">
-                    {t("settings.branding")}
+                    {t('settings.branding')}
                   </h2>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className={labelClass} htmlFor="primary">
-                        {t("settings.primaryColor")}
+                        {t('settings.primaryColor')}
                       </label>
                       <div className="flex items-center gap-2">
                         <input
@@ -212,7 +212,7 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className={labelClass} htmlFor="secondary">
-                        {t("settings.secondaryColor")}
+                        {t('settings.secondaryColor')}
                       </label>
                       <div className="flex items-center gap-2">
                         <input
@@ -234,7 +234,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className={labelClass} htmlFor="companyName">
-                      {t("settings.companyName")}
+                      {t('settings.companyName')}
                     </label>
                     <input
                       id="companyName"
@@ -247,7 +247,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className={labelClass} htmlFor="slogan">
-                      {t("settings.slogan")}
+                      {t('settings.slogan')}
                     </label>
                     <input
                       id="slogan"
@@ -260,7 +260,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className={labelClass} htmlFor="logoUrl">
-                      {t("settings.logoUrl")}
+                      {t('settings.logoUrl')}
                     </label>
                     <input
                       id="logoUrl"
@@ -272,7 +272,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className={labelClass} htmlFor="stampUrl">
-                      {t("settings.stampUrl")}
+                      {t('settings.stampUrl')}
                     </label>
                     <input
                       id="stampUrl"
@@ -284,7 +284,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className={labelClass} htmlFor="address">
-                      {t("settings.address")}
+                      {t('settings.address')}
                     </label>
                     <textarea
                       id="address"
@@ -297,7 +297,7 @@ export default function SettingsPage() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className={labelClass} htmlFor="email">
-                        {t("settings.email")}
+                        {t('settings.email')}
                       </label>
                       <input
                         id="email"
@@ -309,7 +309,7 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className={labelClass} htmlFor="phone">
-                        {t("settings.phone")}
+                        {t('settings.phone')}
                       </label>
                       <input
                         id="phone"
@@ -323,33 +323,33 @@ export default function SettingsPage() {
 
                 <section className="space-y-3 border-t border-slate-100 pt-6">
                   <h2 className="font-display text-base font-semibold text-slate-900">
-                    {t("settings.language")}
+                    {t('settings.language')}
                   </h2>
                   <div className="flex flex-wrap gap-3">
                     <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
                       <input
                         type="radio"
                         name="locale"
-                        checked={defaultLocale === "en"}
-                        onChange={() => setDefaultLocale("en")}
+                        checked={defaultLocale === 'en'}
+                        onChange={() => setDefaultLocale('en')}
                       />
-                      {t("settings.localeEn")}
+                      {t('settings.localeEn')}
                     </label>
                     <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
                       <input
                         type="radio"
                         name="locale"
-                        checked={defaultLocale === "am"}
-                        onChange={() => setDefaultLocale("am")}
+                        checked={defaultLocale === 'am'}
+                        onChange={() => setDefaultLocale('am')}
                       />
-                      {t("settings.localeAm")}
+                      {t('settings.localeAm')}
                     </label>
                   </div>
                 </section>
 
                 <section className="space-y-4 border-t border-slate-100 pt-6">
                   <h2 className="font-display text-base font-semibold text-slate-900">
-                    {t("settings.reminders")}
+                    {t('settings.reminders')}
                   </h2>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
@@ -357,7 +357,7 @@ export default function SettingsPage() {
                         className={labelClass}
                         htmlFor="maintenanceReminderDays"
                       >
-                        {t("settings.maintenanceReminderDays")}
+                        {t('settings.maintenanceReminderDays')}
                       </label>
                       <input
                         id="maintenanceReminderDays"
@@ -371,7 +371,7 @@ export default function SettingsPage() {
                         }
                       />
                       <p className="mt-1 text-xs text-slate-400">
-                        {t("settings.maintenanceReminderDaysHelp")}
+                        {t('settings.maintenanceReminderDaysHelp')}
                       </p>
                     </div>
                     <div>
@@ -379,7 +379,7 @@ export default function SettingsPage() {
                         className={labelClass}
                         htmlFor="paymentReminderOffsetDays"
                       >
-                        {t("settings.paymentReminderOffsetDays")}
+                        {t('settings.paymentReminderOffsetDays')}
                       </label>
                       <input
                         id="paymentReminderOffsetDays"
@@ -391,7 +391,7 @@ export default function SettingsPage() {
                         }
                       />
                       <p className="mt-1 text-xs text-slate-400">
-                        {t("settings.paymentReminderOffsetDaysHelp")}
+                        {t('settings.paymentReminderOffsetDaysHelp')}
                       </p>
                     </div>
                   </div>
@@ -399,11 +399,11 @@ export default function SettingsPage() {
 
                 <section className="space-y-4 border-t border-slate-100 pt-6">
                   <h2 className="font-display text-base font-semibold text-slate-900">
-                    {t("settings.pricing")}
+                    {t('settings.pricing')}
                   </h2>
                   <div>
                     <label className={labelClass} htmlFor="pricingFormula">
-                      {t("settings.pricingFormula")}
+                      {t('settings.pricingFormula')}
                     </label>
                     <input
                       id="pricingFormula"
@@ -415,7 +415,7 @@ export default function SettingsPage() {
                       onChange={(e) => setPricingFormula(e.target.value)}
                     />
                     <p className="mt-1 text-xs text-slate-400">
-                      {t("settings.pricingFormulaHelp")}
+                      {t('settings.pricingFormulaHelp')}
                     </p>
                   </div>
                 </section>
@@ -426,7 +426,7 @@ export default function SettingsPage() {
                   disabled={submitting}
                   className="rounded-lg bg-navy-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-navy-700 disabled:opacity-60"
                 >
-                  {submitting ? t("settings.saving") : t("settings.save")}
+                  {submitting ? t('settings.saving') : t('settings.save')}
                 </button>
               ) : (
                 <p className="text-sm text-slate-500">

@@ -215,6 +215,8 @@ export interface ProductTypeRow {
   refCapacityKg: number;
   /** This product's own formula, or null for the company formula under Settings. */
   formula: string | null;
+  /** The formula this row is priced with, its own figures written in. */
+  effectiveFormula: string;
   liftGeometry: boolean;
   sortOrder: number;
   createdAt: string;
@@ -277,6 +279,8 @@ export interface CalcResult {
   input: CalcInputPayload;
   /** A non-standard shaft, a capped speed: things the person quoting should know. */
   notes: string[];
+  /** The formula that priced this lift, and the same with the lift's figures in. */
+  formula: { text: string; working: string };
   // Every technical field except productType is null for products without
   // lift geometry — §4.1 is EN 81 lift geometry and an escalator has none of it.
   technical: {

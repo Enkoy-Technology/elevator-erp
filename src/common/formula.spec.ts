@@ -2,6 +2,7 @@ import {
   DEFAULT_PRICING_FORMULA,
   evaluateFormula,
   formulaProblem,
+  renderFormula,
 } from './formula';
 
 const scope = {
@@ -110,5 +111,31 @@ describe('tokenizer traps', () => {
 
   it('treats a variable before a bracket as multiplication', () => {
     expect(evaluateFormula('N (C - 630)', scope).toNumber()).toBe(4440);
+  });
+});
+
+describe('renderFormula', () => {
+  it("writes the company formula with a product's figures in, and the whole working with the lift's", () => {
+    const product = { perStop: '80000', perKg: '1000', refN: 10, refC: 630 };
+    expect(renderFormula(DEFAULT_PRICING_FORMULA, product)).toBe(
+      'Base price + (N - 10) * 80,000 + (C - 630) * 1,000',
+    );
+    expect(
+      renderFormula(DEFAULT_PRICING_FORMULA, {
+        ...product,
+        base: '7000000',
+        N: 15,
+        C: 800,
+      }),
+    ).toBe('7,000,000 + (15 - 10) * 80,000 + (800 - 630) * 1,000');
+  });
+
+  it('keeps functions, unary minus and implicit multiplication readable', () => {
+    expect(renderFormula('base+max(0,N-refN)*perStop', { refN: 2 })).toBe(
+      'Base price + max(0, N - 2) * perStop',
+    );
+    expect(renderFormula('-(C-630kg)1000 + Rise', {})).toBe(
+      '-(C - 630) 1,000 + rise',
+    );
   });
 });

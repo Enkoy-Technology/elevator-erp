@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { btnPrimary } from "@/components/form-styles";
+import { btnPrimary } from '@/components/form-styles';
 
-import { FormEvent, useEffect, useState, type ChangeEvent } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useState, type ChangeEvent } from 'react';
+import { useRouter } from 'next/navigation';
 
-import { Sidebar } from "@/components/sidebar";
-import { formatNumber } from "@/lib/money";
+import { Sidebar } from '@/components/sidebar';
+import { formatNumber } from '@/lib/money';
 import {
   ApiError,
   calculateSpecs,
@@ -17,7 +17,7 @@ import {
   type CalcRequestPayload,
   type CalcResult,
   getAccessToken,
-} from "@/lib/api";
+} from '@/lib/api';
 
 /**
  * A passenger lift is described by its shaft and floors alone: the company's
@@ -25,7 +25,7 @@ import {
  * figures below stay for every other product.
  */
 const WORKED_EXAMPLE: CalcInputPayload = {
-  productType: "PASSENGER",
+  productType: 'PASSENGER',
   shaftWidthMm: 1835,
   shaftDepthMm: 1750,
   floors: 12,
@@ -33,10 +33,10 @@ const WORKED_EXAMPLE: CalcInputPayload = {
   stops: 12,
   travelHeightM: 45,
   speedMs: 1.6,
-  machineRoomType: "MRL",
-  doorType: "CENTER_OPEN",
+  machineRoomType: 'MRL',
+  doorType: 'CENTER_OPEN',
   doorWidthMm: 900,
-  buildingUsage: "COMMERCIAL",
+  buildingUsage: 'COMMERCIAL',
   // The calculator shows the list price only; margin and VAT belong to the
   // quotation, where the statutory rate and the agreed price live.
   marginPercent: 0,
@@ -44,14 +44,14 @@ const WORKED_EXAMPLE: CalcInputPayload = {
 };
 
 const field =
-  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm " +
-  "outline-none transition focus:border-navy-600 focus:ring-2 focus:ring-navy-600/20";
+  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm ' +
+  'outline-none transition focus:border-navy-600 focus:ring-2 focus:ring-navy-600/20';
 
 const label =
-  "mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500";
+  'mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500';
 
 const isStandardLift = (productType: string): boolean =>
-  productType === "PASSENGER";
+  productType === 'PASSENGER';
 
 /** The request the API wants: shaft and floors for a standard lift, everything for the rest. */
 const toRequest = (form: CalcInputPayload): CalcRequestPayload => {
@@ -81,12 +81,12 @@ const toRequest = (form: CalcInputPayload): CalcRequestPayload => {
 };
 
 const doorLabel = (input: CalcInputPayload): string =>
-  `${input.doorType === "CENTER_OPEN" ? "CO" : input.doorType === "TELESCOPIC" ? "2S" : "Side"} ${formatNumber(input.doorWidthMm)} × 2,100`;
+  `${input.doorType === 'CENTER_OPEN' ? 'CO' : input.doorType === 'TELESCOPIC' ? '2S' : 'Side'} ${formatNumber(input.doorWidthMm)} × 2,100`;
 
 const formatMoney = (value: string): string =>
-  new Intl.NumberFormat("en-ET", {
-    style: "currency",
-    currency: "ETB",
+  new Intl.NumberFormat('en-ET', {
+    style: 'currency',
+    currency: 'ETB',
   }).format(Number(value));
 
 export default function CalculatorPage() {
@@ -109,7 +109,7 @@ export default function CalculatorPage() {
       })
       .catch(() => undefined);
     if (!getAccessToken()) {
-      router.replace("/login");
+      router.replace('/login');
     }
   }, [router]);
 
@@ -128,7 +128,7 @@ export default function CalculatorPage() {
     } catch (err) {
       setResult(null);
       setError(
-        err instanceof ApiError ? err.message : "Calculation request failed",
+        err instanceof ApiError ? err.message : 'Calculation request failed',
       );
     } finally {
       setSubmitting(false);
@@ -194,8 +194,8 @@ export default function CalculatorPage() {
                     type="number"
                     min={1000}
                     max={6000}
-                    value={form.shaftWidthMm ?? ""}
-                    onChange={setNumber("shaftWidthMm")}
+                    value={form.shaftWidthMm ?? ''}
+                    onChange={setNumber('shaftWidthMm')}
                     required
                   />
                 </label>
@@ -206,8 +206,8 @@ export default function CalculatorPage() {
                     type="number"
                     min={1000}
                     max={6000}
-                    value={form.shaftDepthMm ?? ""}
-                    onChange={setNumber("shaftDepthMm")}
+                    value={form.shaftDepthMm ?? ''}
+                    onChange={setNumber('shaftDepthMm')}
                     required
                   />
                 </label>
@@ -218,8 +218,8 @@ export default function CalculatorPage() {
                     type="number"
                     min={2}
                     max={64}
-                    value={form.floors ?? ""}
-                    onChange={setNumber("floors")}
+                    value={form.floors ?? ''}
+                    onChange={setNumber('floors')}
                     required
                   />
                 </label>
@@ -241,7 +241,7 @@ export default function CalculatorPage() {
                       min={320}
                       max={5000}
                       value={form.capacityKg}
-                      onChange={setNumber("capacityKg")}
+                      onChange={setNumber('capacityKg')}
                       required
                     />
                   </label>
@@ -253,7 +253,7 @@ export default function CalculatorPage() {
                       min={2}
                       max={64}
                       value={form.stops}
-                      onChange={setNumber("stops")}
+                      onChange={setNumber('stops')}
                       required
                     />
                   </label>
@@ -266,7 +266,7 @@ export default function CalculatorPage() {
                       max={200}
                       step="0.01"
                       value={form.travelHeightM}
-                      onChange={setNumber("travelHeightM")}
+                      onChange={setNumber('travelHeightM')}
                       required
                     />
                   </label>
@@ -279,7 +279,7 @@ export default function CalculatorPage() {
                       max={10}
                       step="0.01"
                       value={form.speedMs}
-                      onChange={setNumber("speedMs")}
+                      onChange={setNumber('speedMs')}
                       required
                     />
                   </label>
@@ -291,7 +291,7 @@ export default function CalculatorPage() {
                       min={700}
                       max={1400}
                       value={form.doorWidthMm}
-                      onChange={setNumber("doorWidthMm")}
+                      onChange={setNumber('doorWidthMm')}
                       required
                     />
                   </label>
@@ -307,7 +307,7 @@ export default function CalculatorPage() {
                 onChange={(e) =>
                   setForm((prev) => ({
                     ...prev,
-                    machineRoomType: e.target.value as "MR" | "MRL",
+                    machineRoomType: e.target.value as 'MR' | 'MRL',
                   }))
                 }
               >
@@ -325,7 +325,7 @@ export default function CalculatorPage() {
                   onChange={(e) =>
                     setForm((prev) => ({
                       ...prev,
-                      doorType: e.target.value as CalcInputPayload["doorType"],
+                      doorType: e.target.value as CalcInputPayload['doorType'],
                     }))
                   }
                 >
@@ -345,7 +345,7 @@ export default function CalculatorPage() {
                   setForm((prev) => ({
                     ...prev,
                     buildingUsage: e.target
-                      .value as CalcInputPayload["buildingUsage"],
+                      .value as CalcInputPayload['buildingUsage'],
                   }))
                 }
               >
@@ -371,7 +371,7 @@ export default function CalculatorPage() {
                 disabled={submitting}
                 className={`${btnPrimary} flex-1`}
               >
-                {submitting ? "Calculating…" : "Calculate"}
+                {submitting ? 'Calculating…' : 'Calculate'}
               </button>
               <button
                 type="button"
@@ -417,28 +417,28 @@ export default function CalculatorPage() {
                         {(
                           [
                             [
-                              "Persons",
+                              'Persons',
                               formatNumber(result.technical.capacityPersons),
                             ],
                             [
-                              "Rated load (kg)",
+                              'Rated load (kg)',
                               formatNumber(result.input.capacityKg),
                             ],
-                            ["Speed (m/s)", String(result.input.speedMs)],
+                            ['Speed (m/s)', String(result.input.speedMs)],
                             [
-                              "Car W×D×CH (mm)",
+                              'Car W×D×CH (mm)',
                               `${formatNumber(result.technical.carWidthMm)} × ${formatNumber(result.technical.carDepthMm)} × ${formatNumber(result.technical.carHeightMm)}`,
                             ],
-                            ["Door (mm)", doorLabel(result.input)],
+                            ['Door (mm)', doorLabel(result.input)],
                             [
-                              "Shaft W×D (mm)",
+                              'Shaft W×D (mm)',
                               `${formatNumber(result.technical.shaftWidthMm)} × ${formatNumber(result.technical.shaftDepthMm)}`,
                             ],
                             [
-                              "Floors / stops",
+                              'Floors / stops',
                               formatNumber(result.input.stops),
                             ],
-                            ["Travel (m)", String(result.input.travelHeightM)],
+                            ['Travel (m)', String(result.input.travelHeightM)],
                           ] as const
                         ).map(([k, v]) => (
                           <div key={k}>
@@ -466,42 +466,42 @@ export default function CalculatorPage() {
                       {(
                         [
                           [
-                            "Persons",
+                            'Persons',
                             formatNumber(result.technical.capacityPersons),
                           ],
                           [
-                            "Car W×D×H (mm)",
+                            'Car W×D×H (mm)',
                             `${formatNumber(result.technical.carWidthMm)}×${formatNumber(result.technical.carDepthMm)}×${formatNumber(result.technical.carHeightMm)}`,
                           ],
                           [
-                            "Shaft W×D (mm)",
+                            'Shaft W×D (mm)',
                             `${formatNumber(result.technical.shaftWidthMm)}×${formatNumber(result.technical.shaftDepthMm)}`,
                           ],
                           [
-                            "Pit depth (mm)",
+                            'Pit depth (mm)',
                             formatNumber(result.technical.pitDepthMm),
                           ],
                           [
-                            "Overhead (mm)",
+                            'Overhead (mm)',
                             formatNumber(result.technical.overheadClearanceMm),
                           ],
                           [
-                            "Counterweight (kg)",
+                            'Counterweight (kg)',
                             formatNumber(result.technical.counterweightMassKg, {
                               decimals: 2,
                             }),
                           ],
                           [
-                            "Motor (kW)",
+                            'Motor (kW)',
                             formatNumber(result.technical.motorPowerKw, {
                               decimals: 2,
                             }),
                           ],
-                          ["Guide rail", result.technical.guideRailSpec ?? "—"],
+                          ['Guide rail', result.technical.guideRailSpec ?? '—'],
                           [
-                            "Machine room W×D×H (mm)",
+                            'Machine room W×D×H (mm)',
                             result.technical.machineRoomWidthMm === null
-                              ? "None (MRL)"
+                              ? 'None (MRL)'
                               : `${formatNumber(result.technical.machineRoomWidthMm)}×${formatNumber(result.technical.machineRoomDepthMm)}×${formatNumber(result.technical.machineRoomHeightMm)}`,
                           ],
                         ] as const
@@ -516,22 +516,46 @@ export default function CalculatorPage() {
                 </section>
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-6">
+                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                    How the price is calculated
+                  </h2>
+                  <dl className="space-y-2 text-sm">
+                    <div>
+                      <dt className="text-xs text-slate-500">Formula</dt>
+                      <dd className="font-mono text-[13px] text-slate-900">
+                        {result.formula.text}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-500">This lift</dt>
+                      <dd className="font-mono text-[13px] text-slate-900">
+                        {result.formula.working}
+                      </dd>
+                    </div>
+                  </dl>
+                  <p className="mt-3 text-xs text-slate-400">
+                    Edit the formula under Settings → Pricing, or per product
+                    under Products &amp; prices.
+                  </p>
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-6">
                   <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
                     Pricing breakdown (ETB)
                   </h2>
                   <dl className="space-y-2 text-sm">
                     {(
                       [
-                        ["Base price", result.pricing.basePrice],
+                        ['Base price', result.pricing.basePrice],
                         [
-                          "Additional stops / rise",
+                          'Additional stops / rise',
                           result.pricing.stopsAdjustment,
                         ],
                         [
-                          "Additional capacity",
+                          'Additional capacity',
                           result.pricing.capacityAdjustment,
                         ],
-                        ["List price", result.pricing.totalBeforeMargin],
+                        ['List price', result.pricing.totalBeforeMargin],
                       ] as const
                     ).map(([k, v]) => (
                       <div

@@ -382,6 +382,79 @@ const PROBE_SCOPES: readonly FormulaScope[] = [
   },
 ];
 
+const NAME_LABELS: Record<keyof FormulaScope, string> = {
+  base: 'Base price',
+  N: 'N',
+  C: 'C',
+  perStop: 'perStop',
+  perKg: 'perKg',
+  refN: 'refN',
+  refC: 'refC',
+  rise: 'rise',
+};
+
+const formatValue = (value: Decimal.Value): string => {
+  const d = new Decimal(value);
+  const [whole, fraction] = d.toFixed().split('.');
+  const grouped = whole!.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return fraction ? `${grouped}.${fraction}` : grouped;
+};
+
+/**
+ * The formula written out again with the given names replaced by their
+ * values — "Base price + (N - 10) * 80,000" with the product's figures in,
+ * or the whole working with the lift's figures in. Names not in `values`
+ * stay as names; the text stays a valid formula. Throws FormulaError on a
+ * formula that does not tokenize.
+ */
+export const renderFormula = (
+  formula: string,
+  values: Partial<FormulaScope>,
+): string => {
+  const out: string[] = [];
+  let prev: Token | undefined;
+  let prevUnary = false;
+  for (const token of tokenize(formula)) {
+    let text: string;
+    if (token.kind === 'num') {
+      text = formatValue(token.value);
+    } else if (token.kind === 'id') {
+      const lower = token.name.toLowerCase();
+      const key = ALIASES[lower];
+      const given = key === undefined ? undefined : values[key];
+      text =
+        lower in FUNCTIONS
+          ? lower
+          : given !== undefined
+            ? formatValue(given)
+            : key
+              ? NAME_LABELS[key]
+              : token.name;
+    } else {
+      text = token.value;
+    }
+    // A sign with nothing (or an operator, or an opening bracket) before it
+    // is unary: it hugs what follows.
+    const unary =
+      (text === '-' || text === '+') &&
+      (prev === undefined || (prev.kind === 'op' && prev.value !== ')'));
+    const tight =
+      out.length === 0 ||
+      prevUnary ||
+      text === ')' ||
+      text === ',' ||
+      (prev?.kind === 'op' && prev.value === '(') ||
+      (text === '(' &&
+        prev?.kind === 'id' &&
+        prev.name.toLowerCase() in FUNCTIONS) ||
+      unary;
+    out.push(tight ? text : ` ${text}`);
+    prev = token;
+    prevUnary = unary;
+  }
+  return out.join('');
+};
+
 /** Parse-and-evaluate against sample lifts; the error message if any fails, else null. */
 export const formulaProblem = (formula: string): string | null => {
   try {

@@ -12,6 +12,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser, Roles } from '../../common/decorators';
+import { renderFormula } from '../../common/formula';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import {
   CreateProductTypeDto,
@@ -45,8 +46,22 @@ export class ProductTypesController {
     summary:
       'Products and their prices, in display order. Seeds the company list on first use.',
   })
-  list(@CurrentUser() user: AuthenticatedUser) {
-    return this.productTypes.list(user.tenantId);
+  async list(@CurrentUser() user: AuthenticatedUser) {
+    const [rows, companyFormula] = await Promise.all([
+      this.productTypes.list(user.tenantId),
+      this.productTypes.pricingFormula(user.tenantId),
+    ]);
+    // The formula each row is actually priced with, its own figures written
+    // in — so the list reads like the price sheet.
+    return rows.map((row) => ({
+      ...row,
+      effectiveFormula: renderFormula(row.formula ?? companyFormula, {
+        perStop: row.perStopEtb,
+        perKg: row.perKgEtb,
+        refN: row.refStops,
+        refC: row.refCapacityKg,
+      }),
+    }));
   }
 
   @Post()

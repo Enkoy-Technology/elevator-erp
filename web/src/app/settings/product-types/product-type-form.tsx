@@ -1,35 +1,35 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useRouter } from 'next/navigation';
+import { useState, type FormEvent } from 'react';
 
-import { Field, FormPage, FormSection } from "@/components/form-page";
-import { fieldClass } from "@/components/form-styles";
+import { Field, FormPage, FormSection } from '@/components/form-page';
+import { fieldClass } from '@/components/form-styles';
 import {
   ApiError,
   createProductType,
   updateProductType,
   type ProductTypeRow,
-} from "@/lib/api";
+} from '@/lib/api';
 
-const MONEY = "\\d{1,12}(\\.\\d{1,2})?";
+const MONEY = '\\d{1,12}(\\.\\d{1,2})?';
 
 /** One form for add and edit: `existing` decides which call saves it. */
 export function ProductTypeForm({ existing }: { existing?: ProductTypeRow }) {
   const router = useRouter();
-  const [name, setName] = useState(existing?.name ?? "");
+  const [name, setName] = useState(existing?.name ?? '');
   const [basePriceEtb, setBasePriceEtb] = useState(
-    existing?.basePriceEtb ?? "",
+    existing?.basePriceEtb ?? '',
   );
   const [perStopEtb, setPerStopEtb] = useState(
-    existing?.perStopEtb ?? "80000.00",
+    existing?.perStopEtb ?? '80000.00',
   );
-  const [perKgEtb, setPerKgEtb] = useState(existing?.perKgEtb ?? "1000.00");
+  const [perKgEtb, setPerKgEtb] = useState(existing?.perKgEtb ?? '1000.00');
   const [refStops, setRefStops] = useState(String(existing?.refStops ?? 10));
   const [refCapacityKg, setRefCapacityKg] = useState(
     String(existing?.refCapacityKg ?? 630),
   );
-  const [formula, setFormula] = useState(existing?.formula ?? "");
+  const [formula, setFormula] = useState(existing?.formula ?? '');
   const [liftGeometry, setLiftGeometry] = useState(
     existing?.liftGeometry ?? true,
   );
@@ -43,8 +43,8 @@ export function ProductTypeForm({ existing }: { existing?: ProductTypeRow }) {
     const payload = {
       name: name.trim(),
       basePriceEtb: basePriceEtb.trim(),
-      perStopEtb: perStopEtb.trim() || "0",
-      perKgEtb: perKgEtb.trim() || "0",
+      perStopEtb: perStopEtb.trim() || '0',
+      perKgEtb: perKgEtb.trim() || '0',
       refStops: Number(refStops) || 10,
       refCapacityKg: Number(refCapacityKg) || 630,
       // Blank means the company formula under Settings.
@@ -57,10 +57,10 @@ export function ProductTypeForm({ existing }: { existing?: ProductTypeRow }) {
       } else {
         await createProductType(payload);
       }
-      router.push("/settings/product-types");
+      router.push('/settings/product-types');
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : "Failed to save the product",
+        err instanceof ApiError ? err.message : 'Failed to save the product',
       );
     } finally {
       setSubmitting(false);
@@ -70,13 +70,13 @@ export function ProductTypeForm({ existing }: { existing?: ProductTypeRow }) {
   return (
     <FormPage
       eyebrow="Settings"
-      title={existing ? `Edit ${existing.name}` : "Add product"}
+      title={existing ? `Edit ${existing.name}` : 'Add product'}
       description="Prices are in ETB before margin and VAT. Quotations already issued keep the price they were given."
       backHref="/settings/product-types"
       backLabel="Products & prices"
       error={error}
       submitting={submitting}
-      submitLabel={existing ? "Save changes" : "Add product"}
+      submitLabel={existing ? 'Save changes' : 'Add product'}
       onSubmit={(event) => void onSubmit(event)}
     >
       <FormSection title="Product">
@@ -86,7 +86,7 @@ export function ProductTypeForm({ existing }: { existing?: ProductTypeRow }) {
           hint={
             existing
               ? `Code ${existing.code} stays as it is.`
-              : "The code is derived from the name and then fixed."
+              : 'The code is derived from the name and then fixed.'
           }
           wide
         >

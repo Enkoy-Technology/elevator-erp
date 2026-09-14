@@ -115,4 +115,6 @@ export interface CalcResult {
   input: CalcInput;
   /** Things worth telling the person quoting: a non-standard shaft, a capped speed. */
   notes: string[];
+  /** How the list price was built: the formula that applied, and the same with this lift's figures in. */
+  formula: { text: string; working: string };
 }

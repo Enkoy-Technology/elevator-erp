@@ -107,6 +107,7 @@ describe('QuotationsService', () => {
         taxPercent: 0,
       },
       notes: [],
+      formula: { text: '', working: '' },
       technical: { capacityPersons: 13 } as CalcResult['technical'],
       pricing: {
         // PASSENGER, 5 stops (floors to 0), 1000 kg: 7,000,000 + 370,000
@@ -597,6 +598,7 @@ describe('QuotationsService', () => {
         taxPercent: 0,
       },
       notes: [],
+      formula: { text: '', working: '' },
       technical: { capacityPersons: 10 } as CalcResult['technical'],
       pricing: {
         basePrice: '7000000.00',
