@@ -14,11 +14,12 @@ import {
 import { tenants } from './tenants';
 
 /**
- * What the company sells and what each starts at. The calculator prices a
- * line as `base + max(0, stops − 10) × perStop + max(0, kg − 630) × perKg`,
- * so a product with both rates at zero is a flat price (escalators, platform
- * lifts). `code` is the stable key quotation lines carry (`product_type`
- * text on document lines); the name is what people read.
+ * What the company sells and what each starts at. The company's formula
+ * (Settings → Pricing, or the product's own `formula`) prices a line from
+ * the base price, the stops above `refStops`, the kilograms above
+ * `refCapacityKg` and, for escalators, the rise — see src/common/formula.ts.
+ * `code` is the stable key quotation lines carry (`product_type` text on
+ * document lines); the name is what people read.
  *
  * Seeded with the company's own list the first time a tenant reads it, then
  * theirs to change.
@@ -38,6 +39,12 @@ export const productTypes = pgTable(
     basePriceEtb: numeric('base_price_etb', { precision: 14, scale: 2 }).notNull(),
     perStopEtb: numeric('per_stop_etb', { precision: 12, scale: 2 }).notNull().default('0'),
     perKgEtb: numeric('per_kg_etb', { precision: 12, scale: 2 }).notNull().default('0'),
+    /** The stops the base price includes (refN in the formula). */
+    refStops: integer('ref_stops').notNull().default(10),
+    /** The capacity the base price includes (refC in the formula). */
+    refCapacityKg: integer('ref_capacity_kg').notNull().default(630),
+    /** This product's own formula; null means the company formula under Settings. */
+    formula: text('formula'),
     /** Whether the EN 81 lift geometry block applies (false for escalators). */
     liftGeometry: boolean('lift_geometry').notNull().default(true),
     sortOrder: integer('sort_order').notNull().default(0),

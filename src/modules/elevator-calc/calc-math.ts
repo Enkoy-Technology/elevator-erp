@@ -25,13 +25,10 @@ const qty2 = (value: Decimal): string =>
  * model wholesale (that matrix was denominated in USD and was relabelled ETB
  * without conversion, which under-quoted every machine by ~100x).
  */
-/** Rows are ordered high-to-low; the first the machine reaches wins. */
-export const REFERENCE_STOPS = 10;
-export const REFERENCE_CAPACITY_KG = 630;
-
 /**
- * The tenant's list-price formula over base, N (stops) and C (kg); the
- * starter is `base + (N - 10) × perStop + (C - 630) × perKg`, unfloored.
+ * The company's list-price formula over base, N (stops), C (kg) and rise;
+ * the starter is `base + (N - refN) × perStop + (C - refC) × perKg`,
+ * unfloored, with refN/refC the product's own reference machine.
  *
 
  * The base and both rates come from the tenant's product list, so a product
@@ -42,12 +39,15 @@ export interface ProductRates {
   basePriceEtb: string;
   perStopEtb: string;
   perKgEtb: string;
+  refStops: number;
+  refCapacityKg: number;
 }
 
 export const computeProductPrice = (
   rates: ProductRates,
   stops: number,
   capacityKg: number,
+  travelHeightM: number,
   formula: string,
 ): {
   basePrice: Decimal;
@@ -58,16 +58,20 @@ export const computeProductPrice = (
     base: rates.basePriceEtb,
     perStop: rates.perStopEtb,
     perKg: rates.perKgEtb,
+    refN: rates.refStops,
+    refC: rates.refCapacityKg,
+    rise: travelHeightM,
   };
   const basePrice = D(rates.basePriceEtb);
   const total = evaluateFormula(formula, { ...scope, N: stops, C: capacityKg });
-  // The formula is the tenant's and need not be additive. Splitting at the
-  // reference capacity keeps the printed breakdown honest for any formula:
-  // what the stops added, then what the capacity added on top of that.
+  // The formula is the company's and need not be additive. Splitting at
+  // the product's reference capacity keeps the printed breakdown honest for
+  // any formula: what the stops (or an escalator's rise) added, then what
+  // the capacity added on top of that.
   const atReferenceCapacity = evaluateFormula(formula, {
     ...scope,
     N: stops,
-    C: REFERENCE_CAPACITY_KG,
+    C: rates.refCapacityKg,
   });
   return {
     basePrice,

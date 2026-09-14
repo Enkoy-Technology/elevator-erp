@@ -260,18 +260,18 @@ export const DOC_GROUPS: DocGroup[] = [
         body: [
           'For a passenger elevator the salesperson enters only what the building gives them: the shaft width and depth in millimetres, and the number of floors. The company’s standard passenger table then names the lift — persons, rated load, car width × depth × 2,400 mm, door (CO centre-opening or 2S side-opening, width × 2,100) — and the floors give the stops, the travel (3.0 m a floor) and the speed band: 1–10 floors 1.0 m/s, 11–15 1.5, 16–20 1.75, 21–25 2.0, above 25 2.5, capped at what that lift allows. An exact standard shaft (say 1835 × 1750) picks its row; any other shaft takes the largest standard lift that fits inside it, and the result says so. A shaft smaller than the smallest standard one is refused with the minimum named.',
           'For every other product the calculator takes the classic figures — capacity, stops, travel height, speed, machine-room type, door type and usage — and returns the technical block (car and shaft dimensions, pit depth, overhead clearance, counterweight mass, motor power, guide-rail spec, machine-room dimensions) for products marked as lifts, and the commercial block (base price, adjustments, margin, VAT, grand total) for all.',
-          'What can be sold, and what each product starts at, lives under Settings → Products & prices: passenger, hospital, panoramic, home and cargo elevators, car lift, car platform lift and escalator by default, each with a base price and the per-stop (above 10) and per-kilogram (above 630 kg) rates. Management adds, renames, reprices or retires products there; the calculator and the quotation lines read the list. A product with both rates at zero is a flat price. The EN 81 geometry block is computed for any product marked as a lift.',
-          'Pricing is the product owner’s ETB price list, not a cost model, and the formula that turns the list into a price is the company’s own: Settings → General → List-price formula. The starter is “Base price + (N − 10) × perStop + (C − 630kg) × perKg”, where Base price, perStop and perKg are the product’s figures from Products & prices, N is the stops and C the rated capacity in kg. It is evaluated exactly as written, per line, before margin and VAT — write “max(0, N − 10)” if a lift below the reference machine should cost the base rather than less. Brackets, + − × ÷, thousands separators, unit suffixes (630kg) and max(), min(), round() are understood; a formula that does not parse is refused on save.',
+          'What can be sold, and what each product starts at, lives under Settings → Products & prices: passenger, hospital, panoramic and home elevators, cargo / goods lift, car lift, car platform lift, car stacking lift and escalator by default. Each row carries the base price, the machine that price includes (base stops and base capacity), and what every extra stop and kilogram adds; a product may also carry its own formula, as the escalator does on its rise. Management adds, renames, reprices or retires products there; the calculator and the quotation lines read the list. The EN 81 geometry block is computed for any product marked as a lift.',
+          'Pricing is the company’s ETB price sheet, not a cost model, and the formula that turns the sheet into a price is the company’s own: Settings → Pricing → List-price formula. The starter is “Base price + (N − refN) × perStop + (C − refC) × perKg”, where Base price, refN, refC, perStop and perKg are the product’s figures from Products & prices, N is the stops (a car stacking lift’s parking levels), C the rated capacity in kg and rise the travel in metres. It is evaluated exactly as written, per line, before margin and VAT — write “max(0, N − refN)” if a lift below the base machine should cost the base rather than less. Brackets, + − × ÷, thousands separators, unit suffixes (630kg) and max(), min(), round() are understood; a formula that does not parse or gives a negative price is refused on save. A product with its own formula ignores the company one.',
         ],
         facts: [
-          { label: 'Passenger / hospital base', value: 'ETB 7,000,000' },
-          { label: 'Panoramic / home / cargo base', value: 'ETB 8,000,000' },
-          { label: 'Car lift', value: 'ETB 12,000,000' },
-          { label: 'Car platform lift', value: 'ETB 3,200,000 flat' },
-          { label: 'Escalator', value: 'ETB 6,000,000 flat' },
-          { label: 'Per stop (N − 10)', value: 'ETB 80,000' },
-          { label: 'Per kg (C − 630)', value: 'ETB 1,000' },
-          { label: 'Starter formula', value: 'Base price + (N − 10) × perStop + (C − 630kg) × perKg' },
+          { label: 'Passenger / hospital (10 stops, 630 kg)', value: 'ETB 7,000,000 + 80,000/stop + 1,000/kg' },
+          { label: 'Panoramic / home (10 stops, 630 kg)', value: 'ETB 8,000,000 + 80,000/stop + 1,000/kg' },
+          { label: 'Cargo / goods lift (2 stops, 1,000 kg)', value: 'ETB 8,000,000 + 150,000/stop + 400/kg' },
+          { label: 'Car lift (2 stops, 3,000 kg)', value: 'ETB 11,000,000 + 300,000/stop + 500/kg' },
+          { label: 'Car platform lift (2 stops, 3,000 kg)', value: 'ETB 5,200,000 + 250,000/stop + 400/kg' },
+          { label: 'Car stacking lift (2 levels, 2,000 kg)', value: 'ETB 5,200,000 + 500,000/level + 400/kg' },
+          { label: 'Escalator (6 m rise)', value: 'ETB 6,000,000 + 500,000/m' },
+          { label: 'Starter formula', value: 'Base price + (N − refN) × perStop + (C − refC) × perKg' },
         ],
         flows: [
           {

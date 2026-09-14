@@ -30,9 +30,10 @@ export const PRODUCT_LABELS: Record<string, string> = {
   HOSPITAL: 'Hospital elevator',
   PANORAMIC: 'Panoramic elevator',
   HOME: 'Home elevator',
-  CARGO: 'Cargo elevator',
+  CARGO: 'Cargo / goods lift',
   CAR_LIFT: 'Car lift',
   CAR_PLATFORM_LIFT: 'Car platform lift',
+  CAR_STACKING_LIFT: 'Car stacking lift',
   ESCALATOR: 'Escalator',
 };
 
@@ -231,14 +232,18 @@ const renderPaymentTerms = (terms: readonly PaymentTermData[]): string => {
       (term) =>
         `<li><span class="term-pct">${esc(formatQuantity(term.percent))}%</span>` +
         `<span class="term-label">${esc(term.label)}</span>` +
-        (term.triggerEvent ? `<span class="term-trigger">${esc(term.triggerEvent)}</span>` : '') +
+        (term.triggerEvent
+          ? `<span class="term-trigger">${esc(term.triggerEvent)}</span>`
+          : '') +
         `</li>`,
     )
     .join('');
   return `<h2>Payment Terms</h2><ol class="terms-list">${items}</ol>`;
 };
 
-const renderCommercialTerms = (terms: CommercialTermsData | undefined): string => {
+const renderCommercialTerms = (
+  terms: CommercialTermsData | undefined,
+): string => {
   if (!terms) {
     return '';
   }
@@ -251,7 +256,9 @@ const renderCommercialTerms = (terms: CommercialTermsData | undefined): string =
     ],
     [
       'Warranty of main parts',
-      terms.warrantyPartsMonths == null ? null : monthsLabel(terms.warrantyPartsMonths),
+      terms.warrantyPartsMonths == null
+        ? null
+        : monthsLabel(terms.warrantyPartsMonths),
     ],
     [
       'Free manpower maintenance',
@@ -266,9 +273,14 @@ const renderCommercialTerms = (terms: CommercialTermsData | undefined): string =
   ];
   const body = rows
     .filter((row): row is readonly [string, string] => row[1] !== null)
-    .map(([label, value]) => `<tr><td>${esc(label)}</td><td>${esc(value)}</td></tr>`)
+    .map(
+      ([label, value]) =>
+        `<tr><td>${esc(label)}</td><td>${esc(value)}</td></tr>`,
+    )
     .join('');
-  return body ? `<h2>Terms</h2><table class="lines terms">${`<tbody>${body}</tbody>`}</table>` : '';
+  return body
+    ? `<h2>Terms</h2><table class="lines terms">${`<tbody>${body}</tbody>`}</table>`
+    : '';
 };
 
 /**
@@ -288,7 +300,9 @@ const renderSpecTable = (line: DocumentLineData): string => {
     ['Ordering quantity', text(line.quantity)],
     [
       'With or without machine room',
-      line.machineRoomLabel ?? MACHINE_ROOM_LABELS[String(calc.machineRoomType)] ?? null,
+      line.machineRoomLabel ??
+        MACHINE_ROOM_LABELS[String(calc.machineRoomType)] ??
+        null,
     ],
     [
       'Load (Capacity)',
@@ -309,7 +323,10 @@ const renderSpecTable = (line: DocumentLineData): string => {
     ['Depth of Pit (mm)', text(tech.pitDepthMm)],
     ['O/H height of overhead (mm)', text(tech.overheadClearanceMm)],
     ['Shaft size (W x D)', dims([tech.shaftWidthMm, tech.shaftDepthMm])],
-    ['Car size (W x D x H)', dims([tech.carWidthMm, tech.carDepthMm, tech.carHeightMm])],
+    [
+      'Car size (W x D x H)',
+      dims([tech.carWidthMm, tech.carDepthMm, tech.carHeightMm]),
+    ],
     ['Door size (W x H)', dims([calc.doorWidthMm, line.doorHeightMm])],
     ['Car opening type', DOOR_TYPE_LABELS[String(calc.doorType)] ?? null],
     ['Power supply', text(line.powerSupply)],
@@ -338,7 +355,8 @@ const renderSpecPage = (lines: readonly DocumentLineData[]): string => {
     .map((line, index) => {
       const heading = many
         ? `Specification — ${line.sequence ?? index + 1}. ${
-            productLabel(line.productType ?? line.technicalSpec?.productType) ?? 'Item'
+            productLabel(line.productType ?? line.technicalSpec?.productType) ??
+            'Item'
           }`
         : 'Specification';
       return `<h2>${esc(heading)}</h2>${renderSpecTable(line)}`;

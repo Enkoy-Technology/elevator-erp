@@ -146,24 +146,27 @@ describe('ElevatorCalcService', () => {
       expect(await totalAt(31)).toBe('8680000.00');
     });
 
-    it('prices every product in the company list from its own base', async () => {
-      const baseOf = async (productType: string): Promise<string> =>
-        (
+    it('prices every product at its base when asked for its own base machine', async () => {
+      const baseOf = async (productType: string): Promise<string> => {
+        const row = DEFAULT_PRODUCT_TYPES.find((p) => p.code === productType)!;
+        return (
           await calc({
             ...WORKED_EXAMPLE,
             productType,
-            stops: 10,
-            capacityKg: 630,
+            stops: row.refStops,
+            capacityKg: row.refCapacityKg,
             marginPercent: 0,
             taxPercent: 0,
           })
         ).pricing.totalPrice;
+      };
 
       expect(await baseOf('HOSPITAL')).toBe('7000000.00');
       expect(await baseOf('PANORAMIC')).toBe('8000000.00');
       expect(await baseOf('HOME')).toBe('8000000.00');
       expect(await baseOf('CARGO')).toBe('8000000.00');
-      expect(await baseOf('CAR_LIFT')).toBe('12000000.00');
+      expect(await baseOf('CAR_LIFT')).toBe('11000000.00');
+      expect(await baseOf('CAR_STACKING_LIFT')).toBe('5200000.00');
     });
 
     it('refuses a product that is not in the list', async () => {
@@ -172,54 +175,48 @@ describe('ElevatorCalcService', () => {
       ).rejects.toThrow(/Unknown product type/);
     });
 
-    it('does not tier platform lifts or escalators by stops', async () => {
-      const totalAt = async (
+    it("prices every worked example on the company's price sheet (2026-09-14)", async () => {
+      const sheet = async (
         productType: string,
+        capacityKg: number,
         stops: number,
+        travelHeightM = 30,
       ): Promise<string> =>
         (
           await calc({
             ...WORKED_EXAMPLE,
             productType,
+            capacityKg,
             stops,
+            travelHeightM,
             marginPercent: 0,
             taxPercent: 0,
           })
         ).pricing.totalPrice;
 
-      expect(await totalAt('CAR_PLATFORM_LIFT', 40)).toBe('3200000.00');
-      expect(await totalAt('ESCALATOR', 40)).toBe('6000000.00');
+      expect(await sheet('PASSENGER', 800, 15)).toBe('7570000.00');
+      expect(await sheet('PANORAMIC', 800, 15)).toBe('8570000.00');
+      expect(await sheet('CAR_LIFT', 5000, 3)).toBe('12300000.00');
+      expect(await sheet('CAR_PLATFORM_LIFT', 5000, 3)).toBe('6250000.00');
+      // L = 2 parking levels is the stop count
+      expect(await sheet('CAR_STACKING_LIFT', 4000, 2)).toBe('6000000.00');
+      expect(await sheet('CARGO', 2000, 5)).toBe('8850000.00');
+      // Rise is the travel height; stops and capacity do not move an escalator
+      expect(await sheet('ESCALATOR', 630, 10, 10)).toBe('8000000.00');
+      expect(await sheet('ESCALATOR', 5000, 40, 10)).toBe('8000000.00');
     });
 
-    it('prices a car platform lift flat, ignoring stops and capacity', async () => {
-      const platformLift: CalcInput = {
-        ...WORKED_EXAMPLE,
-        productType: 'CAR_PLATFORM_LIFT',
-        marginPercent: 0,
-        taxPercent: 0,
-      };
-      const small = await calc({
-        ...platformLift,
-        stops: 4,
-        capacityKg: 630,
-      });
-      const big = await calc({
-        ...platformLift,
-        stops: 20,
-        capacityKg: 5000,
-      });
-      expect(small.pricing.totalPrice).toBe('3200000.00');
-      expect(big.pricing.totalPrice).toBe('3200000.00');
-    });
-
-    it('prices an escalator flat', async () => {
+    it("uses the product's own formula over the company one, and splits the breakdown on it", async () => {
       const result = await calc({
         ...WORKED_EXAMPLE,
         productType: 'ESCALATOR',
+        travelHeightM: 10,
         marginPercent: 0,
         taxPercent: 0,
       });
-      expect(result.pricing.totalPrice).toBe('6000000.00');
+      expect(result.pricing.basePrice).toBe('6000000.00');
+      expect(result.pricing.stopsAdjustment).toBe('2000000.00');
+      expect(result.pricing.capacityAdjustment).toBe('0.00');
     });
 
     it('does not vary price by speed, door, machine room or building usage', async () => {

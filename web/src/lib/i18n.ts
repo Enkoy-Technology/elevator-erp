@@ -117,7 +117,7 @@ const en: Record<MessageKey, string> = {
   'settings.pricing': 'Pricing',
   'settings.pricingFormula': 'List-price formula',
   'settings.pricingFormulaHelp':
-    'Evaluated exactly, per quotation line, before margin and VAT. Names: Base price (the product’s base), N (stops), C (capacity in kg), perStop and perKg (the product’s own rates). Use + − × ÷, brackets, and max(), min(), round(). Example: Base price + (N - 10) * 80,000 + (C - 630kg) * 1,000. Leave blank to go back to the starter.',
+    'Evaluated exactly, per quotation line, before margin and VAT, for every product that has no formula of its own. Names: Base price, N (stops), C (capacity in kg), rise (travel in m), refN and refC (the stops and kg the base price includes), perStop and perKg (the product’s rates). Use + − × ÷, brackets, and max(), min(), round(). Starter: Base price + (N - refN) * perStop + (C - refC) * perKg. Leave blank to go back to it.',
   'settings.maintenanceReminderDays': 'Maintenance reminder window (days)',
   'settings.maintenanceReminderDaysHelp':
     'How many days ahead of a scheduled visit the reminder SMS goes out.',

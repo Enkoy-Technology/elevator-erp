@@ -258,7 +258,7 @@ export default function CalculatorPage() {
                     />
                   </label>
                   <label>
-                    <span className={label}>Travel height (m)</span>
+                    <span className={label}>Travel height / rise (m)</span>
                     <input
                       className={field}
                       type="number"
@@ -523,7 +523,10 @@ export default function CalculatorPage() {
                     {(
                       [
                         ["Base price", result.pricing.basePrice],
-                        ["Additional stops", result.pricing.stopsAdjustment],
+                        [
+                          "Additional stops / rise",
+                          result.pricing.stopsAdjustment,
+                        ],
                         [
                           "Additional capacity",
                           result.pricing.capacityAdjustment,

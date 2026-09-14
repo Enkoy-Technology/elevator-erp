@@ -1,16 +1,16 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2 } from 'lucide-react';
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Pencil, Trash2 } from "lucide-react";
 
-import { DataTable } from '@/components/data-table';
-import { btnPrimary } from '@/components/form-styles';
-import { RowAction } from '@/components/list-toolbar';
-import { PageHeader } from '@/components/page-header';
-import { Sidebar } from '@/components/sidebar';
+import { DataTable } from "@/components/data-table";
+import { btnPrimary } from "@/components/form-styles";
+import { RowAction } from "@/components/list-toolbar";
+import { PageHeader } from "@/components/page-header";
+import { Sidebar } from "@/components/sidebar";
 import {
   ApiError,
   deleteProductType,
@@ -19,12 +19,15 @@ import {
   listProductTypes,
   type ProductTypeRow,
   type UserRole,
-} from '@/lib/api';
-import { formatEtb } from '@/lib/money';
+} from "@/lib/api";
+import { formatEtb } from "@/lib/money";
 
 /** Mirrors @Roles on the product-types write routes. */
 const canEditProducts = (role: UserRole | null): boolean =>
-  role === 'SALES_MANAGER' || role === 'GENERAL_MANAGER' || role === 'CEO' || role === 'ADMIN';
+  role === "SALES_MANAGER" ||
+  role === "GENERAL_MANAGER" ||
+  role === "CEO" ||
+  role === "ADMIN";
 
 export default function ProductTypesPage() {
   const router = useRouter();
@@ -38,7 +41,9 @@ export default function ProductTypesPage() {
     try {
       setRows(await listProductTypes());
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to load the products');
+      setError(
+        err instanceof ApiError ? err.message : "Failed to load the products",
+      );
     } finally {
       setLoading(false);
     }
@@ -46,7 +51,7 @@ export default function ProductTypesPage() {
 
   useEffect(() => {
     if (!getAccessToken()) {
-      router.replace('/login');
+      router.replace("/login");
       return;
     }
     setRole(getCurrentRole());
@@ -56,64 +61,106 @@ export default function ProductTypesPage() {
   const canEdit = canEditProducts(role);
 
   const remove = async (row: ProductTypeRow) => {
-    if (!window.confirm(`Retire "${row.name}"? Quotations that used it keep their prices.`)) {
+    if (
+      !window.confirm(
+        `Retire "${row.name}"? Quotations that used it keep their prices.`,
+      )
+    ) {
       return;
     }
     try {
       await deleteProductType(row.id);
       await refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to retire the product');
+      setError(
+        err instanceof ApiError ? err.message : "Failed to retire the product",
+      );
     }
   };
 
   const columns: ColumnDef<ProductTypeRow, unknown>[] = [
     {
-      accessorKey: 'name',
-      header: 'Product',
+      accessorKey: "name",
+      header: "Product",
       enableSorting: true,
       cell: ({ row }) => (
         <span className="flex flex-col">
-          <span className="font-medium text-slate-900">{row.original.name}</span>
-          <span className="font-mono text-[11px] text-slate-500">{row.original.code}</span>
+          <span className="font-medium text-slate-900">
+            {row.original.name}
+          </span>
+          <span className="font-mono text-[11px] text-slate-500">
+            {row.original.code}
+          </span>
         </span>
       ),
     },
     {
-      id: 'base',
-      header: 'Base price',
-      meta: { align: 'right' },
-      cell: ({ row }) => <span className="font-semibold text-slate-900">{formatEtb(row.original.basePriceEtb)}</span>,
+      id: "base",
+      header: "Base price",
+      meta: { align: "right" },
+      cell: ({ row }) => (
+        <span className="flex flex-col items-end">
+          <span className="font-semibold text-slate-900">
+            {formatEtb(row.original.basePriceEtb)}
+          </span>
+          <span className="text-[11px] text-slate-500">
+            {row.original.refStops} stops ·{" "}
+            {row.original.refCapacityKg.toLocaleString("en-ET")} kg
+          </span>
+        </span>
+      ),
     },
     {
-      id: 'perStop',
-      header: 'Per stop above 10',
-      meta: { align: 'right' },
-      cell: ({ row }) => (Number(row.original.perStopEtb) === 0 ? '—' : formatEtb(row.original.perStopEtb)),
+      id: "perStop",
+      header: "Per extra stop",
+      meta: { align: "right" },
+      cell: ({ row }) =>
+        Number(row.original.perStopEtb) === 0
+          ? "—"
+          : formatEtb(row.original.perStopEtb),
     },
     {
-      id: 'perKg',
-      header: 'Per kg above 630',
-      meta: { align: 'right' },
-      cell: ({ row }) => (Number(row.original.perKgEtb) === 0 ? '—' : formatEtb(row.original.perKgEtb)),
+      id: "perKg",
+      header: "Per extra kg",
+      meta: { align: "right" },
+      cell: ({ row }) =>
+        Number(row.original.perKgEtb) === 0
+          ? "—"
+          : formatEtb(row.original.perKgEtb),
     },
     {
-      id: 'geometry',
-      header: 'Lift geometry',
-      cell: ({ row }) => (row.original.liftGeometry ? 'Yes' : 'No'),
+      id: "formula",
+      header: "Formula",
+      cell: ({ row }) =>
+        row.original.formula ? (
+          <span className="font-mono text-[11px] text-slate-700">
+            {row.original.formula}
+          </span>
+        ) : (
+          <span className="text-xs text-slate-400">Company formula</span>
+        ),
+    },
+    {
+      id: "geometry",
+      header: "Lift geometry",
+      cell: ({ row }) => (row.original.liftGeometry ? "Yes" : "No"),
     },
     ...(canEdit
       ? [
           {
-            id: 'actions',
-            header: '',
-            meta: { align: 'right' },
+            id: "actions",
+            header: "",
+            meta: { align: "right" },
             cell: ({ row }) => (
               <div className="flex items-center justify-end gap-0.5">
                 <RowAction
                   icon={Pencil}
                   label={`Edit ${row.original.name}`}
-                  onClick={() => router.push(`/settings/product-types/${row.original.id}/edit`)}
+                  onClick={() =>
+                    router.push(
+                      `/settings/product-types/${row.original.id}/edit`,
+                    )
+                  }
                 />
                 <RowAction
                   icon={Trash2}
@@ -135,7 +182,7 @@ export default function ProductTypesPage() {
         <PageHeader
           eyebrow="Settings"
           title="Products & prices"
-          description="What the company sells and what each starts at. The list-price formula under Settings combines the base price with these rates, the stops and the capacity; then margin and VAT. A product with both rates at zero is a flat price under the starter formula."
+          description="What the company sells and what each starts at. The base price buys the base machine; the company formula under Settings adds the rate for every stop and kilogram above it, unless a product carries its own formula. Margin and VAT come after."
           actions={
             canEdit ? (
               <Link href="/settings/product-types/new" className={btnPrimary}>
@@ -146,7 +193,9 @@ export default function ProductTypesPage() {
         />
         <main className="flex-1 bg-slate-50 p-4 sm:p-8">
           {error ? (
-            <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+            <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </p>
           ) : null}
           <DataTable
             columns={columns}

@@ -210,6 +210,11 @@ export interface ProductTypeRow {
   basePriceEtb: string;
   perStopEtb: string;
   perKgEtb: string;
+  /** The machine the base price includes: refN and refC in the formula. */
+  refStops: number;
+  refCapacityKg: number;
+  /** This product's own formula, or null for the company formula under Settings. */
+  formula: string | null;
   liftGeometry: boolean;
   sortOrder: number;
   createdAt: string;
@@ -221,6 +226,9 @@ export interface ProductTypePayload {
   basePriceEtb: string;
   perStopEtb?: string;
   perKgEtb?: string;
+  refStops?: number;
+  refCapacityKg?: number;
+  formula?: string | null;
   liftGeometry?: boolean;
 }
 

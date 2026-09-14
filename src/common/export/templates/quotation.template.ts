@@ -62,7 +62,7 @@ export interface QuotationTemplateData
 // multiplier model) rows and new quotes render the price-list rows.
 export const PRICING_ROWS: ReadonlyArray<{ key: string; label: string }> = [
   { key: 'basePrice', label: 'Base price' },
-  { key: 'stopsAdjustment', label: 'Additional stops' },
+  { key: 'stopsAdjustment', label: 'Additional stops / rise' },
   { key: 'capacityAdjustment', label: 'Additional capacity' },
   { key: 'baseCost', label: 'Base equipment' },
   { key: 'stopCost', label: 'Additional stops' },

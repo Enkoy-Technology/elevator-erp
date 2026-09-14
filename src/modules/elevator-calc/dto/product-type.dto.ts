@@ -1,7 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
+  IsInt,
   IsOptional,
+  Max,
+  Min,
+  ValidateIf,
   IsString,
   Matches,
   MaxLength,
@@ -10,6 +14,8 @@ import {
 } from 'class-validator';
 
 import { MONEY_RE, PositiveMoneyConstraint } from '../../../common/dto/money';
+import { MAX_FORMULA_LENGTH } from '../../../common/formula';
+import { IsPricingFormulaConstraint } from '../../settings/dto/update-settings.dto';
 
 const MONEY_MSG = 'must be a non-negative decimal string with up to 2 decimals';
 
@@ -30,7 +36,7 @@ export class CreateProductTypeDto {
 
   @ApiPropertyOptional({
     example: '80000.00',
-    description: 'Added per stop above 10. 0 for a flat price.',
+    description: 'Added per stop above refStops. 0 for a flat price.',
     default: '0',
   })
   @IsOptional()
@@ -39,7 +45,7 @@ export class CreateProductTypeDto {
 
   @ApiPropertyOptional({
     example: '1000.00',
-    description: 'Added per kg above 630. 0 for a flat price.',
+    description: 'Added per kg above refCapacityKg. 0 for a flat price.',
     default: '0',
   })
   @IsOptional()
@@ -54,6 +60,40 @@ export class CreateProductTypeDto {
   @IsOptional()
   @IsBoolean()
   liftGeometry?: boolean;
+
+  @ApiPropertyOptional({
+    default: 10,
+    description: 'The stops the base price includes (refN in the formula).',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(64)
+  refStops?: number;
+
+  @ApiPropertyOptional({
+    default: 630,
+    description:
+      'The capacity the base price includes, kg (refC in the formula).',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(50000)
+  refCapacityKg?: number;
+
+  @ApiPropertyOptional({
+    example: 'Base price + (rise - 6) * 500,000',
+    description:
+      'This product’s own formula. Omit or null to use the company formula under Settings. Same names: base, N, C, rise, refN, refC, perStop, perKg.',
+    nullable: true,
+  })
+  @ValidateIf((o: { formula?: string | null }) => o.formula !== null)
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_FORMULA_LENGTH)
+  @Validate(IsPricingFormulaConstraint)
+  formula?: string | null;
 }
 
 export class UpdateProductTypeDto {
@@ -84,4 +124,38 @@ export class UpdateProductTypeDto {
   @IsOptional()
   @IsBoolean()
   liftGeometry?: boolean;
+
+  @ApiPropertyOptional({
+    default: 10,
+    description: 'The stops the base price includes (refN in the formula).',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(64)
+  refStops?: number;
+
+  @ApiPropertyOptional({
+    default: 630,
+    description:
+      'The capacity the base price includes, kg (refC in the formula).',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(50000)
+  refCapacityKg?: number;
+
+  @ApiPropertyOptional({
+    example: 'Base price + (rise - 6) * 500,000',
+    description:
+      'This product’s own formula. Omit or null to use the company formula under Settings. Same names: base, N, C, rise, refN, refC, perStop, perKg.',
+    nullable: true,
+  })
+  @ValidateIf((o: { formula?: string | null }) => o.formula !== null)
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_FORMULA_LENGTH)
+  @Validate(IsPricingFormulaConstraint)
+  formula?: string | null;
 }

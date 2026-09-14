@@ -10,6 +10,9 @@ const scope = {
   C: 1000,
   perStop: '80000',
   perKg: '1000',
+  refN: 10,
+  refC: 630,
+  rise: 33,
 };
 
 describe('evaluateFormula', () => {
@@ -44,6 +47,15 @@ describe('evaluateFormula', () => {
     expect(evaluateFormula('round(10 / 3)', scope).toNumber()).toBe(3);
     expect(evaluateFormula('min(N, 8) × 2', scope).toNumber()).toBe(16);
     expect(evaluateFormula('STOPS + capacity', scope).toNumber()).toBe(1012);
+    expect(
+      evaluateFormula(
+        '(C - refC) * perKg + (L - refN) * perStop',
+        scope,
+      ).toNumber(),
+    ).toBe(530000);
+    expect(
+      evaluateFormula('base + (Rise - 6) * 500,000', scope).toNumber(),
+    ).toBe(20500000);
   });
 
   it('is exact in decimals', () => {

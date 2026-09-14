@@ -28,6 +28,12 @@ export interface FormulaScope {
   perStop: Decimal.Value;
   /** The product's own per-kg rate. */
   perKg: Decimal.Value;
+  /** The stops the product's base price includes. */
+  refN: Decimal.Value;
+  /** The capacity the product's base price includes, kg. */
+  refC: Decimal.Value;
+  /** Travel height in metres — an escalator's rise. */
+  rise: Decimal.Value;
 }
 
 const ALIASES: Record<string, keyof FormulaScope> = {
@@ -38,6 +44,8 @@ const ALIASES: Record<string, keyof FormulaScope> = {
   n: 'N',
   stops: 'N',
   floors: 'N',
+  l: 'N',
+  levels: 'N',
   c: 'C',
   capacity: 'C',
   kg: 'C',
@@ -48,6 +56,20 @@ const ALIASES: Record<string, keyof FormulaScope> = {
   perkg: 'perKg',
   per_kg: 'perKg',
   ratekg: 'perKg',
+  refn: 'refN',
+  ref_n: 'refN',
+  basen: 'refN',
+  base_n: 'refN',
+  basestops: 'refN',
+  refc: 'refC',
+  ref_c: 'refC',
+  basec: 'refC',
+  base_c: 'refC',
+  basecapacity: 'refC',
+  rise: 'rise',
+  travel: 'rise',
+  height: 'rise',
+  h: 'rise',
 };
 
 const FUNCTIONS: Record<string, (args: Decimal[]) => Decimal> = {
@@ -293,7 +315,7 @@ class Parser {
       const key = ALIASES[lower];
       if (!key) {
         throw new FormulaError(
-          `Unknown name "${token.name}". Use base, N (stops), C (capacity kg), perStop or perKg.`,
+          `Unknown name "${token.name}". Use base, N (stops), C (capacity kg), rise (m), refN, refC, perStop or perKg.`,
         );
       }
       return new Decimal(this.scope[key]);
@@ -332,12 +354,32 @@ const MAX_PRICE = new Decimal('1e12');
  * large lift, and a flat product with both rates at zero — so a division
  * that only fails at one of them is refused here, not on the next quotation.
  */
+const passenger = { perStop: '80000', perKg: '1000', refN: 10, refC: 630 };
 const PROBE_SCOPES: readonly FormulaScope[] = [
-  { base: '7000000', N: 12, C: 1000, perStop: '80000', perKg: '1000' },
-  { base: '7000000', N: 10, C: 630, perStop: '80000', perKg: '1000' },
-  { base: '7000000', N: 2, C: 320, perStop: '80000', perKg: '1000' },
-  { base: '12000000', N: 64, C: 5000, perStop: '80000', perKg: '1000' },
-  { base: '6000000', N: 10, C: 630, perStop: '0', perKg: '0' },
+  { base: '7000000', N: 12, C: 1000, rise: 33, ...passenger },
+  { base: '7000000', N: 10, C: 630, rise: 27, ...passenger },
+  { base: '7000000', N: 2, C: 320, rise: 3, ...passenger },
+  { base: '12000000', N: 64, C: 5000, rise: 189, ...passenger },
+  {
+    base: '11000000',
+    N: 2,
+    C: 3000,
+    rise: 3,
+    perStop: '300000',
+    perKg: '500',
+    refN: 2,
+    refC: 3000,
+  },
+  {
+    base: '6000000',
+    N: 10,
+    C: 630,
+    rise: 6,
+    perStop: '0',
+    perKg: '0',
+    refN: 10,
+    refC: 630,
+  },
 ];
 
 /** Parse-and-evaluate against sample lifts; the error message if any fails, else null. */
@@ -363,10 +405,12 @@ export const formulaProblem = (formula: string): string | null => {
 };
 
 /**
- * The client's own formula, the starter every tenant begins with:
- * "Base price + (N-10)*80,000 + (C-630kg)*1000". Written with the product's
- * own rates (80,000 and 1,000 on every elevator) so that a flat product —
- * escalator, platform lift, rates 0 — stays flat under the same formula.
+ * The company's formula (2026-09-14 price sheet), the starter every tenant
+ * begins with: base, plus the stops above the product's own reference,
+ * plus the kilograms above the product's own reference capacity. Written
+ * with the product's rates and references so one formula prices a
+ * passenger lift (10 stops, 630 kg), a car lift (2 stops, 3,000 kg) and a
+ * flat product alike; an escalator carries its own formula on the rise.
  */
 export const DEFAULT_PRICING_FORMULA =
-  'Base price + (N - 10) * perStop + (C - 630kg) * perKg';
+  'Base price + (N - refN) * perStop + (C - refC) * perKg';

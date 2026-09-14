@@ -12,11 +12,13 @@ import { TenantDbService } from '../../database/tenant-db.service';
 export type ProductTypeRecord = typeof productTypes.$inferSelect;
 
 /**
- * The company's own list (2026-09-09), in ETB. The first read on a tenant
+ * The company's price sheet (2026-09-14), in ETB. The first read on a tenant
  * with no products writes these, so the calculator never has nothing to
- * sell and the settings page never opens empty. Elevators carry the
- * per-stop and per-kilogram rates the price list has always used; the
- * platform lift and the escalator are flat.
+ * sell and the settings page never opens empty. Each product carries the
+ * machine its base price includes (refStops, refCapacityKg) and what a
+ * bigger one adds per stop and per kilogram; the escalator alone has its
+ * own formula, on the rise. Hospital and home elevators are not on the
+ * sheet and keep the passenger rates.
  */
 export const DEFAULT_PRODUCT_TYPES: readonly {
   code: string;
@@ -24,73 +26,128 @@ export const DEFAULT_PRODUCT_TYPES: readonly {
   basePriceEtb: string;
   perStopEtb: string;
   perKgEtb: string;
+  refStops: number;
+  refCapacityKg: number;
+  formula: string | null;
   liftGeometry: boolean;
 }[] = [
-  {
-    code: 'PASSENGER',
-    name: 'Passenger elevator',
-    basePriceEtb: '7000000.00',
-    perStopEtb: '80000.00',
-    perKgEtb: '1000.00',
-    liftGeometry: true,
-  },
-  {
-    code: 'HOSPITAL',
-    name: 'Hospital elevator',
-    basePriceEtb: '7000000.00',
-    perStopEtb: '80000.00',
-    perKgEtb: '1000.00',
-    liftGeometry: true,
-  },
-  {
-    code: 'PANORAMIC',
-    name: 'Panoramic elevator',
-    basePriceEtb: '8000000.00',
-    perStopEtb: '80000.00',
-    perKgEtb: '1000.00',
-    liftGeometry: true,
-  },
-  {
-    code: 'HOME',
-    name: 'Home elevator',
-    basePriceEtb: '8000000.00',
-    perStopEtb: '80000.00',
-    perKgEtb: '1000.00',
-    liftGeometry: true,
-  },
-  {
-    code: 'CARGO',
-    name: 'Cargo elevator',
-    basePriceEtb: '8000000.00',
-    perStopEtb: '80000.00',
-    perKgEtb: '1000.00',
-    liftGeometry: true,
-  },
-  {
-    code: 'CAR_LIFT',
-    name: 'Car lift',
-    basePriceEtb: '12000000.00',
-    perStopEtb: '80000.00',
-    perKgEtb: '1000.00',
-    liftGeometry: true,
-  },
-  {
-    code: 'CAR_PLATFORM_LIFT',
-    name: 'Car platform lift',
-    basePriceEtb: '3200000.00',
-    perStopEtb: '0.00',
-    perKgEtb: '0.00',
-    liftGeometry: false,
-  },
-  {
-    code: 'ESCALATOR',
-    name: 'Escalator',
-    basePriceEtb: '6000000.00',
-    perStopEtb: '0.00',
-    perKgEtb: '0.00',
-    liftGeometry: false,
-  },
+  product(
+    'PASSENGER',
+    'Passenger elevator',
+    '7000000.00',
+    '80000.00',
+    '1000.00',
+    10,
+    630,
+    true,
+  ),
+  product(
+    'HOSPITAL',
+    'Hospital elevator',
+    '7000000.00',
+    '80000.00',
+    '1000.00',
+    10,
+    630,
+    true,
+  ),
+  product(
+    'PANORAMIC',
+    'Panoramic elevator',
+    '8000000.00',
+    '80000.00',
+    '1000.00',
+    10,
+    630,
+    true,
+  ),
+  product(
+    'HOME',
+    'Home elevator',
+    '8000000.00',
+    '80000.00',
+    '1000.00',
+    10,
+    630,
+    true,
+  ),
+  product(
+    'CARGO',
+    'Cargo / goods lift',
+    '8000000.00',
+    '150000.00',
+    '400.00',
+    2,
+    1000,
+    true,
+  ),
+  product(
+    'CAR_LIFT',
+    'Car lift',
+    '11000000.00',
+    '300000.00',
+    '500.00',
+    2,
+    3000,
+    true,
+  ),
+  product(
+    'CAR_PLATFORM_LIFT',
+    'Car platform lift',
+    '5200000.00',
+    '250000.00',
+    '400.00',
+    2,
+    3000,
+    false,
+  ),
+  // N is the number of parking levels (L on the price sheet).
+  product(
+    'CAR_STACKING_LIFT',
+    'Car stacking lift',
+    '5200000.00',
+    '500000.00',
+    '400.00',
+    2,
+    2000,
+    false,
+  ),
+  product(
+    'ESCALATOR',
+    'Escalator',
+    '6000000.00',
+    '0.00',
+    '0.00',
+    10,
+    630,
+    false,
+    'Base price + (rise - 6) * 500,000',
+  ),
 ];
+
+function product(
+  code: string,
+  name: string,
+  basePriceEtb: string,
+  perStopEtb: string,
+  perKgEtb: string,
+  refStops: number,
+  refCapacityKg: number,
+  liftGeometry: boolean,
+  formula: string | null = null,
+) {
+  return {
+    code,
+    name,
+    basePriceEtb,
+    perStopEtb,
+    perKgEtb,
+    refStops,
+    refCapacityKg,
+    formula,
+    liftGeometry,
+  };
+}
 
 /** "Panoramic elevator" -> "PANORAMIC_ELEVATOR". */
 export const codeFromName = (name: string): string =>
@@ -106,6 +163,9 @@ export interface ProductTypeInput {
   basePriceEtb: string;
   perStopEtb: string;
   perKgEtb: string;
+  refStops: number;
+  refCapacityKg: number;
+  formula: string | null;
   liftGeometry: boolean;
 }
 

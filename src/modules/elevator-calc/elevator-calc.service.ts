@@ -79,12 +79,13 @@ export class ElevatorCalcService {
         product,
         input.stops,
         input.capacityKg,
-        formula,
+        input.travelHeightM,
+        product.formula ?? formula,
       );
     } catch (err) {
       if (err instanceof FormulaError) {
         throw new BadRequestException(
-          `The pricing formula under Settings cannot be evaluated: ${err.message}`,
+          `The pricing formula ${product.formula ? `on ${product.name}` : 'under Settings'} cannot be evaluated: ${err.message}`,
         );
       }
       throw err;
