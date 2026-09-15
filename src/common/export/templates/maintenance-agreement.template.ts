@@ -66,7 +66,12 @@ const months = (n: number): string => `${n} month${n === 1 ? '' : 's'}`;
 const article = (n: number, title: string, body: string): string =>
   `<h2>Article ${n}: ${esc(title)}</h2>${body}`;
 
-const clause = (text: string): string => `<p class="prose">${text}</p>`;
+/** Each sub-clause is a paragraph of its own; a line break between them read as one crowded block. */
+const clause = (text: string): string =>
+  text
+    .split('<br/>')
+    .map((part) => `<p class="prose">${part}</p>`)
+    .join('');
 
 const list = (items: readonly string[]): string =>
   `<ul class="terms-list">${items.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>`;

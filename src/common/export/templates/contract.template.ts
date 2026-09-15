@@ -96,7 +96,12 @@ const workingDays = (n: number): string =>
 const article = (n: number, title: string, body: string): string =>
   `<h2>Article ${n}: ${esc(title)}</h2>${body}`;
 
-const clause = (text: string): string => `<p class="prose">${text}</p>`;
+/** Each sub-clause is a paragraph of its own; a line break between them read as one crowded block. */
+const clause = (text: string): string =>
+  text
+    .split('<br/>')
+    .map((part) => `<p class="prose">${part}</p>`)
+    .join('');
 
 /**
  * Sub-clauses numbered at render time from the ones that survive, so an

@@ -318,15 +318,15 @@ export const renderLayout = (opts: LayoutOptions): string => {
      The top and bottom values are the reserved page-furniture bands (see
      the <template> elements below); change them in both places or not at
      all. */
-  @page { size: A4; margin: 34mm 10mm 20mm; }
+  @page { size: A4; margin: 34mm 18mm 20mm; }
 
   body {
     font-family: 'Liberation Sans', Arial, Helvetica, 'Noto Sans Ethiopic', sans-serif;
     color: var(--ink);
     font-size: 11px;
-    line-height: 1.5;
+    line-height: 1.65;
     margin: 0;
-    padding: 0 5mm;
+    padding: 0;
   }
 
   /* Page furniture, pinned.
@@ -415,7 +415,7 @@ export const renderLayout = (opts: LayoutOptions): string => {
   }
   .plate td {
     border: none; border-left: 1px solid var(--rule);
-    padding: 7px 10px; vertical-align: top;
+    padding: 9px 12px; vertical-align: top;
   }
   .plate td:first-child { border-left: none; }
   .plate-label {
@@ -427,7 +427,7 @@ export const renderLayout = (opts: LayoutOptions): string => {
   /* ---- party blocks ------------------------------------------------ */
   .parties { width: 100%; border-collapse: collapse; margin: 0 0 16px; page-break-inside: avoid; }
   .parties td {
-    width: 50%; vertical-align: top; padding: 8px 10px;
+    width: 50%; vertical-align: top; padding: 10px 12px;
     border: 1px solid var(--rule); background: #fcfbf9;
   }
   .party-name { font-size: 12px; font-weight: bold; }
@@ -436,14 +436,14 @@ export const renderLayout = (opts: LayoutOptions): string => {
   /* ---- sections and tables ---------------------------------------- */
   h2 {
     font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase;
-    color: var(--ink); margin: 18px 0 6px; padding-bottom: 3px;
+    color: var(--ink); margin: 28px 0 10px; padding-bottom: 4px;
     border-bottom: 2px solid var(--primary); page-break-after: avoid;
   }
   table { width: 100%; border-collapse: collapse; }
   .lines { page-break-inside: auto; }
   thead { display: table-header-group; }
   tr, td, th { page-break-inside: avoid; }
-  td, th { padding: 5px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  td, th { padding: 6px 9px; border-bottom: 1px solid var(--rule); vertical-align: top; }
   th {
     text-align: left; background: var(--tint); border-bottom: 1px solid var(--ink);
     font-size: 9px; letter-spacing: 0.4px; text-transform: uppercase;
@@ -504,10 +504,11 @@ export const renderLayout = (opts: LayoutOptions): string => {
 
   /* Tenant boilerplate: their own paragraphing survives, their markup does
      not (esc runs before this ever sees the text). */
-  .prose { white-space: pre-line; margin: 0 0 10px; }
+  .prose { white-space: pre-line; margin: 0 0 8px; }
+  table + .prose, .sum-block + .prose { margin-top: 12px; }
 
   /* ---- notes, notices, signature ----------------------------------- */
-  .notes { margin-top: 16px; padding: 8px 12px; background: var(--tint); border-left: 3px solid var(--primary); page-break-inside: avoid; }
+  .notes { margin: 18px 0; padding: 10px 14px; background: var(--tint); border-left: 3px solid var(--primary); page-break-inside: avoid; }
   /* Ethiopian-compliance notice/mirror block — see invoice.template.ts's own
      doc comment for the rule this renders (decisions doc §4). Prominent and
      framed in the layout's accent colour per that rule, not a quiet footnote;

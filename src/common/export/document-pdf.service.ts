@@ -60,7 +60,10 @@ export interface TenantBranding {
 // branding yet — the old code's `branding ?? null` scenario) even though
 // renderDocumentPdf's own public signature below requires a non-null
 // TenantBranding, matching the binding interface Phases 3/4 import.
-type TemplateBuilder = (data: object, branding: TenantBranding | null) => string;
+type TemplateBuilder = (
+  data: object,
+  branding: TenantBranding | null,
+) => string;
 
 /**
  * 'quotation' (Phase 2), 'proforma' (Phase 3), 'invoice'/'receipt' (Phase 4,
@@ -296,7 +299,9 @@ export class DocumentPdfService implements OnModuleDestroy {
       // querySelector is the cost of the boundary.
       const bands = await page.evaluate(() => {
         const { document: doc } = globalThis as unknown as {
-          document: { querySelector(selector: string): { innerHTML: string } | null };
+          document: {
+            querySelector(selector: string): { innerHTML: string } | null;
+          };
         };
         return {
           head: doc.querySelector('#page-head')?.innerHTML ?? '',
@@ -309,12 +314,12 @@ export class DocumentPdfService implements OnModuleDestroy {
         '-webkit-print-color-adjust:exact;print-color-adjust:exact;';
 
       const headerTemplate = bands.head
-        ? `<div style="${bandStyle}padding:6mm 10mm 0;">${bands.head}</div>`
+        ? `<div style="${bandStyle}padding:6mm 18mm 0;">${bands.head}</div>`
         : '<span></span>';
       // The page counter is Chromium's own — these class names are the
       // documented hook, not ours, and only work inside these templates.
       const footerTemplate = bands.foot
-        ? `<div style="${bandStyle}padding:0 10mm 4mm;color:#57534e;">
+        ? `<div style="${bandStyle}padding:0 18mm 4mm;color:#57534e;">
              <div style="border-top:1px solid #d6cfc4;padding-top:2mm;display:flex;justify-content:space-between;gap:8mm;">
                <div style="flex:1;">${bands.foot}</div>
                <div style="white-space:nowrap;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>
@@ -333,7 +338,7 @@ export class DocumentPdfService implements OnModuleDestroy {
         // stay larger than the tallest band the templates can render, and
         // they must MATCH the @page rule in layout.ts, which otherwise wins
         // and reserves less space than the bands actually occupy.
-        margin: { top: '34mm', bottom: '20mm', left: '10mm', right: '10mm' },
+        margin: { top: '34mm', bottom: '20mm', left: '18mm', right: '18mm' },
       });
       return Buffer.from(pdf);
     } finally {
