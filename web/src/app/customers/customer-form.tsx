@@ -102,8 +102,8 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
       const payload = {
         name,
         email: email || undefined,
-        phone: phone || undefined,
-        tinNumber: tinNumber.trim() || undefined,
+        phone,
+        tinNumber: tinNumber.trim(),
         city: city || undefined,
         customerType,
         // Omit unless the operator actually toggled it — this is a
@@ -274,6 +274,7 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
           <input
             id="tinNumber"
             inputMode="numeric"
+            required
             pattern="\d{10}"
             title="10-digit TIN"
             maxLength={10}
@@ -350,6 +351,7 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
           <input
             id="phone"
             className={fieldClass}
+            required
             value={phone}
             onChange={(e) => {
               setPhone(e.target.value);

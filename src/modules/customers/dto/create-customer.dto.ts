@@ -33,18 +33,21 @@ export class CreateCustomerDto {
   @MaxLength(200)
   legalName?: string;
 
-  @ApiPropertyOptional({ example: '0067673517', description: 'Tax Identification Number, printed on contracts.' })
-  @IsOptional()
-  @Matches(/^\d{10}$/, { message: 'tinNumber must be the 10-digit Ethiopian TIN' })
-  tinNumber?: string;
+  @ApiProperty({
+    example: '0067673517',
+    description: 'Tax Identification Number, printed on contracts.',
+  })
+  @Matches(/^\d{10}$/, {
+    message: 'tinNumber must be the 10-digit Ethiopian TIN',
+  })
+  tinNumber!: string;
 
   @ApiPropertyOptional({ example: 'ops@addisheights.et' })
   @IsOptional()
   @IsEmail()
   email?: string;
 
-  @ApiPropertyOptional({ example: '+251949922604' })
-  @IsOptional()
+  @ApiProperty({ example: '+251949922604' })
   @IsString()
   @MaxLength(32)
   // Validated at the point it's WRITTEN (phase-5 review I4) — this is the
@@ -53,7 +56,7 @@ export class CreateCustomerDto {
   // silently never arrives, forever, with only a masked ERROR log line to
   // show for it.
   @Validate(IsEthiopianPhoneConstraint)
-  phone?: string;
+  phone!: string;
 
   @ApiPropertyOptional()
   @IsOptional()

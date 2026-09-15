@@ -113,7 +113,11 @@ describe('CustomersService', () => {
   });
 
   it('creates a customer even when look-alikes exist — the check is advisory', async () => {
-    const dto = { name: 'Addis Heights PLC' };
+    const dto = {
+      name: 'Addis Heights PLC',
+      phone: '0911234567',
+      tinNumber: '0067673517',
+    };
     repo.create.mockResolvedValue(sample);
     await expect(service.create(user, dto)).resolves.toEqual(sample);
     expect(repo.create).toHaveBeenCalledWith(user.tenantId, user.userId, dto);

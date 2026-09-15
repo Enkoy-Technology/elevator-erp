@@ -126,6 +126,8 @@ describe('Ethiopic homophone search (end to end)', () => {
     async () => {
       const created = await repo.create(tenantId, userId, {
         name: 'ሐይሉ Elevator PLC',
+        phone: '0911234567',
+        tinNumber: '0067673517',
       });
       expect(created.name).toBe('ሐይሉ Elevator PLC');
       expect(created.nameNormalized).toBe(normalizeEthiopic('ሐይሉ Elevator PLC'));

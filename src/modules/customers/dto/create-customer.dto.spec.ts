@@ -12,7 +12,10 @@ describe('CreateCustomerDto/UpdateCustomerDto phone', () => {
   const base = { name: 'Addis Heights PLC' };
 
   it('CreateCustomerDto rejects a malformed phone', async () => {
-    const dto = plainToInstance(CreateCustomerDto, { ...base, phone: '0911 2345' });
+    const dto = plainToInstance(CreateCustomerDto, {
+      ...base,
+      phone: '0911 2345',
+    });
     const errors = await validate(dto);
     expect(errors.filter((e) => e.property === 'phone')).not.toHaveLength(0);
   });
@@ -25,10 +28,10 @@ describe('CreateCustomerDto/UpdateCustomerDto phone', () => {
     }
   });
 
-  it('CreateCustomerDto accepts an absent phone — it is optional', async () => {
+  it('CreateCustomerDto refuses an absent phone — every customer is reachable', async () => {
     const dto = plainToInstance(CreateCustomerDto, base);
     const errors = await validate(dto);
-    expect(errors.filter((e) => e.property === 'phone')).toHaveLength(0);
+    expect(errors.filter((e) => e.property === 'phone')).not.toHaveLength(0);
   });
 
   it('UpdateCustomerDto (PartialType) inherits the same validation', async () => {

@@ -190,6 +190,8 @@ describe('CustomersRepository — Ethiopic-normalized write and search', () => {
 
     await repo.create(TENANT_ID, 'creator-id', {
       name: 'ሐይሉ Elevator PLC',
+      phone: '0911234567',
+      tinNumber: '0067673517',
     });
 
     expect(captured.name).toBe('ሐይሉ Elevator PLC');
