@@ -203,6 +203,8 @@ describe('Ethiopic homophone search (end to end)', () => {
     async () => {
       const customer = await repo.create(tenantId, userId, {
         name: `Project Search Customer ${slug}`,
+        phone: '0911234567',
+        tinNumber: '0067673517',
       });
       const created = await projectsRepo.create(tenantId, userId, {
         customerId: customer.id,
