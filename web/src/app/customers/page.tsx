@@ -22,7 +22,7 @@ import {
   type Customer,
   type UserRole,
 } from '@/lib/api';
-import { formatEtb } from '@/lib/money';
+import { formatEtb, isPositiveEtb, isZeroEtb } from '@/lib/money';
 import { Check, Pencil, Trash2, X } from 'lucide-react';
 
 /** Mirrors @Roles('SALES_MANAGER') on the customers PATCH/DELETE routes;
@@ -42,7 +42,7 @@ const CSV_HEADERS = [
   'City',
   'Email',
   'Phone',
-  'Net balance (ETB)',
+  'Unpaid (ETB)',
 ] as const;
 
 export default function CustomersPage() {
@@ -116,7 +116,9 @@ export default function CustomersPage() {
       await refresh(page, search, pageSize);
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : `Could not delete ${customer.name}`,
+        err instanceof ApiError
+          ? err.message
+          : `Could not delete ${customer.name}`,
       );
     } finally {
       setBusy(false);
@@ -136,7 +138,9 @@ export default function CustomersPage() {
     setError(null);
     // No bulk endpoint exists, so this is N calls. Report the real tally
     // rather than pretending the loop was one atomic delete.
-    const results = await Promise.allSettled(ids.map((id) => deleteCustomer(id)));
+    const results = await Promise.allSettled(
+      ids.map((id) => deleteCustomer(id)),
+    );
     const failed = results.filter((r) => r.status === 'rejected').length;
     setBusy(false);
     await refresh(page, search, pageSize);
@@ -183,9 +187,28 @@ export default function CustomersPage() {
     },
     {
       id: 'balance',
-      header: 'Net balance',
+      // What the customer still has to pay across every invoice, less any
+      // advance they paid ahead. A dash keeps a settled account quiet.
+      header: () => (
+        <span title="What this customer still owes on issued invoices, less any advance paid. Negative means they paid ahead.">
+          Unpaid (ETB)
+        </span>
+      ),
       meta: { align: 'right' },
-      cell: ({ row }) => formatEtb(row.original.outstandingBalanceEtb),
+      cell: ({ row }) =>
+        isZeroEtb(row.original.outstandingBalanceEtb) ? (
+          <span className="text-slate-400">—</span>
+        ) : (
+          <span
+            className={
+              isPositiveEtb(row.original.outstandingBalanceEtb)
+                ? 'font-medium text-slate-900'
+                : 'text-emerald-700'
+            }
+          >
+            {formatEtb(row.original.outstandingBalanceEtb)}
+          </span>
+        ),
     },
     updatedColumn<Customer>((row) => row.updatedAt),
     ...(canWrite
