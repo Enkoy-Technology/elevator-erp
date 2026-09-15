@@ -239,7 +239,7 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
       ) : null}
 
       <FormSection title="Identity">
-        <Field label="Name" htmlFor="name" wide>
+        <Field label="Name" htmlFor="name">
           <input
             id="name"
             className={fieldClass}
@@ -266,14 +266,6 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
             <option value="GOVERNMENT">Government</option>
           </select>
         </Field>
-        <Field label="City" htmlFor="city">
-          <input
-            id="city"
-            className={fieldClass}
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-          />
-        </Field>
         <Field
           label="TIN"
           htmlFor="tinNumber"
@@ -290,6 +282,14 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
             onChange={(e) => setTinNumber(e.target.value)}
           />
         </Field>
+        <Field label="City" htmlFor="city">
+          <input
+            id="city"
+            className={fieldClass}
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+          />
+        </Field>
       </FormSection>
 
       {!editId ? (
@@ -302,7 +302,6 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
             label="Project name"
             htmlFor="projectName"
             hint="Usually the building: “Bole Twin Towers — Lift A”."
-            wide
           >
             <input
               id="projectName"
@@ -319,7 +318,7 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
           <Field
             label="Product"
             htmlFor="productType"
-            hint="What the customer is buying. The quotation starts from this product's base price and formula."
+            hint="The quotation starts from this product's base price and formula."
           >
             <select
               id="productType"
