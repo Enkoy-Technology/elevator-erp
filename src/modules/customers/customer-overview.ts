@@ -80,25 +80,56 @@ export type OverviewSection = (typeof OVERVIEW_SECTIONS)[number];
  * restating the list here.
  */
 const SECTION_ROLES: Record<OverviewSection, readonly UserRole[]> = {
-  // ProjectsController / QuotationsController / ProformasController /
-  // ContractsController
-  projects: ['SALES_MANAGER', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER'],
-  quotations: ['SALES_MANAGER', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER'],
-  proformas: ['SALES_MANAGER', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER'],
-  contracts: ['SALES_MANAGER', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER'],
-  // InvoicesController / PaymentsController — the AR ledger is FINANCE only,
+  // ProjectsController's class-level @Roles.
+  projects: [
+    'MARKETING_MANAGER',
+    'SALES_MANAGER',
+    'SALESPERSON',
+    'TECHNICAL_MANAGER',
+    'MAINTENANCE_ENGINEER',
+    'SECRETARY',
+  ],
+  // QuotationsController's class-level @Roles.
+  quotations: [
+    'SALES_MANAGER',
+    'SALESPERSON',
+    'TECHNICAL_MANAGER',
+    'FINANCE_OFFICER',
+  ],
+  // ProformasController's / ContractsController's class-level @Roles.
+  proformas: [
+    'SALES_MANAGER',
+    'SALESPERSON',
+    'TECHNICAL_MANAGER',
+    'FINANCE_OFFICER',
+    'SECRETARY',
+  ],
+  contracts: [
+    'SALES_MANAGER',
+    'SALESPERSON',
+    'TECHNICAL_MANAGER',
+    'FINANCE_OFFICER',
+    'SECRETARY',
+  ],
+  // InvoicesController / PaymentsController — the AR ledger is finance only,
   // which is also why GET /customers/:id/statement carries @Roles('FINANCE_OFFICER').
   invoices: ['FINANCE_OFFICER'],
   payments: ['FINANCE_OFFICER'],
-  // AssetsController
+  // AssetsController's class-level @Roles.
   assets: [
     'SALES_MANAGER',
+    'SALESPERSON',
     'TECHNICAL_MANAGER',
     'MAINTENANCE_ENGINEER',
     'STORE_KEEPER',
   ],
-  // MaintenanceController
-  maintenance: ['TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'SALES_MANAGER'],
+  // MaintenanceController's class-level @Roles.
+  maintenance: [
+    'SALES_MANAGER',
+    'TECHNICAL_MANAGER',
+    'MAINTENANCE_ENGINEER',
+    'SECRETARY',
+  ],
 };
 
 /** Mirrors RolesGuard's SUPER_ROLES. */
@@ -125,6 +156,8 @@ export interface CustomerOverviewProject {
   status: ProjectRow['status'];
   /** `projects.siteCity` — projects have no plain `city` column. */
   city: ProjectRow['siteCity'];
+  /** `projects.quotedAmountEtb` — prefills the deal-value prompt when advancing from here. */
+  quotedAmountEtb: ProjectRow['quotedAmountEtb'];
   /** `projects.contractAmountEtb`. */
   contractValueEtb: ProjectRow['contractAmountEtb'];
 }

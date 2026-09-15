@@ -466,6 +466,8 @@ export interface CustomerOverviewProject {
   status: ProjectStatus;
   /** projects.siteCity. */
   city: string | null;
+  /** projects.quotedAmountEtb. */
+  quotedAmountEtb: string | null;
   /** projects.contractAmountEtb. */
   contractValueEtb: string | null;
 }

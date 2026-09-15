@@ -163,8 +163,8 @@ describe('CustomersService', () => {
   });
 
   it('asks for only the sections the caller may see', async () => {
-    // The whole point of the per-section gate. A dispatcher is barred from
-    // InvoicesController and PaymentsController, and from projects,
+    // The whole point of the per-section gate. A maintenance engineer is
+    // barred from InvoicesController and PaymentsController, and from
     // quotations, proformas and contracts — so reaching that data through a
     // customer page must not work either.
     repo.overview.mockResolvedValue({});
@@ -172,6 +172,7 @@ describe('CustomersService', () => {
     await service.overview({ ...user, role: 'MAINTENANCE_ENGINEER' }, sample.id);
 
     expect(repo.overview).toHaveBeenCalledWith(user.tenantId, sample.id, [
+      'projects',
       'assets',
       'maintenance',
     ]);
@@ -183,7 +184,6 @@ describe('CustomersService', () => {
     await service.overview({ ...user, role: 'FINANCE_OFFICER' }, sample.id);
 
     expect(repo.overview).toHaveBeenCalledWith(user.tenantId, sample.id, [
-      'projects',
       'quotations',
       'proformas',
       'contracts',

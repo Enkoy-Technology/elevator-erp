@@ -562,6 +562,7 @@ export class CustomersRepository {
           name: projects.name,
           status: projects.status,
           city: projects.siteCity,
+          quotedAmountEtb: projects.quotedAmountEtb,
           contractValueEtb: projects.contractAmountEtb,
           overallTotal: overallTotal(),
         })

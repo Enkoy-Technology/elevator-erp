@@ -18,6 +18,7 @@ import {
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
 import { csvRows, saveCsv } from '@/app/employees/csv';
+import { CANCELLED, INVALID, promptForDealValue } from './deal-value';
 import {
   ApiError,
   getAccessToken,
@@ -70,56 +71,13 @@ const STAGE_TONE: Record<
   CANCELLED: 'danger',
 };
 
-/** Stages where the rep learns a number worth recording. */
-const AMOUNT_FIELD = {
-  QUOTATION: 'quotedAmountEtb',
-  CONTRACT: 'contractAmountEtb',
-} as const;
-
-const ETB_AMOUNT = /^\d{1,12}(\.\d{1,2})?$/;
-
-const CSV_HEADERS = ['Project', 'Customer', 'City', 'Stage', 'Value (ETB)'] as const;
-
-const CANCELLED = Symbol('cancelled');
-const INVALID = Symbol('invalid');
-
-type DealValue =
-  | { quotedAmountEtb?: string; contractAmountEtb?: string }
-  | undefined;
-
-/**
- * Quotations were dropped, so the deal value is captured here instead.
- * ponytail: window.prompt is the whole UI — swap for a drawer field if reps
- * find it clumsy.
- */
-const promptForDealValue = (
-  project: Project,
-  next: ProjectStatus,
-): DealValue | typeof CANCELLED | typeof INVALID => {
-  const field = AMOUNT_FIELD[next as keyof typeof AMOUNT_FIELD];
-  if (!field) {
-    return undefined;
-  }
-  const entered = window.prompt(
-    next === 'QUOTATION'
-      ? `Price offered to the customer for "${project.name}" (ETB). Leave blank to skip.`
-      : `Signed contract value for "${project.name}" (ETB). Leave blank to skip.`,
-    (next === 'QUOTATION' ? project.quotedAmountEtb : project.contractAmountEtb) ??
-      project.quotedAmountEtb ??
-      '',
-  );
-  if (entered === null) {
-    return CANCELLED;
-  }
-  const trimmed = entered.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-  if (!ETB_AMOUNT.test(trimmed)) {
-    return INVALID;
-  }
-  return { [field]: trimmed };
-};
+const CSV_HEADERS = [
+  'Project',
+  'Customer',
+  'City',
+  'Stage',
+  'Value (ETB)',
+] as const;
 
 export default function ProjectsPage() {
   const router = useRouter();
@@ -239,9 +197,7 @@ export default function ProjectsPage() {
       await updateProjectStatus(project.id, next, amounts);
       await refresh(page, statusFilter, pageSize, customerFilter ?? '');
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : 'Status update failed',
-      );
+      setError(err instanceof ApiError ? err.message : 'Status update failed');
     } finally {
       setAdvancingId(null);
     }
@@ -428,10 +384,10 @@ export default function ProjectsPage() {
                     : 'No projects yet. Create one against a customer from Customers, and it starts at LEAD.'}
                 </p>
                 {canCreate ? (
-<Link href="/projects/new" className={btnSecondary}>
-                  Create project
-                </Link>
-) : null}
+                  <Link href="/projects/new" className={btnSecondary}>
+                    Create project
+                  </Link>
+                ) : null}
               </div>
             }
           />

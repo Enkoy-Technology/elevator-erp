@@ -11,8 +11,13 @@ import {
   ASSET_STATUS_LABEL,
   ASSET_STATUS_TONE,
 } from '@/app/assets/labels';
+import {
+  CANCELLED,
+  INVALID,
+  promptForDealValue,
+} from '@/app/projects/deal-value';
 import { DataTable } from '@/components/data-table';
-import { btnSecondary } from '@/components/form-styles';
+import { btnGhost, btnSecondary } from '@/components/form-styles';
 import { StatusPill } from '@/components/list-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
@@ -23,6 +28,8 @@ import {
   getCurrentRole,
   getCustomer,
   getCustomerOverview,
+  NEXT_PROJECT_STATUSES,
+  updateProjectStatus,
   type ContractStatus,
   type Customer,
   type CustomerOverview,
@@ -40,7 +47,12 @@ import {
   type QuoteStatus,
   type UserRole,
 } from '@/lib/api';
-import { formatEtb, formatNumber, isPositiveEtb, subtractEtb } from '@/lib/money';
+import {
+  formatEtb,
+  formatNumber,
+  isPositiveEtb,
+  subtractEtb,
+} from '@/lib/money';
 
 /**
  * The customer as one screen: who they are, how to reach them, what they owe,
@@ -61,6 +73,15 @@ const canWriteCustomers = (role: UserRole | null): boolean =>
   role === 'SALES_MANAGER' ||
   role === 'SALESPERSON' ||
   role === 'SECRETARY' ||
+  role === 'CEO' ||
+  role === 'GENERAL_MANAGER' ||
+  role === 'ADMIN';
+
+/** Mirrors @Roles on PATCH /projects/:id/status. */
+const canAdvanceProjects = (role: UserRole | null): boolean =>
+  role === 'SALES_MANAGER' ||
+  role === 'SALESPERSON' ||
+  role === 'TECHNICAL_MANAGER' ||
   role === 'CEO' ||
   role === 'GENERAL_MANAGER' ||
   role === 'ADMIN';
@@ -276,10 +297,16 @@ const Section = <T,>({
       </p>
     ) : (
       <>
-        <DataTable caption={title} columns={columns} rows={rows} getRowId={getRowId} />
+        <DataTable
+          caption={title}
+          columns={columns}
+          rows={rows}
+          getRowId={getRowId}
+        />
         {total > rows.length ? (
           <p className="mt-1.5 text-xs text-slate-500">
-            Showing the {formatNumber(rows.length)} most recent of {formatNumber(total)}.
+            Showing the {formatNumber(rows.length)} most recent of{' '}
+            {formatNumber(total)}.
           </p>
         ) : null}
       </>
@@ -314,6 +341,8 @@ export default function CustomerDetailPage() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [overview, setOverview] = useState<CustomerOverview | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
+  const [advancingId, setAdvancingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -340,7 +369,9 @@ export default function CustomerDetailPage() {
       } catch (err) {
         if (!cancelled) {
           setError(
-            err instanceof ApiError ? err.message : 'Failed to load this customer',
+            err instanceof ApiError
+              ? err.message
+              : 'Failed to load this customer',
           );
         }
       } finally {
@@ -369,6 +400,36 @@ export default function CustomerDetailPage() {
     return <LoadMessage message="That customer no longer exists." />;
   }
 
+  // The first project is opened with the customer, so its next step — the
+  // site survey, mostly — is taken from here rather than from the pipeline.
+  const onAdvance = async (
+    project: CustomerOverviewProject,
+    next: ProjectStatus,
+  ) => {
+    const amounts = promptForDealValue(project, next);
+    if (amounts === CANCELLED) {
+      return;
+    }
+    if (amounts === INVALID) {
+      setActionError(
+        'Amount must be a number with up to 2 decimals, e.g. 172345.21',
+      );
+      return;
+    }
+    setAdvancingId(project.id);
+    setActionError(null);
+    try {
+      await updateProjectStatus(project.id, next, amounts);
+      setOverview(await getCustomerOverview(id));
+    } catch (err) {
+      setActionError(
+        err instanceof ApiError ? err.message : 'Stage update failed',
+      );
+    } finally {
+      setAdvancingId(null);
+    }
+  };
+
   const onDelete = async () => {
     if (
       !window.confirm(
@@ -392,7 +453,11 @@ export default function CustomerDetailPage() {
   };
 
   const canWrite = canWriteCustomers(role);
-  const address = [customer.addressLine1, customer.addressLine2, customer.buildingName]
+  const address = [
+    customer.addressLine1,
+    customer.addressLine2,
+    customer.buildingName,
+  ]
     .filter((line): line is string => Boolean(line && line.trim()))
     .join(', ');
   const place = [customer.city, customer.region, customer.country]
@@ -431,8 +496,45 @@ export default function CustomerDetailPage() {
       header: 'Contract value',
       meta: { align: 'right' },
       cell: ({ row }) =>
-        row.original.contractValueEtb ? formatEtb(row.original.contractValueEtb) : '—',
+        row.original.contractValueEtb
+          ? formatEtb(row.original.contractValueEtb)
+          : '—',
     },
+    ...(canAdvanceProjects(role)
+      ? [
+          {
+            id: 'actions',
+            header: '',
+            meta: { align: 'right' },
+            cell: ({ row }) => {
+              const project = row.original;
+              const next = NEXT_PROJECT_STATUSES[project.status];
+              if (next.length === 0) {
+                return null;
+              }
+              return (
+                <div className="flex flex-wrap items-center justify-end gap-1">
+                  {next.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      disabled={advancingId === project.id}
+                      onClick={() => void onAdvance(project, s)}
+                      className={
+                        s === 'CANCELLED'
+                          ? `${btnGhost} px-2.5 py-1 text-xs text-red-600 hover:bg-red-50 hover:text-red-700`
+                          : `${btnSecondary} px-2.5 py-1 text-xs`
+                      }
+                    >
+                      → {PROJECT_LABEL[s]}
+                    </button>
+                  ))}
+                </div>
+              );
+            },
+          } satisfies ColumnDef<CustomerOverviewProject, unknown>,
+        ]
+      : []),
   ];
 
   const quotationColumns: ColumnDef<CustomerOverviewQuotation, unknown>[] = [
@@ -441,9 +543,13 @@ export default function CustomerDetailPage() {
       header: 'Quote',
       cell: ({ row }) => (
         <span className="flex flex-col">
-          <span className="font-medium text-slate-900">{row.original.quoteNumber}</span>
+          <span className="font-medium text-slate-900">
+            {row.original.quoteNumber}
+          </span>
           {row.original.proformaNumber ? (
-            <span className="text-xs text-slate-500">{row.original.proformaNumber}</span>
+            <span className="text-xs text-slate-500">
+              {row.original.proformaNumber}
+            </span>
           ) : null}
         </span>
       ),
@@ -464,7 +570,11 @@ export default function CustomerDetailPage() {
       meta: { align: 'right' },
       cell: ({ row }) => formatEtb(row.original.totalPriceEtb),
     },
-    { id: 'created', header: 'Raised', cell: ({ row }) => day(row.original.createdAt) },
+    {
+      id: 'created',
+      header: 'Raised',
+      cell: ({ row }) => day(row.original.createdAt),
+    },
   ];
 
   const contractColumns: ColumnDef<CustomerOverviewContract, unknown>[] = [
@@ -472,7 +582,9 @@ export default function CustomerDetailPage() {
       id: 'number',
       header: 'Contract',
       cell: ({ row }) => (
-        <span className="font-medium text-slate-900">{row.original.contractNumber}</span>
+        <span className="font-medium text-slate-900">
+          {row.original.contractNumber}
+        </span>
       ),
     },
     {
@@ -491,7 +603,11 @@ export default function CustomerDetailPage() {
       meta: { align: 'right' },
       cell: ({ row }) => formatEtb(row.original.contractValueEtb),
     },
-    { id: 'signed', header: 'Signed', cell: ({ row }) => day(row.original.signedAt) },
+    {
+      id: 'signed',
+      header: 'Signed',
+      cell: ({ row }) => day(row.original.signedAt),
+    },
   ];
 
   const invoiceColumns: ColumnDef<CustomerOverviewInvoice, unknown>[] = [
@@ -499,7 +615,9 @@ export default function CustomerDetailPage() {
       id: 'number',
       header: 'Invoice',
       cell: ({ row }) => (
-        <span className="font-medium text-slate-900">{row.original.invoiceNumber}</span>
+        <span className="font-medium text-slate-900">
+          {row.original.invoiceNumber}
+        </span>
       ),
     },
     {
@@ -526,7 +644,9 @@ export default function CustomerDetailPage() {
       id: 'received',
       header: 'Received',
       cell: ({ row }) => (
-        <span className="font-medium text-slate-900">{day(row.original.receivedAt)}</span>
+        <span className="font-medium text-slate-900">
+          {day(row.original.receivedAt)}
+        </span>
       ),
     },
     {
@@ -586,37 +706,38 @@ export default function CustomerDetailPage() {
     );
   };
 
-  const maintenanceColumns: ColumnDef<CustomerOverviewMaintenance, unknown>[] = [
-    {
-      id: 'asset',
-      header: 'Asset',
-      cell: ({ row }) => (
-        <span className="font-medium text-slate-900">
-          {assetName(row.original.assetId)}
-        </span>
-      ),
-    },
-    {
-      id: 'status',
-      header: 'Status',
-      cell: ({ row }) => (
-        <StatusPill
-          label={sentenceCase(row.original.status)}
-          tone={MAINTENANCE_TONE[row.original.status]}
-        />
-      ),
-    },
-    {
-      id: 'recurrence',
-      header: 'Every',
-      cell: ({ row }) => sentenceCase(row.original.recurrence),
-    },
-    {
-      id: 'next',
-      header: 'Next visit',
-      cell: ({ row }) => day(row.original.nextServiceAt),
-    },
-  ];
+  const maintenanceColumns: ColumnDef<CustomerOverviewMaintenance, unknown>[] =
+    [
+      {
+        id: 'asset',
+        header: 'Asset',
+        cell: ({ row }) => (
+          <span className="font-medium text-slate-900">
+            {assetName(row.original.assetId)}
+          </span>
+        ),
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        cell: ({ row }) => (
+          <StatusPill
+            label={sentenceCase(row.original.status)}
+            tone={MAINTENANCE_TONE[row.original.status]}
+          />
+        ),
+      },
+      {
+        id: 'recurrence',
+        header: 'Every',
+        cell: ({ row }) => sentenceCase(row.original.recurrence),
+      },
+      {
+        id: 'next',
+        header: 'Next visit',
+        cell: ({ row }) => day(row.original.nextServiceAt),
+      },
+    ];
 
   return (
     <Shell>
@@ -630,7 +751,10 @@ export default function CustomerDetailPage() {
           <>
             {canWrite ? (
               <>
-                <Link href={`/customers/${customer.id}/edit`} className={btnSecondary}>
+                <Link
+                  href={`/customers/${customer.id}/edit`}
+                  className={btnSecondary}
+                >
                   <Pencil aria-hidden className="h-4 w-4" />
                   Edit
                 </Link>
@@ -657,7 +781,10 @@ export default function CustomerDetailPage() {
         ) : null}
 
         {/* What this customer has with us, at a glance — each jumps to its list below. */}
-        <nav aria-label="Related records" className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3">
+        <nav
+          aria-label="Related records"
+          className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3"
+        >
           {[
             ['Projects', overview.projects?.total],
             ['Quotations', overview.quotations?.total],
@@ -666,7 +793,10 @@ export default function CustomerDetailPage() {
             ['Assets', overview.assets?.total],
             ['Maintenance', overview.maintenance?.total],
           ]
-            .filter((entry): entry is [string, number] => typeof entry[1] === 'number')
+            .filter(
+              (entry): entry is [string, number] =>
+                typeof entry[1] === 'number',
+            )
             .map(([label, total]) => (
               <a
                 key={label}
@@ -684,12 +814,16 @@ export default function CustomerDetailPage() {
         <div className="grid gap-4 lg:grid-cols-3">
           <section
             className={`rounded-xl border border-slate-200 bg-white p-5 ${
-              overview.invoices && overview.payments ? 'lg:col-span-2' : 'lg:col-span-3'
+              overview.invoices && overview.payments
+                ? 'lg:col-span-2'
+                : 'lg:col-span-3'
             }`}
           >
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <StatusPill label={CUSTOMER_TYPE_LABEL[customer.customerType]} />
-              {place ? <span className="text-sm text-slate-500">{place}</span> : null}
+              {place ? (
+                <span className="text-sm text-slate-500">{place}</span>
+              ) : null}
             </div>
             <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
               <Field
@@ -701,7 +835,9 @@ export default function CustomerDetailPage() {
                 label="Alternate phone"
                 value={customer.alternatePhone}
                 href={
-                  customer.alternatePhone ? `tel:${customer.alternatePhone}` : undefined
+                  customer.alternatePhone
+                    ? `tel:${customer.alternatePhone}`
+                    : undefined
                 }
               />
               <Field
@@ -757,6 +893,15 @@ export default function CustomerDetailPage() {
           ) : null}
         </div>
 
+        {actionError ? (
+          <p
+            role="alert"
+            className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          >
+            {actionError}
+          </p>
+        ) : null}
+
         {overview.projects ? (
           <Section
             title="Projects"
@@ -792,7 +937,7 @@ export default function CustomerDetailPage() {
           />
         ) : null}
 
-                {overview.contracts ? (
+        {overview.contracts ? (
           <Section
             title="Contracts"
             total={overview.contracts.total}

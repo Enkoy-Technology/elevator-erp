@@ -40,11 +40,17 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
   // Create only: a customer arrives with the building they want a lift in,
   // so the first project is opened on the same form.
   const [projectName, setProjectName] = useState('');
-  const [city, setCity] = useState(customer?.city ?? (customer ? '' : 'Addis Ababa'));
+  const [city, setCity] = useState(
+    customer?.city ?? (customer ? '' : 'Addis Ababa'),
+  );
   const [customerType, setCustomerType] = useState<CustomerType>(
     customer?.customerType ?? 'COMMERCIAL',
   );
-  const [smsConsentGiven, setSmsConsentGiven] = useState(consented);
+  // A new customer is consented unless the operator unticks it: the
+  // reminders and greetings are the point of recording the phone number.
+  const [smsConsentGiven, setSmsConsentGiven] = useState(
+    customer ? consented : true,
+  );
   // What's actually on the record right now — the baseline the checkbox
   // started from, so onSubmit can tell "the operator toggled this" apart
   // from "unrelated edit, leave the consent timestamp alone".
@@ -91,7 +97,9 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
         // preference; an unrelated edit (e.g. fixing a typo in the phone
         // number) must never silently re-stamp smsConsentAt to "now".
         smsConsentGiven:
-          smsConsentGiven !== initialSmsConsentGiven ? smsConsentGiven : undefined,
+          smsConsentGiven !== initialSmsConsentGiven
+            ? smsConsentGiven
+            : undefined,
       };
       if (editId) {
         await updateCustomer(editId, payload);
@@ -251,7 +259,11 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
             onChange={(e) => setCity(e.target.value)}
           />
         </Field>
-        <Field label="TIN" htmlFor="tinNumber" hint="Printed in the parties clause of contracts.">
+        <Field
+          label="TIN"
+          htmlFor="tinNumber"
+          hint="Printed in the parties clause of contracts."
+        >
           <input
             id="tinNumber"
             inputMode="numeric"
@@ -266,19 +278,18 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
       </FormSection>
 
       {!editId ? (
-
         <FormSection
-
           title="First project"
 
           description="The building or site this customer wants a lift for. It opens at Lead; leave blank to add projects later from the customer's page."
-
         >
-
-          <Field label="Project name" htmlFor="projectName" hint="Usually the building: “Bole Twin Towers — Lift A”." wide>
-
+          <Field
+            label="Project name"
+            htmlFor="projectName"
+            hint="Usually the building: “Bole Twin Towers — Lift A”."
+            wide
+          >
             <input
-
               id="projectName"
 
               className={fieldClass}
@@ -288,15 +299,10 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
               value={projectName}
 
               onChange={(e) => setProjectName(e.target.value)}
-
             />
-
           </Field>
-
         </FormSection>
-
       ) : null}
-
 
       <FormSection title="Contact">
         <Field label="Email" htmlFor="email">
