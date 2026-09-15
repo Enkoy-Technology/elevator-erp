@@ -165,10 +165,12 @@ export const Field = ({
   wide?: boolean;
   children: ReactNode;
 }) => (
-  <div className={`min-w-0 ${wide ? 'sm:col-span-2' : ''}`}>
+  <div className={`group/field min-w-0 ${wide ? 'sm:col-span-2' : ''}`}>
+    {/* The asterisk follows the control's own `required` attribute, so a
+        form never has to say it twice. */}
     <label
       htmlFor={htmlFor}
-      className="mb-1.5 block text-sm font-medium text-slate-700"
+      className="mb-1.5 block text-sm font-medium text-slate-700 after:ml-0.5 after:text-red-500 group-has-[:required]/field:after:content-['*']"
     >
       {label}
     </label>
