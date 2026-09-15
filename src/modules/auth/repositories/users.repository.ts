@@ -63,6 +63,25 @@ export class UsersRepository {
     });
   }
 
+  /** A password chosen by the person: stored hashed, the temporary flag cleared, other sessions signed out. */
+  async setOwnPassword(
+    tenantId: string,
+    userId: string,
+    passwordHash: string,
+  ): Promise<void> {
+    await this.tenantDb.withTenant(tenantId, async (tx) => {
+      await tx
+        .update(users)
+        .set({
+          passwordHash,
+          mustChangePassword: false,
+          refreshTokenHash: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId));
+    });
+  }
+
   async recordLogin(tenantId: string, userId: string): Promise<void> {
     await this.tenantDb.withTenant(tenantId, async (tx) => {
       await tx

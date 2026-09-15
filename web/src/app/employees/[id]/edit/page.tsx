@@ -48,7 +48,9 @@ export default function EditEmployeePage() {
   const grantableRoles =
     callerRole === 'CEO' || callerRole === 'ADMIN'
       ? EMPLOYEE_ROLES
-      : EMPLOYEE_ROLES.filter((r) => r !== 'CEO' && r !== 'GENERAL_MANAGER' && r !== 'ADMIN');
+      : EMPLOYEE_ROLES.filter(
+          (r) => r !== 'CEO' && r !== 'GENERAL_MANAGER' && r !== 'ADMIN',
+        );
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
@@ -62,7 +64,9 @@ export default function EditEmployeePage() {
   // started from, so onSubmit can tell "the operator toggled this" apart
   // from "unrelated edit, leave the consent timestamp alone" (see onSubmit).
   const [initialSmsConsentGiven, setInitialSmsConsentGiven] = useState(false);
-  const [smsConsentAtDisplay, setSmsConsentAtDisplay] = useState<string | null>(null);
+  const [smsConsentAtDisplay, setSmsConsentAtDisplay] = useState<string | null>(
+    null,
+  );
   const [smsConsentRevokedAtDisplay, setSmsConsentRevokedAtDisplay] = useState<
     string | null
   >(null);
@@ -91,7 +95,8 @@ export default function EditEmployeePage() {
         // "Currently consented" is smsConsentAt set AND not (yet) revoked
         // (I10) — mirrors canSmsRecipient's own server-side predicate.
         const consented =
-          employee.smsConsentAt !== null && employee.smsConsentRevokedAt === null;
+          employee.smsConsentAt !== null &&
+          employee.smsConsentRevokedAt === null;
         setSmsConsentGiven(consented);
         setInitialSmsConsentGiven(consented);
         setSmsConsentAtDisplay(employee.smsConsentAt);
@@ -122,11 +127,15 @@ export default function EditEmployeePage() {
         // regulatory consent record (ECA Directive 832/2021), not a
         // preference; an unrelated edit (e.g. a role change) must never
         // silently re-stamp smsConsentAt to "now".
-        ...(smsConsentGiven !== initialSmsConsentGiven ? { smsConsentGiven } : {}),
+        ...(smsConsentGiven !== initialSmsConsentGiven
+          ? { smsConsentGiven }
+          : {}),
       });
       router.push('/employees');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to save employee');
+      setError(
+        err instanceof ApiError ? err.message : 'Failed to save employee',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -220,7 +229,11 @@ export default function EditEmployeePage() {
           </select>
         </Field>
 
-        <Field label="New password" htmlFor="password">
+        <Field
+          label="Reset password"
+          htmlFor="password"
+          hint="A temporary one: they replace it with their own on next sign-in."
+        >
           <input
             id="password"
             type="password"

@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { and, asc, count, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { hash } from 'bcrypt';
 
@@ -45,10 +49,7 @@ export class EmployeesRepository {
       options.pageSize,
     );
     return this.tenantDb.withTenant(tenantId, async (tx) => {
-      const filters = [
-        isNull(users.deletedAt),
-        ne(users.role, 'CUSTOMER'),
-      ];
+      const filters = [isNull(users.deletedAt), ne(users.role, 'CUSTOMER')];
       if (options.q && options.q.trim().length > 0) {
         const pattern = `%${options.q.trim().toLowerCase()}%`;
         filters.push(
@@ -170,7 +171,9 @@ export class EmployeesRepository {
         )
         .limit(1);
       if (existing[0]) {
-        throw new ConflictException('An employee with this email already exists');
+        throw new ConflictException(
+          'An employee with this email already exists',
+        );
       }
       const [row] = await tx
         .insert(users)
@@ -181,6 +184,8 @@ export class EmployeesRepository {
           phone: input.phone,
           role: input.role,
           passwordHash: await hash(input.password, BCRYPT_ROUNDS),
+          // Set by an admin, so it is temporary: replaced on first sign-in.
+          mustChangePassword: true,
           ...(input.smsConsentGiven ? { smsConsentAt: new Date() } : {}),
         })
         .returning({
@@ -311,6 +316,8 @@ export class EmployeesRepository {
       isActive?: boolean;
       /** Already-hashed — the service hashes the plaintext before this call. */
       passwordHash?: string;
+      /** Set alongside a reset: the person replaces the temporary password on next sign-in. */
+      mustChangePassword?: boolean;
       /**
        * Server-stamped elsewhere — see UpdateEmployeeDto.smsConsentGiven.
        * true -> smsConsentAt now, smsConsentRevokedAt cleared (a fresh

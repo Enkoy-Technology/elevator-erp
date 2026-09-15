@@ -16,6 +16,8 @@ export interface AuthProfile {
   fullName: string;
   role: string;
   lastLoginAt: string | null;
+  /** True until a temporary password given by an admin has been replaced. */
+  mustChangePassword: boolean;
 }
 
 /** RFC 7807 Problem Details, as emitted by the API's exception filter. */
@@ -197,6 +199,16 @@ export const logout = async (): Promise<void> => {
 
 export const getProfile = (): Promise<AuthProfile> =>
   apiFetch<AuthProfile>('/auth/me');
+
+/** Replace my own password. The API signs every other session out. */
+export const changePassword = (
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> =>
+  apiFetch<void>('/auth/password', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
 
 /** A code from the tenant's product list (Settings → Products & prices). */
 export type ProductType = string;

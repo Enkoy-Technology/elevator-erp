@@ -39,6 +39,14 @@ export const users = pgTable(
     }),
     role: userRoleEnum('role').notNull(),
     isActive: boolean('is_active').notNull().default(true),
+    /**
+     * Set when an admin gave this person a temporary password (on creation
+     * or a reset). The web sends them to the change-password screen on
+     * their next sign-in and nowhere else until it is replaced.
+     */
+    mustChangePassword: boolean('must_change_password')
+      .notNull()
+      .default(false),
     refreshTokenHash: text('refresh_token_hash'),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })

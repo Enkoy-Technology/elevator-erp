@@ -1,7 +1,7 @@
 import { UnauthorizedException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { hash } from 'bcrypt';
+import { compare, hash } from 'bcrypt';
 
 import type { Env } from '../../config';
 import { AuthService } from './auth.service';
@@ -39,6 +39,7 @@ describe('AuthService', () => {
       smsConsentRevokedAt: null,
       role: 'CEO',
       isActive: true,
+      mustChangePassword: false,
       refreshTokenHash: null,
       lastLoginAt: null,
       createdAt: new Date(),
@@ -54,6 +55,7 @@ describe('AuthService', () => {
       findActiveByEmail: jest.fn(),
       findActiveById: jest.fn(),
       setRefreshTokenHash: jest.fn(),
+      setOwnPassword: jest.fn(),
       recordLogin: jest.fn(),
     } as unknown as jest.Mocked<UsersRepository>;
 
@@ -137,7 +139,7 @@ describe('AuthService', () => {
       sub: USER_ID,
       tenantId: TENANT_ID,
       role: 'CEO',
-      type:'access',
+      type: 'access',
     });
     await expect(service.refresh(accessToken)).rejects.toBeInstanceOf(
       UnauthorizedException,
@@ -177,7 +179,7 @@ describe('AuthService', () => {
       sub: USER_ID,
       tenantId: TENANT_ID,
       role: 'CEO',
-      type:'refresh',
+      type: 'refresh',
     });
     tenantsRepository.findActiveById.mockResolvedValue({
       id: TENANT_ID,
@@ -197,7 +199,7 @@ describe('AuthService', () => {
       sub: USER_ID,
       tenantId: TENANT_ID,
       role: 'CEO',
-      type:'refresh',
+      type: 'refresh',
     });
     tenantsRepository.findActiveById.mockResolvedValue({
       id: TENANT_ID,
@@ -207,5 +209,51 @@ describe('AuthService', () => {
     await expect(service.refresh(refreshToken)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
+  });
+
+  describe('changePassword', () => {
+    const me = { userId: USER_ID, tenantId: TENANT_ID, role: 'CEO' as const };
+
+    it('stores a new hash and clears the temporary flag when the current password is right', async () => {
+      usersRepository.findActiveById.mockResolvedValue(user);
+
+      await service.changePassword(
+        me,
+        'correct-horse-battery',
+        'my-own-password-1',
+      );
+
+      expect(usersRepository.setOwnPassword).toHaveBeenCalledTimes(1);
+      const [tenantId, userId, storedHash] =
+        usersRepository.setOwnPassword.mock.calls[0]!;
+      expect(tenantId).toBe(TENANT_ID);
+      expect(userId).toBe(USER_ID);
+      expect(storedHash).not.toBe('my-own-password-1');
+      await expect(compare('my-own-password-1', storedHash)).resolves.toBe(
+        true,
+      );
+    });
+
+    it('refuses when the current password is wrong', async () => {
+      usersRepository.findActiveById.mockResolvedValue(user);
+
+      await expect(
+        service.changePassword(me, 'not-my-password', 'my-own-password-1'),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(usersRepository.setOwnPassword).not.toHaveBeenCalled();
+    });
+
+    it('refuses the same password again', async () => {
+      usersRepository.findActiveById.mockResolvedValue(user);
+
+      await expect(
+        service.changePassword(
+          me,
+          'correct-horse-battery',
+          'correct-horse-battery',
+        ),
+      ).rejects.toThrow(/differ/);
+      expect(usersRepository.setOwnPassword).not.toHaveBeenCalled();
+    });
   });
 });

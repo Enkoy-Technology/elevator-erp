@@ -11,11 +11,8 @@ import {
 
 import { CurrentUser, Public } from '../../common/decorators';
 import type { AuthenticatedUser } from '../../types/auth.types';
-import {
-  AuthService,
-  type AuthProfile,
-  type TokenPair,
-} from './auth.service';
+import { AuthService, type AuthProfile, type TokenPair } from './auth.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 
@@ -57,6 +54,31 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
   async logout(@CurrentUser() user: AuthenticatedUser): Promise<void> {
     await this.authService.logout(user);
+  }
+
+  @Post('password')
+  @HttpCode(204)
+  @ApiBearerAuth('access-token')
+  @Throttle({
+    burst: { ttl: 60_000, limit: 5 },
+    sustained: { ttl: 900_000, limit: 20 },
+  })
+  @ApiOperation({
+    summary: 'Replace my own password (current password required)',
+  })
+  @ApiNoContentResponse({
+    description: 'Password changed; other sessions signed out',
+  })
+  @ApiUnauthorizedResponse({ description: 'Wrong current password' })
+  async changePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ChangePasswordDto,
+  ): Promise<void> {
+    await this.authService.changePassword(
+      user,
+      dto.currentPassword,
+      dto.newPassword,
+    );
   }
 
   @Get('me')

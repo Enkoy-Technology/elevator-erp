@@ -22,7 +22,9 @@ export default function NewEmployeePage() {
   const grantableRoles =
     callerRole === 'CEO' || callerRole === 'ADMIN'
       ? EMPLOYEE_ROLES
-      : EMPLOYEE_ROLES.filter((r) => r !== 'CEO' && r !== 'GENERAL_MANAGER' && r !== 'ADMIN');
+      : EMPLOYEE_ROLES.filter(
+          (r) => r !== 'CEO' && r !== 'GENERAL_MANAGER' && r !== 'ADMIN',
+        );
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -58,7 +60,9 @@ export default function NewEmployeePage() {
       });
       router.push('/employees');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to save employee');
+      setError(
+        err instanceof ApiError ? err.message : 'Failed to save employee',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -126,7 +130,11 @@ export default function NewEmployeePage() {
           </select>
         </Field>
 
-        <Field label="Temporary password" htmlFor="password">
+        <Field
+          label="Temporary password"
+          htmlFor="password"
+          hint="They replace it with their own on first sign-in."
+        >
           <input
             id="password"
             type="password"

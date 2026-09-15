@@ -74,7 +74,10 @@ export class EmployeesService {
       // Hashed here (never persisted or logged as plaintext) so a reset
       // never touches the wire or the DB layer unhashed.
       ...(dto.password !== undefined
-        ? { passwordHash: await hash(dto.password, BCRYPT_ROUNDS) }
+        ? {
+            passwordHash: await hash(dto.password, BCRYPT_ROUNDS),
+            mustChangePassword: true,
+          }
         : {}),
     });
   }

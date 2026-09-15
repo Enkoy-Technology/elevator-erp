@@ -1,11 +1,16 @@
 import { createHash } from 'node:crypto';
 
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { compare } from 'bcrypt';
+import { compare, hash } from 'bcrypt';
 
 import type { Env } from '../../config';
+import { BCRYPT_ROUNDS } from '../../common/security.constants';
 import type {
   AuthenticatedUser,
   JwtPayload,
@@ -13,7 +18,10 @@ import type {
 } from '../../types/auth.types';
 import type { LoginDto } from './dto/login.dto';
 import { TenantsRepository } from './repositories/tenants.repository';
-import { UsersRepository, type UserRecord } from './repositories/users.repository';
+import {
+  UsersRepository,
+  type UserRecord,
+} from './repositories/users.repository';
 
 export interface TokenPair {
   accessToken: string;
@@ -28,6 +36,8 @@ export interface AuthProfile {
   fullName: string;
   role: UserRole;
   lastLoginAt: Date | null;
+  /** True until a temporary password given by an admin has been replaced. */
+  mustChangePassword: boolean;
 }
 
 const BLOCKED_SUBSCRIPTION_STATUSES = new Set(['SUSPENDED', 'CANCELLED']);
@@ -47,7 +57,10 @@ export class AuthService {
     );
     // Same error for unknown tenant, unknown user, and bad password —
     // prevents tenant slug / account enumeration.
-    if (!tenant || BLOCKED_SUBSCRIPTION_STATUSES.has(tenant.subscriptionStatus)) {
+    if (
+      !tenant ||
+      BLOCKED_SUBSCRIPTION_STATUSES.has(tenant.subscriptionStatus)
+    ) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -81,7 +94,10 @@ export class AuthService {
       this.tenantsRepository.findActiveById(payload.tenantId),
       this.usersRepository.findActiveById(payload.tenantId, payload.sub),
     ]);
-    if (!tenant || BLOCKED_SUBSCRIPTION_STATUSES.has(tenant.subscriptionStatus)) {
+    if (
+      !tenant ||
+      BLOCKED_SUBSCRIPTION_STATUSES.has(tenant.subscriptionStatus)
+    ) {
       throw new UnauthorizedException('Invalid refresh token');
     }
     if (
@@ -118,7 +134,37 @@ export class AuthService {
       fullName: record.fullName,
       role: record.role,
       lastLoginAt: record.lastLoginAt,
+      mustChangePassword: record.mustChangePassword,
     };
+  }
+
+  /**
+   * The person replaces their own password. The current one is checked
+   * first so a stolen session cannot lock its owner out; every other
+   * session is signed out by clearing the refresh token.
+   */
+  async changePassword(
+    user: AuthenticatedUser,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const record = await this.usersRepository.findActiveById(
+      user.tenantId,
+      user.userId,
+    );
+    if (!record || !(await compare(currentPassword, record.passwordHash))) {
+      throw new UnauthorizedException('The current password is wrong');
+    }
+    if (await compare(newPassword, record.passwordHash)) {
+      throw new BadRequestException(
+        'The new password must differ from the current one',
+      );
+    }
+    await this.usersRepository.setOwnPassword(
+      user.tenantId,
+      user.userId,
+      await hash(newPassword, BCRYPT_ROUNDS),
+    );
   }
 
   private async issueTokens(user: UserRecord): Promise<TokenPair> {

@@ -5,11 +5,25 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-import { getAccessToken, getCurrentRole, getProfile, logout, type AuthProfile } from '@/lib/api';
+import {
+  getAccessToken,
+  getCurrentRole,
+  getProfile,
+  logout,
+  type AuthProfile,
+} from '@/lib/api';
 
 import { useLocale } from './locale-provider';
-import { MODULE_GROUPS, modulesForRole, type ModuleNavItem } from './module-nav';
-import { toggleCollapsed, toggleHidden, useSidebarState } from './sidebar-state';
+import {
+  MODULE_GROUPS,
+  modulesForRole,
+  type ModuleNavItem,
+} from './module-nav';
+import {
+  toggleCollapsed,
+  toggleHidden,
+  useSidebarState,
+} from './sidebar-state';
 import mark from '../../public/shining-star-mark.png';
 
 /** 'SALES_MANAGER' -> 'Sales manager' — the role as a person would say it. */
@@ -32,7 +46,9 @@ export function Sidebar() {
   const { collapsed, hidden } = useSidebarState();
   const { t } = useLocale();
   // Read after mount: localStorage is unavailable during the server render.
-  const [modules, setModules] = useState(() => modulesForRole(null).filter((m) => !m.hidden));
+  const [modules, setModules] = useState(() =>
+    modulesForRole(null).filter((m) => !m.hidden),
+  );
   const [profile, setProfile] = useState<AuthProfile | null>(null);
 
   useEffect(() => {
@@ -48,6 +64,10 @@ export function Sidebar() {
       .then((next) => {
         if (alive) {
           setProfile(next);
+          // A temporary password is replaced before anything else is done.
+          if (next.mustChangePassword && pathname !== '/account/password') {
+            router.replace('/account/password');
+          }
         }
       })
       // The page's own auth effect owns the redirect; the shell just goes
@@ -56,7 +76,7 @@ export function Sidebar() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [pathname, router]);
 
   if (hidden) {
     return (
@@ -86,7 +106,9 @@ export function Sidebar() {
     >
       <div
         className={`flex items-center gap-2.5 border-b border-navy-800 py-4 ${
-          collapsed ? 'justify-center px-0' : 'justify-center px-0 sm:justify-start sm:px-4'
+          collapsed
+            ? 'justify-center px-0'
+            : 'justify-center px-0 sm:justify-start sm:px-4'
         }`}
       >
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white p-1">
@@ -119,7 +141,10 @@ export function Sidebar() {
           return (
             <div key={key} role="group" aria-label={label}>
               {collapsed ? (
-                <div className="mx-auto my-3 h-px w-6 bg-navy-800" aria-hidden />
+                <div
+                  className="mx-auto my-3 h-px w-6 bg-navy-800"
+                  aria-hidden
+                />
               ) : (
                 <>
                   <div
@@ -171,6 +196,17 @@ export function Sidebar() {
               </p>
             </div>
           )}
+          <Link
+            href="/account/password"
+            title="Change password"
+            aria-label="Change password"
+            className="shrink-0 rounded-lg p-2 text-navy-100/60 transition hover:bg-navy-800 hover:text-white"
+          >
+            <Icon
+              path="M15 7a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm2-5a5 5 0 0 0-4.9 6l-8.4 8.4V21h4l1-1v-2h2v-2h2l1.6-1.6A5 5 0 1 0 17 2z"
+              className="h-4 w-4"
+            />
+          </Link>
           <button
             type="button"
             onClick={() => void onSignOut()}
