@@ -9,6 +9,7 @@ import {
   ApiError,
   createNotification,
   getAccessToken,
+  getCurrentRole,
   listEmployees,
   NOTIFICATION_TYPES,
   optional,
@@ -37,6 +38,11 @@ export default function NewNotificationPage() {
   useEffect(() => {
     if (!getAccessToken()) {
       router.replace('/login');
+      return;
+    }
+    const role = getCurrentRole();
+    if (role === null || !['CEO', 'ADMIN', 'GENERAL_MANAGER', 'OFFICE_MANAGER', 'MARKETING_MANAGER', 'SECRETARY'].includes(role)) {
+      router.replace('/notifications');
       return;
     }
     void (async () => {

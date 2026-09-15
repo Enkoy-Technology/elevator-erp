@@ -31,6 +31,7 @@ export default function SettingsPage() {
   const { t, setLocale } = useLocale();
   const role = getCurrentRole();
   const canEdit = role === 'CEO' || role === 'ADMIN';
+  const canOpen = canEdit || role === 'GENERAL_MANAGER';
   const [settings, setSettings] = useState<TenantSettings | null>(null);
   const [name, setName] = useState('');
   const [slogan, setSlogan] = useState('');
@@ -94,8 +95,12 @@ export default function SettingsPage() {
       router.replace('/login');
       return;
     }
+    if (!canOpen) {
+      router.replace('/');
+      return;
+    }
     void refresh();
-  }, [router, refresh]);
+  }, [router, refresh, canOpen]);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();

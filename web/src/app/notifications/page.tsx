@@ -20,12 +20,26 @@ import { Sidebar } from '@/components/sidebar';
 import {
   ApiError,
   getAccessToken,
+  getCurrentRole,
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
   type AppNotification,
   type NotificationType,
+  type UserRole,
 } from '@/lib/api';
+
+/** Mirrors POST /notifications' @Roles: the communication roles post notices. */
+const canPostNotice = (role: UserRole | null): boolean =>
+  role !== null &&
+  [
+    'CEO',
+    'ADMIN',
+    'GENERAL_MANAGER',
+    'OFFICE_MANAGER',
+    'MARKETING_MANAGER',
+    'SECRETARY',
+  ].includes(role);
 import { csvRows, saveCsv } from '@/app/employees/csv';
 
 const TYPE_LABEL: Record<NotificationType, string> = {
@@ -59,7 +73,9 @@ export default function NotificationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [markingAll, setMarkingAll] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
   const [bulkNotice, setBulkNotice] = useState<string | null>(null);
 
   const refresh = useCallback(
@@ -156,7 +172,9 @@ export default function NotificationsPage() {
     const results = await Promise.allSettled(
       targets.map((item) => markNotificationRead(item.id)),
     );
-    const failed = results.filter((result) => result.status === 'rejected').length;
+    const failed = results.filter(
+      (result) => result.status === 'rejected',
+    ).length;
     setBulkNotice(
       failed === 0
         ? `Marked ${targets.length} notification(s) read.`
@@ -176,7 +194,13 @@ export default function NotificationsPage() {
       header: 'Notice',
       cell: ({ row }) => (
         <div className="min-w-[16rem] max-w-xl">
-          <p className={row.original.readAt ? 'text-slate-700' : 'font-semibold text-slate-900'}>
+          <p
+            className={
+              row.original.readAt
+                ? 'text-slate-700'
+                : 'font-semibold text-slate-900'
+            }
+          >
             {row.original.title}
           </p>
           {row.original.body ? (
@@ -204,7 +228,9 @@ export default function NotificationsPage() {
       id: 'createdAt',
       header: 'Received',
       cell: ({ row }) => (
-        <span className="whitespace-nowrap">{formatWhen(row.original.createdAt)}</span>
+        <span className="whitespace-nowrap">
+          {formatWhen(row.original.createdAt)}
+        </span>
       ),
     },
     {
@@ -255,9 +281,11 @@ export default function NotificationsPage() {
               >
                 {markingAll ? 'Marking…' : 'Mark all read'}
               </button>
-              <Link href="/notifications/new" className={btnPrimary}>
-                Send notice
-              </Link>
+              {canPostNotice(getCurrentRole()) ? (
+                <Link href="/notifications/new" className={btnPrimary}>
+                  Send notice
+                </Link>
+              ) : null}
             </>
           }
         />
@@ -302,7 +330,11 @@ export default function NotificationsPage() {
             getRowLabel={(item) => item.title}
             bulkActions={
               <>
-                <button type="button" onClick={exportSelected} className={bulkBtn}>
+                <button
+                  type="button"
+                  onClick={exportSelected}
+                  className={bulkBtn}
+                >
                   Export selected
                 </button>
                 <button

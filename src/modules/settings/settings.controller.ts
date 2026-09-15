@@ -15,7 +15,9 @@ import { SettingsService } from './settings.service';
 @ApiBearerAuth('access-token')
 @Controller('settings')
 // Spec §5.3 Tenant Config (View): every staff role. Edit stays with ADMIN (and CEO via SUPER_ROLES).
-@Roles('GENERAL_MANAGER', 'MARKETING_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'FINANCE_OFFICER', 'OFFICE_MANAGER', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'STORE_KEEPER', 'SECRETARY')
+// Reading company settings is management's; the office and marketing
+// managers read them for the messaging screen (reminder cadence, locale).
+@Roles('GENERAL_MANAGER', 'OFFICE_MANAGER', 'MARKETING_MANAGER')
 export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 

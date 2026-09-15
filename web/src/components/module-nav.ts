@@ -201,7 +201,9 @@ export const MODULES: ModuleNavItem[] = [
     phase: null,
     href: '/settings',
     icon: 'M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4',
-    roles: ['GENERAL_MANAGER', 'MARKETING_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'FINANCE_OFFICER', 'OFFICE_MANAGER', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'STORE_KEEPER', 'SECRETARY'],
+    // Company settings are management's: CEO and Admin edit, the General
+    // Manager reads. Nobody else has a reason to open them.
+    roles: ['GENERAL_MANAGER'],
   },
   {
     nameKey: 'nav.boilerplate',
@@ -210,10 +212,9 @@ export const MODULES: ModuleNavItem[] = [
     phase: null,
     href: '/settings/boilerplate',
     icon: 'M7 3h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z M9 8h6 M9 12h6 M9 16h4',
-    // Mirrors DocumentContentController's class-level
-    // @Roles('SALES_MANAGER', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER'); writing is
-    // SALES_MANAGER only and is gated inside the page, not here.
-    roles: ['GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER', 'SECRETARY'],
+    // The roles that may write it (DocumentContentController's route-level
+    // @Roles); everyone else meets the text on the printed documents.
+    roles: ['GENERAL_MANAGER', 'SALES_MANAGER'],
   },
   {
     nameKey: 'nav.productTypes',
@@ -222,7 +223,9 @@ export const MODULES: ModuleNavItem[] = [
     phase: null,
     href: '/settings/product-types',
     icon: 'M4 7h16 M4 12h16 M4 17h10',
-    roles: ['GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'FINANCE_OFFICER', 'SECRETARY'],
+    // The roles that may reprice (ProductTypesController's write routes);
+    // the calculator reads the list for everyone else.
+    roles: ['GENERAL_MANAGER', 'SALES_MANAGER'],
   },
   {
     nameKey: 'nav.components',
@@ -231,8 +234,8 @@ export const MODULES: ModuleNavItem[] = [
     phase: null,
     href: '/settings/components',
     icon: 'M4 5h16v14H4z M4 10h16 M10 5v14',
-    // Same controller, same class-level roles.
-    roles: ['GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER', 'SECRETARY'],
+    // Same controller, same write roles.
+    roles: ['GENERAL_MANAGER', 'SALES_MANAGER'],
   },
   {
     nameKey: 'nav.docs',
