@@ -244,6 +244,13 @@ export default function QuotationsPage() {
   // validity that confirmation will send.
   const [approving, setApproving] = useState<Quotation | null>(null);
   const [approveDate, setApproveDate] = useState('');
+  // The other questions this list asks — a reason, a due date — answered in
+  // the same dialog rather than a browser prompt.
+  const [question, setQuestion] = useState<{
+    kind: 'reject' | 'cancelProforma' | 'invoice';
+    quote: Quotation;
+  } | null>(null);
+  const [answer, setAnswer] = useState('');
   // Proformas has no "converted" flag of its own (issueFromProforma never
   // touches proformas.status), so without this the → Invoice button would
   // stay live indefinitely and every second click would be a guaranteed 409
@@ -333,16 +340,8 @@ export default function QuotationsPage() {
   };
 
   const onReject = (quote: Quotation) => {
-    const entered = window.prompt(`Reason for rejecting ${quote.quoteNumber}?`);
-    if (entered === null) {
-      return;
-    }
-    const reason = entered.trim();
-    if (reason.length < 2) {
-      setError('Rejection reason must be at least 2 characters');
-      return;
-    }
-    void runQuoteAction(() => rejectQuotation(quote.id, reason), quote.id);
+    setAnswer('');
+    setQuestion({ kind: 'reject', quote });
   };
 
   const onExpire = (quote: Quotation) => {
@@ -381,44 +380,50 @@ export default function QuotationsPage() {
     if (!quote.proformaId) {
       return;
     }
-    const entered = window.prompt(
-      `Reason for cancelling ${quote.proformaNumber}?`,
-    );
-    if (entered === null) {
-      return;
-    }
-    const reason = entered.trim();
-    if (reason.length < 2) {
-      setError('Cancellation reason must be at least 2 characters');
-      return;
-    }
-    const proformaId = quote.proformaId;
-    void runQuoteAction(() => cancelProforma(proformaId, reason), quote.id);
+    setAnswer('');
+    setQuestion({ kind: 'cancelProforma', quote });
   };
 
-  // ponytail: window.prompt for the optional due date, matching the
-  // established reason-prompt convention on this page (see onApprove above).
-  const onConvertToInvoice = async (quote: Quotation) => {
+  const onConvertToInvoice = (quote: Quotation) => {
+    if (!quote.proformaId) {
+      return;
+    }
+    setAnswer('');
+    setQuestion({ kind: 'invoice', quote });
+  };
+
+  /** The dialog's one button: run whichever action the question was about. */
+  const answerQuestion = async () => {
+    if (!question) {
+      return;
+    }
+    const { kind, quote } = question;
+    const value = answer.trim();
+    if (kind !== 'invoice' && value.length < 2) {
+      setError('The reason must be at least 2 characters');
+      return;
+    }
+    if (kind === 'invoice' && value && !ISO_DATE.test(value)) {
+      setError('Due date must be in YYYY-MM-DD format');
+      return;
+    }
+    setQuestion(null);
+    if (kind === 'reject') {
+      void runQuoteAction(() => rejectQuotation(quote.id, value), quote.id);
+      return;
+    }
     const proformaId = quote.proformaId;
     if (!proformaId) {
       return;
     }
-    const entered = window.prompt(
-      `Convert ${quote.proformaNumber} to an invoice. Due date (YYYY-MM-DD, optional)?`,
-      '',
-    );
-    if (entered === null) {
-      return;
-    }
-    const trimmed = entered.trim();
-    if (trimmed && !ISO_DATE.test(trimmed)) {
-      setError('Due date must be in YYYY-MM-DD format');
+    if (kind === 'cancelProforma') {
+      void runQuoteAction(() => cancelProforma(proformaId, value), quote.id);
       return;
     }
     setBusyId(quote.id);
     setError(null);
     try {
-      await convertProformaToInvoice(proformaId, trimmed || undefined);
+      await convertProformaToInvoice(proformaId, value || undefined);
       setConvertedIds((prev) => new Set(prev).add(proformaId));
       await refresh(page, quoteStatusFilter, pageSize);
     } catch (err) {
@@ -630,7 +635,7 @@ export default function QuotationsPage() {
           <button
             type="button"
             disabled={busy}
-            onClick={() => void onConvertToInvoice(quote)}
+            onClick={() => onConvertToInvoice(quote)}
             className={`${btnPrimary} px-2.5 py-1 text-xs`}
           >
             → Invoice
@@ -955,6 +960,87 @@ export default function QuotationsPage() {
             </div>
           </div>
         ) : null}
+      </Dialog>
+
+      <Dialog
+        open={question !== null}
+        onClose={() => setQuestion(null)}
+        title={
+          question?.kind === 'reject'
+            ? `Reject ${question.quote.quoteNumber}`
+            : question?.kind === 'cancelProforma'
+              ? `Cancel ${question.quote.proformaNumber ?? 'proforma'}`
+              : question
+                ? `Invoice ${question.quote.proformaNumber ?? 'proforma'}`
+                : ''
+        }
+        description={
+          question?.kind === 'reject'
+            ? 'The reason is kept on the quotation and shown to whoever prepared it.'
+            : question?.kind === 'cancelProforma'
+              ? 'The proforma is marked cancelled and keeps its number; the quotation stays as it is.'
+              : 'The invoice is issued for the proforma\u2019s full amount, with a new invoice number.'
+        }
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setQuestion(null)}
+              className={btnSecondary}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void answerQuestion()}
+              className={btnPrimary}
+            >
+              {question?.kind === 'reject'
+                ? 'Reject quotation'
+                : question?.kind === 'cancelProforma'
+                  ? 'Cancel proforma'
+                  : 'Issue invoice'}
+            </button>
+          </>
+        }
+      >
+        {question?.kind === 'invoice' ? (
+          <div>
+            <label
+              htmlFor="question-answer"
+              className="mb-1 block text-xs font-semibold text-slate-600"
+            >
+              Due date
+            </label>
+            <input
+              id="question-answer"
+              type="date"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Leave blank to use the customer&apos;s payment terms.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <label
+              htmlFor="question-answer"
+              className="mb-1 block text-xs font-semibold text-slate-600"
+            >
+              Reason
+            </label>
+            <textarea
+              id="question-answer"
+              rows={3}
+              autoFocus
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+            />
+          </div>
+        )}
       </Dialog>
     </div>
   );
