@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 
 import { btnPrimary } from '@/components/form-styles';
-import { ApiError, login } from '@/lib/api';
+import { ApiError, login, getProfile } from '@/lib/api';
 
 import logo from '../../../public/shining-star-logo.jpg';
 
@@ -34,20 +34,104 @@ const DEMO_PASSWORD = 'Demo!Passw0rd';
  * boundary. demo-accounts.spec.ts fails if the two lists drift apart.
  */
 /** `can` is what the seat may expect to open and do — the requirement document's responsibilities, as built. */
-const DEMO_ACCOUNTS: readonly { role: string; label: string; email: string; blurb: string; can: string }[] = [
-  { role: 'CEO', label: 'CEO', email: 'ceo@demo.example.com', blurb: 'Sees everything', can: 'Everything: every module, every approval, settings and staff.' },
-  { role: 'GENERAL_MANAGER', label: 'General Manager', email: 'gm@demo.example.com', blurb: 'Runs the business', can: 'Every module read. Approves sales, projects and maintenance. Manages staff below management.' },
-  { role: 'MARKETING_MANAGER', label: 'Marketing Manager', email: 'marketing@demo.example.com', blurb: 'Leads and customers', can: 'Customers and leads: register customers, create leads, post notices. No quotations or money.' },
-  { role: 'SALES_MANAGER', label: 'Sales Manager', email: 'sales@demo.example.com', blurb: 'Approves quotes and contracts', can: 'Customers, projects, quotations, proformas, contracts, maintenance agreements. Approves quotes and prices. Reads invoices.' },
-  { role: 'SALESPERSON', label: 'Salesperson', email: 'salesperson@demo.example.com', blurb: 'Prepares quotations', can: 'Registers customers, moves leads, prepares, prices and submits quotations. Reads proformas and contracts. Cannot approve.' },
-  { role: 'FINANCE_OFFICER', label: 'Finance Officer', email: 'finance@demo.example.com', blurb: 'Invoices and payments', can: 'Invoices, payments, expenses, bank accounts, receivables, statements. Reads quotes and contracts to invoice them.' },
-  { role: 'OFFICE_MANAGER', label: 'Office Manager', email: 'office@demo.example.com', blurb: 'Staff and communication', can: 'Employee records below management, SMS message log, notices.' },
-  { role: 'TECHNICAL_MANAGER', label: 'Technical Manager', email: 'technical@demo.example.com', blurb: 'Specs and installation', can: 'Calculator and quotation lines, projects and installation stages, contract handover, assets, maintenance and breakdowns.' },
-  { role: 'MAINTENANCE_ENGINEER', label: 'Maintenance Engineer', email: 'engineer@demo.example.com', blurb: 'Visits and breakdowns', can: 'Maintenance contracts, service visits, breakdown tickets, assets. Reads customers, projects and specs.' },
-  { role: 'STORE_KEEPER', label: 'Store Keeper', email: 'warehouse@demo.example.com', blurb: 'Assets and stock', can: 'The asset register. Inventory arrives with the inventory module.' },
-  { role: 'SECRETARY', label: 'Secretary', email: 'secretary@demo.example.com', blurb: 'Reception and documents', can: 'Registers customers, opens breakdown calls, reads and prints quotations, proformas and contracts.' },
-  { role: 'ADMIN', label: 'System Administrator', email: 'admin@demo.example.com', blurb: 'Settings and employees', can: 'Everything, plus settings, statutory rates, employees and the message log.' },
-  { role: 'CUSTOMER', label: 'Customer', email: 'customer@demo.example.com', blurb: 'No screens yet', can: 'Nothing yet. The customer portal is not built.' },
+const DEMO_ACCOUNTS: readonly {
+  role: string;
+  label: string;
+  email: string;
+  blurb: string;
+  can: string;
+}[] = [
+  {
+    role: 'CEO',
+    label: 'CEO',
+    email: 'ceo@demo.example.com',
+    blurb: 'Sees everything',
+    can: 'Everything: every module, every approval, settings and staff.',
+  },
+  {
+    role: 'GENERAL_MANAGER',
+    label: 'General Manager',
+    email: 'gm@demo.example.com',
+    blurb: 'Runs the business',
+    can: 'Every module read. Approves sales, projects and maintenance. Manages staff below management.',
+  },
+  {
+    role: 'MARKETING_MANAGER',
+    label: 'Marketing Manager',
+    email: 'marketing@demo.example.com',
+    blurb: 'Leads and customers',
+    can: 'Customers and leads: register customers, create leads, post notices. No quotations or money.',
+  },
+  {
+    role: 'SALES_MANAGER',
+    label: 'Sales Manager',
+    email: 'sales@demo.example.com',
+    blurb: 'Approves quotes and contracts',
+    can: 'Customers, projects, quotations, proformas, contracts, maintenance agreements. Approves quotes and prices. Reads invoices.',
+  },
+  {
+    role: 'SALESPERSON',
+    label: 'Salesperson',
+    email: 'salesperson@demo.example.com',
+    blurb: 'Prepares quotations',
+    can: 'Registers customers, moves leads, prepares, prices and submits quotations. Reads proformas and contracts. Cannot approve.',
+  },
+  {
+    role: 'FINANCE_OFFICER',
+    label: 'Finance Officer',
+    email: 'finance@demo.example.com',
+    blurb: 'Invoices and payments',
+    can: 'Invoices, payments, expenses, bank accounts, receivables, statements. Reads quotes and contracts to invoice them.',
+  },
+  {
+    role: 'OFFICE_MANAGER',
+    label: 'Office Manager',
+    email: 'office@demo.example.com',
+    blurb: 'Staff and communication',
+    can: 'Employee records below management, SMS message log, notices.',
+  },
+  {
+    role: 'TECHNICAL_MANAGER',
+    label: 'Technical Manager',
+    email: 'technical@demo.example.com',
+    blurb: 'Specs and installation',
+    can: 'Calculator and quotation lines, projects and installation stages, contract handover, assets, maintenance and breakdowns.',
+  },
+  {
+    role: 'MAINTENANCE_ENGINEER',
+    label: 'Maintenance Engineer',
+    email: 'engineer@demo.example.com',
+    blurb: 'Visits and breakdowns',
+    can: 'Maintenance contracts, service visits, breakdown tickets, assets. Reads customers, projects and specs.',
+  },
+  {
+    role: 'STORE_KEEPER',
+    label: 'Store Keeper',
+    email: 'warehouse@demo.example.com',
+    blurb: 'Assets and stock',
+    can: 'The asset register. Inventory arrives with the inventory module.',
+  },
+  {
+    role: 'SECRETARY',
+    label: 'Secretary',
+    email: 'secretary@demo.example.com',
+    blurb: 'Reception and documents',
+    can: 'Registers customers, opens breakdown calls, reads and prints quotations, proformas and contracts.',
+  },
+  {
+    role: 'ADMIN',
+    label: 'System Administrator',
+    email: 'admin@demo.example.com',
+    blurb: 'Settings and employees',
+    can: 'Everything, plus settings, statutory rates, employees and the message log.',
+  },
+  {
+    role: 'CUSTOMER',
+    label: 'Customer',
+    email: 'customer@demo.example.com',
+    blurb: 'No screens yet',
+    can: 'Nothing yet. The customer portal is not built.',
+  },
 ];
 
 export default function LoginPage() {
@@ -73,7 +157,9 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await login(tenantSlug.trim(), email.trim(), password);
-      router.replace('/');
+      // A temporary password is replaced before anything else is seen.
+      const me = await getProfile().catch(() => null);
+      router.replace(me?.mustChangePassword ? '/account/password' : '/');
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -110,7 +196,12 @@ export default function LoginPage() {
 
         <div className="relative flex flex-col items-center text-center">
           <div className="w-56 overflow-hidden rounded-3xl bg-white p-6 shadow-[0_30px_70px_-25px_rgba(0,0,0,0.8)]">
-            <Image src={logo} alt="Shining Star Electromechanical Works" priority className="h-auto w-full" />
+            <Image
+              src={logo}
+              alt="Shining Star Electromechanical Works"
+              priority
+              className="h-auto w-full"
+            />
           </div>
 
           <h2 className="font-display mt-10 max-w-sm text-[1.75rem] font-bold leading-tight tracking-tight text-white">
@@ -141,7 +232,9 @@ export default function LoginPage() {
           <Image src={logo} alt="" priority className="h-auto w-full" />
         </div>
         <div>
-          <p className="font-display text-sm font-bold leading-tight text-slate-900">Shining Star</p>
+          <p className="font-display text-sm font-bold leading-tight text-slate-900">
+            Shining Star
+          </p>
           <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-gold-600">
             Electromechanical
           </p>
@@ -158,7 +251,10 @@ export default function LoginPage() {
             Sign in to your company’s workspace.
           </p>
 
-          <form onSubmit={(event) => void onSubmit(event)} className="mt-8 space-y-4">
+          <form
+            onSubmit={(event) => void onSubmit(event)}
+            className="mt-8 space-y-4"
+          >
             <div>
               <label className={label} htmlFor="workspace">
                 Workspace
@@ -259,7 +355,8 @@ export default function LoginPage() {
                 Demo workspace — sign in as
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Click a role to sign in as them; each card says what that seat can open and do. Every account uses the password{' '}
+                Click a role to sign in as them; each card says what that seat
+                can open and do. Every account uses the password{' '}
                 <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px] font-semibold text-slate-700">
                   {DEMO_PASSWORD}
                 </code>{' '}
