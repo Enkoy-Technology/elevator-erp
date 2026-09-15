@@ -108,9 +108,9 @@ const en: Record<MessageKey, string> = {
   'settings.secondaryColor': 'Secondary colour',
   'settings.companyName': 'Company name',
   'settings.slogan': 'Slogan',
-  'settings.logoUrl': 'Logo URL',
-  'settings.stampUrl': 'Stamp URL',
-  'settings.watermarkUrl': 'Watermark image URL',
+  'settings.logoUrl': 'Logo',
+  'settings.stampUrl': 'Company stamp',
+  'settings.watermarkUrl': 'Watermark',
   'settings.watermarkUrlHelp':
     'A light version of the brand mark. Printed faintly behind the text of every page of every document.',
   'settings.websiteUrl': 'Website',
