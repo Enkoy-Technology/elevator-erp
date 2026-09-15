@@ -17,7 +17,7 @@ import {
   StatusPill,
 } from '@/components/list-toolbar';
 import { Sidebar } from '@/components/sidebar';
-import { SideDrawer } from '@/components/side-drawer';
+import { Dialog } from '@/components/dialog';
 import { formatEtb } from '@/lib/money';
 import {
   ApiError,
@@ -891,28 +891,28 @@ export default function QuotationsPage() {
         </main>
       </div>
 
-      <SideDrawer
+      <Dialog
         open={approving !== null}
         onClose={() => setApproving(null)}
         title={approving ? `Approve ${approving.quoteNumber}` : 'Approve'}
         description="Approving issues the proforma the customer pays against. The quotation is then fixed; a change means a new revision."
         footer={
-          <div className="flex gap-2">
+          <>
             <button
               type="button"
               onClick={() => setApproving(null)}
-              className={`${btnSecondary} flex-1`}
+              className={btnSecondary}
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={confirmApprove}
-              className={`${btnPrimary} flex-1`}
+              className={btnPrimary}
             >
               Approve and issue proforma
             </button>
-          </div>
+          </>
         }
       >
         {approving ? (
@@ -955,7 +955,7 @@ export default function QuotationsPage() {
             </div>
           </div>
         ) : null}
-      </SideDrawer>
+      </Dialog>
     </div>
   );
 }
