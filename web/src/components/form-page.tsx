@@ -12,7 +12,7 @@ import { Sidebar } from './sidebar';
  * form view: a control bar on top with the breadcrumb on the left and the
  * record's actions on the right, then one white sheet holding the fields.
  *
- * Inside the sheet, fields sit in two column groups with the label beside
+ * Inside the sheet, fields sit in two even columns with the label above
  * the control, and sections are separated by a titled rule rather than
  * boxed into cards — the sheet is the one surface. One component owns this
  * so every form in the product is the same form.
@@ -70,7 +70,9 @@ export const FormPage = ({
                 />
               </div>
               <div className="flex items-center gap-2">
-                {secondaryAction ? <div className="mr-2">{secondaryAction}</div> : null}
+                {secondaryAction ? (
+                  <div className="mr-2">{secondaryAction}</div>
+                ) : null}
                 <button
                   type="button"
                   disabled={submitting}
@@ -91,7 +93,7 @@ export const FormPage = ({
           </div>
 
           <div className="flex-1 px-3 py-4 sm:px-6 sm:py-6">
-            <div className="mx-auto w-full max-w-5xl">
+            <div className="mx-auto w-full max-w-4xl">
               {error ? (
                 <p
                   role="alert"
@@ -101,17 +103,16 @@ export const FormPage = ({
                 </p>
               ) : null}
 
-              {/* The sheet. */}
-              <div className="rounded-md border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-100 px-6 py-5 sm:px-10">
-                  <h1 className="font-display text-2xl font-semibold tracking-tight text-slate-900">
-                    {title}
-                  </h1>
+              {/* The sheet. The breadcrumb already names the record, so the
+                  sheet opens straight on the fields; a description, when
+                  given, is one quiet line above them. */}
+              <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+                <div className="px-6 py-6 sm:px-10 sm:py-8">
                   {description ? (
-                    <p className="mt-1 max-w-3xl text-sm text-slate-500">{description}</p>
+                    <p className="mb-6 text-sm text-slate-500">{description}</p>
                   ) : null}
+                  <div className="space-y-10">{children}</div>
                 </div>
-                <div className="space-y-8 px-6 py-6 sm:px-10 sm:py-8">{children}</div>
               </div>
             </div>
           </div>
@@ -136,17 +137,20 @@ export const FormSection = ({
   children: ReactNode;
 }) => (
   <section>
-    <div className="mb-4 border-b border-slate-200 pb-2">
-      <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-      {description ? <p className="mt-0.5 text-sm text-slate-500">{description}</p> : null}
+    <div className="mb-5 border-b border-slate-200 pb-2">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+        {title}
+      </h2>
+      {description ? (
+        <p className="mt-1 text-sm text-slate-500">{description}</p>
+      ) : null}
     </div>
-    <div className="grid gap-x-12 gap-y-3 lg:grid-cols-2">{children}</div>
+    <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">{children}</div>
   </section>
 );
 
 /**
- * One labelled control, label beside the control (stacked on a phone).
- * `wide` spans both column groups and gets a wider control.
+ * One labelled control, label above the control. `wide` spans both columns.
  */
 export const Field = ({
   label,
@@ -161,17 +165,16 @@ export const Field = ({
   wide?: boolean;
   children: ReactNode;
 }) => (
-  <div
-    className={`grid gap-y-1 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-start sm:gap-x-4 ${
-      wide ? 'lg:col-span-2' : ''
-    }`}
-  >
-    <label htmlFor={htmlFor} className="text-sm text-slate-600 sm:pt-2">
+  <div className={`min-w-0 ${wide ? 'sm:col-span-2' : ''}`}>
+    <label
+      htmlFor={htmlFor}
+      className="mb-1.5 block text-sm font-medium text-slate-700"
+    >
       {label}
     </label>
-    <div className="min-w-0">
-      {children}
-      {hint ? <p className="mt-1 text-xs leading-snug text-slate-500">{hint}</p> : null}
-    </div>
+    {children}
+    {hint ? (
+      <p className="mt-1.5 text-xs leading-snug text-slate-500">{hint}</p>
+    ) : null}
   </div>
 );
