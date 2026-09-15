@@ -19,7 +19,8 @@ export { fmtDate };
  * that file owns — does not name this template yet, and a literal-to-union
  * cast is not even legal until it does. Registering the builder there adds
  */
-export const TECHNICAL_PROPOSAL_TEMPLATE: DocumentTemplate = 'technical-proposal';
+export const TECHNICAL_PROPOSAL_TEMPLATE: DocumentTemplate =
+  'technical-proposal';
 
 /**
  * Shape `renderDocumentPdf(TECHNICAL_PROPOSAL_TEMPLATE, data, branding)`
@@ -104,7 +105,10 @@ const SPEC_ROWS: readonly SpecRow[] = [
 ];
 
 /** Labels are literals; only the values come from stored data, so only they are escaped. */
-const renderRows = (source: Record<string, unknown>, rows: readonly SpecRow[]): string =>
+const renderRows = (
+  source: Record<string, unknown>,
+  rows: readonly SpecRow[],
+): string =>
   rows
     .filter((r) => source[r.key] != null)
     .map((r) => {
@@ -135,7 +139,8 @@ export const buildTechnicalProposalHtml = (
   const product = tech.productType ?? input.productType;
   // Anything that is not a stored enum string (missing, or a malformed jsonb
   // payload) prints as an em dash rather than "[object Object]".
-  const productLabel = typeof product === 'string' ? (PRODUCT_LABELS[product] ?? product) : '—';
+  const productLabel =
+    typeof product === 'string' ? (PRODUCT_LABELS[product] ?? product) : '—';
 
   const dutyRows = renderRows(input, DUTY_ROWS);
   const geometryRows = renderRows(tech, SPEC_ROWS);
@@ -171,6 +176,7 @@ export const buildTechnicalProposalHtml = (
   return renderLayout({
     branding,
     documentTitle: 'TECHNICAL PROPOSAL',
+    coverLines: ['Prepared for', d.customerName, 'Project', d.projectName],
     bodyHtml,
     footerNote: `Specification for quotation ${d.quoteNumber}, computed to EN 81-20/50. Dimensions are nominal and confirmed by site survey.`,
   });

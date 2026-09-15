@@ -192,6 +192,8 @@ export interface LayoutOptions {
   footerNote?: string;
   /** Lines under the title on the cover — "Between", a party, "and", the other. Escaped internally. */
   coverLines?: readonly string[];
+  /** A cover page of its own: the title band alone on page one, the document from page two. Defaults to on whenever there are cover lines. */
+  cover?: boolean;
 }
 
 /**
@@ -216,6 +218,7 @@ export const renderLayout = (opts: LayoutOptions): string => {
     bodyHtml,
     footerNote,
     coverLines = [],
+    cover = coverLines.length > 0,
   } = opts;
   const b = asDocumentBranding(branding);
   const primary = sanitizeHex(b?.primaryColor);
@@ -270,8 +273,7 @@ export const renderLayout = (opts: LayoutOptions): string => {
     ? `<div class="watermark"><img src="${esc(b.watermarkUrl)}" alt="" /></div>`
     : '';
 
-  const coverHtml = `
-  <div class="doc-cover">
+  const coverInner = `
     <div class="doc-title">${esc(documentTitle)}</div>
     <div class="doc-rule"></div>
     ${coverLines
@@ -280,8 +282,13 @@ export const renderLayout = (opts: LayoutOptions): string => {
           ? `<div class="cover-party">${esc(line)}</div>`
           : `<div class="cover-line">${esc(line)}</div>`,
       )
-      .join('')}
-  </div>`;
+      .join('')}`;
+  // The company's paper opens on a cover: the title band alone, ruled
+  // above and below, in the middle of page one. Short documents keep the
+  // title at the top of their one page instead.
+  const coverHtml = cover
+    ? `<div class="cover-page"><div class="cover-band">${coverInner}</div></div>`
+    : `<div class="doc-cover">${coverInner}</div>`;
 
   return `<!doctype html>
 <html>
@@ -372,6 +379,22 @@ export const renderLayout = (opts: LayoutOptions): string => {
   .doc-rule { width: 22mm; height: 3px; background: var(--primary); margin: 3mm auto; }
   .cover-line { color: var(--ink-soft); font-size: 10.5px; }
   .cover-party { font-size: 12.5px; font-weight: bold; margin: 1mm 0; }
+
+  /* The cover page: fills the printable height of page one (A4 less the
+     margins the renderer reserves) and breaks, so the document itself
+     always starts on page two. */
+  .cover-page {
+    min-height: 236mm; display: flex; flex-direction: column; justify-content: center;
+    page-break-after: always; break-after: page;
+  }
+  .cover-band {
+    border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink);
+    padding: 16mm 10mm; text-align: center;
+  }
+  .cover-band .doc-title { font-size: 30px; line-height: 1.2; letter-spacing: 2.5px; }
+  .cover-band .doc-rule { margin: 5mm auto 6mm; }
+  .cover-band .cover-line { font-size: 12px; margin-top: 2mm; }
+  .cover-band .cover-party { font-size: 15px; margin: 1.5mm 0; }
 
   /* ---- watermark: the brand mark, faint, behind the text of every page.
      position:fixed is repeated on every printed page by Chromium — the one

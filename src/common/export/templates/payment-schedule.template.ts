@@ -107,6 +107,7 @@ export const buildPaymentScheduleHtml = (
   return renderLayout({
     branding,
     documentTitle: 'PAYMENT SCHEDULE',
+    coverLines: ['For', d.customerName, 'Project', d.projectName],
     bodyHtml,
     footerNote: `This payment schedule forms part of contract ${d.contractNumber}. Amounts in ETB.`,
   });

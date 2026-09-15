@@ -33,8 +33,7 @@ export { formatEtb, fmtDate, TECH_ROWS };
  * recomputed as total - VAT.
  */
 export interface ProformaTemplateData
-  extends CommercialTermsData,
-    DocumentAppendixContent {
+  extends CommercialTermsData, DocumentAppendixContent {
   proformaNumber: string;
   status: string;
   issuedAt?: Date | string | null;
@@ -62,7 +61,10 @@ export interface ProformaTemplateData
  * builder as the quotation (see the interface note above): the client's own
  * proforma is the document this whole layout was rebuilt from.
  */
-export const buildProformaHtml = (data: object, branding: TenantBranding | null): string => {
+export const buildProformaHtml = (
+  data: object,
+  branding: TenantBranding | null,
+): string => {
   const d = data as ProformaTemplateData;
   const exVatTotalEtb = d.subtotalEtb ?? '0.00';
   const lines =
@@ -95,6 +97,7 @@ export const buildProformaHtml = (data: object, branding: TenantBranding | null)
   return renderLayout({
     branding,
     documentTitle: 'PROFORMA INVOICE',
+    coverLines: ['Prepared for', d.customerName, 'Project', d.projectName],
     bodyHtml,
     footerNote: `This proforma invoice is valid until ${fmtDate(d.validUntil)}. Prices in ETB.`,
   });

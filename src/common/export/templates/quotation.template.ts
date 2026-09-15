@@ -18,7 +18,9 @@ export const fmtDate = (d: Date | string | null | undefined): string => {
     return '—';
   }
   const parsed = d instanceof Date ? d : new Date(d);
-  return Number.isNaN(parsed.getTime()) ? '—' : parsed.toISOString().slice(0, 10);
+  return Number.isNaN(parsed.getTime())
+    ? '—'
+    : parsed.toISOString().slice(0, 10);
 };
 
 /**
@@ -29,8 +31,7 @@ export const fmtDate = (d: Date | string | null | undefined): string => {
  * the caller responsible for actually supplying it.
  */
 export interface QuotationTemplateData
-  extends CommercialTermsData,
-    DocumentAppendixContent {
+  extends CommercialTermsData, DocumentAppendixContent {
   quoteNumber: string;
   status: string;
   createdAt?: Date | string | null;
@@ -133,7 +134,10 @@ export const impliedLine = (
  * own reporting, and printing either on the customer's copy would hand over
  * the negotiating position.
  */
-export const buildQuotationHtml = (data: object, branding: TenantBranding | null): string => {
+export const buildQuotationHtml = (
+  data: object,
+  branding: TenantBranding | null,
+): string => {
   const d = data as QuotationTemplateData;
   // total - VAT, so the three printed figures always add up to the cent (see
   // netOfTaxEtb) rather than being re-derived from the pre-margin subtotal.
@@ -168,6 +172,7 @@ export const buildQuotationHtml = (data: object, branding: TenantBranding | null
   return renderLayout({
     branding,
     documentTitle: 'QUOTATION',
+    coverLines: ['Prepared for', d.customerName, 'Project', d.projectName],
     bodyHtml,
     footerNote: `This quotation is valid until ${fmtDate(d.validUntil)}. Prices in ETB.`,
   });
