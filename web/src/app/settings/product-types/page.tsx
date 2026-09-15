@@ -54,7 +54,13 @@ export default function ProductTypesPage() {
       router.replace('/login');
       return;
     }
-    setRole(getCurrentRole());
+    const current = getCurrentRole();
+    if (!canEditProducts(current)) {
+      // Everyone else meets the prices through the calculator.
+      router.replace('/');
+      return;
+    }
+    setRole(current);
     void refresh();
   }, [router, refresh]);
 

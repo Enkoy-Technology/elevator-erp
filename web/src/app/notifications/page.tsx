@@ -360,7 +360,9 @@ export default function NotificationsPage() {
             empty={
               unreadOnly
                 ? 'Nothing unread. Switch Read state to All notifications to see the earlier alerts.'
-                : 'No notifications yet. Send one to a colleague here \u2014 assignments raised elsewhere in the system also land on this screen.'
+                : canPostNotice(getCurrentRole())
+                  ? 'No notifications yet. Send one to a colleague here \u2014 assignments raised elsewhere in the system also land on this screen.'
+                  : 'No notifications yet. Work assigned to you and alerts raised elsewhere in the system land on this screen.'
             }
           />
         </main>
