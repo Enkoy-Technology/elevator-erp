@@ -1,8 +1,9 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { json, urlencoded, type Request, type Response } from 'express';
+import type { Request, Response } from 'express';
 import helmet from 'helmet';
 
 import { AppModule } from './app.module';
@@ -12,9 +13,11 @@ const bootstrap = async (): Promise<void> => {
   // Nest's own body parser stops at 100 kB. Branding images (logo, stamp,
   // watermark) are stored as data URIs, so the limit is raised here and
   // Nest's parser is switched off so the two do not disagree.
-  const app = await NestFactory.create(AppModule, { bodyParser: false });
-  app.use(json({ limit: '2mb' }));
-  app.use(urlencoded({ extended: true, limit: '2mb' }));
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bodyParser: false,
+  });
+  app.useBodyParser('json', { limit: '2mb' });
+  app.useBodyParser('urlencoded', { extended: true, limit: '2mb' });
   const config = app.get(ConfigService<Env, true>);
   const isProduction = config.get('NODE_ENV', { infer: true }) === 'production';
 
