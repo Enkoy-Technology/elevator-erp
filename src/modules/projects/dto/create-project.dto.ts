@@ -5,6 +5,7 @@ import {
   IsUUID,
   MaxLength,
   MinLength,
+  Matches,
 } from 'class-validator';
 
 export class CreateProjectDto {
@@ -23,6 +24,17 @@ export class CreateProjectDto {
   @IsString()
   @MaxLength(64)
   code?: string;
+
+  @ApiPropertyOptional({
+    example: 'PASSENGER',
+    description:
+      'The product this project is for: a code from Settings → Products & prices. The quotation starts from it.',
+  })
+  @IsOptional()
+  @Matches(/^[A-Z0-9_]{1,40}$/, {
+    message: 'productType must be a product code such as PASSENGER',
+  })
+  productType?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

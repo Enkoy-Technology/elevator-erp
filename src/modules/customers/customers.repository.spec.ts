@@ -522,6 +522,7 @@ const projectRow = (n: number, total: string) => ({
   name: `Tower ${n}`,
   status: 'EXECUTION',
   city: 'Addis Ababa',
+  productType: 'PASSENGER',
   quotedAmountEtb: null,
   contractValueEtb: '1000.00',
   overallTotal: total,
@@ -557,6 +558,7 @@ describe('CustomersRepository.overview — sections', () => {
       name: 'Tower 1',
       status: 'EXECUTION',
       city: 'Addis Ababa',
+      productType: 'PASSENGER',
       quotedAmountEtb: null,
       contractValueEtb: '1000.00',
     });

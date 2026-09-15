@@ -482,6 +482,8 @@ export interface CustomerOverviewProject {
   status: ProjectStatus;
   /** projects.siteCity. */
   city: string | null;
+  /** projects.productType. */
+  productType: string | null;
   /** projects.quotedAmountEtb. */
   quotedAmountEtb: string | null;
   /** projects.contractAmountEtb. */
@@ -585,6 +587,8 @@ export interface Project {
   name: string;
   code: string | null;
   status: ProjectStatus;
+  /** The product code the project was opened for; the quotation starts from it. */
+  productType: string | null;
   siteCity: string | null;
   siteCountry: string;
   quotedAmountEtb: string | null;
@@ -598,6 +602,7 @@ export interface CreateProjectPayload {
   customerId: string;
   name: string;
   code?: string;
+  productType?: string;
   siteCity?: string;
   buildingName?: string;
   notes?: string;

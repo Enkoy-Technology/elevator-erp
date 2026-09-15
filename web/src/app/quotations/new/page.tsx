@@ -73,7 +73,9 @@ export default function NewQuotationPage() {
       return;
     }
     void (async () => {
-      const projectPage = await optional(listProjects({ page: 1, pageSize: 100 }));
+      const projectPage = await optional(
+        listProjects({ page: 1, pageSize: 100 }),
+      );
       setProjects(projectPage.items);
       setProjectId((prev) => prev || projectPage.items[0]?.id || '');
     })();
@@ -88,14 +90,19 @@ export default function NewQuotationPage() {
     setSubmitting(true);
     setError(null);
     try {
+      const project = projects.find((p) => p.id === projectId);
       const quotation = await createQuotationFromCalc(projectId, {
         ...PLACEHOLDER_LIFT,
+        // The product was chosen when the project was opened.
+        productType: project?.productType ?? PLACEHOLDER_LIFT.productType,
         validUntil: validUntil ? new Date(validUntil).toISOString() : undefined,
         notes: notes || undefined,
       });
       router.push(`/quotations/${quotation.id}/edit`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to create quotation');
+      setError(
+        err instanceof ApiError ? err.message : 'Failed to create quotation',
+      );
     } finally {
       setSubmitting(false);
     }

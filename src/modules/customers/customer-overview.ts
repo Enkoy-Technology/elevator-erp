@@ -156,6 +156,8 @@ export interface CustomerOverviewProject {
   status: ProjectRow['status'];
   /** `projects.siteCity` — projects have no plain `city` column. */
   city: ProjectRow['siteCity'];
+  /** `projects.productType` — the product code the project was opened for. */
+  productType: ProjectRow['productType'];
   /** `projects.quotedAmountEtb` — prefills the deal-value prompt when advancing from here. */
   quotedAmountEtb: ProjectRow['quotedAmountEtb'];
   /** `projects.contractAmountEtb`. */

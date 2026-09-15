@@ -10,8 +10,10 @@ import {
   createProject,
   getAccessToken,
   listCustomers,
+  listProductTypes,
   optional,
   type Customer,
+  type ProductTypeRow,
 } from '@/lib/api';
 
 export default function NewProjectPage() {
@@ -20,6 +22,8 @@ export default function NewProjectPage() {
   const [customerId, setCustomerId] = useState('');
   const [name, setName] = useState('');
   const [siteCity, setSiteCity] = useState('Addis Ababa');
+  const [products, setProducts] = useState<ProductTypeRow[]>([]);
+  const [productType, setProductType] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -34,11 +38,19 @@ export default function NewProjectPage() {
       if (!cancelled) {
         setCustomers(page.items);
         // Arriving from a customer's page: that customer, not the first in the list.
-        const preset = new URLSearchParams(window.location.search).get('customerId') ?? '';
+        const preset =
+          new URLSearchParams(window.location.search).get('customerId') ?? '';
         setCustomerId((prev) => prev || preset || page.items[0]?.id || '');
       }
     };
     void load();
+    void listProductTypes()
+      .then((rows) => {
+        if (cancelled) return;
+        setProducts(rows);
+        setProductType((prev) => prev || rows[0]?.code || '');
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -56,6 +68,7 @@ export default function NewProjectPage() {
       await createProject({
         customerId,
         name,
+        productType: productType || undefined,
         siteCity: siteCity || undefined,
       });
       router.push(`/customers/${customerId}`);
@@ -111,6 +124,24 @@ export default function NewProjectPage() {
             onChange={(e) => setName(e.target.value)}
             placeholder="Bole Twin Towers — Lift A"
           />
+        </Field>
+        <Field
+          label="Product"
+          htmlFor="productType"
+          hint="The quotation starts from this product's base price and formula."
+        >
+          <select
+            id="productType"
+            className={fieldClass}
+            value={productType}
+            onChange={(e) => setProductType(e.target.value)}
+          >
+            {products.map((p) => (
+              <option key={p.code} value={p.code}>
+                {p.name}
+              </option>
+            ))}
+          </select>
         </Field>
         <Field label="Site city" htmlFor="city">
           <input

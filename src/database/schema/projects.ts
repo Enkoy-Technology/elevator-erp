@@ -29,6 +29,12 @@ export const projects = pgTable(
     nameNormalized: text('name_normalized'),
     code: text('code'),
     status: projectStatusEnum('status').notNull().default('LEAD'),
+    /**
+     * The product this project is for — a `product_types.code` (PASSENGER,
+     * CAR_LIFT, …). Chosen when the project is opened; the quotation starts
+     * from it, so the base price and the formula follow from day one.
+     */
+    productType: text('product_type'),
     siteAddressLine1: text('site_address_line1'),
     siteAddressLine2: text('site_address_line2'),
     siteCity: text('site_city'),

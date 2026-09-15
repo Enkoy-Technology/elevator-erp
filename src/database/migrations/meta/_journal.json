@@ -526,6 +526,13 @@
       "when": 1789461184667,
       "tag": "0074_foamy_tigra",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1789462585826,
+      "tag": "0075_curious_mongu",
+      "breakpoints": true
     }
   ]
 }

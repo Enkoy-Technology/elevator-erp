@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 
 import { Field, FormPage, FormSection } from '@/components/form-page';
 import { btnDanger, btnSecondary, fieldClass } from '@/components/form-styles';
@@ -10,6 +10,8 @@ import {
   checkCustomerDuplicate,
   createCustomer,
   createProject,
+  listProductTypes,
+  type ProductTypeRow,
   deleteCustomer,
   updateCustomer,
   type Customer,
@@ -40,6 +42,8 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
   // Create only: a customer arrives with the building they want a lift in,
   // so the first project is opened on the same form.
   const [projectName, setProjectName] = useState('');
+  const [products, setProducts] = useState<ProductTypeRow[]>([]);
+  const [productType, setProductType] = useState('');
   const [city, setCity] = useState(
     customer?.city ?? (customer ? '' : 'Addis Ababa'),
   );
@@ -80,6 +84,16 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
     }
   };
 
+  useEffect(() => {
+    if (editId) return;
+    void listProductTypes()
+      .then((rows) => {
+        setProducts(rows);
+        setProductType((prev) => prev || rows[0]?.code || '');
+      })
+      .catch(() => undefined);
+  }, [editId]);
+
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
@@ -110,6 +124,7 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
           await createProject({
             customerId: created.id,
             name: projectName.trim(),
+            productType: productType || undefined,
             siteCity: city || undefined,
           });
         }
@@ -300,6 +315,24 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
 
               onChange={(e) => setProjectName(e.target.value)}
             />
+          </Field>
+          <Field
+            label="Product"
+            htmlFor="productType"
+            hint="What the customer is buying. The quotation starts from this product's base price and formula."
+          >
+            <select
+              id="productType"
+              className={fieldClass}
+              value={productType}
+              onChange={(e) => setProductType(e.target.value)}
+            >
+              {products.map((p) => (
+                <option key={p.code} value={p.code}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
           </Field>
         </FormSection>
       ) : null}

@@ -28,7 +28,9 @@ import {
   getCurrentRole,
   getCustomer,
   getCustomerOverview,
+  listProductTypes,
   NEXT_PROJECT_STATUSES,
+  productName,
   updateProjectStatus,
   type ContractStatus,
   type Customer,
@@ -43,6 +45,7 @@ import {
   type CustomerType,
   type InvoiceStatus,
   type PaymentMethod,
+  type ProductTypeRow,
   type ProjectStatus,
   type QuoteStatus,
   type UserRole,
@@ -336,6 +339,7 @@ export default function CustomerDetailPage() {
   const [overview, setOverview] = useState<CustomerOverview | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [advancingId, setAdvancingId] = useState<string | null>(null);
+  const [products, setProducts] = useState<ProductTypeRow[]>([]);
   const [actionError, setActionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -347,6 +351,9 @@ export default function CustomerDetailPage() {
       return;
     }
     setRole(getCurrentRole());
+    void listProductTypes()
+      .then(setProducts)
+      .catch(() => undefined);
     let cancelled = false;
     const load = async () => {
       try {
@@ -483,6 +490,14 @@ export default function CustomerDetailPage() {
           tone={PROJECT_TONE[row.original.status]}
         />
       ),
+    },
+    {
+      id: 'product',
+      header: 'Product',
+      cell: ({ row }) =>
+        row.original.productType
+          ? productName(products, row.original.productType)
+          : '—',
     },
     { id: 'city', header: 'City', cell: ({ row }) => dash(row.original.city) },
     {

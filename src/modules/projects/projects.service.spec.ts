@@ -20,6 +20,7 @@ describe('ProjectsService', () => {
     nameNormalized: 'bole twin towers — lift a',
     code: 'PRJ-001',
     status: 'LEAD',
+    productType: null,
     siteAddressLine1: null,
     siteAddressLine2: null,
     siteCity: 'Addis Ababa',

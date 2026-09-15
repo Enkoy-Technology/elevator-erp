@@ -24,9 +24,12 @@ import {
   getAccessToken,
   getCurrentRole,
   listCustomers,
+  listProductTypes,
   listProjects,
+  productName,
   NEXT_PROJECT_STATUSES,
   updateProjectStatus,
+  type ProductTypeRow,
   type Project,
   type ProjectStatus,
   optional,
@@ -86,6 +89,7 @@ export default function ProjectsPage() {
     role === 'ADMIN';
   const [projects, setProjects] = useState<Project[]>([]);
   const [customerMap, setCustomerMap] = useState<Record<string, string>>({});
+  const [products, setProducts] = useState<ProductTypeRow[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
@@ -157,6 +161,9 @@ export default function ProjectsPage() {
       router.replace('/login');
       return;
     }
+    void listProductTypes()
+      .then(setProducts)
+      .catch(() => undefined);
     if (customerFilter === null) {
       return;
     }
@@ -228,6 +235,14 @@ export default function ProjectsPage() {
       cell: ({ row }) =>
         customerMap[row.original.customerId] ??
         row.original.customerId.slice(0, 8),
+    },
+    {
+      id: 'product',
+      header: 'Product',
+      cell: ({ row }) =>
+        row.original.productType
+          ? productName(products, row.original.productType)
+          : '\u2014',
     },
     {
       id: 'city',

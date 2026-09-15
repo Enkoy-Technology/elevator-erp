@@ -168,6 +168,7 @@ export class ProjectsRepository {
           name: dto.name,
           nameNormalized: normalizeEthiopic(dto.name),
           code: dto.code,
+          productType: dto.productType ?? null,
           siteAddressLine1: dto.siteAddressLine1,
           siteAddressLine2: dto.siteAddressLine2,
           siteCity: dto.siteCity,
