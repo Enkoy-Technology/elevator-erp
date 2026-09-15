@@ -1,8 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { Sidebar } from '@/components/sidebar';
+import { getAccessToken, getCurrentRole } from '@/lib/api';
 
 import {
   DOC_GROUPS,
@@ -20,7 +22,11 @@ const haystack = (section: DocSection): string =>
     ...section.body,
     ...(section.rules ?? []),
     ...(section.facts ?? []).flatMap((f) => [f.label, f.value]),
-    ...(section.flows ?? []).flatMap((f) => [f.title, ...f.steps, f.note ?? '']),
+    ...(section.flows ?? []).flatMap((f) => [
+      f.title,
+      ...f.steps,
+      f.note ?? '',
+    ]),
     ...(section.checks ?? []).flatMap((c) => [c.action, c.expect]),
     ...(section.endpoints ?? []).flatMap((e) => [e.path, e.roles, e.note]),
   ]
@@ -35,7 +41,19 @@ const METHOD_CLASS: Record<Endpoint['method'], string> = {
 };
 
 export default function DocsPage() {
+  const router = useRouter();
   const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    if (!getAccessToken()) {
+      router.replace('/login');
+      return;
+    }
+    const role = getCurrentRole();
+    if (role !== 'CEO' && role !== 'ADMIN' && role !== 'GENERAL_MANAGER') {
+      router.replace('/');
+    }
+  }, [router]);
 
   const groups = useMemo<DocGroup[]>(() => {
     const needle = query.trim().toLowerCase();
@@ -52,7 +70,9 @@ export default function DocsPage() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-8 py-4">
           <div>
-            <h1 className="font-display text-lg font-semibold">Documentation</h1>
+            <h1 className="font-display text-lg font-semibold">
+              Documentation
+            </h1>
             <p className="text-sm text-slate-500">
               Every module, flow and rule in the platform
             </p>
@@ -234,7 +254,10 @@ function SectionCard({ section }: { section: DocSection }) {
       <div className="space-y-6 px-6 py-6">
         <div className="max-w-3xl space-y-3">
           {section.body.map((paragraph) => (
-            <p key={paragraph} className="text-[14px] leading-relaxed text-slate-700">
+            <p
+              key={paragraph}
+              className="text-[14px] leading-relaxed text-slate-700"
+            >
               {paragraph}
             </p>
           ))}
@@ -297,7 +320,10 @@ function SectionCard({ section }: { section: DocSection }) {
         {section.rules && (
           <ul className="space-y-2">
             {section.rules.map((rule) => (
-              <li key={rule} className="flex gap-2.5 text-[13px] text-slate-700">
+              <li
+                key={rule}
+                className="flex gap-2.5 text-[13px] text-slate-700"
+              >
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
@@ -328,7 +354,10 @@ function SectionCard({ section }: { section: DocSection }) {
               </thead>
               <tbody>
                 {section.checks.map((check, index) => (
-                  <tr key={check.action} className="border-t border-slate-100 align-top">
+                  <tr
+                    key={check.action}
+                    className="border-t border-slate-100 align-top"
+                  >
                     <td className="px-4 py-2.5 font-mono text-[12px] text-slate-400">
                       {index + 1}
                     </td>

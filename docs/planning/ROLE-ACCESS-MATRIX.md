@@ -40,7 +40,7 @@ for every role; the login screen lists them.
   Admin, and never an existing executive's account (`EmployeesService.assertMayManage`).
 - **Settings** (company, products & prices, document text, components) are management's: CEO and Admin edit; the General Manager reads; Sales Manager edits prices, document text and components.
 - **Dashboard** is open to every staff role; the customer role gets none.
-- **Notifications** (the inbox) and the in-app docs are open to every login; posting a notice is for the communication roles: General Manager, Office Manager, Marketing Manager, Secretary.
+- **Notifications** (the inbox) are open to every login; the in-app docs are for the CEO, Admin and General Manager; posting a notice is for the communication roles: General Manager, Office Manager, Marketing Manager, Secretary.
 
 ## Not in the document's access rights but granted, with the reason
 

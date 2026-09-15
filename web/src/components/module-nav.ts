@@ -244,7 +244,8 @@ export const MODULES: ModuleNavItem[] = [
     phase: null,
     href: '/docs',
     icon: 'M12 6.5C10.5 5 8.5 4.5 5 4.5v13c3.5 0 5.5.5 7 2m0-13c1.5-1.5 3.5-2 7-2v13c-3.5 0-5.5.5-7 2m0-13v13',
-    // Documentation, not data: every role may read it.
-    roles: null,
+    // The system documentation is for the people who run the system: CEO
+    // and Admin (SUPER_ROLES) and the General Manager.
+    roles: ['GENERAL_MANAGER'],
   },
 ];
