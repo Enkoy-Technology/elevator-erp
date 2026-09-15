@@ -49,6 +49,13 @@ export type ProformaLineRecord = typeof proformaLines.$inferSelect;
 /** `document_sequences.kind` for this document type — see the table's own doc comment. */
 const PROFORMA_SEQUENCE_KIND = 'PROFORMA';
 
+/** `days` from `from`, as the calendar date the `date` column stores. */
+const addDaysIso = (from: Date, days: number): string => {
+  const d = new Date(from);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
 @Injectable()
 export class ProformasRepository {
   constructor(private readonly tenantDb: TenantDbService) {}
@@ -365,6 +372,13 @@ export class ProformasRepository {
         .where(eq(quotationPaymentTerms.quotationId, quote.id))
         .orderBy(asc(quotationPaymentTerms.sequence));
 
+      // The offer states "valid for N days"; unless a date was given, the
+      // proforma is valid until N days from today, so nobody is asked twice.
+      const resolvedValidUntil =
+        validUntil ??
+        (quote.validityDays
+          ? addDaysIso(new Date(), quote.validityDays)
+          : null);
       const [row] = await tx
         .insert(proformas)
         .values({
@@ -396,7 +410,7 @@ export class ProformasRepository {
             triggerEvent: term.triggerEvent,
           })),
           issuedByUserId: userId,
-          validUntil,
+          validUntil: resolvedValidUntil,
           status: 'ISSUED',
         })
         .returning();

@@ -17,6 +17,7 @@ import {
   StatusPill,
 } from '@/components/list-toolbar';
 import { Sidebar } from '@/components/sidebar';
+import { SideDrawer } from '@/components/side-drawer';
 import { formatEtb } from '@/lib/money';
 import {
   ApiError,
@@ -167,7 +168,9 @@ const downloadCsv = (
   // spreadsheet rather than as a formula.
   const cell = (value: string): string =>
     `"${(/^[=+\-@\t\r]/.test(value) ? `'${value}` : value).replace(/"/g, '""')}"`;
-  const csv = [headers, ...rows].map((row) => row.map(cell).join(',')).join('\r\n');
+  const csv = [headers, ...rows]
+    .map((row) => row.map(cell).join(','))
+    .join('\r\n');
   // BOM: Excel needs it to read UTF-8 (Amharic names) instead of mojibake.
   const url = URL.createObjectURL(
     new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }),
@@ -182,6 +185,13 @@ const downloadCsv = (
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Today plus `days`, as YYYY-MM-DD — the same rule the API applies when no date is sent. */
+const addDaysIso = (days: number): string => {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
 
 /** Mirrors @Roles('SALES_MANAGER') on the quotations/proformas mutation
  *  routes; CEO and ADMIN bypass via RolesGuard's SUPER_ROLES. */
@@ -206,7 +216,10 @@ const canApproveQuotes = (role: UserRole | null): boolean =>
  *  that controller, not ProformasController, so it needs its own gate
  *  distinct from canWrite's SALES_MANAGER check above. */
 const canConvertToInvoice = (role: UserRole | null): boolean =>
-  role === 'FINANCE_OFFICER' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
+  role === 'FINANCE_OFFICER' ||
+  role === 'CEO' ||
+  role === 'GENERAL_MANAGER' ||
+  role === 'ADMIN';
 
 export default function QuotationsPage() {
   const router = useRouter();
@@ -217,7 +230,9 @@ export default function QuotationsPage() {
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  const [quoteStatusFilter, setQuoteStatusFilter] = useState<QuoteStatus | ''>('');
+  const [quoteStatusFilter, setQuoteStatusFilter] = useState<QuoteStatus | ''>(
+    '',
+  );
 
   const [projectMap, setProjectMap] = useState<Record<string, string>>({});
   const [customerMap, setCustomerMap] = useState<Record<string, string>>({});
@@ -225,6 +240,10 @@ export default function QuotationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // The quotation waiting for its Approve confirmation, and the proforma
+  // validity that confirmation will send.
+  const [approving, setApproving] = useState<Quotation | null>(null);
+  const [approveDate, setApproveDate] = useState('');
   // Proformas has no "converted" flag of its own (issueFromProforma never
   // touches proformas.status), so without this the → Invoice button would
   // stay live indefinitely and every second click would be a guaranteed 409
@@ -235,7 +254,9 @@ export default function QuotationsPage() {
   // Bulk selection. Cleared whenever the rows underneath it
   // change (see refresh) — an id whose row is no longer loaded cannot be
   // exported, so keeping it would silently drop it from the CSV.
-  const [selectedQuotes, setSelectedQuotes] = useState<ReadonlySet<string>>(new Set());
+  const [selectedQuotes, setSelectedQuotes] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
   // Two-step confirm for Expire — the only destructive action here that has
   // no reason prompt of its own to act as the confirmation.
   const [confirmExpireId, setConfirmExpireId] = useState<string | null>(null);
@@ -252,10 +273,14 @@ export default function QuotationsPage() {
           optional(listCustomers({ page: 1, pageSize: 100 })),
         ]);
         setProjectMap(
-          Object.fromEntries(projectPage.items.map((p) => [p.id, p.name] as const)),
+          Object.fromEntries(
+            projectPage.items.map((p) => [p.id, p.name] as const),
+          ),
         );
         setCustomerMap(
-          Object.fromEntries(customerPage.items.map((c) => [c.id, c.name] as const)),
+          Object.fromEntries(
+            customerPage.items.map((c) => [c.id, c.name] as const),
+          ),
         );
 
         const result = await listQuotations({
@@ -307,7 +332,6 @@ export default function QuotationsPage() {
     void runQuoteAction(() => submitQuotation(quote.id), quote.id);
   };
 
-
   const onReject = (quote: Quotation) => {
     const entered = window.prompt(`Reason for rejecting ${quote.quoteNumber}?`);
     if (entered === null) {
@@ -328,24 +352,27 @@ export default function QuotationsPage() {
   /**
    * Approving IS issuing the proforma — one click, one transaction on the
    * API (POST /quotations/:id/convert-to-proforma accepts PENDING_APPROVAL).
-   * ponytail: window.prompt for the optional valid-until date, matching the
-   * established reason-prompt convention on this page.
+   * The proforma's validity follows the offer's own "valid for N days";
+   * the confirmation shows the date and lets it be changed.
    */
   const onApprove = (quote: Quotation) => {
-    const entered = window.prompt(
-      `Approve ${quote.quoteNumber} and issue its proforma. Proforma valid until (YYYY-MM-DD, optional)?`,
-      '',
-    );
-    if (entered === null) {
+    setApproveDate(quote.validityDays ? addDaysIso(quote.validityDays) : '');
+    setApproving(quote);
+  };
+
+  const confirmApprove = () => {
+    if (!approving) {
       return;
     }
-    const trimmed = entered.trim();
-    if (trimmed && !ISO_DATE.test(trimmed)) {
+    const date = approveDate.trim();
+    if (date && !ISO_DATE.test(date)) {
       setError('Valid-until date must be in YYYY-MM-DD format');
       return;
     }
+    const quote = approving;
+    setApproving(null);
     void runQuoteAction(
-      () => convertQuotationToProforma(quote.id, trimmed || undefined),
+      () => convertQuotationToProforma(quote.id, date || undefined),
       quote.id,
     );
   };
@@ -354,7 +381,9 @@ export default function QuotationsPage() {
     if (!quote.proformaId) {
       return;
     }
-    const entered = window.prompt(`Reason for cancelling ${quote.proformaNumber}?`);
+    const entered = window.prompt(
+      `Reason for cancelling ${quote.proformaNumber}?`,
+    );
     if (entered === null) {
       return;
     }
@@ -437,17 +466,27 @@ export default function QuotationsPage() {
 
   const onDownloadIssued = (quote: Quotation, choice: IssuedDownload) =>
     choice.startsWith('proforma:')
-      ? onDownloadProforma(quote, choice.slice('proforma:'.length) as DocumentFormat)
+      ? onDownloadProforma(
+          quote,
+          choice.slice('proforma:'.length) as DocumentFormat,
+        )
       : onDownloadQuote(quote, choice as QuoteDownload);
 
-  const onDownloadProforma = async (quote: Quotation, format: DocumentFormat) => {
+  const onDownloadProforma = async (
+    quote: Quotation,
+    format: DocumentFormat,
+  ) => {
     if (!quote.proformaId || !quote.proformaNumber) {
       return;
     }
     setBusyId(quote.id);
     setError(null);
     try {
-      await downloadProformaDocument(quote.proformaId, quote.proformaNumber, format);
+      await downloadProformaDocument(
+        quote.proformaId,
+        quote.proformaNumber,
+        format,
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Download failed');
     } finally {
@@ -492,7 +531,15 @@ export default function QuotationsPage() {
     const rows = quotes.filter((quote) => selectedQuotes.has(quote.id));
     downloadCsv(
       'quotations.csv',
-      ['Number', 'Proforma', 'Project', 'Customer', 'Status', 'Total ETB', 'Created'],
+      [
+        'Number',
+        'Proforma',
+        'Project',
+        'Customer',
+        'Status',
+        'Total ETB',
+        'Created',
+      ],
       rows.map((quote) => [
         quote.quoteNumber,
         quote.proformaNumber ?? '',
@@ -629,7 +676,8 @@ export default function QuotationsPage() {
             onClick={() => onReject(quote)}
           />
         ) : null}
-        {canApprove && (quote.status === 'DRAFT' || quote.status === 'PENDING_APPROVAL') ? (
+        {canApprove &&
+        (quote.status === 'DRAFT' || quote.status === 'PENDING_APPROVAL') ? (
           confirmExpireId === quote.id ? (
             <>
               <RowAction
@@ -680,20 +728,24 @@ export default function QuotationsPage() {
       header: 'Number',
       enableSorting: true,
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-slate-900">{row.original.quoteNumber}</span>
+        <span className="font-mono text-xs text-slate-900">
+          {row.original.quoteNumber}
+        </span>
       ),
     },
     {
       id: 'project',
       header: 'Project',
-      accessorFn: (row) => projectMap[row.projectId] ?? row.projectId.slice(0, 8),
+      accessorFn: (row) =>
+        projectMap[row.projectId] ?? row.projectId.slice(0, 8),
       cell: (cell) => cell.getValue<string>(),
     },
     {
       id: 'customer',
       header: 'Customer',
       enableSorting: true,
-      accessorFn: (row) => customerMap[row.customerId] ?? row.customerId.slice(0, 8),
+      accessorFn: (row) =>
+        customerMap[row.customerId] ?? row.customerId.slice(0, 8),
       cell: (cell) => cell.getValue<string>(),
     },
     {
@@ -726,7 +778,9 @@ export default function QuotationsPage() {
       header: 'Total',
       meta: { align: 'right' },
       cell: ({ row }) => (
-        <span className="font-semibold text-navy-800">{formatEtb(row.original.totalPriceEtb)}</span>
+        <span className="font-semibold text-navy-800">
+          {formatEtb(row.original.totalPriceEtb)}
+        </span>
       ),
     },
     updatedColumn<Quotation>((row) => row.updatedAt),
@@ -747,7 +801,8 @@ export default function QuotationsPage() {
             <div>
               <h1 className="font-display text-lg font-semibold">Quotations</h1>
               <p className="text-sm text-slate-500">
-                Draft → submit → approve. Approval issues the proforma (amounts in ETB)
+                Draft → submit → approve. Approval issues the proforma (amounts
+                in ETB)
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -771,70 +826,136 @@ export default function QuotationsPage() {
           ) : null}
 
           <section>
-                <ListToolbar
-                  filters={
-                    <FilterSelect
-                      label="Status"
-                      value={quoteStatusFilter}
-                      onChange={setQuoteFilter}
-                      options={QUOTE_FILTERS.map((s) => ({
-                        value: s,
-                        label: QUOTE_STATUS_LABEL[s],
-                      }))}
-                      allLabel="All statuses"
-                    />
-                  }
+            <ListToolbar
+              filters={
+                <FilterSelect
+                  label="Status"
+                  value={quoteStatusFilter}
+                  onChange={setQuoteFilter}
+                  options={QUOTE_FILTERS.map((s) => ({
+                    value: s,
+                    label: QUOTE_STATUS_LABEL[s],
+                  }))}
+                  allLabel="All statuses"
                 />
-                <DataTable
-                  columns={quoteColumns}
-                  rows={quotes}
-                  getRowId={(quote) => quote.id}
-                  getRowLabel={(quote) => quote.quoteNumber}
-                  selectable
-                  selectedIds={selectedQuotes}
-                  onSelectionChange={setSelectedQuotes}
-                  bulkActions={
-                    <button
-                      type="button"
-                      onClick={exportSelectedQuotes}
-                      className={`${btnSecondary} px-2.5 py-1 text-xs`}
+              }
+            />
+            <DataTable
+              columns={quoteColumns}
+              rows={quotes}
+              getRowId={(quote) => quote.id}
+              getRowLabel={(quote) => quote.quoteNumber}
+              selectable
+              selectedIds={selectedQuotes}
+              onSelectionChange={setSelectedQuotes}
+              bulkActions={
+                <button
+                  type="button"
+                  onClick={exportSelectedQuotes}
+                  className={`${btnSecondary} px-2.5 py-1 text-xs`}
+                >
+                  Export selected
+                </button>
+              }
+              loading={loading}
+              caption="Quotations"
+              pagination={{
+                page,
+                pageSize,
+                total,
+                totalPages,
+                onPageChange: setPage,
+                onPageSizeChange: (size) => {
+                  setPageSize(size);
+                  setPage(1);
+                },
+              }}
+              empty={
+                canMutate ? (
+                  <>
+                    No quotations yet.{' '}
+                    <Link
+                      href="/quotations/new"
+                      className="font-semibold text-navy-800 hover:underline"
                     >
-                      Export selected
-                    </button>
-                  }
-                  loading={loading}
-                  caption="Quotations"
-                  pagination={{
-                    page,
-                    pageSize,
-                    total,
-                    totalPages,
-                    onPageChange: setPage,
-                    onPageSizeChange: (size) => {
-                      setPageSize(size);
-                      setPage(1);
-                    },
-                  }}
-                  empty={
-                    canMutate ? (
-                      <>
-                        No quotations yet.{' '}
-                        <Link
-                          href="/quotations/new"
-                          className="font-semibold text-navy-800 hover:underline"
-                        >
-                          Draft your first quote
-                        </Link>
-                        .
-                      </>
-                    ) : (
-                      <>No quotations yet. A sales manager drafts the first one.</>
-                    )
-                  }
-                />
+                      Draft your first quote
+                    </Link>
+                    .
+                  </>
+                ) : (
+                  <>No quotations yet. A sales manager drafts the first one.</>
+                )
+              }
+            />
           </section>
         </main>
       </div>
+
+      <SideDrawer
+        open={approving !== null}
+        onClose={() => setApproving(null)}
+        title={approving ? `Approve ${approving.quoteNumber}` : 'Approve'}
+        description="Approving issues the proforma the customer pays against. The quotation is then fixed; a change means a new revision."
+        footer={
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setApproving(null)}
+              className={`${btnSecondary} flex-1`}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmApprove}
+              className={`${btnPrimary} flex-1`}
+            >
+              Approve and issue proforma
+            </button>
+          </div>
+        }
+      >
+        {approving ? (
+          <div className="space-y-4 text-sm">
+            <dl className="space-y-1.5">
+              <div className="flex justify-between gap-4">
+                <dt className="text-slate-500">Customer</dt>
+                <dd className="font-medium text-slate-900">
+                  {customerMap[approving.customerId] ?? '—'}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-slate-500">
+                  Total{approving.vatApplies ? ', incl. VAT' : ', no VAT'}
+                </dt>
+                <dd className="font-semibold tabular-nums text-slate-900">
+                  {formatEtb(approving.totalPriceEtb)}
+                </dd>
+              </div>
+            </dl>
+            <div>
+              <label
+                htmlFor="approve-valid-until"
+                className="mb-1 block text-xs font-semibold text-slate-600"
+              >
+                Proforma valid until
+              </label>
+              <input
+                id="approve-valid-until"
+                type="date"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                value={approveDate}
+                onChange={(e) => setApproveDate(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                {approving.validityDays
+                  ? `From the offer's own terms: valid for ${approving.validityDays} days.`
+                  : 'The offer states no validity. Leave blank for none, or pick a date.'}
+              </p>
+            </div>
+          </div>
+        ) : null}
+      </SideDrawer>
     </div>
   );
 }
