@@ -101,6 +101,12 @@ export class SettingsRepository {
           ...(dto.slogan !== undefined ? { slogan: dto.slogan } : {}),
           ...(dto.logoUrl !== undefined ? { logoUrl: dto.logoUrl } : {}),
           ...(dto.stampUrl !== undefined ? { stampUrl: dto.stampUrl } : {}),
+          ...(dto.watermarkUrl !== undefined
+            ? { watermarkUrl: dto.watermarkUrl }
+            : {}),
+          ...(dto.websiteUrl !== undefined
+            ? { websiteUrl: dto.websiteUrl }
+            : {}),
           ...(dto.officialAddress !== undefined
             ? { officialAddress: dto.officialAddress }
             : {}),

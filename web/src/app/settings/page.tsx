@@ -39,6 +39,8 @@ export default function SettingsPage() {
   const [secondaryColorHex, setSecondaryColorHex] = useState('#E8B54D');
   const [logoUrl, setLogoUrl] = useState('');
   const [stampUrl, setStampUrl] = useState('');
+  const [watermarkUrl, setWatermarkUrl] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
   const [officialAddress, setOfficialAddress] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
@@ -63,6 +65,8 @@ export default function SettingsPage() {
       setSecondaryColorHex(data.secondaryColorHex);
       setLogoUrl(data.logoUrl ?? '');
       setStampUrl(data.stampUrl ?? '');
+      setWatermarkUrl(data.watermarkUrl ?? '');
+      setWebsiteUrl(data.websiteUrl ?? '');
       setOfficialAddress(data.officialAddress ?? '');
       setContactEmail(data.contactEmail ?? '');
       setContactPhone(data.contactPhone ?? '');
@@ -115,6 +119,8 @@ export default function SettingsPage() {
         secondaryColorHex,
         logoUrl: logoUrl || null,
         stampUrl: stampUrl || null,
+        watermarkUrl: watermarkUrl || null,
+        websiteUrl: websiteUrl.trim() || null,
         officialAddress: officialAddress || null,
         contactEmail: contactEmail || null,
         contactPhone: contactPhone || null,
@@ -285,6 +291,33 @@ export default function SettingsPage() {
                       value={stampUrl}
                       onChange={(e) => setStampUrl(e.target.value)}
                       placeholder="https://…"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass} htmlFor="watermarkUrl">
+                      {t('settings.watermarkUrl')}
+                    </label>
+                    <input
+                      id="watermarkUrl"
+                      className={fieldClass}
+                      value={watermarkUrl}
+                      onChange={(e) => setWatermarkUrl(e.target.value)}
+                      placeholder="https://…"
+                    />
+                    <p className="mt-1 text-xs text-slate-400">
+                      {t('settings.watermarkUrlHelp')}
+                    </p>
+                  </div>
+                  <div>
+                    <label className={labelClass} htmlFor="websiteUrl">
+                      {t('settings.websiteUrl')}
+                    </label>
+                    <input
+                      id="websiteUrl"
+                      className={fieldClass}
+                      value={websiteUrl}
+                      onChange={(e) => setWebsiteUrl(e.target.value)}
+                      placeholder="www.shiningstar.et"
                     />
                   </div>
                   <div>

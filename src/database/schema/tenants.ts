@@ -131,6 +131,10 @@ export const tenantBranding = pgTable('tenant_branding', {
   secondaryColorHex: text('secondary_color_hex').notNull().default('#E8B54D'),
   logoUrl: text('logo_url'),
   stampUrl: text('stamp_url'),
+  /** A faint version of the brand mark, printed behind the text of every page. */
+  watermarkUrl: text('watermark_url'),
+  /** Printed in the footer of every document, beside the email and phone. */
+  websiteUrl: text('website_url'),
   /** Printed under the company name on every branded document. The client's
    * own proposal requires "STAR OF ELEVATION" on all generated documents;
    * the PDF and docx layouts already omit the line when this is empty. */

@@ -46,6 +46,8 @@ export class TenantBrandingProvider {
         // Rendered as the seal on the signature block of the customer-facing
         // documents; null simply omits that block's seal column.
         stampUrl: branding?.stampUrl ?? null,
+        watermarkUrl: branding?.watermarkUrl ?? null,
+        websiteUrl: branding?.websiteUrl ?? null,
         address: branding?.officialAddress ?? '',
         phones: branding?.contactPhone ? [branding.contactPhone] : [],
         email: branding?.contactEmail ?? null,

@@ -1214,6 +1214,10 @@ export interface TenantSettings {
   secondaryColorHex: string;
   logoUrl: string | null;
   stampUrl: string | null;
+  /** A faint brand mark printed behind every page of every document. */
+  watermarkUrl: string | null;
+  /** Printed in the footer of every document. */
+  websiteUrl: string | null;
   officialAddress: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
@@ -2343,6 +2347,8 @@ export const updateSettings = (payload: {
   secondaryColorHex?: string;
   logoUrl?: string | null;
   stampUrl?: string | null;
+  watermarkUrl?: string | null;
+  websiteUrl?: string | null;
   officialAddress?: string | null;
   contactEmail?: string | null;
   contactPhone?: string | null;

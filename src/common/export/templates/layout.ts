@@ -53,11 +53,16 @@ export interface DocumentBranding extends TenantBranding {
   /** Scanned company seal. Rendered ONLY when set — never a placeholder box. */
   stampUrl?: string | null;
   email?: string | null;
+  /** A faint brand mark printed behind every page. Rendered ONLY when set. */
+  watermarkUrl?: string | null;
+  websiteUrl?: string | null;
 }
 
 // TenantBranding is structurally assignable to DocumentBranding (the extra
 // fields are optional), so this is a widening annotation, not a cast.
-const asDocumentBranding = (branding: TenantBranding | null): DocumentBranding | null => branding;
+const asDocumentBranding = (
+  branding: TenantBranding | null,
+): DocumentBranding | null => branding;
 
 /** One cell of the reference plate: a mono label over a mono value. */
 export interface ReferenceField {
@@ -72,7 +77,9 @@ export interface ReferenceField {
  * element on the page that must be findable without reading anything else.
  * Every label and value is escaped here.
  */
-export const renderReferencePlate = (fields: readonly ReferenceField[]): string => {
+export const renderReferencePlate = (
+  fields: readonly ReferenceField[],
+): string => {
   if (fields.length === 0) {
     return '';
   }
@@ -96,10 +103,16 @@ export interface PartyBlock {
  * The two unambiguous party blocks every commercial document needs: who
  * issued it (always the tenant) and who it is addressed to. Escaped here.
  */
-export const renderParties = (branding: TenantBranding | null, to: PartyBlock): string => {
+export const renderParties = (
+  branding: TenantBranding | null,
+  to: PartyBlock,
+): string => {
   const from: PartyBlock = {
     label: 'From',
-    lines: [branding?.name ?? '', ...(branding?.address ? [branding.address] : [])],
+    lines: [
+      branding?.name ?? '',
+      ...(branding?.address ? [branding.address] : []),
+    ],
   };
   const column = (party: PartyBlock): string => {
     const lines = party.lines
@@ -177,6 +190,8 @@ export interface LayoutOptions {
   bodyHtml: string;
   /** Optional line under the branding footer, e.g. a validity notice. Escaped internally. */
   footerNote?: string;
+  /** Lines under the title on the cover — "Between", a party, "and", the other. Escaped internally. */
+  coverLines?: readonly string[];
 }
 
 /**
@@ -195,13 +210,24 @@ export interface LayoutOptions {
  * is preceded by a flat neutral so an older engine still gets a sane fill.
  */
 export const renderLayout = (opts: LayoutOptions): string => {
-  const { branding, documentTitle, bodyHtml, footerNote } = opts;
+  const {
+    branding,
+    documentTitle,
+    bodyHtml,
+    footerNote,
+    coverLines = [],
+  } = opts;
   const b = asDocumentBranding(branding);
   const primary = sanitizeHex(b?.primaryColor);
   const phones = (b?.phones ?? []).filter(Boolean).map(esc).join(' &middot; ');
-  const contact = [b?.address ? esc(b.address) : '', phones, b?.email ? esc(b.email) : '']
+  // The address block top right, one line per part — the way the company's
+  // own letterhead sets it.
+  const addressLines = (b?.address ?? '')
+    .split(/\r?\n|,\s*/)
+    .map((line) => line.trim())
     .filter(Boolean)
-    .join(' &middot; ');
+    .map(esc)
+    .join('<br/>');
 
   // The two bands below are rendered by Chromium into the page MARGIN
   // BOXES, which are an isolated context with no access to this document's
@@ -212,27 +238,50 @@ export const renderLayout = (opts: LayoutOptions): string => {
   // alt="" (not alt="logo"): a logo URL the asset gate blocks, or one that
   // 404s, must leave nothing behind — not the word "logo" where the mark
   // should be.
+  // The letterhead follows the company's own paper: the logo alone, top
+  // left, and the address block top right in small grey type. The document
+  // title is not up here — it opens the page, centred. A tenant with no
+  // logo yet gets its name where the logo would be.
   const headerHtml = `
     <table style="width:100%;border-collapse:collapse;"><tbody><tr>
-      ${
-        b?.logoUrl
-          ? `<td style="width:1%;padding:0 12px 0 0;vertical-align:middle;border:none;"><img src="${esc(b.logoUrl)}" alt="" style="height:13mm;width:auto;display:block;" /></td>`
-          : ''
-      }
-      <td style="padding:0 12px 0 0;vertical-align:middle;border:none;">
-        <div style="font-size:13px;font-weight:bold;line-height:1.25;color:#17150f;">${esc(b?.name ?? '')}</div>
-        ${b?.slogan ? `<div style="font-size:8.5px;letter-spacing:0.4px;text-transform:uppercase;color:#57534e;">${esc(b.slogan)}</div>` : ''}
+      <td style="padding:0;vertical-align:top;border:none;">
+        ${
+          b?.logoUrl
+            ? `<img src="${esc(b.logoUrl)}" alt="" style="height:18mm;width:auto;display:block;" />`
+            : `<div style="font-size:14px;font-weight:bold;line-height:1.25;color:#17150f;">${esc(b?.name ?? '')}</div>`
+        }
+        ${b?.slogan ? `<div style="margin-top:2px;font-size:8px;letter-spacing:0.4px;text-transform:uppercase;color:#57534e;">${esc(b.slogan)}</div>` : ''}
       </td>
-      <td style="width:1%;text-align:right;white-space:nowrap;vertical-align:middle;border:none;">
-        <div style="font-size:17px;font-weight:bold;letter-spacing:0.8px;color:#17150f;">${esc(documentTitle)}</div>
+      <td style="width:1%;text-align:right;white-space:nowrap;vertical-align:top;border:none;font-size:8.5px;line-height:1.4;color:#57534e;">
+        ${addressLines}
       </td>
-    </tr></tbody></table>
-    <div style="height:2.5px;background:${primary};margin-top:5px;"></div>
-    <div style="height:1px;background:#17150f;margin-top:1px;"></div>`;
+    </tr></tbody></table>`;
 
+  // Website and email on the left, phone on the right — the company's own
+  // footer. The renderer adds the page counter after this.
   const footerHtml = `
-      <div>${contact}</div>
-      ${footerNote ? `<div>${esc(footerNote)}</div>` : ''}`;
+      <div style="display:flex;justify-content:space-between;gap:8mm;">
+        <div>${[b?.websiteUrl, b?.email].filter(Boolean).map(esc).join('<br/>')}</div>
+        <div style="text-align:right;">${phones}</div>
+      </div>
+      ${footerNote ? `<div style="margin-top:1mm;">${esc(footerNote)}</div>` : ''}`;
+
+  const watermarkHtml = b?.watermarkUrl
+    ? `<div class="watermark"><img src="${esc(b.watermarkUrl)}" alt="" /></div>`
+    : '';
+
+  const coverHtml = `
+  <div class="doc-cover">
+    <div class="doc-title">${esc(documentTitle)}</div>
+    <div class="doc-rule"></div>
+    ${coverLines
+      .map((line, i) =>
+        i % 2 === 1
+          ? `<div class="cover-party">${esc(line)}</div>`
+          : `<div class="cover-line">${esc(line)}</div>`,
+      )
+      .join('')}
+  </div>`;
 
   return `<!doctype html>
 <html>
@@ -313,7 +362,25 @@ export const renderLayout = (opts: LayoutOptions): string => {
   .lh-name { font-size: 15px; line-height: 1.3; font-weight: bold; letter-spacing: 0.4px; }
   .lh-slogan { color: var(--ink-soft); font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase; }
   .lh-doc { width: 1%; text-align: right; white-space: nowrap; }
-  .doc-title { font-size: 21px; line-height: 1.3; font-weight: bold; letter-spacing: 1px; }
+
+  /* ---- cover: the title opens the page, centred, like the company's paper.
+     Near-black rather than the brand colour: the client's orange on white
+     does not read as text (see the colour rule above), so the brand
+     appears as the short rule under it instead. */
+  .doc-cover { text-align: center; margin: 2mm 0 8mm; page-break-inside: avoid; page-break-after: avoid; }
+  .doc-title { font-size: 22px; line-height: 1.25; font-weight: bold; letter-spacing: 1.5px; color: var(--ink); }
+  .doc-rule { width: 22mm; height: 3px; background: var(--primary); margin: 3mm auto; }
+  .cover-line { color: var(--ink-soft); font-size: 10.5px; }
+  .cover-party { font-size: 12.5px; font-weight: bold; margin: 1mm 0; }
+
+  /* ---- watermark: the brand mark, faint, behind the text of every page.
+     position:fixed is repeated on every printed page by Chromium — the one
+     use of it here, since it has no height for content to run under. */
+  .watermark {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 130mm; z-index: -1; opacity: 0.2; pointer-events: none;
+  }
+  .watermark img { width: 100%; height: auto; display: block; }
   .head-rule { height: 3px; background: var(--primary); margin: 6px 0 0; }
   .head-rule-thin { height: 1px; background: var(--ink); margin: 1px 0 16px; }
 
@@ -450,6 +517,8 @@ export const renderLayout = (opts: LayoutOptions): string => {
   <template id="page-head">${headerHtml}</template>
   <template id="page-foot">${footerHtml}</template>
 
+  ${watermarkHtml}
+  ${coverHtml}
   ${bodyHtml}
 </body>
 </html>`;

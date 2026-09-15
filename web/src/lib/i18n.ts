@@ -31,7 +31,6 @@ export type MessageKey =
   | 'nav.group.hr'
   | 'nav.group.admin'
   | 'nav.group.operations'
-
   | 'brand.subtitle'
   | 'settings.title'
   | 'settings.subtitle'
@@ -43,6 +42,9 @@ export type MessageKey =
   | 'settings.slogan'
   | 'settings.logoUrl'
   | 'settings.stampUrl'
+  | 'settings.watermarkUrl'
+  | 'settings.watermarkUrlHelp'
+  | 'settings.websiteUrl'
   | 'settings.address'
   | 'settings.email'
   | 'settings.phone'
@@ -108,6 +110,10 @@ const en: Record<MessageKey, string> = {
   'settings.slogan': 'Slogan',
   'settings.logoUrl': 'Logo URL',
   'settings.stampUrl': 'Stamp URL',
+  'settings.watermarkUrl': 'Watermark image URL',
+  'settings.watermarkUrlHelp':
+    'A light version of the brand mark. Printed faintly behind the text of every page of every document.',
+  'settings.websiteUrl': 'Website',
   'settings.address': 'Official address',
   'settings.email': 'Contact email',
   'settings.phone': 'Contact phone',
@@ -178,6 +184,9 @@ const am: Record<MessageKey, string> = {
   'settings.slogan': 'መፈክር',
   'settings.logoUrl': 'የሎጎ አድራሻ',
   'settings.stampUrl': 'የማህተም አድራሻ',
+  'settings.watermarkUrl': 'የውሃ ምልክት ምስል አድራሻ',
+  'settings.watermarkUrlHelp': 'ቀላል የምርት ምልክት፣ በእያንዳንዱ ሰነድ ገጽ ጀርባ በደብዛዛ ይታተማል።',
+  'settings.websiteUrl': 'ድረ-ገጽ',
   'settings.address': 'ኦፊሴላዊ አድራሻ',
   'settings.email': 'ኢሜይል',
   'settings.phone': 'ስልክ',
@@ -213,10 +222,9 @@ const dictionaries: Record<AppLocale, Record<MessageKey, string>> = {
 
 export const LOCALE_STORAGE_KEY = 'erp.locale';
 
-export const translate = (
-  locale: AppLocale,
-  key: MessageKey,
-): string => dictionaries[locale][key] ?? dictionaries.en[key] ?? key;
+export const translate = (locale: AppLocale, key: MessageKey): string =>
+  dictionaries[locale][key] ?? dictionaries.en[key] ?? key;
 
-export const isAppLocale = (value: string | null | undefined): value is AppLocale =>
-  value === 'en' || value === 'am';
+export const isAppLocale = (
+  value: string | null | undefined,
+): value is AppLocale => value === 'en' || value === 'am';

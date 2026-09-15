@@ -90,7 +90,8 @@ const pct = (value: string): string => {
 };
 
 const months = (n: number): string => `${n} month${n === 1 ? '' : 's'}`;
-const workingDays = (n: number): string => `${n} working day${n === 1 ? '' : 's'}`;
+const workingDays = (n: number): string =>
+  `${n} working day${n === 1 ? '' : 's'}`;
 
 const article = (n: number, title: string, body: string): string =>
   `<h2>Article ${n}: ${esc(title)}</h2>${body}`;
@@ -150,7 +151,10 @@ const instalmentTable = (
   const totalNum = Number(total) || 0;
   const rows = instalments
     .map((row, i) => {
-      const share = totalNum > 0 ? Math.round((Number(row.amountEtb) / totalNum) * 1000) / 10 : null;
+      const share =
+        totalNum > 0
+          ? Math.round((Number(row.amountEtb) / totalNum) * 1000) / 10
+          : null;
       return `<tr><td class="num">${i + 1}</td><td>${esc(row.label)}</td><td class="num">${share == null ? '—' : `${share}%`}</td><td class="num">${formatEtb(row.amountEtb)}</td><td>${esc(fmtDate(row.dueDate))}</td></tr>`;
     })
     .join('');
@@ -224,7 +228,9 @@ export const buildContractHtml = (
   ${article(
     2,
     'Object of the Contract',
-    clause('The Supplier shall supply, install and commission the following equipment:') +
+    clause(
+      'The Supplier shall supply, install and commission the following equipment:',
+    ) +
       (equipment.length > 0
         ? equipmentTable(equipment)
         : clause('As specified in the attached proforma.')) +
@@ -307,7 +313,9 @@ export const buildContractHtml = (
       (d.delayPenaltyPercentPerDay == null
         ? '7.1 Delay: if the Supplier fails to hand over within the agreed period, the parties shall agree a remedy in writing.<br/>'
         : `7.1 Delay: if the Supplier fails to hand over within the agreed period, the Client may deduct ${esc(pct(d.delayPenaltyPercentPerDay))} of the Contract Price for each day of delay${
-            d.delayPenaltyCapPercent == null ? '' : `, up to a maximum of ${esc(pct(d.delayPenaltyCapPercent))}`
+            d.delayPenaltyCapPercent == null
+              ? ''
+              : `, up to a maximum of ${esc(pct(d.delayPenaltyCapPercent))}`
           }.<br/>`) +
         "7.2 Non-payment: if the Client defaults on a payment, the Supplier may suspend the Work only after fifteen (15) days' written notice.",
     ),
@@ -350,6 +358,7 @@ ${
   return renderLayout({
     branding,
     documentTitle: isDraft ? 'CONTRACT DRAFT' : 'CONTRACT',
+    coverLines: ['Between', d.customerName, 'and', supplier],
     bodyHtml,
     footerNote: isDraft
       ? 'DRAFT for review — not binding until signed by both parties. Amounts in ETB.'

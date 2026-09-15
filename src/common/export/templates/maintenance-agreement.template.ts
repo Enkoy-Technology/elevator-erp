@@ -71,7 +71,11 @@ const clause = (text: string): string => `<p class="prose">${text}</p>`;
 const list = (items: readonly string[]): string =>
   `<ul class="terms-list">${items.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>`;
 
-const party = (role: string, name: string, lines: readonly (string | null | undefined)[]): string =>
+const party = (
+  role: string,
+  name: string,
+  lines: readonly (string | null | undefined)[],
+): string =>
   `<td><div class="plate-label">${esc(role)}</div><div class="party-name">${esc(name)}</div>${lines
     .filter((line): line is string => Boolean(line))
     .map((line) => `<div class="party-line">${esc(line)}</div>`)
@@ -87,7 +91,8 @@ export const buildMaintenanceAgreementHtml = (
 ): string => {
   const d = data as MaintenanceAgreementTemplateData;
   const provider = branding?.name ?? 'the Service Provider';
-  const recurrence = RECURRENCE_LABEL[d.recurrence] ?? d.recurrence.toLowerCase();
+  const recurrence =
+    RECURRENCE_LABEL[d.recurrence] ?? d.recurrence.toLowerCase();
   const specLines = (d.specSummary ?? '')
     .split('\n')
     .map((line) => line.trim())
@@ -187,7 +192,9 @@ export const buildMaintenanceAgreementHtml = (
     <tr class="grand"><td>Monthly fee</td><td class="num">${formatEtb(d.monthlyFeeEtb)}</td></tr>
     <tr><td colspan="2">${esc(amountInWords(d.monthlyFeeEtb))}</td></tr>
     </tbody></table></div>`
-      : clause('The fee is as stated in the Service Provider’s attached price quotation.'),
+      : clause(
+          'The fee is as stated in the Service Provider’s attached price quotation.',
+        ),
   )}
 
   ${article(
@@ -198,8 +205,14 @@ export const buildMaintenanceAgreementHtml = (
     ),
   )}
   ${renderSignaturePair(
-    { caption: 'For the Client', lines: [d.customerName, 'Name, title, signature and date'] },
-    { caption: 'For the Service Provider', lines: [branding?.name, 'Name, title, signature and date'] },
+    {
+      caption: 'For the Client',
+      lines: [d.customerName, 'Name, title, signature and date'],
+    },
+    {
+      caption: 'For the Service Provider',
+      lines: [branding?.name, 'Name, title, signature and date'],
+    },
   )}
   ${renderSignaturePair(
     { caption: 'Witness 1', lines: ['Name, signature and date'] },
@@ -209,6 +222,7 @@ export const buildMaintenanceAgreementHtml = (
   return renderLayout({
     branding,
     documentTitle: 'MAINTENANCE & SERVICE AGREEMENT',
+    coverLines: ['Between', d.customerName, 'and', provider],
     bodyHtml,
     footerNote:
       'One copy for the Client, one retained by the Service Provider. Amounts in ETB.',

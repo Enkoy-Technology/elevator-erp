@@ -3,6 +3,7 @@ import {
   BorderStyle,
   Document,
   Footer,
+  Header,
   HeadingLevel,
   PageNumber,
   Paragraph,
@@ -34,7 +35,13 @@ const RULE = 'D9D4CC';
 const TINT = 'F2F0EC';
 
 /** A4 with real margins: 15mm sides/top, 18mm bottom (1440 twips = 1 inch). */
-const PAGE_MARGIN = { top: 850, right: 850, bottom: 1020, left: 850, footer: 510 };
+const PAGE_MARGIN = {
+  top: 850,
+  right: 850,
+  bottom: 1020,
+  left: 850,
+  footer: 510,
+};
 
 /** A tenant colour as docx wants it: 6 hex digits, no leading '#', brand default when unset/invalid. */
 export const hexOf = (value: string | null | undefined): string =>
@@ -51,22 +58,40 @@ export const border = (color: string, size: number): IBorderOptions => ({
 const plateLabel = (text: string): Paragraph =>
   new Paragraph({
     spacing: { after: 20 },
-    children: [new TextRun({ text: text.toUpperCase(), size: 13, color: SOFT, bold: true })],
+    children: [
+      new TextRun({
+        text: text.toUpperCase(),
+        size: 13,
+        color: SOFT,
+        bold: true,
+      }),
+    ],
   });
 
 const cell = (
   text: string,
-  { width, align }: { width: number; align?: (typeof AlignmentType)[keyof typeof AlignmentType] },
+  {
+    width,
+    align,
+  }: {
+    width: number;
+    align?: (typeof AlignmentType)[keyof typeof AlignmentType];
+  },
 ): TableCell =>
   new TableCell({
     width: { size: width, type: WidthType.PERCENTAGE },
-    children: [new Paragraph({ alignment: align, children: [new TextRun(text)] })],
+    children: [
+      new Paragraph({ alignment: align, children: [new TextRun(text)] }),
+    ],
   });
 
 /** Two-column label/value row, value right-aligned (mirrors the PDF's `td.num`). */
 export const row = (text: string, value: string): TableRow =>
   new TableRow({
-    children: [cell(text, { width: 65 }), cell(value, { width: 35, align: AlignmentType.RIGHT })],
+    children: [
+      cell(text, { width: 65 }),
+      cell(value, { width: 35, align: AlignmentType.RIGHT }),
+    ],
   });
 
 /** The same row, shaded and bold: the one figure that matters (grand total). */
@@ -76,7 +101,9 @@ export const grandRow = (text: string, value: string): TableRow =>
       new TableCell({
         width: { size: 65, type: WidthType.PERCENTAGE },
         shading: { fill: TINT },
-        children: [new Paragraph({ children: [new TextRun({ text, bold: true })] })],
+        children: [
+          new Paragraph({ children: [new TextRun({ text, bold: true })] }),
+        ],
       }),
       new TableCell({
         width: { size: 35, type: WidthType.PERCENTAGE },
@@ -93,7 +120,10 @@ export const grandRow = (text: string, value: string): TableRow =>
 
 /** A plain body paragraph (notes, an amount in words). */
 export const textBlock = (text: string, italics = false): Paragraph =>
-  new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text, italics })] });
+  new Paragraph({
+    spacing: { after: 120 },
+    children: [new TextRun({ text, italics })],
+  });
 
 export const fullWidthTable = (rows: readonly TableRow[]): Table =>
   new Table({
@@ -110,12 +140,22 @@ export const fullWidthTable = (rows: readonly TableRow[]): Table =>
   });
 
 /** Section heading: black text on a primary rule — never coloured text. */
-export const heading = (text: string, primary: string | null | undefined): Paragraph =>
+export const heading = (
+  text: string,
+  primary: string | null | undefined,
+): Paragraph =>
   new Paragraph({
     heading: HeadingLevel.HEADING_2,
     spacing: { before: 260, after: 100 },
     border: { bottom: border(hexOf(primary), 12) },
-    children: [new TextRun({ text: text.toUpperCase(), bold: true, size: 18, color: INK })],
+    children: [
+      new TextRun({
+        text: text.toUpperCase(),
+        bold: true,
+        size: 18,
+        color: INK,
+      }),
+    ],
   });
 
 /** One cell of the reference plate. */
@@ -144,10 +184,17 @@ export const plateTable = (
         children: fields.map(
           (f) =>
             new TableCell({
-              width: { size: Math.floor(100 / fields.length), type: WidthType.PERCENTAGE },
+              width: {
+                size: Math.floor(100 / fields.length),
+                type: WidthType.PERCENTAGE,
+              },
               children: [
                 plateLabel(f.label),
-                new Paragraph({ children: [new TextRun({ text: f.value, bold: true, size: 22 })] }),
+                new Paragraph({
+                  children: [
+                    new TextRun({ text: f.value, bold: true, size: 22 }),
+                  ],
+                }),
               ],
             }),
         ),
@@ -165,13 +212,18 @@ export const partiesTable = (
       width: { size: 50, type: WidthType.PERCENTAGE },
       children: [
         plateLabel(title),
-        ...lines
-          .filter(Boolean)
-          .map((line, i) =>
+        ...lines.filter(Boolean).map(
+          (line, i) =>
             new Paragraph({
-              children: [new TextRun({ text: line, bold: i === 0, color: i === 0 ? INK : SOFT })],
+              children: [
+                new TextRun({
+                  text: line,
+                  bold: i === 0,
+                  color: i === 0 ? INK : SOFT,
+                }),
+              ],
             }),
-          ),
+        ),
       ],
     });
   return new Table({
@@ -187,7 +239,10 @@ export const partiesTable = (
     rows: [
       new TableRow({
         children: [
-          column('From', [branding?.name ?? '', ...(branding?.address ? [branding.address] : [])]),
+          column('From', [
+            branding?.name ?? '',
+            ...(branding?.address ? [branding.address] : []),
+          ]),
           column(to.label, to.lines),
         ],
       }),
@@ -228,13 +283,19 @@ export const signatureTable = (
                 children: [new TextRun('')],
               }),
               new Paragraph({
-                children: [new TextRun({ text: caption, size: 16, color: SOFT })],
+                children: [
+                  new TextRun({ text: caption, size: 16, color: SOFT }),
+                ],
               }),
               ...(branding?.name
                 ? [
                     new Paragraph({
                       children: [
-                        new TextRun({ text: `for ${branding.name}`, size: 16, color: SOFT }),
+                        new TextRun({
+                          text: `for ${branding.name}`,
+                          size: 16,
+                          color: SOFT,
+                        }),
                       ],
                     }),
                   ]
@@ -270,30 +331,93 @@ export const buildDocxDocument = (opts: DocxDocumentOptions): Document => {
   const { branding, documentTitle, footerNote, children } = opts;
   const b: DocumentBranding | null = branding;
   const primary = hexOf(b?.primaryColor);
-  const contact = [b?.address, (b?.phones ?? []).filter(Boolean).join(' · '), b?.email]
+  const contact = [
+    b?.websiteUrl,
+    b?.email,
+    (b?.phones ?? []).filter(Boolean).join(' · '),
+  ]
     .filter(Boolean)
-    .join(' · ');
+    .join('   ·   ');
+
+  // The company's paper: name (Word has no logo here — the image would
+  // need an in-memory buffer) top left, address block top right in small
+  // grey type, a rule in the brand colour; the title opens the page, centred.
+  const addressLines = (b?.address ?? '')
+    .split(/\r?\n|,\s*/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const cell = (children: Paragraph[]) =>
+    new TableCell({
+      borders: {
+        top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+      },
+      width: { size: 50, type: WidthType.PERCENTAGE },
+      children: children.map((p) => p),
+    });
+  const header = new Header({
+    children: [
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [
+          new TableRow({
+            children: [
+              cell([
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: b?.name ?? '',
+                      bold: true,
+                      size: 28,
+                      color: INK,
+                    }),
+                  ],
+                }),
+                ...(b?.slogan
+                  ? [
+                      new Paragraph({
+                        children: [
+                          new TextRun({
+                            text: b.slogan,
+                            size: 16,
+                            color: SOFT,
+                          }),
+                        ],
+                      }),
+                    ]
+                  : []),
+              ]),
+              cell(
+                addressLines.map(
+                  (line) =>
+                    new Paragraph({
+                      alignment: AlignmentType.RIGHT,
+                      children: [
+                        new TextRun({ text: line, size: 16, color: SOFT }),
+                      ],
+                    }),
+                ),
+              ),
+            ],
+          }),
+        ],
+      }),
+      new Paragraph({
+        spacing: { after: 120 },
+        border: { bottom: border(primary, 12) },
+        children: [],
+      }),
+    ],
+  });
 
   const letterhead: (Paragraph | Table)[] = [
     new Paragraph({
-      children: [new TextRun({ text: b?.name ?? '', bold: true, size: 32, color: INK })],
-    }),
-    ...(b?.slogan
-      ? [
-          new Paragraph({
-            children: [new TextRun({ text: b.slogan, size: 18, color: SOFT })],
-          }),
-        ]
-      : []),
-    new Paragraph({
-      spacing: { after: 240 },
-      border: { bottom: border(primary, 18) },
-      children: [new TextRun({ text: contact, size: 16, color: SOFT })],
-    }),
-    new Paragraph({
-      spacing: { after: 200 },
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 120, after: 240 },
       children: [
-        new TextRun({ text: documentTitle, bold: true, size: 32, color: INK }),
+        new TextRun({ text: documentTitle, bold: true, size: 36, color: INK }),
       ],
     }),
   ];
@@ -320,23 +444,36 @@ export const buildDocxDocument = (opts: DocxDocumentOptions): Document => {
     sections: [
       {
         properties: { page: { margin: PAGE_MARGIN } },
+        headers: { default: header },
         footers: {
           default: new Footer({
             children: [
               new Paragraph({
                 border: { top: border(RULE, 4) },
-                children: [new TextRun({ text: contact, size: 14, color: SOFT })],
+                children: [
+                  new TextRun({ text: contact, size: 14, color: SOFT }),
+                ],
               }),
               new Paragraph({
-                children: [new TextRun({ text: footerNote, size: 14, color: SOFT })],
+                children: [
+                  new TextRun({ text: footerNote, size: 14, color: SOFT }),
+                ],
               }),
               new Paragraph({
                 alignment: AlignmentType.RIGHT,
                 children: [
                   new TextRun({ text: 'Page ', size: 14, color: SOFT }),
-                  new TextRun({ children: [PageNumber.CURRENT], size: 14, color: SOFT }),
+                  new TextRun({
+                    children: [PageNumber.CURRENT],
+                    size: 14,
+                    color: SOFT,
+                  }),
                   new TextRun({ text: ' of ', size: 14, color: SOFT }),
-                  new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 14, color: SOFT }),
+                  new TextRun({
+                    children: [PageNumber.TOTAL_PAGES],
+                    size: 14,
+                    color: SOFT,
+                  }),
                 ],
               }),
             ],

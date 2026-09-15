@@ -105,6 +105,20 @@ export class UpdateSettingsDto {
   @MaxLength(500)
   stampUrl?: string | null;
 
+  @ApiPropertyOptional({
+    description: 'A faint brand mark printed behind every page.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  watermarkUrl?: string | null;
+
+  @ApiPropertyOptional({ example: 'www.shiningstar.et' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  websiteUrl?: string | null;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
