@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Matches, Validate } from 'class-validator';
+import { IsBoolean, Matches, Validate } from 'class-validator';
 
 import { MONEY_RE, PositiveMoneyConstraint } from '../../../common/dto/money';
 
@@ -20,9 +20,15 @@ export class PriceQuotationDto {
     description: 'VAT-inclusive grand total, as a decimal string in ETB.',
   })
   @Matches(MONEY_RE, {
-    message:
-      'grandTotalEtb must be a money amount, up to 2 decimal places',
+    message: 'grandTotalEtb must be a money amount, up to 2 decimal places',
   })
   @Validate(PositiveMoneyConstraint)
   grandTotalEtb!: string;
+}
+
+/** Switch VAT on or off on a DRAFT offer; the totals follow. */
+export class SetQuotationVatDto {
+  @ApiProperty({ example: true })
+  @IsBoolean()
+  vatApplies!: boolean;
 }

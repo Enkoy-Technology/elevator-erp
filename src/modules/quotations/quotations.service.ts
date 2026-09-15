@@ -90,7 +90,7 @@ export class QuotationsService {
     // it in the insert's own transaction.
     const project = await this.projectsService.getById(user, projectId);
 
-    const { validUntil, notes, ...calcInput } = dto;
+    const { validUntil, notes, vatApplies = true, ...calcInput } = dto;
 
     // VAT is a statutory rate, never a client-supplied or hardcoded percent:
     // resolve today's open rate version and do the tax math ourselves in
@@ -100,7 +100,9 @@ export class QuotationsService {
     const vatPayload = ratePayloadSchemaFor('VAT').parse(
       rateVersion.payload,
     ) as { percent: string };
-    const vatPercent = D(vatPayload.percent);
+    // An offer without VAT is priced at 0% — the rate version is still
+    // recorded, so switching VAT back on knows what it would have been.
+    const vatPercent = vatApplies ? D(vatPayload.percent) : D(0);
 
     // calc's own taxPercent input is unused here — pass 0 as a placeholder
     // and override the tax/total lines below with the VAT computed above,
@@ -141,6 +143,7 @@ export class QuotationsService {
       rateVersionId: rateVersion.id,
       marginPercent: String(calcInput.marginPercent),
       taxPercent: vatPercent.toFixed(2),
+      vatApplies,
       subtotalEtb: result.pricing.totalBeforeMargin,
       marginAmountEtb: result.pricing.marginAmount,
       taxAmountEtb,
@@ -293,6 +296,35 @@ export class QuotationsService {
   // ---------------------------------------------------------------------
   // Negotiated pricing.
   // ---------------------------------------------------------------------
+
+  /**
+   * Switch VAT on or off on a DRAFT offer. The header totals are rebuilt
+   * from the lines at the new rate; a price already agreed with the
+   * customer is applied again as the same figure, so what the customer
+   * pays does not move — only its split into net and VAT does.
+   */
+  async setVat(
+    user: AuthenticatedUser,
+    id: string,
+    vatApplies: boolean,
+  ): Promise<QuotationRecord> {
+    const before = await this.getById(user, id);
+    const rateVersion = await this.ratesService.resolve('VAT', todayIso());
+    const vatPayload = ratePayloadSchemaFor('VAT').parse(
+      rateVersion.payload,
+    ) as { percent: string };
+    const after = await this.quotationsRepository.setVat(user.tenantId, id, {
+      vatApplies,
+      taxPercent: vatApplies ? D(vatPayload.percent).toFixed(2) : '0.00',
+      rateVersionId: rateVersion.id,
+    });
+    if (before.calculatedTotalEtb !== null) {
+      return this.priceFromGrandTotal(user, id, {
+        grandTotalEtb: before.totalPriceEtb,
+      });
+    }
+    return after;
+  }
 
   /**
    * Price the quotation BACKWARD from the round figure the customer pays,

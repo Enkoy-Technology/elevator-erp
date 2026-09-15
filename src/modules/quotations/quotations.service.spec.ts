@@ -36,6 +36,7 @@ describe('QuotationsService', () => {
     rateVersionId: '77777777-7777-7777-7777-777777777777',
     marginPercent: '25.00',
     taxPercent: '15.00',
+    vatApplies: true,
     subtotalEtb: '100.00',
     marginAmountEtb: '25.00',
     taxAmountEtb: '18.75',

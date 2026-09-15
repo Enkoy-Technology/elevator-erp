@@ -177,7 +177,7 @@ export default function EditQuotationPage() {
       id: 'price',
       label: 'Price',
       summary: quotation
-        ? `${formatEtb(quotation.totalPriceEtb)} incl. VAT`
+        ? `${formatEtb(quotation.totalPriceEtb)} ${quotation.vatApplies ? 'incl. VAT' : 'no VAT'}`
         : null,
       // Done means someone AGREED a figure, not that the calculator ran.
       done: Boolean(quotation?.calculatedTotalEtb),

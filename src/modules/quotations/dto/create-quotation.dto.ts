@@ -1,5 +1,11 @@
 import { ApiPropertyOptional, OmitType } from '@nestjs/swagger';
-import { IsISO8601, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 import { CalculateSpecsDto } from '../../elevator-calc/dto/calculate-specs.dto';
 
@@ -21,4 +27,12 @@ export class CreateQuotationDto extends OmitType(CalculateSpecsDto, [
   @IsString()
   @MaxLength(2000)
   notes?: string;
+
+  @ApiPropertyOptional({
+    default: true,
+    description: 'Charge VAT on this offer. Off prices the offer ex VAT.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  vatApplies?: boolean;
 }

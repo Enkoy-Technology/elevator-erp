@@ -1,0 +1,1 @@
+ALTER TABLE "quotations" ADD COLUMN "vat_applies" boolean DEFAULT true NOT NULL;

@@ -18,7 +18,9 @@ import {
   createQuotationFromCalc,
   getAccessToken,
   getCurrentRole,
+  getVatPercent,
   listProductTypes,
+  priceQuotation,
   updateQuotationLine,
   listProjects,
   optional,
@@ -28,6 +30,8 @@ import {
   type Project,
   type UserRole,
 } from '@/lib/api';
+import { formatEtb, splitGrossEtb, withVatEtb } from '@/lib/money';
+import { NumberInput } from '../number-input';
 
 /**
  * A quotation starts in the calculator. The project names the product;
@@ -55,6 +59,9 @@ export default function NewQuotationPage() {
   const [products, setProducts] = useState<ProductTypeRow[]>([]);
   const [form, setForm] = useState<CalcInputPayload>(WORKED_EXAMPLE);
   const [result, setResult] = useState<CalcResult | null>(null);
+  const [vatApplies, setVatApplies] = useState(true);
+  const [vatPercent, setVatPercent] = useState('15');
+  const [offered, setOffered] = useState('');
   const [validUntil, setValidUntil] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +79,9 @@ export default function NewQuotationPage() {
     }
     const wanted =
       new URLSearchParams(window.location.search).get('projectId') ?? '';
+    void getVatPercent()
+      .then(setVatPercent)
+      .catch(() => undefined);
     void (async () => {
       const [projectPage, rows] = await Promise.all([
         optional(listProjects({ page: 1, pageSize: 100 })),
@@ -127,6 +137,7 @@ export default function NewQuotationPage() {
       const { taxPercent: _scenario, ...lift } = toRequest(form);
       const quotation = await createQuotationFromCalc(projectId, {
         ...lift,
+        vatApplies,
         validUntil: validUntil ? new Date(validUntil).toISOString() : undefined,
         notes: notes || undefined,
       });
@@ -140,6 +151,13 @@ export default function NewQuotationPage() {
         ...Array.from({ length: floors - 1 }, (_, i) => String(i + 1)),
       ].join(',');
       await updateQuotationLine(quotation.id, quotation.id, { floorLabels });
+      // The price was decided here too: a figure other than the
+      // calculator's is applied as the agreed price, VAT-inclusive when
+      // VAT is on. Last, because any change to a line resets an agreed
+      // price by design.
+      if (offered.trim() && offered.trim() !== listGross) {
+        await priceQuotation(quotation.id, offered.trim());
+      }
       router.push(`/quotations/${quotation.id}/edit?step=price`);
     } catch (err) {
       setError(
@@ -151,6 +169,15 @@ export default function NewQuotationPage() {
   };
 
   const project = projects.find((p) => p.id === projectId);
+
+  // What the offer will say, both ways. The calculator's figure is ex VAT;
+  // the agreed figure is typed the way the customer hears it — inclusive
+  // when VAT is on.
+  const rate = vatApplies ? vatPercent : '0';
+  const listNet = result?.pricing.totalBeforeMargin ?? null;
+  const listGross = listNet ? withVatEtb(listNet, rate).grossEtb : null;
+  const agreedGross = offered.trim() ? offered.trim() : listGross;
+  const agreed = agreedGross ? splitGrossEtb(agreedGross, rate) : null;
 
   return (
     <div className="flex min-h-screen">
@@ -245,8 +272,83 @@ export default function NewQuotationPage() {
           </form>
 
           <div className="space-y-6">
-            {result ? (
-              <LiftResult result={result} products={products} />
+            {result && listNet && listGross ? (
+              <>
+                <section className="rounded-2xl border-2 border-gold-500/40 bg-white p-6">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                      Price on the offer
+                    </h2>
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={vatApplies}
+                        onChange={(e) => setVatApplies(e.target.checked)}
+                      />
+                      Charge VAT ({vatPercent}%)
+                    </label>
+                  </div>
+                  <table className="mt-4 w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+                        <th className="py-1 font-medium"></th>
+                        <th className="py-1 text-right font-medium">Ex VAT</th>
+                        <th className="py-1 text-right font-medium">VAT</th>
+                        <th className="py-1 text-right font-medium">
+                          Incl. VAT
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="tabular-nums">
+                      <tr className="border-t border-slate-100">
+                        <td className="py-1.5 text-slate-600">Calculator</td>
+                        <td className="py-1.5 text-right">
+                          {formatEtb(listNet)}
+                        </td>
+                        <td className="py-1.5 text-right">
+                          {formatEtb(withVatEtb(listNet, rate).taxEtb)}
+                        </td>
+                        <td className="py-1.5 text-right font-semibold">
+                          {formatEtb(listGross)}
+                        </td>
+                      </tr>
+                      {agreed && agreedGross ? (
+                        <tr className="border-t border-slate-100 font-semibold text-navy-900">
+                          <td className="py-1.5">Offered to the customer</td>
+                          <td className="py-1.5 text-right">
+                            {formatEtb(agreed.netEtb)}
+                          </td>
+                          <td className="py-1.5 text-right">
+                            {formatEtb(agreed.taxEtb)}
+                          </td>
+                          <td className="py-1.5 text-right">
+                            {formatEtb(agreedGross)}
+                          </td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                  <label className="mt-4 block">
+                    <span className={label}>
+                      Price offered to the customer
+                      {vatApplies ? ', incl. VAT' : ''} (ETB)
+                    </span>
+                    <NumberInput
+                      value={offered}
+                      onValueChange={setOffered}
+                      placeholder={formatEtb(listGross)}
+                      className={fieldClass}
+                    />
+                    <span className="mt-1 block text-xs text-slate-500">
+                      Leave blank to offer the calculator&apos;s figure. A round
+                      number you agreed is split into net and VAT the way the
+                      document prints it; both can still be changed on the offer
+                      later.
+                    </span>
+                  </label>
+                </section>
+                <LiftResult result={result} products={products} />
+              </>
             ) : (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-16 text-center text-sm text-slate-500">
                 Describe the lift and calculate. The specs and the list price

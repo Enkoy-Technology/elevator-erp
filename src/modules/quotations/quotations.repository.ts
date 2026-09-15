@@ -1,6 +1,18 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import Decimal from 'decimal.js';
-import { and, asc, count, desc, eq, getTableColumns, isNull } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  isNull,
+} from 'drizzle-orm';
 
 import { WorkflowTransitionError } from '../../common/exceptions';
 import {
@@ -125,7 +137,10 @@ export class QuotationsRepository {
         .from(quotations)
         .leftJoin(
           proformas,
-          and(eq(quotations.tenantId, proformas.tenantId), eq(quotations.id, proformas.quotationId)),
+          and(
+            eq(quotations.tenantId, proformas.tenantId),
+            eq(quotations.id, proformas.quotationId),
+          ),
         )
         .where(where)
         .orderBy(desc(quotations.createdAt))
@@ -171,11 +186,17 @@ export class QuotationsRepository {
         .from(quotations)
         .leftJoin(
           customers,
-          and(eq(quotations.tenantId, customers.tenantId), eq(quotations.customerId, customers.id)),
+          and(
+            eq(quotations.tenantId, customers.tenantId),
+            eq(quotations.customerId, customers.id),
+          ),
         )
         .leftJoin(
           projects,
-          and(eq(quotations.tenantId, projects.tenantId), eq(quotations.projectId, projects.id)),
+          and(
+            eq(quotations.tenantId, projects.tenantId),
+            eq(quotations.projectId, projects.id),
+          ),
         )
         .where(and(eq(quotations.id, id), isNull(quotations.deletedAt)))
         .limit(1);
@@ -217,7 +238,10 @@ export class QuotationsRepository {
     expectedStatus: QuoteStatus,
     status: QuoteStatus,
     extra: Partial<
-      Pick<QuotationInsert, 'approvedByUserId' | 'approvedAt' | 'rejectedReason'>
+      Pick<
+        QuotationInsert,
+        'approvedByUserId' | 'approvedAt' | 'rejectedReason'
+      >
     > = {},
   ): Promise<QuotationRecord> {
     const now = new Date();
@@ -406,6 +430,24 @@ export class QuotationsRepository {
    * them, does the arithmetic outside a transaction, and comes back, so a
    * line added in between would otherwise be silently priced at nothing.
    */
+  /** VAT on or off, then the header totals rebuilt from the lines. DRAFT only. */
+  async setVat(
+    tenantId: string,
+    quotationId: string,
+    vat: { vatApplies: boolean; taxPercent: string; rateVersionId: string },
+  ): Promise<QuotationRecord> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const quotation = await requireDraft(tx, quotationId);
+      await materializeLegacyLine(tx, tenantId, quotation);
+      await tx
+        .update(quotations)
+        .set({ ...vat, updatedAt: new Date() })
+        .where(eq(quotations.id, quotationId));
+      await resyncHeaderFromLines(tx, { ...quotation, ...vat });
+      return requireQuotation(tx, quotationId);
+    });
+  }
+
   async applyPricing(
     tenantId: string,
     quotationId: string,
@@ -423,7 +465,7 @@ export class QuotationsRepository {
         existing.some((line) => !priced.has(line.id))
       ) {
         throw new WorkflowTransitionError(
-          'The quotation\'s line items changed while it was being priced — reload and price it again',
+          "The quotation's line items changed while it was being priced — reload and price it again",
         );
       }
 
@@ -603,9 +645,7 @@ const requireQuotation = async (
   const [row] = await tx
     .select()
     .from(quotations)
-    .where(
-      and(eq(quotations.id, quotationId), isNull(quotations.deletedAt)),
-    )
+    .where(and(eq(quotations.id, quotationId), isNull(quotations.deletedAt)))
     .limit(1);
   if (!row) {
     throw new NotFoundException('Quotation not found');

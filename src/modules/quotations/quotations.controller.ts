@@ -32,7 +32,10 @@ import { TenantBrandingProvider } from '../../common/export/tenant-branding.prov
 import { quoteStatusEnum, type QuoteStatus } from '../../database/schema';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { CreateQuotationDto } from './dto/create-quotation.dto';
-import { PriceQuotationDto } from './dto/price-quotation.dto';
+import {
+  PriceQuotationDto,
+  SetQuotationVatDto,
+} from './dto/price-quotation.dto';
 import {
   CreateQuotationLineDto,
   ReorderQuotationLinesDto,
@@ -281,6 +284,20 @@ export class QuotationsController {
     @Body() dto: PriceQuotationDto,
   ) {
     return this.quotationsService.priceFromGrandTotal(user, id, dto);
+  }
+
+  @Patch('quotations/:id/vat')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON')
+  @ApiOperation({
+    summary:
+      'Switch VAT on or off on a DRAFT quotation. The totals follow; an agreed price stays what the customer pays.',
+  })
+  setVat(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetQuotationVatDto,
+  ) {
+    return this.quotationsService.setVat(user, id, dto.vatApplies);
   }
 
   @Post('quotations/:id/approve-discount')

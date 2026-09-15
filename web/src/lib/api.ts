@@ -1463,6 +1463,8 @@ export interface Quotation {
   status: QuoteStatus;
   marginPercent: string;
   taxPercent: string;
+  /** Whether VAT is charged on this offer; off means taxPercent is 0. */
+  vatApplies: boolean;
   subtotalEtb: string;
   marginAmountEtb: string;
   taxAmountEtb: string;
@@ -1513,6 +1515,8 @@ export interface CreateQuotationPayload extends Omit<
 > {
   validUntil?: string;
   notes?: string;
+  /** Charge VAT on this offer (default true). */
+  vatApplies?: boolean;
 }
 
 export const listQuotations = (options?: {
@@ -1765,6 +1769,24 @@ export const priceQuotation = (
  * over it — submitting an unapproved over-threshold quotation is what fails.
  * 400s on a quotation that has no negotiated discount yet.
  */
+/** VAT on or off on a DRAFT offer; the totals follow, an agreed price stays what the customer pays. */
+export const setQuotationVat = (
+  id: string,
+  vatApplies: boolean,
+): Promise<Quotation> =>
+  apiFetch<Quotation>(`/quotations/${id}/vat`, {
+    method: 'PATCH',
+    body: JSON.stringify({ vatApplies }),
+  });
+
+/** Today's statutory VAT percent, from the rates table — never hardcoded. */
+export const getVatPercent = async (): Promise<string> => {
+  const version = await apiFetch<{ payload: { percent: string } }>(
+    '/rates?kind=VAT',
+  );
+  return version.payload.percent;
+};
+
 export const approveQuotationDiscount = (id: string): Promise<Quotation> =>
   apiFetch<Quotation>(`/quotations/${id}/approve-discount`, { method: 'POST' });
 

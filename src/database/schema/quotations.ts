@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   foreignKey,
   integer,
   jsonb,
@@ -52,6 +53,12 @@ export const quotations = pgTable(
     taxPercent: numeric('tax_percent', { precision: 5, scale: 2 })
       .notNull()
       .default('0'),
+    /**
+     * Whether VAT is charged on this offer. Off means taxPercent is 0 and
+     * the customer pays the ex-VAT figure; the statutory rate still comes
+     * from the rates table whenever it is on.
+     */
+    vatApplies: boolean('vat_applies').notNull().default(true),
     subtotalEtb: numeric('subtotal_etb', { precision: 14, scale: 2 }).notNull(),
     marginAmountEtb: numeric('margin_amount_etb', {
       precision: 14,

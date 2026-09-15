@@ -20,7 +20,8 @@ const toCents = (value: string): bigint => {
   const unsigned = negative ? trimmed.slice(1) : trimmed;
   const [wholePart, fracPart = ''] = unsigned.split('.');
   const cents =
-    BigInt(wholePart || '0') * 100n + BigInt((fracPart + '00').slice(0, 2) || '0');
+    BigInt(wholePart || '0') * 100n +
+    BigInt((fracPart + '00').slice(0, 2) || '0');
   return negative ? -cents : cents;
 };
 
@@ -64,9 +65,13 @@ export const isPositiveEtb = (value: string): boolean => toCents(value) > 0n;
 /** Exact quantity (<=3dp) x unit price (<=2dp), rounded half-up to 2dp — the
  *  same rounding point the server's computeLineTotal (invoice-money.ts)
  *  uses — for a display-only line-item preview. */
-export const lineTotalEtb = (quantity: string, unitPriceEtb: string): string => {
+export const lineTotalEtb = (
+  quantity: string,
+  unitPriceEtb: string,
+): string => {
   const [qWhole, qFrac = ''] = quantity.trim().split('.');
-  const qMilli = BigInt(qWhole || '0') * 1000n + BigInt((qFrac + '000').slice(0, 3) || '0');
+  const qMilli =
+    BigInt(qWhole || '0') * 1000n + BigInt((qFrac + '000').slice(0, 3) || '0');
   const priceCents = toCents(unitPriceEtb);
   // Scaled by 1000 (qty) * 100 (price) = 100000 per ETB; drop the last 3
   // digits (thousandths of a cent) with a half-up round on the remainder.
@@ -102,4 +107,30 @@ export const formatNumber = (
     minimumFractionDigits: decimals ?? 0,
     maximumFractionDigits: decimals ?? (Number.isInteger(parsed) ? 0 : 2),
   });
+};
+
+/** Half-up integer division for non-negative bigints. */
+const divHalfUp = (a: bigint, d: bigint): bigint => (a * 2n + d) / (2n * d);
+
+/** '15' or '15.00' -> 1500 basis points. */
+const toBasisPoints = (percent: string): bigint => toCents(percent);
+
+/** A net figure plus VAT at `percent`, rounded HALF_UP to the cent — the server's own rule. */
+export const withVatEtb = (
+  netEtb: string,
+  percent: string,
+): { taxEtb: string; grossEtb: string } => {
+  const net = toCents(netEtb);
+  const tax = divHalfUp(net * toBasisPoints(percent), 10000n);
+  return { taxEtb: fromCents(tax), grossEtb: fromCents(net + tax) };
+};
+
+/** A VAT-inclusive figure split into net and VAT, the way the server derives an agreed price. */
+export const splitGrossEtb = (
+  grossEtb: string,
+  percent: string,
+): { netEtb: string; taxEtb: string } => {
+  const gross = toCents(grossEtb);
+  const net = divHalfUp(gross * 10000n, 10000n + toBasisPoints(percent));
+  return { netEtb: fromCents(net), taxEtb: fromCents(gross - net) };
 };
