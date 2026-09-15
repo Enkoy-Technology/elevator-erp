@@ -2,14 +2,19 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import type { Request, Response } from 'express';
+import { json, urlencoded, type Request, type Response } from 'express';
 import helmet from 'helmet';
 
 import { AppModule } from './app.module';
 import type { Env } from './config';
 
 const bootstrap = async (): Promise<void> => {
-  const app = await NestFactory.create(AppModule);
+  // Nest's own body parser stops at 100 kB. Branding images (logo, stamp,
+  // watermark) are stored as data URIs, so the limit is raised here and
+  // Nest's parser is switched off so the two do not disagree.
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  app.use(json({ limit: '2mb' }));
+  app.use(urlencoded({ extended: true, limit: '2mb' }));
   const config = app.get(ConfigService<Env, true>);
   const isProduction = config.get('NODE_ENV', { infer: true }) === 'production';
 
@@ -34,10 +39,7 @@ const bootstrap = async (): Promise<void> => {
   // Visiting http://localhost:PORT/ should not 404 — send humans to Swagger.
   const expressApp = app.getHttpAdapter().getInstance() as {
     set: (setting: string, value: unknown) => void;
-    get: (
-      path: string,
-      handler: (req: Request, res: Response) => void,
-    ) => void;
+    get: (path: string, handler: (req: Request, res: Response) => void) => void;
   };
   // Behind a load balancer the throttler must key on the real client IP,
   // not the proxy's — otherwise one attacker can exhaust everyone's login

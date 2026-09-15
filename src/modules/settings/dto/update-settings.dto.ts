@@ -63,6 +63,10 @@ export class IsPricingFormulaConstraint implements ValidatorConstraintInterface 
   }
 }
 
+/** What the document renderer will actually fetch: https, or an inline image. */
+const IMAGE_SOURCE_RE =
+  /^(?:https:\/\/\S{1,480}|data:image\/(?:png|jpe?g|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+)$/;
+
 export class UpdateSettingsDto {
   // The company name on every branded document letterhead. Without this the
   // only way to name the tenant is the seeder, so a real deployment printed
@@ -93,24 +97,38 @@ export class UpdateSettingsDto {
   @Matches(HEX_COLOR)
   secondaryColorHex?: string;
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  logoUrl?: string | null;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  stampUrl?: string | null;
-
   @ApiPropertyOptional({
-    description: 'A faint brand mark printed behind every page.',
+    description: 'An https URL or a data:image/… URI (up to ~1 MB).',
   })
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(1_500_000)
+  @Matches(IMAGE_SOURCE_RE, {
+    message: '$property must be an https URL or a base64 data:image URI',
+  })
+  logoUrl?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'An https URL or a data:image/… URI (up to ~1 MB).',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1_500_000)
+  @Matches(IMAGE_SOURCE_RE, {
+    message: '$property must be an https URL or a base64 data:image URI',
+  })
+  stampUrl?: string | null;
+
+  @ApiPropertyOptional({
+    description:
+      'A faint brand mark printed behind every page: an https URL or a data:image/… URI (up to ~1 MB).',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1_500_000)
+  @Matches(IMAGE_SOURCE_RE, {
+    message: '$property must be an https URL or a base64 data:image URI',
+  })
   watermarkUrl?: string | null;
 
   @ApiPropertyOptional({ example: 'www.shiningstar.et' })

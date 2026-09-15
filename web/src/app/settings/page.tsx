@@ -26,6 +26,95 @@ const parseOffsetDays = (text: string): number[] =>
     .map((part) => Number.parseInt(part.trim(), 10))
     .filter((n) => Number.isInteger(n));
 
+/** Up to ~1 MB, stored inline so the document renderer needs no file host. */
+const MAX_IMAGE_BYTES = 1_000_000;
+
+/**
+ * A branding image: pick a file (stored as a data URI) or paste an https
+ * URL, with a preview of what the documents will print.
+ */
+const ImageField = ({
+  id,
+  label,
+  value,
+  onChange,
+  hint,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+  hint?: string;
+}) => {
+  const [problem, setProblem] = useState<string | null>(null);
+  const pick = (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > MAX_IMAGE_BYTES) {
+      setProblem('That image is over 1 MB. Use a smaller file.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setProblem(null);
+      onChange(typeof reader.result === 'string' ? reader.result : '');
+    };
+    reader.readAsDataURL(file);
+  };
+  return (
+    <div>
+      <label className={labelClass} htmlFor={id}>
+        {label}
+      </label>
+      <div className="flex items-start gap-3">
+        {value ? (
+          <img
+            src={value}
+            alt=""
+            className="h-12 w-20 rounded border border-slate-200 bg-white object-contain p-1"
+          />
+        ) : (
+          <div className="flex h-12 w-20 items-center justify-center rounded border border-dashed border-slate-300 text-[10px] text-slate-400">
+            None
+          </div>
+        )}
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <input
+            id={id}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/svg+xml"
+            className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-md file:border file:border-slate-300 file:bg-white file:px-2.5 file:py-1 file:text-xs file:font-medium"
+            onChange={(e) => pick(e.target.files?.[0])}
+          />
+          <input
+            className={`${fieldClass} font-mono text-[11px]`}
+            value={value.startsWith('data:') ? '' : value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={
+              value.startsWith('data:')
+                ? 'Uploaded image'
+                : 'or paste an https:// link'
+            }
+          />
+          {value ? (
+            <button
+              type="button"
+              onClick={() => onChange('')}
+              className="text-xs text-red-700 hover:underline"
+            >
+              Remove
+            </button>
+          ) : null}
+        </div>
+      </div>
+      {problem ? (
+        <p className="mt-1 text-xs text-red-700">{problem}</p>
+      ) : hint ? (
+        <p className="mt-1 text-xs text-slate-400">{hint}</p>
+      ) : null}
+    </div>
+  );
+};
+
 export default function SettingsPage() {
   const router = useRouter();
   const { t, setLocale } = useLocale();
@@ -269,45 +358,25 @@ export default function SettingsPage() {
                       placeholder="Star of Elevation"
                     />
                   </div>
-                  <div>
-                    <label className={labelClass} htmlFor="logoUrl">
-                      {t('settings.logoUrl')}
-                    </label>
-                    <input
-                      id="logoUrl"
-                      className={fieldClass}
-                      value={logoUrl}
-                      onChange={(e) => setLogoUrl(e.target.value)}
-                      placeholder="https://…"
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass} htmlFor="stampUrl">
-                      {t('settings.stampUrl')}
-                    </label>
-                    <input
-                      id="stampUrl"
-                      className={fieldClass}
-                      value={stampUrl}
-                      onChange={(e) => setStampUrl(e.target.value)}
-                      placeholder="https://…"
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass} htmlFor="watermarkUrl">
-                      {t('settings.watermarkUrl')}
-                    </label>
-                    <input
-                      id="watermarkUrl"
-                      className={fieldClass}
-                      value={watermarkUrl}
-                      onChange={(e) => setWatermarkUrl(e.target.value)}
-                      placeholder="https://…"
-                    />
-                    <p className="mt-1 text-xs text-slate-400">
-                      {t('settings.watermarkUrlHelp')}
-                    </p>
-                  </div>
+                  <ImageField
+                    id="logoUrl"
+                    label={t('settings.logoUrl')}
+                    value={logoUrl}
+                    onChange={setLogoUrl}
+                  />
+                  <ImageField
+                    id="stampUrl"
+                    label={t('settings.stampUrl')}
+                    value={stampUrl}
+                    onChange={setStampUrl}
+                  />
+                  <ImageField
+                    id="watermarkUrl"
+                    label={t('settings.watermarkUrl')}
+                    value={watermarkUrl}
+                    onChange={setWatermarkUrl}
+                    hint={t('settings.watermarkUrlHelp')}
+                  />
                   <div>
                     <label className={labelClass} htmlFor="websiteUrl">
                       {t('settings.websiteUrl')}
