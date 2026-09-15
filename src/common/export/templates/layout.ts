@@ -389,12 +389,12 @@ export const renderLayout = (opts: LayoutOptions): string => {
   }
   .cover-band {
     border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink);
-    padding: 16mm 10mm; text-align: center;
+    padding: 20mm 10mm; text-align: center;
   }
-  .cover-band .doc-title { font-size: 30px; line-height: 1.2; letter-spacing: 2.5px; }
+  .cover-band .doc-title { font-size: 40px; line-height: 1.2; letter-spacing: 3px; }
   .cover-band .doc-rule { margin: 5mm auto 6mm; }
-  .cover-band .cover-line { font-size: 12px; margin-top: 2mm; }
-  .cover-band .cover-party { font-size: 15px; margin: 1.5mm 0; }
+  .cover-band .cover-line { font-size: 15px; margin-top: 3mm; }
+  .cover-band .cover-party { font-size: 20px; margin: 2mm 0; }
 
   /* ---- watermark: the brand mark, faint, behind the text of every page.
      position:fixed is repeated on every printed page by Chromium — the one
