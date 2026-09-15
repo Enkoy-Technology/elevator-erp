@@ -401,7 +401,7 @@ export const renderLayout = (opts: LayoutOptions): string => {
      use of it here, since it has no height for content to run under. */
   .watermark {
     position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 130mm; z-index: -1; opacity: 0.2; pointer-events: none;
+    width: 130mm; z-index: -1; opacity: 0.08; pointer-events: none;
   }
   .watermark img { width: 100%; height: auto; display: block; }
   .head-rule { height: 3px; background: var(--primary); margin: 6px 0 0; }
