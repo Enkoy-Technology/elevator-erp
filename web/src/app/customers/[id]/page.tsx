@@ -407,6 +407,12 @@ export default function CustomerDetailPage() {
     project: CustomerOverviewProject,
     next: ProjectStatus,
   ) => {
+    // A quotation is not a number typed into a prompt: the calculator
+    // describes the lift and the confirmed result becomes the offer.
+    if (next === 'QUOTATION') {
+      router.push(`/quotations/new?projectId=${project.id}`);
+      return;
+    }
     const amounts = promptForDealValue(project, next);
     if (amounts === CANCELLED) {
       return;

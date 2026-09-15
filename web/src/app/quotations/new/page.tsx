@@ -3,47 +3,40 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 
-import { Field, FormPage, FormSection } from '@/components/form-page';
-import { fieldClass } from '@/components/form-styles';
+import {
+  LiftInputs,
+  LiftResult,
+  toRequest,
+  WORKED_EXAMPLE,
+} from '@/app/calculator/lift-calculator';
+import { btnPrimary, btnSecondary, fieldClass } from '@/components/form-styles';
+import { PageHeader } from '@/components/page-header';
+import { Sidebar } from '@/components/sidebar';
 import {
   ApiError,
+  calculateSpecs,
   createQuotationFromCalc,
   getAccessToken,
   getCurrentRole,
+  listProductTypes,
   listProjects,
   optional,
-  type CreateQuotationPayload,
+  type CalcInputPayload,
+  type CalcResult,
+  type ProductTypeRow,
   type Project,
   type UserRole,
 } from '@/lib/api';
 
 /**
- * Starting a quotation asks for the customer's project and nothing else.
- *
- * A quotation is a table of lifts now, and a lift is nineteen fields — so
- * describing the first one HERE and the second one on the next screen would
- * be two different jobs wearing the same name. This creates the DRAFT with a
- * placeholder lift and hands over to the editor, which is the one place a
- * lift is ever described.
+ * A quotation starts in the calculator. The project names the product;
+ * the salesperson describes the lift the way the calculator asks (shaft and
+ * floors for a standard passenger lift, the classic figures otherwise),
+ * sees the specs and the list price, and confirms — that lift becomes the
+ * quotation's first line and the project moves to QUOTATION on its own.
  */
 
-/** The placeholder lift. Every value is overwritten on the next screen; it
- *  exists so the API has a priced line to create the quotation around. */
-const PLACEHOLDER_LIFT: Omit<CreateQuotationPayload, 'validUntil' | 'notes'> = {
-  productType: 'PASSENGER',
-  capacityKg: 1000,
-  stops: 12,
-  travelHeightM: 45,
-  speedMs: 1.6,
-  machineRoomType: 'MRL',
-  doorType: 'CENTER_OPEN',
-  doorWidthMm: 900,
-  buildingUsage: 'COMMERCIAL',
-  marginPercent: 0,
-};
-
-/** Mirrors @Roles('SALES_MANAGER') on the quotations mutation routes;
- *  CEO and ADMIN bypass via RolesGuard's SUPER_ROLES. */
+/** Mirrors @Roles on the quotation mutation routes; CEO and ADMIN bypass. */
 const canWrite = (role: UserRole | null): boolean =>
   role === 'SALES_MANAGER' ||
   role === 'SALESPERSON' ||
@@ -51,50 +44,88 @@ const canWrite = (role: UserRole | null): boolean =>
   role === 'GENERAL_MANAGER' ||
   role === 'ADMIN';
 
+const label =
+  'mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500';
+
 export default function NewQuotationPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState('');
+  const [products, setProducts] = useState<ProductTypeRow[]>([]);
+  const [form, setForm] = useState<CalcInputPayload>(WORKED_EXAMPLE);
+  const [result, setResult] = useState<CalcResult | null>(null);
   const [validUntil, setValidUntil] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [calculating, setCalculating] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (!getAccessToken()) {
       router.replace('/login');
       return;
     }
-    // The list page only offers this action to a sales manager; the route
-    // has to say the same thing rather than render a form the API will
-    // reject.
     if (!canWrite(getCurrentRole())) {
       router.replace('/quotations');
       return;
     }
+    const wanted =
+      new URLSearchParams(window.location.search).get('projectId') ?? '';
     void (async () => {
-      const projectPage = await optional(
-        listProjects({ page: 1, pageSize: 100 }),
-      );
+      const [projectPage, rows] = await Promise.all([
+        optional(listProjects({ page: 1, pageSize: 100 })),
+        listProductTypes().catch(() => [] as ProductTypeRow[]),
+      ]);
       setProjects(projectPage.items);
-      setProjectId((prev) => prev || projectPage.items[0]?.id || '');
+      setProducts(rows);
+      setProjectId((prev) => prev || wanted || projectPage.items[0]?.id || '');
     })();
   }, [router]);
 
-  const onSubmit = async (event: FormEvent) => {
+  // The project chose the product when it was opened; changing the project
+  // here follows it, and the result is stale until recalculated.
+  useEffect(() => {
+    const project = projects.find((p) => p.id === projectId);
+    const productType =
+      project?.productType &&
+      products.some((p) => p.code === project.productType)
+        ? project.productType
+        : products[0]?.code;
+    if (productType) {
+      setForm((prev) =>
+        prev.productType === productType ? prev : { ...prev, productType },
+      );
+    }
+    setResult(null);
+  }, [projectId, projects, products]);
+
+  const onCalculate = async (event: FormEvent) => {
     event.preventDefault();
+    setError(null);
+    setCalculating(true);
+    try {
+      setResult(await calculateSpecs(toRequest(form)));
+    } catch (err) {
+      setResult(null);
+      setError(
+        err instanceof ApiError ? err.message : 'Calculation request failed',
+      );
+    } finally {
+      setCalculating(false);
+    }
+  };
+
+  const onCreate = async () => {
     if (!projectId) {
       setError('Create a project first, then draft a quote.');
       return;
     }
-    setSubmitting(true);
+    setCreating(true);
     setError(null);
     try {
-      const project = projects.find((p) => p.id === projectId);
+      const { taxPercent: _scenario, ...lift } = toRequest(form);
       const quotation = await createQuotationFromCalc(projectId, {
-        ...PLACEHOLDER_LIFT,
-        // The product was chosen when the project was opened.
-        productType: project?.productType ?? PLACEHOLDER_LIFT.productType,
+        ...lift,
         validUntil: validUntil ? new Date(validUntil).toISOString() : undefined,
         notes: notes || undefined,
       });
@@ -104,67 +135,116 @@ export default function NewQuotationPage() {
         err instanceof ApiError ? err.message : 'Failed to create quotation',
       );
     } finally {
-      setSubmitting(false);
+      setCreating(false);
     }
   };
 
-  return (
-    <FormPage
-      eyebrow="Sales"
-      title="New quotation"
-      description="Opens a DRAFT with one lift on it. You describe the lifts, agree the price and state the terms on the next screen."
-      backHref="/quotations"
-      backLabel="Quotations"
-      error={error}
-      submitting={submitting}
-      submitLabel="Start the offer"
-      onSubmit={(event) => void onSubmit(event)}
-    >
-      <FormSection title="Project">
-        <Field label="Project" htmlFor="project" wide>
-          <select
-            id="project"
-            className={fieldClass}
-            required
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-          >
-            {projects.length === 0 ? (
-              <option value="">No projects yet</option>
-            ) : (
-              projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))
-            )}
-          </select>
-        </Field>
-      </FormSection>
+  const project = projects.find((p) => p.id === projectId);
 
-      <FormSection
-        title="Optional"
-        description="Both can wait — the offer's stated validity is set with the rest of the terms on the next screen."
-      >
-        <Field label="Expires on" htmlFor="validUntil">
-          <input
-            id="validUntil"
-            type="date"
-            className={fieldClass}
-            value={validUntil}
-            onChange={(e) => setValidUntil(e.target.value)}
-          />
-        </Field>
-        <Field label="Internal notes" htmlFor="notes" wide>
-          <textarea
-            id="notes"
-            className={fieldClass}
-            rows={3}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </Field>
-      </FormSection>
-    </FormPage>
+  return (
+    <div className="flex min-h-screen">
+      <Sidebar />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <PageHeader
+          eyebrow="Sales"
+          title="New quotation"
+          description="Describe the lift, check the specs and the list price, then confirm. The lift becomes the first line of the offer; the price is agreed and the terms stated on the next screen."
+          backHref={
+            project ? `/customers/${project.customerId}` : '/quotations'
+          }
+          backLabel={project ? 'Customer' : 'Quotations'}
+          actions={
+            <button
+              type="button"
+              onClick={() => void onCreate()}
+              disabled={!result || creating || calculating}
+              className={btnPrimary}
+            >
+              {creating ? 'Creating…' : 'Create quotation'}
+            </button>
+          }
+        />
+
+        <main className="grid flex-1 gap-8 bg-slate-50 px-4 py-6 sm:px-8 xl:grid-cols-[minmax(0,24rem)_1fr]">
+          <form
+            onSubmit={(event) => void onCalculate(event)}
+            className="h-fit space-y-4 rounded-2xl border border-slate-200 bg-white p-6"
+          >
+            <label className="block">
+              <span className={label}>Project</span>
+              <select
+                className={fieldClass}
+                required
+                value={projectId}
+                onChange={(e) => setProjectId(e.target.value)}
+              >
+                {projects.length === 0 ? (
+                  <option value="">No projects yet</option>
+                ) : (
+                  projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+
+            <LiftInputs form={form} setForm={setForm} products={products} />
+
+            <label className="block">
+              <span className={label}>Offer expires on</span>
+              <input
+                type="date"
+                className={fieldClass}
+                value={validUntil}
+                onChange={(e) => setValidUntil(e.target.value)}
+              />
+            </label>
+            <label className="block">
+              <span className={label}>Internal notes</span>
+              <textarea
+                className={fieldClass}
+                rows={2}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </label>
+
+            {error ? (
+              <p
+                role="alert"
+                className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+              >
+                {error}
+              </p>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={calculating}
+              className={`${btnSecondary} w-full`}
+            >
+              {calculating
+                ? 'Calculating…'
+                : result
+                  ? 'Recalculate'
+                  : 'Calculate'}
+            </button>
+          </form>
+
+          <div className="space-y-6">
+            {result ? (
+              <LiftResult result={result} products={products} />
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-16 text-center text-sm text-slate-500">
+                Describe the lift and calculate. The specs and the list price
+                appear here; Create quotation takes them onto the offer.
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+    </div>
   );
 }

@@ -182,6 +182,10 @@ export default function ProjectsPage() {
   };
 
   const onAdvance = async (project: Project, next: ProjectStatus) => {
+    if (next === 'QUOTATION') {
+      router.push(`/quotations/new?projectId=${project.id}`);
+      return;
+    }
     const amounts = promptForDealValue(project, next);
     if (amounts === CANCELLED) {
       return;

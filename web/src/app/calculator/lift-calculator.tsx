@@ -1,0 +1,471 @@
+'use client';
+
+import type { ChangeEvent, Dispatch, SetStateAction } from 'react';
+
+import { formatNumber } from '@/lib/money';
+import {
+  productName,
+  type CalcInputPayload,
+  type CalcRequestPayload,
+  type CalcResult,
+  type ProductTypeRow,
+} from '@/lib/api';
+
+/**
+ * A passenger lift is described by its shaft and floors alone: the company's
+ * standard table names the lift, and the API fills in the rest. The classic
+ * figures below stay for every other product.
+ */
+export const WORKED_EXAMPLE: CalcInputPayload = {
+  productType: 'PASSENGER',
+  shaftWidthMm: 1835,
+  shaftDepthMm: 1750,
+  floors: 12,
+  capacityKg: 1000,
+  stops: 12,
+  travelHeightM: 45,
+  speedMs: 1.6,
+  machineRoomType: 'MRL',
+  doorType: 'CENTER_OPEN',
+  doorWidthMm: 900,
+  buildingUsage: 'COMMERCIAL',
+  // The calculator shows the list price only; margin and VAT belong to the
+  // quotation, where the statutory rate and the agreed price live.
+  marginPercent: 0,
+  taxPercent: 0,
+};
+
+const field =
+  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm ' +
+  'outline-none transition focus:border-navy-600 focus:ring-2 focus:ring-navy-600/20';
+
+const label =
+  'mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500';
+
+export const isStandardLift = (productType: string): boolean =>
+  productType === 'PASSENGER';
+
+/** The request the API wants: shaft and floors for a standard lift, everything for the rest. */
+export const toRequest = (form: CalcInputPayload): CalcRequestPayload => {
+  const {
+    shaftWidthMm,
+    shaftDepthMm,
+    floors,
+    capacityKg,
+    stops,
+    travelHeightM,
+    speedMs,
+    doorType,
+    doorWidthMm,
+    ...common
+  } = form;
+  return isStandardLift(form.productType)
+    ? { ...common, shaftWidthMm, shaftDepthMm, floors }
+    : {
+        ...common,
+        capacityKg,
+        stops,
+        travelHeightM,
+        speedMs,
+        doorType,
+        doorWidthMm,
+      };
+};
+
+const doorLabel = (input: CalcInputPayload): string =>
+  `${input.doorType === 'CENTER_OPEN' ? 'CO' : input.doorType === 'TELESCOPIC' ? '2S' : 'Side'} ${formatNumber(input.doorWidthMm)} × 2,100`;
+
+export const formatMoney = (value: string): string =>
+  new Intl.NumberFormat('en-ET', {
+    style: 'currency',
+    currency: 'ETB',
+  }).format(Number(value));
+
+/**
+ * The lift as the salesperson describes it: the product, then — for a
+ * standard passenger lift — the shaft and the floors, or the classic
+ * figures for everything else. Shared by the calculator and by the start
+ * of a quotation, so a lift is described the same way in both places.
+ */
+export const LiftInputs = ({
+  form,
+  setForm,
+  products,
+}: {
+  form: CalcInputPayload;
+  setForm: Dispatch<SetStateAction<CalcInputPayload>>;
+  products: readonly ProductTypeRow[];
+}) => {
+  const setNumber =
+    (key: keyof CalcInputPayload) => (event: ChangeEvent<HTMLInputElement>) => {
+      setForm((prev) => ({ ...prev, [key]: Number(event.target.value) }));
+    };
+  const standard = isStandardLift(form.productType);
+
+  return (
+    <>
+      <label className="block">
+        <span className={label}>Product</span>
+        <select
+          className={field}
+          value={form.productType}
+          onChange={(e) =>
+            setForm((prev) => ({
+              ...prev,
+              productType: e.target.value,
+            }))
+          }
+        >
+          {products.map((p) => (
+            <option key={p.code} value={p.code}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+        {products.some(
+          (p) =>
+            p.code === form.productType &&
+            Number(p.perStopEtb) === 0 &&
+            Number(p.perKgEtb) === 0,
+        ) && (
+          <span className="mt-1 block text-xs text-slate-500">
+            Flat price — stops and capacity do not change it.
+          </span>
+        )}
+      </label>
+
+      {standard ? (
+        <div className="grid grid-cols-2 gap-3">
+          <label>
+            <span className={label}>Shaft width (mm)</span>
+            <input
+              className={field}
+              type="number"
+              min={1000}
+              max={6000}
+              value={form.shaftWidthMm ?? ''}
+              onChange={setNumber('shaftWidthMm')}
+              required
+            />
+          </label>
+          <label>
+            <span className={label}>Shaft depth (mm)</span>
+            <input
+              className={field}
+              type="number"
+              min={1000}
+              max={6000}
+              value={form.shaftDepthMm ?? ''}
+              onChange={setNumber('shaftDepthMm')}
+              required
+            />
+          </label>
+          <label>
+            <span className={label}>Number of floors</span>
+            <input
+              className={field}
+              type="number"
+              min={2}
+              max={64}
+              value={form.floors ?? ''}
+              onChange={setNumber('floors')}
+              required
+            />
+          </label>
+          <p className="col-span-2 text-xs text-slate-500">
+            Persons, rated load, speed, car and door follow from the shaft and
+            the floors — the company&apos;s standard passenger table.
+          </p>
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-2 gap-3">
+        {standard ? null : (
+          <>
+            <label>
+              <span className={label}>Capacity (kg)</span>
+              <input
+                className={field}
+                type="number"
+                min={320}
+                max={5000}
+                value={form.capacityKg}
+                onChange={setNumber('capacityKg')}
+                required
+              />
+            </label>
+            <label>
+              <span className={label}>Stops</span>
+              <input
+                className={field}
+                type="number"
+                min={2}
+                max={64}
+                value={form.stops}
+                onChange={setNumber('stops')}
+                required
+              />
+            </label>
+            <label>
+              <span className={label}>Travel height / rise (m)</span>
+              <input
+                className={field}
+                type="number"
+                min={3}
+                max={200}
+                step="0.01"
+                value={form.travelHeightM}
+                onChange={setNumber('travelHeightM')}
+                required
+              />
+            </label>
+            <label>
+              <span className={label}>Speed (m/s)</span>
+              <input
+                className={field}
+                type="number"
+                min={0.4}
+                max={10}
+                step="0.01"
+                value={form.speedMs}
+                onChange={setNumber('speedMs')}
+                required
+              />
+            </label>
+            <label>
+              <span className={label}>Door width (mm)</span>
+              <input
+                className={field}
+                type="number"
+                min={700}
+                max={1400}
+                value={form.doorWidthMm}
+                onChange={setNumber('doorWidthMm')}
+                required
+              />
+            </label>
+          </>
+        )}
+      </div>
+
+      <label className="block">
+        <span className={label}>Machine room</span>
+        <select
+          className={field}
+          value={form.machineRoomType}
+          onChange={(e) =>
+            setForm((prev) => ({
+              ...prev,
+              machineRoomType: e.target.value as 'MR' | 'MRL',
+            }))
+          }
+        >
+          <option value="MR">Machine Room (MR)</option>
+          <option value="MRL">Machine Room Less (MRL)</option>
+        </select>
+      </label>
+
+      {standard ? null : (
+        <label className="block">
+          <span className={label}>Door type</span>
+          <select
+            className={field}
+            value={form.doorType}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                doorType: e.target.value as CalcInputPayload['doorType'],
+              }))
+            }
+          >
+            <option value="CENTER_OPEN">Center open</option>
+            <option value="TELESCOPIC">Telescopic</option>
+            <option value="SWING">Side opening</option>
+          </select>
+        </label>
+      )}
+
+      <label className="block">
+        <span className={label}>Building usage</span>
+        <select
+          className={field}
+          value={form.buildingUsage}
+          onChange={(e) =>
+            setForm((prev) => ({
+              ...prev,
+              buildingUsage: e.target
+                .value as CalcInputPayload['buildingUsage'],
+            }))
+          }
+        >
+          <option value="RESIDENTIAL">Residential</option>
+          <option value="COMMERCIAL">Commercial</option>
+          <option value="HOSPITAL">Hospital</option>
+          <option value="INDUSTRIAL">Industrial</option>
+        </select>
+      </label>
+    </>
+  );
+};
+
+/** What the calculator found: the list price, the specs, the working, the breakdown. */
+export const LiftResult = ({
+  result,
+  products,
+}: {
+  result: CalcResult;
+  products: readonly ProductTypeRow[];
+}) => (
+  <>
+    <section className="rounded-2xl bg-navy-800 p-6 text-white">
+      <p className="text-sm text-navy-100/70">List price</p>
+      <p className="font-display mt-1 text-3xl font-bold tracking-tight text-gold-400">
+        {formatMoney(result.pricing.totalBeforeMargin)}
+      </p>
+      <p className="mt-2 text-xs text-navy-100/60">
+        Before VAT. The quotation adds the statutory rate.
+      </p>
+    </section>
+
+    <section className="rounded-2xl border border-slate-200 bg-white p-6">
+      <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        Technical specifications
+      </h2>
+      {result.input.floors !== undefined ? (
+        <>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
+            {(
+              [
+                ['Persons', formatNumber(result.technical.capacityPersons)],
+                ['Rated load (kg)', formatNumber(result.input.capacityKg)],
+                ['Speed (m/s)', String(result.input.speedMs)],
+                [
+                  'Car W×D×CH (mm)',
+                  `${formatNumber(result.technical.carWidthMm)} × ${formatNumber(result.technical.carDepthMm)} × ${formatNumber(result.technical.carHeightMm)}`,
+                ],
+                ['Door (mm)', doorLabel(result.input)],
+                [
+                  'Shaft W×D (mm)',
+                  `${formatNumber(result.technical.shaftWidthMm)} × ${formatNumber(result.technical.shaftDepthMm)}`,
+                ],
+                ['Floors / stops', formatNumber(result.input.stops)],
+                ['Travel (m)', String(result.input.travelHeightM)],
+              ] as const
+            ).map(([k, v]) => (
+              <div key={k}>
+                <dt className="text-xs text-slate-500">{k}</dt>
+                <dd className="font-medium text-slate-900">{v}</dd>
+              </div>
+            ))}
+          </dl>
+          {result.notes.length > 0 ? (
+            <ul className="mt-4 space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              {result.notes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      ) : result.technical.capacityPersons === null ? (
+        <p className="text-sm text-slate-500">
+          {productName(products, result.technical.productType)} is priced as a
+          flat product — the EN 81 shaft and machine calculations apply to
+          passenger lifts only.
+        </p>
+      ) : (
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
+          {(
+            [
+              ['Persons', formatNumber(result.technical.capacityPersons)],
+              [
+                'Car W×D×H (mm)',
+                `${formatNumber(result.technical.carWidthMm)}×${formatNumber(result.technical.carDepthMm)}×${formatNumber(result.technical.carHeightMm)}`,
+              ],
+              [
+                'Shaft W×D (mm)',
+                `${formatNumber(result.technical.shaftWidthMm)}×${formatNumber(result.technical.shaftDepthMm)}`,
+              ],
+              ['Pit depth (mm)', formatNumber(result.technical.pitDepthMm)],
+              [
+                'Overhead (mm)',
+                formatNumber(result.technical.overheadClearanceMm),
+              ],
+              [
+                'Counterweight (kg)',
+                formatNumber(result.technical.counterweightMassKg, {
+                  decimals: 2,
+                }),
+              ],
+              [
+                'Motor (kW)',
+                formatNumber(result.technical.motorPowerKw, {
+                  decimals: 2,
+                }),
+              ],
+              ['Guide rail', result.technical.guideRailSpec ?? '—'],
+              [
+                'Machine room W×D×H (mm)',
+                result.technical.machineRoomWidthMm === null
+                  ? 'None (MRL)'
+                  : `${formatNumber(result.technical.machineRoomWidthMm)}×${formatNumber(result.technical.machineRoomDepthMm)}×${formatNumber(result.technical.machineRoomHeightMm)}`,
+              ],
+            ] as const
+          ).map(([k, v]) => (
+            <div key={k}>
+              <dt className="text-xs text-slate-500">{k}</dt>
+              <dd className="font-medium text-slate-900">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </section>
+
+    <section className="rounded-2xl border border-slate-200 bg-white p-6">
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        How the price is calculated
+      </h2>
+      <dl className="space-y-2 text-sm">
+        <div>
+          <dt className="text-xs text-slate-500">Formula</dt>
+          <dd className="font-mono text-[13px] text-slate-900">
+            {result.formula.text}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-slate-500">This lift</dt>
+          <dd className="font-mono text-[13px] text-slate-900">
+            {result.formula.working}
+          </dd>
+        </div>
+      </dl>
+      <p className="mt-3 text-xs text-slate-400">
+        Edit the formula under Settings → Pricing, or per product under Products
+        &amp; prices.
+      </p>
+    </section>
+
+    <section className="rounded-2xl border border-slate-200 bg-white p-6">
+      <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        Pricing breakdown (ETB)
+      </h2>
+      <dl className="space-y-2 text-sm">
+        {(
+          [
+            ['Base price', result.pricing.basePrice],
+            ['Additional stops / rise', result.pricing.stopsAdjustment],
+            ['Additional capacity', result.pricing.capacityAdjustment],
+            ['List price', result.pricing.totalBeforeMargin],
+          ] as const
+        ).map(([k, v]) => (
+          <div
+            key={k}
+            className="flex items-center justify-between border-b border-slate-100 py-1.5 last:border-0"
+          >
+            <dt className="text-slate-500">{k}</dt>
+            <dd className="font-medium tabular-nums">{formatMoney(v)}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  </>
+);

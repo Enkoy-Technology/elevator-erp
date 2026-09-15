@@ -1508,7 +1508,7 @@ export interface Quotation {
 /** Same shape the calc engine takes, minus taxPercent — VAT is resolved
  *  server-side from the statutory rates table, never client-supplied. */
 export interface CreateQuotationPayload extends Omit<
-  CalcInputPayload,
+  CalcRequestPayload,
   'taxPercent'
 > {
   validUntil?: string;
