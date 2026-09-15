@@ -7,10 +7,16 @@ import { useRouter } from 'next/navigation';
 
 import { btnPrimary, btnSecondary } from '@/components/form-styles';
 import { DataTable } from '@/components/data-table';
-import { ListToolbar, RowAction, SearchField, StatusPill } from '@/components/list-toolbar';
+import {
+  ListToolbar,
+  RowAction,
+  SearchField,
+  StatusPill,
+} from '@/components/list-toolbar';
 import { Ban, Check, Pencil, X } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
+import { useConfirm } from '@/components/use-confirm';
 import {
   ApiError,
   getAccessToken,
@@ -28,6 +34,7 @@ const bulkBtn =
 
 export default function EmployeesPage() {
   const router = useRouter();
+  const { confirm, confirmDialog } = useConfirm();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -37,7 +44,9 @@ export default function EmployeesPage() {
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
   const [bulkNotice, setBulkNotice] = useState<string | null>(null);
   // Which row is mid-confirm. One at a time: opening a second confirm closes
   // the first, so there is never an ambiguous armed button off-screen.
@@ -122,9 +131,12 @@ export default function EmployeesPage() {
       return;
     }
     if (
-      !window.confirm(
-        `Deactivate ${targets.length} employee(s)? They will not be able to log in.`,
-      )
+      (await confirm({
+        title: `Deactivate ${targets.length} employee(s)?`,
+        description: `They will not be able to log in.`,
+        confirmLabel: 'Deactivate',
+        tone: 'danger',
+      })) === null
     ) {
       return;
     }
@@ -132,9 +144,13 @@ export default function EmployeesPage() {
     // No bulk endpoint exists — this is N PATCHes, so it is NOT atomic and a
     // partial failure is reported as one rather than dressed up as success.
     const results = await Promise.allSettled(
-      targets.map((employee) => updateEmployee(employee.id, { isActive: false })),
+      targets.map((employee) =>
+        updateEmployee(employee.id, { isActive: false }),
+      ),
     );
-    const failed = results.filter((result) => result.status === 'rejected').length;
+    const failed = results.filter(
+      (result) => result.status === 'rejected',
+    ).length;
     setBulkNotice(
       failed === 0
         ? `Deactivated ${targets.length} employee(s).`
@@ -149,7 +165,9 @@ export default function EmployeesPage() {
       header: 'Name',
       enableSorting: true,
       cell: ({ row }) => (
-        <span className="font-medium text-slate-900">{row.original.fullName}</span>
+        <span className="font-medium text-slate-900">
+          {row.original.fullName}
+        </span>
       ),
     },
     { accessorKey: 'email', header: 'Email' },
@@ -157,7 +175,9 @@ export default function EmployeesPage() {
       id: 'role',
       header: 'Role',
       cell: ({ row }) => (
-        <StatusPill label={ROLE_LABELS[row.original.role] ?? row.original.role} />
+        <StatusPill
+          label={ROLE_LABELS[row.original.role] ?? row.original.role}
+        />
       ),
     },
     {
@@ -220,6 +240,7 @@ export default function EmployeesPage() {
   return (
     <div className="flex min-h-screen">
       <Sidebar />
+      {confirmDialog}
       <div className="flex min-w-0 flex-1 flex-col">
         <PageHeader
           eyebrow="People"
@@ -283,7 +304,11 @@ export default function EmployeesPage() {
               <>
                 {/* Sized to the selection bar's own Clear button, not the
                     page's full-size btnSecondary. */}
-                <button type="button" onClick={exportSelected} className={bulkBtn}>
+                <button
+                  type="button"
+                  onClick={exportSelected}
+                  className={bulkBtn}
+                >
                   Export selected
                 </button>
                 <button

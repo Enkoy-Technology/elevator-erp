@@ -19,6 +19,7 @@ import {
 } from '@/components/list-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
+import { useConfirm } from '@/components/use-confirm';
 import { formatEtb } from '@/lib/money';
 import {
   ApiError,
@@ -61,7 +62,6 @@ const STATUS_FILTERS: readonly ContractStatus[] = [
 
 const DOWNLOAD_FORMATS: readonly DocumentFormat[] = ['pdf', 'docx', 'xlsx'];
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Print stays its own button (it is the action people actually reach for);
@@ -118,7 +118,9 @@ const downloadCsv = (
   // rather than as a formula.
   const cell = (value: string): string =>
     `"${(/^[=+\-@\t\r]/.test(value) ? `'${value}` : value).replace(/"/g, '""')}"`;
-  const csv = [headers, ...rows].map((row) => row.map(cell).join(',')).join('\r\n');
+  const csv = [headers, ...rows]
+    .map((row) => row.map(cell).join(','))
+    .join('\r\n');
   // BOM: Excel needs it to read UTF-8 (Amharic names) instead of mojibake.
   const url = URL.createObjectURL(
     new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }),
@@ -136,10 +138,14 @@ const downloadCsv = (
  *  ADMIN bypass via RolesGuard's SUPER_ROLES. TECHNICAL_LEAD and FINANCE
  *  reach the list read-only. */
 const canWrite = (role: UserRole | null): boolean =>
-  role === 'SALES_MANAGER' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
+  role === 'SALES_MANAGER' ||
+  role === 'CEO' ||
+  role === 'GENERAL_MANAGER' ||
+  role === 'ADMIN';
 
 export default function ContractsPage() {
   const router = useRouter();
+  const { confirm, confirmDialog } = useConfirm();
   const [role, setRole] = useState<UserRole | null>(null);
 
   const [contracts, setContracts] = useState<ContractListRow[]>([]);
@@ -183,7 +189,9 @@ export default function ContractsPage() {
         setTotal(result.total);
         setTotalPages(result.totalPages);
       } catch (err) {
-        setError(err instanceof ApiError ? err.message : 'Failed to load contracts');
+        setError(
+          err instanceof ApiError ? err.message : 'Failed to load contracts',
+        );
       } finally {
         setLoading(false);
       }
@@ -233,43 +241,47 @@ export default function ContractsPage() {
     }
   };
 
-  // ponytail: window.prompt for the optional signature date, matching the
-  // established prompt convention on the quotations and invoices lists — the
-  // paper is signed on a day that is often not today.
-  const onSign = (contract: ContractListRow) => {
-    const entered = window.prompt(
-      `Sign ${contract.contractNumber}. Signature date (YYYY-MM-DD, blank = today)?`,
-      '',
+  const onSign = async (contract: ContractListRow) => {
+    const date = await confirm({
+      title: `Mark ${contract.contractNumber} as signed`,
+      description: 'The day the paper was signed. Leave blank for today.',
+      confirmLabel: 'Mark as signed',
+      input: { label: 'Signature date', kind: 'date' },
+    });
+    if (date === null) {
+      return;
+    }
+    void runAction(
+      () => signContract(contract.id, date || undefined),
+      contract.id,
     );
-    if (entered === null) {
-      return;
-    }
-    const trimmed = entered.trim();
-    if (trimmed && !ISO_DATE.test(trimmed)) {
-      setError('Signature date must be in YYYY-MM-DD format');
-      return;
-    }
-    void runAction(() => signContract(contract.id, trimmed || undefined), contract.id);
   };
 
-  const onCancel = (contract: ContractListRow) => {
-    const entered = window.prompt(`Reason for cancelling ${contract.contractNumber}?`);
-    if (entered === null) {
-      return;
-    }
-    const reason = entered.trim();
-    if (reason.length < 2) {
-      setError('Cancellation reason must be at least 2 characters');
+  const onCancel = async (contract: ContractListRow) => {
+    const reason = await confirm({
+      title: `Reason for cancelling ${contract.contractNumber}`,
+      confirmLabel: 'Cancel contract',
+      tone: 'danger',
+      input: { label: 'Reason', minLength: 2 },
+    });
+    if (reason === null) {
       return;
     }
     void runAction(() => cancelContract(contract.id, reason), contract.id);
   };
 
-  const onDownload = async (contract: ContractListRow, format: DocumentFormat) => {
+  const onDownload = async (
+    contract: ContractListRow,
+    format: DocumentFormat,
+  ) => {
     setBusyId(contract.id);
     setError(null);
     try {
-      await downloadContractDocument(contract.id, contract.contractNumber, format);
+      await downloadContractDocument(
+        contract.id,
+        contract.contractNumber,
+        format,
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Download failed');
     } finally {
@@ -332,10 +344,10 @@ export default function ContractsPage() {
           <button
             type="button"
             disabled={busy}
-            onClick={() => onSign(contract)}
+            onClick={() => void onSign(contract)}
             className={`${btnPrimary} px-2.5 py-1 text-xs`}
           >
-            Sign
+            Mark as signed
           </button>
         ) : null}
         <button
@@ -383,7 +395,7 @@ export default function ContractsPage() {
             tone="danger"
             disabled={busy}
             label={`Cancel ${contract.contractNumber}`}
-            onClick={() => onCancel(contract)}
+            onClick={() => void onCancel(contract)}
           />
         ) : null}
       </div>
@@ -451,11 +463,12 @@ export default function ContractsPage() {
   return (
     <div className="flex min-h-screen">
       <Sidebar />
+      {confirmDialog}
       <div className="flex min-w-0 flex-1 flex-col">
         <PageHeader
           eyebrow="Sales"
           title="Contracts"
-          description="Draft → sign → hand over. A contract is issued from an issued proforma and closes the project when it is handed over."
+          description="A contract comes from an approved quotation. Mark it signed once the paper is signed, then record the handover when the lift is delivered — that closes the project."
           actions={
             <Link href="/quotations" className={btnGhost}>
               Quotations &amp; proformas

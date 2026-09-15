@@ -46,9 +46,19 @@ import {
 } from '@/lib/api';
 
 /** Approval issues the proforma, so the approved state reads as the proforma. */
+/** One line under the status: what happens next, in the words a salesperson uses. */
+const NEXT_STEP: Record<QuoteStatus, string | null> = {
+  DRAFT: 'Next: send it for approval',
+  PENDING_APPROVAL: 'Waiting for a manager to approve',
+  APPROVED: 'Next: issue the proforma',
+  REJECTED: null,
+  EXPIRED: null,
+  CONVERTED_TO_PROFORMA: 'Next: create the contract, or issue the invoice',
+};
+
 const QUOTE_STATUS_LABEL: Record<QuoteStatus, string> = {
   DRAFT: 'Draft',
-  PENDING_APPROVAL: 'Pending approval',
+  PENDING_APPROVAL: 'Waiting for approval',
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
   EXPIRED: 'Expired',
@@ -605,7 +615,7 @@ export default function QuotationsPage() {
             onClick={() => onSubmitQuote(quote)}
             className={`${btnPrimary} px-2.5 py-1 text-xs`}
           >
-            Submit
+            Send for approval
           </button>
         ) : null}
         {canApprove && quote.status === 'PENDING_APPROVAL' ? (
@@ -638,7 +648,7 @@ export default function QuotationsPage() {
             onClick={() => onConvertToInvoice(quote)}
             className={`${btnPrimary} px-2.5 py-1 text-xs`}
           >
-            → Invoice
+            Issue invoice
           </button>
         ) : null}
         {canApprove && issued ? (
@@ -648,7 +658,7 @@ export default function QuotationsPage() {
             onClick={() => void onIssueContract(quote)}
             className={`${btnSecondary} px-2.5 py-1 text-xs`}
           >
-            → Contract
+            Create contract
           </button>
         ) : null}
         {/* Print gives the document the customer is owed at this stage: the
@@ -775,6 +785,12 @@ export default function QuotationsPage() {
               {row.original.proformaNumber}
             </span>
           ) : null}
+          {row.original.proformaStatus !== 'CANCELLED' &&
+          NEXT_STEP[row.original.status] ? (
+            <span className="text-[11px] text-slate-400">
+              {NEXT_STEP[row.original.status]}
+            </span>
+          ) : null}
         </div>
       ),
     },
@@ -806,8 +822,8 @@ export default function QuotationsPage() {
             <div>
               <h1 className="font-display text-lg font-semibold">Quotations</h1>
               <p className="text-sm text-slate-500">
-                Draft → submit → approve. Approval issues the proforma (amounts
-                in ETB)
+                Draft → send for approval → approve, which issues the proforma →
+                create the contract, or issue the invoice. Amounts in ETB.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-sm">

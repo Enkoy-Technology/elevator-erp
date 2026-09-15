@@ -11,6 +11,7 @@ import { btnPrimary } from '@/components/form-styles';
 import { RowAction } from '@/components/list-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
+import { useConfirm } from '@/components/use-confirm';
 import {
   ApiError,
   deleteMessageTemplate,
@@ -22,6 +23,7 @@ import {
 
 export default function MessageTemplatesPage() {
   const router = useRouter();
+  const { confirm, confirmDialog } = useConfirm();
   const [saved, setSaved] = useState<MessageTemplate[]>([]);
   const [starters, setStarters] = useState<StarterTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +36,9 @@ export default function MessageTemplatesPage() {
       setSaved(result.saved);
       setStarters(result.starters);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to load templates');
+      setError(
+        err instanceof ApiError ? err.message : 'Failed to load templates',
+      );
     } finally {
       setLoading(false);
     }
@@ -49,14 +53,22 @@ export default function MessageTemplatesPage() {
   }, [router, refresh]);
 
   const remove = async (template: MessageTemplate) => {
-    if (!window.confirm(`Delete the template "${template.name}"?`)) {
+    if (
+      (await confirm({
+        title: `Delete the template "${template.name}"?`,
+        confirmLabel: 'Delete',
+        tone: 'danger',
+      })) === null
+    ) {
       return;
     }
     try {
       await deleteMessageTemplate(template.id);
       await refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to delete the template');
+      setError(
+        err instanceof ApiError ? err.message : 'Failed to delete the template',
+      );
     }
   };
 
@@ -65,7 +77,9 @@ export default function MessageTemplatesPage() {
     {
       accessorKey: 'body',
       header: 'Message',
-      cell: ({ row }) => <span className="text-xs text-slate-600">{row.original.body}</span>,
+      cell: ({ row }) => (
+        <span className="text-xs text-slate-600">{row.original.body}</span>
+      ),
     },
     {
       id: 'updated',
@@ -81,7 +95,9 @@ export default function MessageTemplatesPage() {
           <RowAction
             icon={Pencil}
             label={`Edit ${row.original.name}`}
-            onClick={() => router.push(`/messages/templates/${row.original.id}/edit`)}
+            onClick={() =>
+              router.push(`/messages/templates/${row.original.id}/edit`)
+            }
           />
           <RowAction
             icon={Trash2}
@@ -97,6 +113,7 @@ export default function MessageTemplatesPage() {
   return (
     <div className="flex min-h-screen">
       <Sidebar />
+      {confirmDialog}
       <div className="flex min-w-0 flex-1 flex-col">
         <PageHeader
           eyebrow="Communication"
@@ -110,7 +127,9 @@ export default function MessageTemplatesPage() {
         />
         <main className="flex-1 space-y-6 bg-slate-50 p-4 sm:p-8">
           {error ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+            <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </p>
           ) : null}
 
           <DataTable
@@ -121,7 +140,10 @@ export default function MessageTemplatesPage() {
             empty={
               <>
                 No saved templates yet. Pick a starter below and{' '}
-                <Link href="/messages/templates/new" className="font-semibold text-navy-800 hover:underline">
+                <Link
+                  href="/messages/templates/new"
+                  className="font-semibold text-navy-800 hover:underline"
+                >
                   save your own wording
                 </Link>
                 .
@@ -137,9 +159,14 @@ export default function MessageTemplatesPage() {
             </div>
             <ul className="divide-y divide-slate-100">
               {starters.map((t) => (
-                <li key={t.name} className="flex flex-wrap items-start justify-between gap-3 px-5 py-3">
+                <li
+                  key={t.name}
+                  className="flex flex-wrap items-start justify-between gap-3 px-5 py-3"
+                >
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-900">{t.name}</p>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {t.name}
+                    </p>
                     <p className="text-xs text-slate-600">{t.body}</p>
                   </div>
                   <Link

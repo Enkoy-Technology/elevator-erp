@@ -21,6 +21,7 @@ import { btnGhost, btnSecondary } from '@/components/form-styles';
 import { StatusPill } from '@/components/list-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
+import { useConfirm } from '@/components/use-confirm';
 import {
   ApiError,
   deleteCustomer,
@@ -335,6 +336,7 @@ export default function CustomerDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = params.id;
+  const { confirm, confirmDialog } = useConfirm();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [overview, setOverview] = useState<CustomerOverview | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
@@ -439,9 +441,12 @@ export default function CustomerDetailPage() {
 
   const onDelete = async () => {
     if (
-      !window.confirm(
-        `Delete ${customer.name}? Their projects, invoices and history stay, but the account is removed from the list.`,
-      )
+      (await confirm({
+        title: `Delete ${customer.name}?`,
+        description: `Their projects, invoices and history stay, but the account is removed from the list.`,
+        confirmLabel: 'Delete',
+        tone: 'danger',
+      })) === null
     ) {
       return;
     }
@@ -756,6 +761,7 @@ export default function CustomerDetailPage() {
 
   return (
     <Shell>
+      {confirmDialog}
       <PageHeader
         eyebrow="Customer"
         title={customer.name}

@@ -2,7 +2,15 @@
 
 import Link from 'next/link';
 import { updatedColumn } from '@/components/updated-column';
-import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import type { ColumnDef } from '@tanstack/react-table';
 
@@ -26,7 +34,14 @@ import {
 } from '@/components/list-toolbar';
 import { SideDrawer } from '@/components/side-drawer';
 import { Sidebar } from '@/components/sidebar';
-import { formatEtb, isPositiveEtb, isZeroEtb, subtractEtb, sumEtb } from '@/lib/money';
+import { useConfirm } from '@/components/use-confirm';
+import {
+  formatEtb,
+  isPositiveEtb,
+  isZeroEtb,
+  subtractEtb,
+  sumEtb,
+} from '@/lib/money';
 import {
   getCustomer,
   ApiError,
@@ -89,9 +104,9 @@ const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   OTHER: 'Other',
 };
 
-const PAYMENT_METHOD_OPTIONS = (Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]).map(
-  (value) => ({ value, label: PAYMENT_METHOD_LABEL[value] }),
-);
+const PAYMENT_METHOD_OPTIONS = (
+  Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]
+).map((value) => ({ value, label: PAYMENT_METHOD_LABEL[value] }));
 
 /**
  * Print stays its own button (it is the action people actually reach for);
@@ -145,7 +160,10 @@ const DateFilter = ({
   const id = useId();
   return (
     <div className="min-w-[9.5rem]">
-      <label htmlFor={id} className={`mb-1 block font-semibold ${metaLabelClass}`}>
+      <label
+        htmlFor={id}
+        className={`mb-1 block font-semibold ${metaLabelClass}`}
+      >
         {label}
       </label>
       <input
@@ -180,7 +198,9 @@ const downloadCsv = (
   // rather than as a formula.
   const cell = (value: string): string =>
     `"${(/^[=+\-@\t\r]/.test(value) ? `'${value}` : value).replace(/"/g, '""')}"`;
-  const csv = [headers, ...rows].map((row) => row.map(cell).join(',')).join('\r\n');
+  const csv = [headers, ...rows]
+    .map((row) => row.map(cell).join(','))
+    .join('\r\n');
   // BOM: Excel needs it to read UTF-8 (Amharic names) instead of mojibake.
   const url = URL.createObjectURL(
     new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }),
@@ -201,7 +221,10 @@ const OPEN_STATUSES = new Set<InvoiceStatus>(['ISSUED', 'PARTIALLY_PAID']);
  *  @Roles('FINANCE_OFFICER') (no per-route override on any mutation route);
  *  CEO/ADMIN bypass via RolesGuard's SUPER_ROLES. */
 const canManageFinance = (role: UserRole | null): boolean =>
-  role === 'FINANCE_OFFICER' || role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN';
+  role === 'FINANCE_OFFICER' ||
+  role === 'CEO' ||
+  role === 'GENERAL_MANAGER' ||
+  role === 'ADMIN';
 
 /**
  * The list's Outstanding column — GET /invoices now returns an exact,
@@ -232,6 +255,7 @@ function toAllocationDrafts(invoices: InvoiceListRow[]): AllocationDraft[] {
 
 export default function InvoicesPage() {
   const router = useRouter();
+  const { confirm, confirmDialog } = useConfirm();
   const [tab, setTab] = useState<Tab>('invoices');
   const [role, setRole] = useState<UserRole | null>(null);
   /**
@@ -265,7 +289,9 @@ export default function InvoicesPage() {
   const [paymentsTotalPages, setPaymentsTotalPages] = useState(0);
   const [paymentsLoading, setPaymentsLoading] = useState(true);
   const [paymentsCustomerFilter, setPaymentsCustomerFilter] = useState('');
-  const [paymentsMethodFilter, setPaymentsMethodFilter] = useState<PaymentMethod | ''>('');
+  const [paymentsMethodFilter, setPaymentsMethodFilter] = useState<
+    PaymentMethod | ''
+  >('');
   const [paymentsFrom, setPaymentsFrom] = useState('');
   const [paymentsTo, setPaymentsTo] = useState('');
   const [paymentsQInput, setPaymentsQInput] = useState('');
@@ -278,8 +304,12 @@ export default function InvoicesPage() {
   // Bulk selection, one set per tab. Cleared whenever the rows underneath it
   // change (see refresh/refreshPayments) — an id whose row is no longer
   // loaded cannot be exported, so keeping it would silently drop it.
-  const [selectedInvoices, setSelectedInvoices] = useState<ReadonlySet<string>>(new Set());
-  const [selectedPayments, setSelectedPayments] = useState<ReadonlySet<string>>(new Set());
+  const [selectedInvoices, setSelectedInvoices] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+  const [selectedPayments, setSelectedPayments] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
 
   // --- Withholding drawer ---
   const [withholdTarget, setWithholdTarget] = useState<Invoice | null>(null);
@@ -289,7 +319,9 @@ export default function InvoicesPage() {
   const [withholdSubmitting, setWithholdSubmitting] = useState(false);
 
   // --- Allocate (existing payment) drawer ---
-  const [allocateTarget, setAllocateTarget] = useState<PaymentListRow | null>(null);
+  const [allocateTarget, setAllocateTarget] = useState<PaymentListRow | null>(
+    null,
+  );
   const [allocateDrafts, setAllocateDrafts] = useState<AllocationDraft[]>([]);
   const [allocateError, setAllocateError] = useState<string | null>(null);
   const [allocateSubmitting, setAllocateSubmitting] = useState(false);
@@ -332,14 +364,18 @@ export default function InvoicesPage() {
         }
         setCustomers(options);
         setCustomerMap(
-          Object.fromEntries(customerPage.items.map((c) => [c.id, c.name] as const)),
+          Object.fromEntries(
+            customerPage.items.map((c) => [c.id, c.name] as const),
+          ),
         );
         setInvoices(result.items);
         setPage(result.page);
         setTotal(result.total);
         setTotalPages(result.totalPages);
       } catch (err) {
-        setError(err instanceof ApiError ? err.message : 'Failed to load invoices');
+        setError(
+          err instanceof ApiError ? err.message : 'Failed to load invoices',
+        );
       } finally {
         setLoading(false);
       }
@@ -375,7 +411,9 @@ export default function InvoicesPage() {
         setPaymentsTotal(result.total);
         setPaymentsTotalPages(result.totalPages);
       } catch (err) {
-        setError(err instanceof ApiError ? err.message : 'Failed to load payments');
+        setError(
+          err instanceof ApiError ? err.message : 'Failed to load payments',
+        );
       } finally {
         setPaymentsLoading(false);
       }
@@ -480,8 +518,9 @@ export default function InvoicesPage() {
     () =>
       new Set(
         payments
-          .filter((p): p is PaymentListRow & { reversalOfPaymentId: string } =>
-            p.reversalOfPaymentId !== null,
+          .filter(
+            (p): p is PaymentListRow & { reversalOfPaymentId: string } =>
+              p.reversalOfPaymentId !== null,
           )
           .map((p) => p.reversalOfPaymentId),
       ),
@@ -491,9 +530,12 @@ export default function InvoicesPage() {
   const switchTab = (next: Tab) => {
     setTab(next);
     setError(null);
-    router.replace(next === 'payments' ? '/invoices?tab=payments' : '/invoices', {
-      scroll: false,
-    });
+    router.replace(
+      next === 'payments' ? '/invoices?tab=payments' : '/invoices',
+      {
+        scroll: false,
+      },
+    );
   };
 
   const setStatus = (next: InvoiceStatus | '') => {
@@ -573,13 +615,13 @@ export default function InvoicesPage() {
   // ---- Void ----
 
   const onVoid = async (invoice: Invoice) => {
-    const entered = window.prompt(`Reason for voiding ${invoice.invoiceNumber}?`);
-    if (entered === null) {
-      return;
-    }
-    const reason = entered.trim();
-    if (reason.length < 2) {
-      setError('Void reason must be at least 2 characters');
+    const reason = await confirm({
+      title: `Reason for voiding ${invoice.invoiceNumber}`,
+      confirmLabel: 'Void invoice',
+      tone: 'danger',
+      input: { label: 'Reason', minLength: 2 },
+    });
+    if (reason === null) {
       return;
     }
     setBusyId(invoice.id);
@@ -588,7 +630,9 @@ export default function InvoicesPage() {
       await voidInvoice(invoice.id, reason);
       await refresh(page, statusFilter, customerFilter, q, pageSize);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to void invoice');
+      setError(
+        err instanceof ApiError ? err.message : 'Failed to void invoice',
+      );
     } finally {
       setBusyId(null);
     }
@@ -684,12 +728,17 @@ export default function InvoicesPage() {
       return;
     }
     setAllocateError(null);
-    const entered = allocateDrafts.filter((a) => isPositiveEtb(a.amountEtb || '0'));
+    const entered = allocateDrafts.filter((a) =>
+      isPositiveEtb(a.amountEtb || '0'),
+    );
     if (entered.length === 0) {
       setAllocateError('Enter an amount for at least one invoice.');
       return;
     }
-    const remaining = subtractEtb(allocateTarget.amountEtb, allocateTarget.allocatedEtb);
+    const remaining = subtractEtb(
+      allocateTarget.amountEtb,
+      allocateTarget.allocatedEtb,
+    );
     const enteredTotal = sumEtb(entered.map((a) => a.amountEtb));
     if (isPositiveEtb(subtractEtb(enteredTotal, remaining))) {
       setAllocateError(
@@ -715,17 +764,24 @@ export default function InvoicesPage() {
         });
         setAllocateTarget((prev) =>
           prev
-            ? { ...prev, allocatedEtb: sumEtb([prev.allocatedEtb, allocation.amountEtb]) }
+            ? {
+                ...prev,
+                allocatedEtb: sumEtb([prev.allocatedEtb, allocation.amountEtb]),
+              }
             : prev,
         );
         setAllocateDrafts((prev) =>
-          prev.map((a) => (a.invoiceId === draft.invoiceId ? { ...a, amountEtb: '' } : a)),
+          prev.map((a) =>
+            a.invoiceId === draft.invoiceId ? { ...a, amountEtb: '' } : a,
+          ),
         );
       }
       closeAllocate();
       await refreshAfterPaymentMutation();
     } catch (err) {
-      setAllocateError(err instanceof ApiError ? err.message : 'Failed to allocate payment');
+      setAllocateError(
+        err instanceof ApiError ? err.message : 'Failed to allocate payment',
+      );
     } finally {
       setAllocateSubmitting(false);
     }
@@ -734,13 +790,13 @@ export default function InvoicesPage() {
   // ---- Reverse a payment ----
 
   const onReverse = async (payment: PaymentListRow) => {
-    const entered = window.prompt(`Reason for reversing receipt ${payment.receiptNumber}?`);
-    if (entered === null) {
-      return;
-    }
-    const reason = entered.trim();
-    if (reason.length < 2) {
-      setError('Reversal reason must be at least 2 characters');
+    const reason = await confirm({
+      title: `Reason for reversing receipt ${payment.receiptNumber}`,
+      confirmLabel: 'Reverse receipt',
+      tone: 'danger',
+      input: { label: 'Reason', minLength: 2 },
+    });
+    if (reason === null) {
       return;
     }
     setBusyId(payment.id);
@@ -749,7 +805,9 @@ export default function InvoicesPage() {
       await reversePayment(payment.id, reason);
       await refreshAfterPaymentMutation();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to reverse payment');
+      setError(
+        err instanceof ApiError ? err.message : 'Failed to reverse payment',
+      );
     } finally {
       setBusyId(null);
     }
@@ -757,7 +815,10 @@ export default function InvoicesPage() {
 
   // ---- Downloads ----
 
-  const onDownloadInvoice = async (invoice: Invoice, format: DocumentFormat) => {
+  const onDownloadInvoice = async (
+    invoice: Invoice,
+    format: DocumentFormat,
+  ) => {
     setBusyId(invoice.id);
     setError(null);
     try {
@@ -769,7 +830,10 @@ export default function InvoicesPage() {
     }
   };
 
-  const onDownloadReceipt = async (payment: PaymentListRow, format: 'pdf' | 'docx') => {
+  const onDownloadReceipt = async (
+    payment: PaymentListRow,
+    format: 'pdf' | 'docx',
+  ) => {
     setBusyId(payment.id);
     setError(null);
     try {
@@ -811,7 +875,16 @@ export default function InvoicesPage() {
     const rows = invoices.filter((invoice) => selectedInvoices.has(invoice.id));
     downloadCsv(
       'invoices.csv',
-      ['Number', 'Customer', 'Issued', 'Due', 'Total ETB', 'Withheld ETB', 'Outstanding ETB', 'Status'],
+      [
+        'Number',
+        'Customer',
+        'Issued',
+        'Due',
+        'Total ETB',
+        'Withheld ETB',
+        'Outstanding ETB',
+        'Status',
+      ],
       rows.map((invoice) => [
         invoice.invoiceNumber,
         customerMap[invoice.customerId] ?? invoice.customerId,
@@ -829,7 +902,16 @@ export default function InvoicesPage() {
     const rows = payments.filter((payment) => selectedPayments.has(payment.id));
     downloadCsv(
       'payments.csv',
-      ['Receipt', 'Customer', 'Received', 'Method', 'Amount ETB', 'Allocated ETB', 'Unallocated ETB', 'Reversal'],
+      [
+        'Receipt',
+        'Customer',
+        'Received',
+        'Method',
+        'Amount ETB',
+        'Allocated ETB',
+        'Unallocated ETB',
+        'Reversal',
+      ],
       rows.map((payment) => [
         payment.receiptNumber,
         payment.customerName ?? payment.customerId,
@@ -915,7 +997,8 @@ export default function InvoicesPage() {
       isPositiveEtb(payment.amountEtb) &&
       isPositiveEtb(unallocated) &&
       !reversedIds.has(payment.id);
-    const canReverse = !payment.reversalOfPaymentId && !reversedIds.has(payment.id);
+    const canReverse =
+      !payment.reversalOfPaymentId && !reversedIds.has(payment.id);
     return (
       <div className="flex items-center justify-end gap-1.5">
         {canWrite && canAllocate ? (
@@ -965,14 +1048,17 @@ export default function InvoicesPage() {
       header: 'Number',
       enableSorting: true,
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-slate-900">{row.original.invoiceNumber}</span>
+        <span className="font-mono text-xs text-slate-900">
+          {row.original.invoiceNumber}
+        </span>
       ),
     },
     {
       id: 'customer',
       header: 'Customer',
       enableSorting: true,
-      accessorFn: (row) => customerMap[row.customerId] ?? row.customerId.slice(0, 8),
+      accessorFn: (row) =>
+        customerMap[row.customerId] ?? row.customerId.slice(0, 8),
       cell: (cell) => cell.getValue<string>(),
     },
     {
@@ -990,7 +1076,9 @@ export default function InvoicesPage() {
       header: 'Total',
       meta: { align: 'right' },
       cell: ({ row }) => (
-        <span className="font-semibold text-navy-800">{formatEtb(row.original.totalEtb)}</span>
+        <span className="font-semibold text-navy-800">
+          {formatEtb(row.original.totalEtb)}
+        </span>
       ),
     },
     {
@@ -1025,8 +1113,12 @@ export default function InvoicesPage() {
       enableSorting: true,
       cell: ({ row }) => (
         <span className="flex items-center gap-1.5">
-          <span className="font-mono text-xs text-slate-900">{row.original.receiptNumber}</span>
-          {row.original.reversalOfPaymentId ? <StatusPill label="Reversal" /> : null}
+          <span className="font-mono text-xs text-slate-900">
+            {row.original.receiptNumber}
+          </span>
+          {row.original.reversalOfPaymentId ? (
+            <StatusPill label="Reversal" />
+          ) : null}
         </span>
       ),
     },
@@ -1052,7 +1144,9 @@ export default function InvoicesPage() {
       header: 'Amount',
       meta: { align: 'right' },
       cell: ({ row }) => (
-        <span className="font-semibold text-navy-800">{formatEtb(row.original.amountEtb)}</span>
+        <span className="font-semibold text-navy-800">
+          {formatEtb(row.original.amountEtb)}
+        </span>
       ),
     },
     {
@@ -1065,7 +1159,10 @@ export default function InvoicesPage() {
       id: 'unallocated',
       header: 'Unallocated',
       meta: { align: 'right' },
-      cell: ({ row }) => formatEtb(subtractEtb(row.original.amountEtb, row.original.allocatedEtb)),
+      cell: ({ row }) =>
+        formatEtb(
+          subtractEtb(row.original.amountEtb, row.original.allocatedEtb),
+        ),
     },
     {
       id: 'actions',
@@ -1078,6 +1175,7 @@ export default function InvoicesPage() {
   return (
     <div className="flex min-h-screen">
       <Sidebar />
+      {confirmDialog}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="border-b border-slate-200 bg-white px-8 py-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
@@ -1170,7 +1268,10 @@ export default function InvoicesPage() {
                         label="Customer"
                         value={customerFilter}
                         onChange={setCustomer}
-                        options={customers.map((c) => ({ value: c.id, label: c.name }))}
+                        options={customers.map((c) => ({
+                          value: c.id,
+                          label: c.name,
+                        }))}
                         allLabel="All customers"
                       />
                     </>
@@ -1210,7 +1311,10 @@ export default function InvoicesPage() {
                     },
                   }}
                   empty={
-                    <>No invoices here. Issue one from an approved proforma, or create a standalone invoice.</>
+                    <>
+                      No invoices here. Issue one from an approved proforma, or
+                      create a standalone invoice.
+                    </>
                   }
                 />
               </>
@@ -1231,7 +1335,10 @@ export default function InvoicesPage() {
                         label="Customer"
                         value={paymentsCustomerFilter}
                         onChange={setPaymentsCustomer}
-                        options={customers.map((c) => ({ value: c.id, label: c.name }))}
+                        options={customers.map((c) => ({
+                          value: c.id,
+                          label: c.name,
+                        }))}
                         allLabel="All customers"
                       />
                       <FilterSelect
@@ -1241,8 +1348,16 @@ export default function InvoicesPage() {
                         options={PAYMENT_METHOD_OPTIONS}
                         allLabel="All methods"
                       />
-                      <DateFilter label="From" value={paymentsFrom} onChange={setPaymentsFromDate} />
-                      <DateFilter label="To" value={paymentsTo} onChange={setPaymentsToDate} />
+                      <DateFilter
+                        label="From"
+                        value={paymentsFrom}
+                        onChange={setPaymentsFromDate}
+                      />
+                      <DateFilter
+                        label="To"
+                        value={paymentsTo}
+                        onChange={setPaymentsToDate}
+                      />
                     </>
                   }
                   actions={(['csv', 'xlsx'] as const).map((format) => (
@@ -1286,7 +1401,12 @@ export default function InvoicesPage() {
                       setPaymentsPage(1);
                     },
                   }}
-                  empty={<>No payments match these filters. Record one to see it here.</>}
+                  empty={
+                    <>
+                      No payments match these filters. Record one to see it
+                      here.
+                    </>
+                  }
                 />
               </>
             )}
@@ -1299,12 +1419,18 @@ export default function InvoicesPage() {
         open={withholdTarget !== null}
         onClose={closeWithhold}
         title={
-          withholdTarget ? `Withholding — ${withholdTarget.invoiceNumber}` : 'Withholding'
+          withholdTarget
+            ? `Withholding — ${withholdTarget.invoiceNumber}`
+            : 'Withholding'
         }
         description="The credit this customer retained when settling the invoice."
         footer={
           <div className="flex gap-2">
-            <button type="button" onClick={closeWithhold} className={`${btnSecondary} flex-1`}>
+            <button
+              type="button"
+              onClick={closeWithhold}
+              className={`${btnSecondary} flex-1`}
+            >
               Cancel
             </button>
             <button
@@ -1318,7 +1444,11 @@ export default function InvoicesPage() {
           </div>
         }
       >
-        <form id="withhold-form" onSubmit={(e) => void onWithhold(e)} className="space-y-4">
+        <form
+          id="withhold-form"
+          onSubmit={(e) => void onWithhold(e)}
+          className="space-y-4"
+        >
           {withholdError ? (
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {withholdError}
@@ -1357,11 +1487,19 @@ export default function InvoicesPage() {
       <SideDrawer
         open={allocateTarget !== null}
         onClose={closeAllocate}
-        title={allocateTarget ? `Allocate — ${allocateTarget.receiptNumber}` : 'Allocate'}
+        title={
+          allocateTarget
+            ? `Allocate — ${allocateTarget.receiptNumber}`
+            : 'Allocate'
+        }
         description="Apply this receipt's remaining amount against open invoices."
         footer={
           <div className="flex gap-2">
-            <button type="button" onClick={closeAllocate} className={`${btnSecondary} flex-1`}>
+            <button
+              type="button"
+              onClick={closeAllocate}
+              className={`${btnSecondary} flex-1`}
+            >
               Cancel
             </button>
             <button
@@ -1375,7 +1513,11 @@ export default function InvoicesPage() {
           </div>
         }
       >
-        <form id="allocate-form" onSubmit={(e) => void onSubmitAllocate(e)} className="space-y-4">
+        <form
+          id="allocate-form"
+          onSubmit={(e) => void onSubmitAllocate(e)}
+          className="space-y-4"
+        >
           {allocateError ? (
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {allocateError}
@@ -1384,11 +1526,18 @@ export default function InvoicesPage() {
           {allocateTarget ? (
             <p className="text-xs text-slate-500">
               Remaining:{' '}
-              {formatEtb(subtractEtb(allocateTarget.amountEtb, allocateTarget.allocatedEtb))}
+              {formatEtb(
+                subtractEtb(
+                  allocateTarget.amountEtb,
+                  allocateTarget.allocatedEtb,
+                ),
+              )}
             </p>
           ) : null}
           {allocateDrafts.length === 0 ? (
-            <p className="text-xs text-slate-400">No open invoices for this customer.</p>
+            <p className="text-xs text-slate-400">
+              No open invoices for this customer.
+            </p>
           ) : (
             <div className="space-y-2">
               {allocateDrafts.map((a) => (
@@ -1396,7 +1545,9 @@ export default function InvoicesPage() {
                   <span className="flex-1 font-mono text-xs text-slate-600">
                     {a.invoiceNumber}
                     {a.maxEtb ? (
-                      <span className="ml-1 text-slate-400">(up to {formatEtb(a.maxEtb)})</span>
+                      <span className="ml-1 text-slate-400">
+                        (up to {formatEtb(a.maxEtb)})
+                      </span>
                     ) : null}
                   </span>
                   <input
@@ -1406,7 +1557,9 @@ export default function InvoicesPage() {
                     max={a.maxEtb || undefined}
                     className={`${fieldClass} w-32`}
                     value={a.amountEtb}
-                    onChange={(e) => setAllocateDraftAmount(a.invoiceId, e.target.value)}
+                    onChange={(e) =>
+                      setAllocateDraftAmount(a.invoiceId, e.target.value)
+                    }
                   />
                 </div>
               ))}

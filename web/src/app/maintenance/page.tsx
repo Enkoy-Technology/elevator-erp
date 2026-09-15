@@ -26,6 +26,7 @@ import {
 } from '@/components/list-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
+import { useConfirm } from '@/components/use-confirm';
 import {
   ApiError,
   downloadMaintenanceAgreement,
@@ -54,12 +55,23 @@ const bulkBtn =
 
 /** CEO and ADMIN bypass every @Roles list via RolesGuard's SUPER_ROLES. */
 const allows = (role: UserRole | null, allowed: readonly UserRole[]): boolean =>
-  role !== null && (role === 'CEO' || role === 'GENERAL_MANAGER' || role === 'ADMIN' || allowed.includes(role));
+  role !== null &&
+  (role === 'CEO' ||
+    role === 'GENERAL_MANAGER' ||
+    role === 'ADMIN' ||
+    allowed.includes(role));
 
 /** Mirrors @Roles on PATCH /maintenance/contracts/:id. */
-const CONTRACT_WRITE_ROLES: readonly UserRole[] = ['SALES_MANAGER', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER'];
+const CONTRACT_WRITE_ROLES: readonly UserRole[] = [
+  'SALES_MANAGER',
+  'TECHNICAL_MANAGER',
+  'MAINTENANCE_ENGINEER',
+];
 /** POST contracts/:id/visits and PATCH breakdowns/:id — no SALES_MANAGER. */
-const FIELD_WRITE_ROLES: readonly UserRole[] = ['TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER'];
+const FIELD_WRITE_ROLES: readonly UserRole[] = [
+  'TECHNICAL_MANAGER',
+  'MAINTENANCE_ENGINEER',
+];
 
 /** Severity is the response clock, so it reads as colour, not as text. */
 const SEVERITY_TONE: Record<
@@ -93,6 +105,7 @@ const CONTRACT_STATUS_TONE: Record<
 
 export default function MaintenancePage() {
   const router = useRouter();
+  const { confirm, confirmDialog } = useConfirm();
   const [tab, setTab] = useState<'contracts' | 'breakdowns'>('contracts');
   const [contracts, setContracts] = useState<MaintenanceContract[]>([]);
   const [breakdowns, setBreakdowns] = useState<Breakdown[]>([]);
@@ -104,7 +117,9 @@ export default function MaintenancePage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<UserRole | null>(null);
-  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
   const [bulkNotice, setBulkNotice] = useState<string | null>(null);
   // Which row is mid-confirm; one at a time.
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -135,7 +150,9 @@ export default function MaintenancePage() {
       setSelectedIds(new Set());
       setConfirmId(null);
       try {
-        const assetPage = await optional(listAssets({ page: 1, pageSize: 100 }));
+        const assetPage = await optional(
+          listAssets({ page: 1, pageSize: 100 }),
+        );
         setAssetMap(
           Object.fromEntries(
             assetPage.items.map((a) => [a.id, a.name] as const),
@@ -284,9 +301,12 @@ export default function MaintenancePage() {
       return;
     }
     if (
-      !window.confirm(
-        `End ${targets.length} contract(s)? They stop generating service visits.`,
-      )
+      (await confirm({
+        title: `End ${targets.length} contract(s)?`,
+        description: `They stop generating service visits.`,
+        confirmLabel: 'End contracts',
+        tone: 'danger',
+      })) === null
     ) {
       return;
     }
@@ -311,7 +331,13 @@ export default function MaintenancePage() {
       setBulkNotice('Every selected ticket is already done.');
       return;
     }
-    if (!window.confirm(`Mark ${targets.length} ticket(s) done?`)) {
+    if (
+      (await confirm({
+        title: `Mark ${targets.length} ticket(s) done?`,
+        confirmLabel: 'Mark done',
+        tone: 'primary',
+      })) === null
+    ) {
       return;
     }
     setBulkNotice(null);
@@ -346,7 +372,8 @@ export default function MaintenancePage() {
       cell: ({ row }) => {
         // Overdue is the only thing on this page that needs chasing today.
         const overdue =
-          row.original.status === 'ACTIVE' && row.original.nextServiceAt < today;
+          row.original.status === 'ACTIVE' &&
+          row.original.nextServiceAt < today;
         return (
           <span className="flex items-center gap-2">
             <span
@@ -391,8 +418,11 @@ export default function MaintenancePage() {
               icon={FileDown}
               label={`Download the maintenance agreement for ${label}`}
               onClick={() =>
-                void downloadMaintenanceAgreement(contract.id).catch((err: unknown) =>
-                  setError(err instanceof ApiError ? err.message : 'Download failed'),
+                void downloadMaintenanceAgreement(contract.id).catch(
+                  (err: unknown) =>
+                    setError(
+                      err instanceof ApiError ? err.message : 'Download failed',
+                    ),
                 )
               }
             />
@@ -509,7 +539,9 @@ export default function MaintenancePage() {
 
   const tabClass = (active: boolean) =>
     `rounded-lg px-3 py-1.5 text-sm font-medium ${
-      active ? 'bg-navy-800 text-white' : 'border border-slate-200 text-slate-600'
+      active
+        ? 'bg-navy-800 text-white'
+        : 'border border-slate-200 text-slate-600'
     }`;
 
   const pagination = {
@@ -527,6 +559,7 @@ export default function MaintenancePage() {
   return (
     <div className="flex min-h-screen">
       <Sidebar />
+      {confirmDialog}
       <div className="flex min-w-0 flex-1 flex-col">
         <PageHeader
           eyebrow="Operations"
@@ -557,7 +590,11 @@ export default function MaintenancePage() {
           <ListToolbar
             filters={
               <>
-                <div className="flex gap-2" role="tablist" aria-label="Maintenance view">
+                <div
+                  className="flex gap-2"
+                  role="tablist"
+                  aria-label="Maintenance view"
+                >
                   <button
                     type="button"
                     role="tab"
@@ -578,7 +615,10 @@ export default function MaintenancePage() {
                   </button>
                 </div>
                 {customerFilter && tab === 'contracts' ? (
-                  <FilterNotice label="One customer" onClear={clearCustomerFilter} />
+                  <FilterNotice
+                    label="One customer"
+                    onClear={clearCustomerFilter}
+                  />
                 ) : null}
               </>
             }
@@ -604,7 +644,11 @@ export default function MaintenancePage() {
               getRowLabel={(c) => `the contract on ${assetName(c.assetId)}`}
               bulkActions={
                 <>
-                  <button type="button" onClick={exportContracts} className={bulkBtn}>
+                  <button
+                    type="button"
+                    onClick={exportContracts}
+                    className={bulkBtn}
+                  >
                     Export selected
                   </button>
                   {canWriteContracts ? (
@@ -639,7 +683,11 @@ export default function MaintenancePage() {
               getRowLabel={(b) => b.title}
               bulkActions={
                 <>
-                  <button type="button" onClick={exportBreakdowns} className={bulkBtn}>
+                  <button
+                    type="button"
+                    onClick={exportBreakdowns}
+                    className={bulkBtn}
+                  >
                     Export selected
                   </button>
                   {canWorkField ? (
@@ -655,8 +703,8 @@ export default function MaintenancePage() {
               }
               empty={
                 <>
-                  No breakdown tickets. Open one with Open breakdown above when a
-                  customer reports a fault — severity sets the response clock.
+                  No breakdown tickets. Open one with Open breakdown above when
+                  a customer reports a fault — severity sets the response clock.
                 </>
               }
             />

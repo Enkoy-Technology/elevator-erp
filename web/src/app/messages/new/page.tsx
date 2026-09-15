@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import { Field, FormPage, FormSection } from '@/components/form-page';
+import { useConfirm } from '@/components/use-confirm';
 import { btnSecondary, fieldClass } from '@/components/form-styles';
 import { ROLE_LABELS } from '@/app/employees/labels';
 import {
@@ -24,13 +25,17 @@ const MAX_BODY = 335;
 
 /** What the recipient will read, with the placeholders filled by example. */
 const example = (body: string): string =>
-  body.replace(/\{\{\s*name\s*\}\}/gi, 'Abebe Kebede').replace(/\{\{\s*company\s*\}\}/gi, 'Shining Star');
+  body
+    .replace(/\{\{\s*name\s*\}\}/gi, 'Abebe Kebede')
+    .replace(/\{\{\s*company\s*\}\}/gi, 'Shining Star');
 
 /** `datetime-local` value -> ISO with the browser's offset, so 08:00 means 08:00 in Addis. */
-const toIso = (local: string): string | undefined => (local ? new Date(local).toISOString() : undefined);
+const toIso = (local: string): string | undefined =>
+  local ? new Date(local).toISOString() : undefined;
 
 export default function ComposeMessagePage() {
   const router = useRouter();
+  const { confirm, confirmDialog } = useConfirm();
   const [audience, setAudience] = useState<BroadcastAudience>('EMPLOYEES');
   const [roles, setRoles] = useState<EmployeeRole[]>([]);
   const [body, setBody] = useState('');
@@ -101,7 +106,9 @@ export default function ComposeMessagePage() {
   };
 
   const toggleRole = (role: EmployeeRole) =>
-    setRoles((prev) => (prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]));
+    setRoles((prev) =>
+      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role],
+    );
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -110,10 +117,20 @@ export default function ComposeMessagePage() {
       return;
     }
     if (preview && preview.queued === 0) {
-      setError('Nobody would receive this: no recipient in this audience has a phone with consent on file.');
+      setError(
+        'Nobody would receive this: no recipient in this audience has a phone with consent on file.',
+      );
       return;
     }
-    if (!window.confirm(`Send this message to ${preview?.queued ?? '?'} people${payload.sendAt ? ' at the scheduled time' : ' now'}?`)) {
+    if (
+      (await confirm({
+        title: `Send this message to ${preview?.queued ?? '?'} people?`,
+        description: payload.sendAt
+          ? 'It goes out at the scheduled time.'
+          : 'It goes out now, by SMS, to everyone in this audience with consent on file.',
+        confirmLabel: 'Send',
+      })) === null
+    ) {
       return;
     }
     setSubmitting(true);
@@ -121,7 +138,9 @@ export default function ComposeMessagePage() {
     try {
       setResult(await sendBroadcast(payload));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to send the message');
+      setError(
+        err instanceof ApiError ? err.message : 'Failed to send the message',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -146,25 +165,45 @@ export default function ComposeMessagePage() {
         <FormSection title="Result">
           <dl className="grid gap-3 sm:grid-cols-2">
             <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Queued</dt>
-              <dd className="text-2xl font-bold text-slate-900">{result.queued}</dd>
+              <dt className="text-xs uppercase tracking-wide text-slate-500">
+                Queued
+              </dt>
+              <dd className="text-2xl font-bold text-slate-900">
+                {result.queued}
+              </dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Audience</dt>
-              <dd className="text-2xl font-bold text-slate-900">{result.audienceSize}</dd>
+              <dt className="text-xs uppercase tracking-wide text-slate-500">
+                Audience
+              </dt>
+              <dd className="text-2xl font-bold text-slate-900">
+                {result.audienceSize}
+              </dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Held, no consent</dt>
-              <dd className="text-lg font-semibold text-amber-700">{result.skippedNoConsent}</dd>
+              <dt className="text-xs uppercase tracking-wide text-slate-500">
+                Held, no consent
+              </dt>
+              <dd className="text-lg font-semibold text-amber-700">
+                {result.skippedNoConsent}
+              </dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-500">Held, no phone</dt>
-              <dd className="text-lg font-semibold text-amber-700">{result.skippedNoPhone}</dd>
+              <dt className="text-xs uppercase tracking-wide text-slate-500">
+                Held, no phone
+              </dt>
+              <dd className="text-lg font-semibold text-amber-700">
+                {result.skippedNoPhone}
+              </dd>
             </div>
             {result.sendAt ? (
               <div className="sm:col-span-2">
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Scheduled for</dt>
-                <dd className="text-sm text-slate-900">{new Date(result.sendAt).toLocaleString('en-GB')}</dd>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">
+                  Scheduled for
+                </dt>
+                <dd className="text-sm text-slate-900">
+                  {new Date(result.sendAt).toLocaleString('en-GB')}
+                </dd>
               </div>
             ) : null}
           </dl>
@@ -185,7 +224,10 @@ export default function ComposeMessagePage() {
       submitLabel={sendAtLocal ? 'Schedule' : 'Send now'}
       onSubmit={(event) => void onSubmit(event)}
     >
-      <FormSection title="Who" description="Employees by role, or every customer with a phone on file.">
+      <FormSection
+        title="Who"
+        description="Employees by role, or every customer with a phone on file."
+      >
         <Field label="Audience" htmlFor="audience">
           <select
             id="audience"
@@ -198,7 +240,12 @@ export default function ComposeMessagePage() {
           </select>
         </Field>
         {audience === 'EMPLOYEES' ? (
-          <Field label="Roles" htmlFor="roles" hint="Leave all unticked for every active employee." wide>
+          <Field
+            label="Roles"
+            htmlFor="roles"
+            hint="Leave all unticked for every active employee."
+            wide
+          >
             <div id="roles" className="flex flex-wrap gap-2">
               {EMPLOYEE_ROLES.map((role) => (
                 <label
@@ -227,14 +274,15 @@ export default function ComposeMessagePage() {
               'Counting…'
             ) : (
               <>
-                <span className="font-semibold">{preview.queued}</span> will receive it
+                <span className="font-semibold">{preview.queued}</span> will
+                receive it
                 {preview.skippedNoConsent + preview.skippedNoPhone > 0 ? (
                   <>
                     {' '}
-                    · {preview.skippedNoConsent} held for no consent · {preview.skippedNoPhone} for no phone
+                    · {preview.skippedNoConsent} held for no consent ·{' '}
+                    {preview.skippedNoPhone} for no phone
                   </>
-                ) : null}
-                {' '}
+                ) : null}{' '}
                 (of {preview.audienceSize})
               </>
             )}
@@ -290,7 +338,10 @@ export default function ComposeMessagePage() {
         </Field>
         {body.trim() ? (
           <Field label="Preview" htmlFor="previewText" wide>
-            <p id="previewText" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+            <p
+              id="previewText"
+              className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+            >
               {example(body)}
             </p>
           </Field>
@@ -301,15 +352,26 @@ export default function ComposeMessagePage() {
             type="button"
             className={`${btnSecondary} px-3 py-1.5 text-sm`}
             disabled={!body.trim()}
-            onClick={() => router.push(`/messages/templates/new?body=${encodeURIComponent(body)}`)}
+            onClick={() =>
+              router.push(
+                `/messages/templates/new?body=${encodeURIComponent(body)}`,
+              )
+            }
           >
             Save this wording as a template
           </button>
         </Field>
       </FormSection>
 
-      <FormSection title="When" description="Leave blank to send within the minute.">
-        <Field label="Send at" htmlFor="sendAt" hint="Addis Ababa time. A New Year greeting can be scheduled the week before.">
+      <FormSection
+        title="When"
+        description="Leave blank to send within the minute."
+      >
+        <Field
+          label="Send at"
+          htmlFor="sendAt"
+          hint="Addis Ababa time. A New Year greeting can be scheduled the week before."
+        >
           <input
             id="sendAt"
             type="datetime-local"
@@ -319,6 +381,7 @@ export default function ComposeMessagePage() {
           />
         </Field>
       </FormSection>
+      {confirmDialog}
     </FormPage>
   );
 }

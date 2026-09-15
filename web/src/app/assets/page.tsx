@@ -18,6 +18,7 @@ import {
 import { Check, Pencil, Trash2, X } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
+import { useConfirm } from '@/components/use-confirm';
 import { csvRows, saveCsv } from '@/app/employees/csv';
 import {
   ApiError,
@@ -65,6 +66,7 @@ const CSV_HEADERS = [
 
 export default function AssetsPage() {
   const router = useRouter();
+  const { confirm, confirmDialog } = useConfirm();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [customerMap, setCustomerMap] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1);
@@ -167,10 +169,18 @@ export default function AssetsPage() {
     try {
       await deleteAsset(asset.id);
       setConfirmingId(null);
-      await refresh(page, pageSize, search, categoryFilter, customerFilter ?? '');
+      await refresh(
+        page,
+        pageSize,
+        search,
+        categoryFilter,
+        customerFilter ?? '',
+      );
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : `Could not delete ${asset.name}`,
+        err instanceof ApiError
+          ? err.message
+          : `Could not delete ${asset.name}`,
       );
     } finally {
       setBusy(false);
@@ -180,9 +190,12 @@ export default function AssetsPage() {
   const onBulkDelete = async () => {
     const ids = [...selected];
     if (
-      !window.confirm(
-        `Delete ${ids.length} asset${ids.length === 1 ? '' : 's'}? Contracts and work orders referencing them stay put.`,
-      )
+      (await confirm({
+        title: `Delete ${ids.length} asset${ids.length === 1 ? '' : 's'}?`,
+        description: 'Contracts and work orders referencing them stay put.',
+        confirmLabel: 'Delete',
+        tone: 'danger',
+      })) === null
     ) {
       return;
     }
@@ -226,7 +239,9 @@ export default function AssetsPage() {
       enableSorting: true,
       cell: ({ row }) => (
         <>
-          <span className="font-medium text-slate-900">{row.original.name}</span>
+          <span className="font-medium text-slate-900">
+            {row.original.name}
+          </span>
           {row.original.serialNumber ? (
             <span className="mt-0.5 block font-mono text-xs font-normal text-slate-500">
               {row.original.serialNumber}
@@ -313,6 +328,7 @@ export default function AssetsPage() {
   return (
     <div className="flex min-h-screen">
       <Sidebar />
+      {confirmDialog}
       <div className="flex min-w-0 flex-1 flex-col">
         <PageHeader
           eyebrow="Operations"
@@ -419,11 +435,15 @@ export default function AssetsPage() {
             }}
             empty={
               search || categoryFilter ? (
-                <>No asset matches these filters. Clear the search and set Category to All categories.</>
+                <>
+                  No asset matches these filters. Clear the search and set
+                  Category to All categories.
+                </>
               ) : (
                 <>
                   No assets registered. Register the equipment here first — a
-                  maintenance contract on Maintenance needs an asset to attach to.
+                  maintenance contract on Maintenance needs an asset to attach
+                  to.
                 </>
               )
             }

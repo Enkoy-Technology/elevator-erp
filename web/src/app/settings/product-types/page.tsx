@@ -11,6 +11,7 @@ import { btnPrimary } from '@/components/form-styles';
 import { RowAction } from '@/components/list-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
+import { useConfirm } from '@/components/use-confirm';
 import {
   ApiError,
   deleteProductType,
@@ -31,6 +32,7 @@ const canEditProducts = (role: UserRole | null): boolean =>
 
 export default function ProductTypesPage() {
   const router = useRouter();
+  const { confirm, confirmDialog } = useConfirm();
   const [rows, setRows] = useState<ProductTypeRow[]>([]);
   const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
@@ -68,9 +70,12 @@ export default function ProductTypesPage() {
 
   const remove = async (row: ProductTypeRow) => {
     if (
-      !window.confirm(
-        `Retire "${row.name}"? Quotations that used it keep their prices.`,
-      )
+      (await confirm({
+        title: `Retire "${row.name}"?`,
+        description: `Quotations that used it keep their prices.`,
+        confirmLabel: 'Retire',
+        tone: 'danger',
+      })) === null
     ) {
       return;
     }
@@ -188,6 +193,7 @@ export default function ProductTypesPage() {
   return (
     <div className="flex min-h-screen">
       <Sidebar />
+      {confirmDialog}
       <div className="flex min-w-0 flex-1 flex-col">
         <PageHeader
           eyebrow="Settings"

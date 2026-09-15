@@ -12,6 +12,7 @@ import { DataTable } from '@/components/data-table';
 import { ListToolbar, RowAction, SearchField } from '@/components/list-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
+import { useConfirm } from '@/components/use-confirm';
 import { csvRows, saveCsv } from '@/app/employees/csv';
 import {
   ApiError,
@@ -47,6 +48,7 @@ const CSV_HEADERS = [
 
 export default function CustomersPage() {
   const router = useRouter();
+  const { confirm, confirmDialog } = useConfirm();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -128,9 +130,12 @@ export default function CustomersPage() {
   const onBulkDelete = async () => {
     const ids = [...selected];
     if (
-      !window.confirm(
-        `Delete ${ids.length} customer${ids.length === 1 ? '' : 's'}? This cannot be undone.`,
-      )
+      (await confirm({
+        title: `Delete ${ids.length} customer${ids.length === 1 ? '' : 's'}?`,
+        description: 'This cannot be undone.',
+        confirmLabel: 'Delete',
+        tone: 'danger',
+      })) === null
     ) {
       return;
     }
@@ -265,6 +270,7 @@ export default function CustomersPage() {
   return (
     <div className="flex min-h-screen">
       <Sidebar />
+      {confirmDialog}
       <div className="flex min-w-0 flex-1 flex-col">
         <PageHeader
           eyebrow="Sales"
