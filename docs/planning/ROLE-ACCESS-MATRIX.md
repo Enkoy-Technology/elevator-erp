@@ -31,7 +31,7 @@ for every role; the login screen lists them.
 | Store Keeper | Inventory management, material issuance, stock monitoring, purchase requests, warehouse control | Dashboard, Assets | The asset register. Inventory, issuance and purchase requests are not built |
 | Secretary | Document preparation, correspondence, filing, meeting coordination, reception | Dashboard, Customers, Projects (read), Quotations (read), Contracts (read), Maintenance (breakdowns), Notifications (post) | Register customers; open breakdown calls; read and print quotations, proformas and contracts; post notifications |
 | System Administrator (`ADMIN`) | — | Everything | Everything, plus settings edit, rates, employees, messages |
-| Customer (`CUSTOMER`) | — | Notifications, docs | Nothing yet; the customer portal is not built |
+| Customer (`CUSTOMER`) | — | Notifications | Nothing yet; the customer portal is not built |
 
 ## Rules that hold across modules
 
