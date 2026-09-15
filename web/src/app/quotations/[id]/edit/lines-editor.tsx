@@ -541,19 +541,6 @@ export const LinesEditor = ({
                         onValueChange={(v) => setField(line, 'stops', v)}
                       />
                     </Field>
-                    <Field
-                      label="Entrances per stop"
-                      htmlFor={`entrances-${line.id}`}
-                    >
-                      <NumberInput
-                        id={`entrances-${line.id}`}
-                        disabled={!editable}
-                        value={draft.entranceCount}
-                        onValueChange={(v) =>
-                          setField(line, 'entranceCount', v)
-                        }
-                      />
-                    </Field>
 
                     {isStandardLift(draft) ? null : (
                       <>
@@ -613,22 +600,6 @@ export const LinesEditor = ({
                         <option value="MR">With machine room</option>
                       </select>
                     </Field>
-                    <Field
-                      label="Machine room label"
-                      htmlFor={`mrl-${line.id}`}
-                      hint="As printed on the spec sheet."
-                    >
-                      <input
-                        id={`mrl-${line.id}`}
-                        className={fieldClass}
-                        disabled={!editable}
-                        placeholder="MRL"
-                        value={draft.machineRoomLabel}
-                        onChange={(e) =>
-                          setField(line, 'machineRoomLabel', e.target.value)
-                        }
-                      />
-                    </Field>
 
                     {isStandardLift(draft) ? null : (
                       <Field label="Door type" htmlFor={`doortype-${line.id}`}>
@@ -684,58 +655,7 @@ export const LinesEditor = ({
                         />
                       </Field>
                     )}
-                    <Field label="Door height (mm)" htmlFor={`dh-${line.id}`}>
-                      <NumberInput
-                        id={`dh-${line.id}`}
-                        disabled={!editable}
-                        value={draft.doorHeightMm}
-                        onValueChange={(v) => setField(line, 'doorHeightMm', v)}
-                      />
-                    </Field>
 
-                    <Field label="Roping" htmlFor={`roping-${line.id}`}>
-                      <input
-                        id={`roping-${line.id}`}
-                        className={fieldClass}
-                        disabled={!editable}
-                        placeholder="2:1"
-                        value={draft.ropingRatio}
-                        onChange={(e) =>
-                          setField(line, 'ropingRatio', e.target.value)
-                        }
-                      />
-                    </Field>
-                    <Field
-                      label="Traction machine"
-                      htmlFor={`traction-${line.id}`}
-                    >
-                      <input
-                        id={`traction-${line.id}`}
-                        className={fieldClass}
-                        disabled={!editable}
-                        placeholder="Gearless"
-                        value={draft.tractionMachineType}
-                        onChange={(e) =>
-                          setField(line, 'tractionMachineType', e.target.value)
-                        }
-                      />
-                    </Field>
-
-                    <Field
-                      label="Control system"
-                      htmlFor={`control-${line.id}`}
-                    >
-                      <input
-                        id={`control-${line.id}`}
-                        className={fieldClass}
-                        disabled={!editable}
-                        placeholder="Simplex"
-                        value={draft.controlSystem}
-                        onChange={(e) =>
-                          setField(line, 'controlSystem', e.target.value)
-                        }
-                      />
-                    </Field>
                     <Field label="Margin (%)" htmlFor={`margin-${line.id}`}>
                       <NumberInput
                         id={`margin-${line.id}`}
@@ -747,48 +667,155 @@ export const LinesEditor = ({
                       />
                     </Field>
 
-                    <Field label="Power supply" htmlFor={`power-${line.id}`}>
-                      <input
-                        id={`power-${line.id}`}
-                        className={fieldClass}
-                        disabled={!editable}
-                        placeholder="380V AC 50HZ 3-phase 4 lines"
-                        value={draft.powerSupply}
-                        onChange={(e) =>
-                          setField(line, 'powerSupply', e.target.value)
-                        }
-                      />
-                    </Field>
-                    <Field label="Light supply" htmlFor={`light-${line.id}`}>
-                      <input
-                        id={`light-${line.id}`}
-                        className={fieldClass}
-                        disabled={!editable}
-                        placeholder="240V AC 50HZ Single phase"
-                        value={draft.lightSupply}
-                        onChange={(e) =>
-                          setField(line, 'lightSupply', e.target.value)
-                        }
-                      />
-                    </Field>
-
-                    <Field
-                      label="Description on the offer"
-                      htmlFor={`summary-${line.id}`}
-                      wide
-                      hint="Leave blank and the system writes it from the fields above."
-                    >
-                      <input
-                        id={`summary-${line.id}`}
-                        className={fieldClass}
-                        disabled={!editable}
-                        placeholder="800KG -10persons / Speed 1.5m/s / B+G+M+10 / 13 floors/13 doors"
-                        value={draft.specSummary}
-                        onChange={(e) =>
-                          setField(line, 'specSummary', e.target.value)
-                        }
-                      />
-                    </Field>
+                    {/* The spec-sheet details are the company's standard on
+                        nine lifts out of ten, so they stay folded until a
+                        lift differs. */}
+                    <details className="rounded-lg border border-slate-200 bg-slate-50/60 px-4 py-3 sm:col-span-2">
+                      <summary className="cursor-pointer text-sm font-medium text-slate-700">
+                        Printed on the spec sheet
+                      </summary>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Already filled with the company&apos;s standard details.
+                        Change one only when this lift differs.
+                      </p>
+                      <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                        <Field
+                          label="Entrances per stop"
+                          htmlFor={`entrances-${line.id}`}
+                        >
+                          <NumberInput
+                            id={`entrances-${line.id}`}
+                            disabled={!editable}
+                            value={draft.entranceCount}
+                            onValueChange={(v) =>
+                              setField(line, 'entranceCount', v)
+                            }
+                          />
+                        </Field>
+                        <Field
+                          label="Machine room label"
+                          htmlFor={`mrl-${line.id}`}
+                          hint="As printed on the spec sheet."
+                        >
+                          <input
+                            id={`mrl-${line.id}`}
+                            className={fieldClass}
+                            disabled={!editable}
+                            placeholder="MRL"
+                            value={draft.machineRoomLabel}
+                            onChange={(e) =>
+                              setField(line, 'machineRoomLabel', e.target.value)
+                            }
+                          />
+                        </Field>
+                        <Field
+                          label="Door height (mm)"
+                          htmlFor={`dh-${line.id}`}
+                        >
+                          <NumberInput
+                            id={`dh-${line.id}`}
+                            disabled={!editable}
+                            value={draft.doorHeightMm}
+                            onValueChange={(v) =>
+                              setField(line, 'doorHeightMm', v)
+                            }
+                          />
+                        </Field>
+                        <Field label="Roping" htmlFor={`roping-${line.id}`}>
+                          <input
+                            id={`roping-${line.id}`}
+                            className={fieldClass}
+                            disabled={!editable}
+                            placeholder="2:1"
+                            value={draft.ropingRatio}
+                            onChange={(e) =>
+                              setField(line, 'ropingRatio', e.target.value)
+                            }
+                          />
+                        </Field>
+                        <Field
+                          label="Traction machine"
+                          htmlFor={`traction-${line.id}`}
+                        >
+                          <input
+                            id={`traction-${line.id}`}
+                            className={fieldClass}
+                            disabled={!editable}
+                            placeholder="Gearless"
+                            value={draft.tractionMachineType}
+                            onChange={(e) =>
+                              setField(
+                                line,
+                                'tractionMachineType',
+                                e.target.value,
+                              )
+                            }
+                          />
+                        </Field>
+                        <Field
+                          label="Control system"
+                          htmlFor={`control-${line.id}`}
+                        >
+                          <input
+                            id={`control-${line.id}`}
+                            className={fieldClass}
+                            disabled={!editable}
+                            placeholder="Simplex"
+                            value={draft.controlSystem}
+                            onChange={(e) =>
+                              setField(line, 'controlSystem', e.target.value)
+                            }
+                          />
+                        </Field>
+                        <Field
+                          label="Power supply"
+                          htmlFor={`power-${line.id}`}
+                        >
+                          <input
+                            id={`power-${line.id}`}
+                            className={fieldClass}
+                            disabled={!editable}
+                            placeholder="380V AC 50HZ 3-phase 4 lines"
+                            value={draft.powerSupply}
+                            onChange={(e) =>
+                              setField(line, 'powerSupply', e.target.value)
+                            }
+                          />
+                        </Field>
+                        <Field
+                          label="Light supply"
+                          htmlFor={`light-${line.id}`}
+                        >
+                          <input
+                            id={`light-${line.id}`}
+                            className={fieldClass}
+                            disabled={!editable}
+                            placeholder="240V AC 50HZ Single phase"
+                            value={draft.lightSupply}
+                            onChange={(e) =>
+                              setField(line, 'lightSupply', e.target.value)
+                            }
+                          />
+                        </Field>
+                        <Field
+                          label="Description on the offer"
+                          htmlFor={`summary-${line.id}`}
+                          wide
+                          hint="Leave blank and the system writes it from the fields above."
+                        >
+                          <input
+                            id={`summary-${line.id}`}
+                            className={fieldClass}
+                            disabled={!editable}
+                            placeholder="800KG -10persons / Speed 1.5m/s / B+G+M+10 / 13 floors/13 doors"
+                            value={draft.specSummary}
+                            onChange={(e) =>
+                              setField(line, 'specSummary', e.target.value)
+                            }
+                          />
+                        </Field>
+                      </div>
+                    </details>
                   </div>
 
                   <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-3">

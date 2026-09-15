@@ -19,6 +19,7 @@ import {
   getAccessToken,
   getCurrentRole,
   listProductTypes,
+  updateQuotationLine,
   listProjects,
   optional,
   type CalcInputPayload,
@@ -129,7 +130,17 @@ export default function NewQuotationPage() {
         validUntil: validUntil ? new Date(validUntil).toISOString() : undefined,
         notes: notes || undefined,
       });
-      router.push(`/quotations/${quotation.id}/edit`);
+      // The floors were counted here; name them G, 1, 2 … so nobody picks
+      // them a second time on the offer. Basements and mezzanines are the
+      // one thing the editor is still for. The first line carries the
+      // quotation's own id.
+      const floors = lift.floors ?? lift.stops ?? 2;
+      const floorLabels = [
+        'G',
+        ...Array.from({ length: floors - 1 }, (_, i) => String(i + 1)),
+      ].join(',');
+      await updateQuotationLine(quotation.id, quotation.id, { floorLabels });
+      router.push(`/quotations/${quotation.id}/edit?step=price`);
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : 'Failed to create quotation',
