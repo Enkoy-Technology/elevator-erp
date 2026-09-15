@@ -5,7 +5,6 @@ import {
   count,
   desc,
   eq,
-  exists,
   getTableColumns,
   isNull,
   sql,
@@ -18,12 +17,7 @@ import {
   type PaginatedResult,
 } from '../../common/pagination';
 import { normalizeEthiopic } from '../../common/text/ethiopic-normalize';
-import {
-  customers,
-  proformas,
-  projects,
-  type ProjectStatus,
-} from '../../database/schema';
+import { customers, projects, type ProjectStatus } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import type { CreateProjectDto } from './dto/create-project.dto';
 
@@ -149,10 +143,7 @@ export class ProjectsRepository {
     }
   }
 
-  async findById(
-    tenantId: string,
-    id: string,
-  ): Promise<ProjectRecord | null> {
+  async findById(tenantId: string, id: string): Promise<ProjectRecord | null> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       const rows = await tx
         .select()
@@ -198,41 +189,8 @@ export class ProjectsRepository {
   }
 
   /**
-   * DAG gate (finance-exports-sms task 2): QUOTATION -> PROFORMA requires an
-   * issued, non-cancelled proforma for this project. Queries the proformas
-   * table directly — proformas is a shared /database/schema table, not a
-   * quotations- or proformas-module internal, so this stays a plain
-   * repository-level EXISTS query rather than a cross-module import (which
-   * would create a cycle: quotations already imports projects).
-   */
-  async hasIssuedProforma(
-    tenantId: string,
-    projectId: string,
-  ): Promise<boolean> {
-    return this.tenantDb.withTenant(tenantId, async (tx) => {
-      const rows = await tx
-        .select({ id: proformas.id })
-        .from(proformas)
-        .where(
-          and(eq(proformas.projectId, projectId), eq(proformas.status, 'ISSUED')),
-        )
-        .limit(1);
-      return rows.length > 0;
-    });
-  }
-
-  /**
    * Compare-and-swap: the update only lands if the project is still in
    * `expectedStatus`, so two concurrent transitions cannot both apply.
-   *
-   * Security-review fix: the QUOTATION -> PROFORMA DAG gate in
-   * ProjectsService.updateStatus() checks hasIssuedProforma() as a separate,
-   * earlier transaction — a TOCTOU window (e.g. a concurrent proforma
-   * cancellation) could otherwise let the write land after the check already
-   * passed. The EXISTS re-check below runs inside THIS UPDATE's own WHERE
-   * clause, so a PROFORMA transition can only ever commit alongside a
-   * currently-ISSUED proforma for the same project, evaluated atomically at
-   * write time — not just at check time.
    */
   async updateStatus(
     tenantId: string,
@@ -259,21 +217,6 @@ export class ProjectsRepository {
             eq(projects.id, id),
             eq(projects.status, expectedStatus),
             isNull(projects.deletedAt),
-            ...(status === 'PROFORMA'
-              ? [
-                  exists(
-                    tx
-                      .select({ one: sql`1` })
-                      .from(proformas)
-                      .where(
-                        and(
-                          eq(proformas.projectId, id),
-                          eq(proformas.status, 'ISSUED'),
-                        ),
-                      ),
-                  ),
-                ]
-              : []),
           ),
         )
         .returning();

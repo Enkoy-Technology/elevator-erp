@@ -38,10 +38,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 const STAGE_LABELS: Record<PipelineStage['status'], string> = {
   LEAD: 'Lead',
-  SITE_SURVEY: 'Site survey',
-  SPEC_CALCULATION: 'Spec calculation',
   QUOTATION: 'Quotation',
-  PROFORMA: 'Proforma',
   CONTRACT: 'Contract',
   EXECUTION: 'Execution',
 };
@@ -50,18 +47,38 @@ const STAGE_LABELS: Record<PipelineStage['status'], string> = {
  *  both encode progress, so the chart survives greyscale and print. */
 const STAGE_TONE: Record<PipelineStage['status'], 1 | 2 | 3 | 4 | 5> = {
   LEAD: 1,
-  SITE_SURVEY: 1,
-  SPEC_CALCULATION: 2,
-  QUOTATION: 3,
-  PROFORMA: 3,
+  QUOTATION: 2,
   CONTRACT: 4,
   EXECUTION: 5,
 };
 
-const MONTH_INITIALS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+const MONTH_INITIALS = [
+  'J',
+  'F',
+  'M',
+  'A',
+  'M',
+  'J',
+  'J',
+  'A',
+  'S',
+  'O',
+  'N',
+  'D',
+];
 const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 const plural = (count: number, noun: string): string =>
@@ -88,7 +105,9 @@ const Card = ({
   children: ReactNode;
   className?: string;
 }) => (
-  <section className={`rounded-xl border border-slate-200 bg-white ${className}`}>
+  <section
+    className={`rounded-xl border border-slate-200 bg-white ${className}`}
+  >
     <div className="flex items-baseline justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
       <h2 className={metaClass}>{title}</h2>
       {action}
@@ -97,9 +116,18 @@ const Card = ({
   </section>
 );
 
-const CardLink = ({ href, children }: { href?: string; children: ReactNode }) =>
+const CardLink = ({
+  href,
+  children,
+}: {
+  href?: string;
+  children: ReactNode;
+}) =>
   href ? (
-    <a href={href} className="text-xs font-medium text-gold-600 hover:underline">
+    <a
+      href={href}
+      className="text-xs font-medium text-gold-600 hover:underline"
+    >
       {children} →
     </a>
   ) : null;
@@ -138,7 +166,10 @@ const Kpi = ({
   return (
     <div className="min-w-0 px-4 py-4 sm:px-5">
       {href ? (
-        <a href={href} className="block rounded-lg outline-none transition hover:opacity-75">
+        <a
+          href={href}
+          className="block rounded-lg outline-none transition hover:opacity-75"
+        >
           {body}
         </a>
       ) : (
@@ -165,7 +196,10 @@ export default function DashboardPage() {
     }
     const mine = modulesForRole(getCurrentRole()).filter(
       (module) =>
-        module.href !== null && module.href !== '/' && module.href !== '/docs' && !module.hidden,
+        module.href !== null &&
+        module.href !== '/' &&
+        module.href !== '/docs' &&
+        !module.hidden,
     );
     setModules(mine);
     setOpenable(
@@ -229,15 +263,38 @@ export default function DashboardPage() {
     };
   });
 
-  const collectedYear = collections.reduce((total, point) => total + point.value, 0);
+  const collectedYear = collections.reduce(
+    (total, point) => total + point.value,
+    0,
+  );
 
   const ageing = finance
     ? [
-        { label: 'Current', value: Number(finance.agingBuckets.currentEtb), tone: 1 as const },
-        { label: '1–30 days', value: Number(finance.agingBuckets.d1_30Etb), tone: 2 as const },
-        { label: '31–60 days', value: Number(finance.agingBuckets.d31_60Etb), tone: 3 as const },
-        { label: '61–90 days', value: Number(finance.agingBuckets.d61_90Etb), tone: 4 as const },
-        { label: 'Over 90 days', value: Number(finance.agingBuckets.d90PlusEtb), tone: 5 as const },
+        {
+          label: 'Current',
+          value: Number(finance.agingBuckets.currentEtb),
+          tone: 1 as const,
+        },
+        {
+          label: '1–30 days',
+          value: Number(finance.agingBuckets.d1_30Etb),
+          tone: 2 as const,
+        },
+        {
+          label: '31–60 days',
+          value: Number(finance.agingBuckets.d31_60Etb),
+          tone: 3 as const,
+        },
+        {
+          label: '61–90 days',
+          value: Number(finance.agingBuckets.d61_90Etb),
+          tone: 4 as const,
+        },
+        {
+          label: 'Over 90 days',
+          value: Number(finance.agingBuckets.d90PlusEtb),
+          tone: 5 as const,
+        },
       ]
     : [];
 
@@ -245,10 +302,30 @@ export default function DashboardPage() {
 
   const serviceTiles = service
     ? [
-        { label: 'Due in 7 days', value: service.servicesDueThisWeek, note: 'Scheduled visits', bad: false },
-        { label: 'Overdue', value: service.servicesOverdue, note: 'Past the service date', bad: service.servicesOverdue > 0 },
-        { label: 'Breakdowns', value: service.openBreakdowns, note: 'Open tickets', bad: service.openBreakdowns > 0 },
-        { label: 'Emergencies', value: service.emergencyBreakdowns, note: '30-minute SLA', bad: service.emergencyBreakdowns > 0 },
+        {
+          label: 'Due in 7 days',
+          value: service.servicesDueThisWeek,
+          note: 'Scheduled visits',
+          bad: false,
+        },
+        {
+          label: 'Overdue',
+          value: service.servicesOverdue,
+          note: 'Past the service date',
+          bad: service.servicesOverdue > 0,
+        },
+        {
+          label: 'Breakdowns',
+          value: service.openBreakdowns,
+          note: 'Open tickets',
+          bad: service.openBreakdowns > 0,
+        },
+        {
+          label: 'Emergencies',
+          value: service.emergencyBreakdowns,
+          note: '30-minute SLA',
+          bad: service.emergencyBreakdowns > 0,
+        },
       ]
     : [];
 
@@ -276,7 +353,9 @@ export default function DashboardPage() {
               {initials}
             </span>
             <div className="hidden sm:block">
-              <p className="text-sm font-semibold text-slate-900">{profile.fullName}</p>
+              <p className="text-sm font-semibold text-slate-900">
+                {profile.fullName}
+              </p>
               <p className="text-xs text-slate-500">
                 {ROLE_LABELS[profile.role] ?? profile.role}
               </p>
@@ -293,7 +372,10 @@ export default function DashboardPage() {
 
         <main className="space-y-5 px-6 py-6 sm:px-8">
           {error ? (
-            <p role="alert" className="rounded-xl border-l-2 border-red-600 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <p
+              role="alert"
+              className="rounded-xl border-l-2 border-red-600 bg-red-50 px-4 py-3 text-sm text-red-800"
+            >
               {error}
             </p>
           ) : null}
@@ -340,7 +422,9 @@ export default function DashboardPage() {
                   label="Past due"
                   value={formatEtb(finance.overdueTotalEtb)}
                   sub={`${plural(finance.overdueInvoiceCount, 'invoice')} past the due date`}
-                  tone={Number(finance.overdueTotalEtb) > 0 ? 'critical' : 'plain'}
+                  tone={
+                    Number(finance.overdueTotalEtb) > 0 ? 'critical' : 'plain'
+                  }
                   href={linkTo('/receivables')}
                 />
               ) : null}
@@ -352,20 +436,28 @@ export default function DashboardPage() {
               of it. */}
           <div
             className={`grid gap-5 ${
-              cardCount >= 3 ? 'md:grid-cols-2 xl:grid-cols-3' : cardCount === 2 ? 'md:grid-cols-2' : ''
+              cardCount >= 3
+                ? 'md:grid-cols-2 xl:grid-cols-3'
+                : cardCount === 2
+                  ? 'md:grid-cols-2'
+                  : ''
             }`}
           >
             {finance ? (
               <Card
                 title="Collections · last 12 months"
                 className="md:col-span-2"
-                action={<CardLink href={linkTo('/invoices')}>Payments</CardLink>}
+                action={
+                  <CardLink href={linkTo('/invoices')}>Payments</CardLink>
+                }
               >
                 <div className="mb-4 flex items-baseline gap-3">
                   <p className="font-display text-2xl font-bold tabular-nums text-slate-900">
                     {formatEtb(collectedYear.toFixed(2))}
                   </p>
-                  <p className="text-xs text-slate-500">received over the period</p>
+                  <p className="text-xs text-slate-500">
+                    received over the period
+                  </p>
                 </div>
                 <ColumnChart points={collections} />
               </Card>
@@ -374,7 +466,9 @@ export default function DashboardPage() {
             {sales ? (
               <Card
                 title="Pipeline by stage"
-                action={<CardLink href={linkTo('/projects')}>All projects</CardLink>}
+                action={
+                  <CardLink href={linkTo('/projects')}>All projects</CardLink>
+                }
               >
                 <BarList
                   emptyNote="No projects in the pipeline. Start one on Projects."
@@ -395,7 +489,9 @@ export default function DashboardPage() {
             {finance ? (
               <Card
                 title="Receivables ageing"
-                action={<CardLink href={linkTo('/receivables')}>Full report</CardLink>}
+                action={
+                  <CardLink href={linkTo('/receivables')}>Full report</CardLink>
+                }
               >
                 <BarList
                   rows={ageing}
@@ -407,7 +503,9 @@ export default function DashboardPage() {
             {service ? (
               <Card
                 title="Service & breakdowns"
-                action={<CardLink href={linkTo('/maintenance')}>Maintenance</CardLink>}
+                action={
+                  <CardLink href={linkTo('/maintenance')}>Maintenance</CardLink>
+                }
               >
                 <dl className="grid grid-cols-2 gap-x-4 gap-y-5">
                   {serviceTiles.map((tile) => (
@@ -430,7 +528,9 @@ export default function DashboardPage() {
             {service ? (
               <Card
                 title="Next service visits"
-                action={<CardLink href={linkTo('/maintenance')}>Schedule</CardLink>}
+                action={
+                  <CardLink href={linkTo('/maintenance')}>Schedule</CardLink>
+                }
               >
                 {service.upcomingServices.length === 0 ? (
                   <p className="py-6 text-center text-sm text-slate-500">
@@ -458,7 +558,9 @@ export default function DashboardPage() {
                               : 'bg-slate-100 text-slate-600'
                           }`}
                         >
-                          {visit.overdue ? 'Overdue' : dayLabel(visit.nextServiceAt)}
+                          {visit.overdue
+                            ? 'Overdue'
+                            : dayLabel(visit.nextServiceAt)}
                         </span>
                       </li>
                     ))}
@@ -496,7 +598,9 @@ export default function DashboardPage() {
                         <span className="block text-sm font-semibold text-slate-900">
                           {t(module.nameKey)}
                         </span>
-                        <span className="block text-xs text-slate-500">{module.description}</span>
+                        <span className="block text-xs text-slate-500">
+                          {module.description}
+                        </span>
                       </span>
                     </a>
                   </li>
@@ -511,16 +615,34 @@ export default function DashboardPage() {
             <section className="flex flex-wrap items-center gap-x-8 gap-y-2 rounded-xl border border-slate-200 bg-white px-5 py-3.5">
               <span className={metaClass}>On the books</span>
               {[
-                { label: 'Customers', value: totals.customers, href: linkTo('/customers') },
-                { label: 'Registered assets', value: totals.assets, href: linkTo('/assets') },
-                { label: 'Staff', value: totals.employees, href: linkTo('/employees') },
+                {
+                  label: 'Customers',
+                  value: totals.customers,
+                  href: linkTo('/customers'),
+                },
+                {
+                  label: 'Registered assets',
+                  value: totals.assets,
+                  href: linkTo('/assets'),
+                },
+                {
+                  label: 'Staff',
+                  value: totals.employees,
+                  href: linkTo('/employees'),
+                },
               ].map((entry) => (
-                <span key={entry.label} className="flex items-baseline gap-2 text-sm">
+                <span
+                  key={entry.label}
+                  className="flex items-baseline gap-2 text-sm"
+                >
                   <span className="font-display font-bold tabular-nums text-slate-900">
                     {formatNumber(entry.value)}
                   </span>
                   {entry.href ? (
-                    <a href={entry.href} className="text-slate-500 hover:text-slate-900 hover:underline">
+                    <a
+                      href={entry.href}
+                      className="text-slate-500 hover:text-slate-900 hover:underline"
+                    >
                       {entry.label}
                     </a>
                   ) : (

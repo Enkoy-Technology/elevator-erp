@@ -519,6 +519,13 @@
       "when": 1789412892055,
       "tag": "0073_productive_aqueduct",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1789461184667,
+      "tag": "0074_foamy_tigra",
+      "breakpoints": true
     }
   ]
 }

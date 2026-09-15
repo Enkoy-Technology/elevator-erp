@@ -22,7 +22,11 @@ import type { Response } from 'express';
 import { todayIso } from '../../common/business-time';
 import { CurrentUser, Roles } from '../../common/decorators';
 import { parseExportFormat } from '../../common/export/export-query.dto';
-import { type ColumnDef, writeCsv, writeXlsx } from '../../common/export/tabular';
+import {
+  type ColumnDef,
+  writeCsv,
+  writeXlsx,
+} from '../../common/export/tabular';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { CreateProjectDto } from './dto/create-project.dto';
 import {
@@ -69,7 +73,15 @@ export const PROJECTS_EXPORT_COLUMNS: ColumnDef[] = [
 // Spec §5.3 Projects (View All): Sales and Technical; Field Engineer sees
 // them too (the spec says "assigned" — there is no crew assignment yet, so
 // all). Finance reads proformas and contracts instead.
-@Roles('GENERAL_MANAGER', 'MARKETING_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'SECRETARY')
+@Roles(
+  'GENERAL_MANAGER',
+  'MARKETING_MANAGER',
+  'SALES_MANAGER',
+  'SALESPERSON',
+  'TECHNICAL_MANAGER',
+  'MAINTENANCE_ENGINEER',
+  'SECRETARY',
+)
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
@@ -103,7 +115,8 @@ export class ProjectsController {
     if (customerId !== undefined && !isUUID(customerId)) {
       throw new BadRequestException('customerId must be a UUID');
     }
-    const parsedStatus = status as (typeof PROJECT_STATUSES)[number] | undefined;
+    const parsedStatus = status as
+      (typeof PROJECT_STATUSES)[number] | undefined;
     const format = parseExportFormat(formatRaw);
     if (!format) {
       const result = await this.projectsService.list(user, {
@@ -139,7 +152,13 @@ export class ProjectsController {
   }
 
   @Post()
-  @Roles('GENERAL_MANAGER', 'MARKETING_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER')
+  @Roles(
+    'GENERAL_MANAGER',
+    'MARKETING_MANAGER',
+    'SALES_MANAGER',
+    'SALESPERSON',
+    'TECHNICAL_MANAGER',
+  )
   @ApiOperation({ summary: 'Create project/lead (starts at LEAD)' })
   create(
     @CurrentUser() user: AuthenticatedUser,
@@ -151,7 +170,8 @@ export class ProjectsController {
   @Patch(':id/status')
   @Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER')
   @ApiOperation({
-    summary: 'Advance or cancel project via status DAG, optionally with the deal value',
+    summary:
+      'Advance or cancel project via status DAG, optionally with the deal value',
   })
   updateStatus(
     @CurrentUser() user: AuthenticatedUser,

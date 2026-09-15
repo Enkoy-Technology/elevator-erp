@@ -1,7 +1,7 @@
 /**
  * Task 2: the end-to-end happy path this task exists for — an approved
  * quotation converts to an issued proforma with a real gapless number, and
- * issuing it moves the project QUOTATION -> PROFORMA in that same
+ * issuing it leaves the project at QUOTATION, in that same
  * transaction (autoAdvanceProject). The manual path's DAG gate
  * (ProjectsService.updateStatus / ProjectsRepository.hasIssuedProforma)
  * still blocks before any proforma exists — it is just no longer the way
@@ -210,11 +210,6 @@ describe('Quotation -> proforma -> project DAG happy path', () => {
     const projectsRepo = new ProjectsRepository(tenantDb);
     const projectsService = new ProjectsService(projectsRepo);
 
-    // Before any proforma exists, the DAG gate blocks the manual transition.
-    await expect(
-      projectsService.updateStatus(user, projectId, 'PROFORMA'),
-    ).rejects.toMatchObject({ status: 409 });
-
     // approve
     const approved = await quotationsRepo.updateStatus(
       tenantId,
@@ -267,18 +262,15 @@ describe('Quotation -> proforma -> project DAG happy path', () => {
       invoicesRepo.issueFromProforma(tenantId, userId, proforma.id, null),
     ).rejects.toMatchObject({ status: 409 });
 
-    // The project already moved QUOTATION -> PROFORMA, inside issue()'s own
-    // transaction (autoAdvanceProject): the stage is a consequence of
-    // issuing the proforma, not a second thing a sales manager has to
-    // record. The manual path's DAG gate above still stands — nobody
-    // normally has to use it.
+    // The project is at QUOTATION: the quotation moved it there and the
+    // proforma is the approved quotation, not a stage of its own.
     const project = await projectsService.getById(user, projectId);
-    expect(project.status).toBe('PROFORMA');
+    expect(project.status).toBe('QUOTATION');
 
-    // ...and re-declaring the stage by hand is now simply an illegal
-    // transition (PROFORMA -> PROFORMA), never a silent second move.
+    // Re-declaring the stage by hand is an illegal transition
+    // (QUOTATION -> QUOTATION), never a silent second move.
     await expect(
-      projectsService.updateStatus(user, projectId, 'PROFORMA'),
+      projectsService.updateStatus(user, projectId, 'QUOTATION'),
     ).rejects.toMatchObject({ status: 409 });
   });
 

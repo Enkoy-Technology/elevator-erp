@@ -212,7 +212,7 @@ describe('ContractsRepository.sign — DRAFT -> SIGNED, and the project follows'
       .mockReturnValueOnce(signChain)
       .mockReturnValueOnce(advanceChain);
     // autoAdvanceProject reads the project's current stage first.
-    const select = jest.fn(() => makeSelectChain([{ status: 'PROFORMA' }]));
+    const select = jest.fn(() => makeSelectChain([{ status: 'QUOTATION' }]));
 
     await repoWith({ update, select }).sign(
       TENANT_ID,

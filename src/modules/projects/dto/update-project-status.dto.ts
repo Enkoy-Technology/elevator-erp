@@ -9,7 +9,7 @@ export const PROJECT_STATUSES = projectStatusEnum.enumValues;
 const ETB_AMOUNT = /^\d{1,12}(\.\d{1,2})?$/;
 
 export class UpdateProjectStatusDto {
-  @ApiProperty({ enum: PROJECT_STATUSES, example: 'SITE_SURVEY' })
+  @ApiProperty({ enum: PROJECT_STATUSES, example: 'QUOTATION' })
   @IsEnum(PROJECT_STATUSES)
   status!: (typeof PROJECT_STATUSES)[number];
 

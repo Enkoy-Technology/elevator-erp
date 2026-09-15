@@ -152,7 +152,9 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
     // technicalSpec/pricingBreakdown are copied onto the proforma's own
     // snapshot columns at issue time (see the 0034 migration).
     expect(insertedProforma.technicalSpec).toEqual(quoteRow.technicalSpec);
-    expect(insertedProforma.pricingBreakdown).toEqual(quoteRow.pricingBreakdown);
+    expect(insertedProforma.pricingBreakdown).toEqual(
+      quoteRow.pricingBreakdown,
+    );
 
     const fy = computeFiscalYear(todayIso(), '07-08');
     expect(insertedProforma.fiscalYearLabel).toBe(fy.label);
@@ -189,7 +191,7 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('throws WorkflowTransitionError (409) when the open VAT version does not match the quotation\'s rateVersionId (VAT has rotated since pricing)', async () => {
+  it("throws WorkflowTransitionError (409) when the open VAT version does not match the quotation's rateVersionId (VAT has rotated since pricing)", async () => {
     const update = jest.fn(() => makeUpdateChain([quoteRow]));
     // Open VAT version id differs from quoteRow.rateVersionId.
     const select = jest.fn(() =>
@@ -248,7 +250,10 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
       .fn()
       .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
       .mockReturnValueOnce(
-        makeProformaInsertChain((v) => (insertedProforma = v), [{ id: 'pf-1' }]),
+        makeProformaInsertChain(
+          (v) => (insertedProforma = v),
+          [{ id: 'pf-1' }],
+        ),
       )
       .mockReturnValue(makeLinesInsertChain());
     const withTenant = jest.fn(
@@ -292,7 +297,10 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
       .fn()
       .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
       .mockReturnValueOnce(
-        makeProformaInsertChain((v) => (insertedProforma = v), [{ id: 'pf-1' }]),
+        makeProformaInsertChain(
+          (v) => (insertedProforma = v),
+          [{ id: 'pf-1' }],
+        ),
       )
       .mockReturnValue(makeLinesInsertChain());
     const withTenant = jest.fn(
@@ -380,10 +388,10 @@ describe('ProformasRepository.cancel — CAS ISSUED -> CANCELLED', () => {
   });
 });
 
-describe('ProformasRepository.findByIdForDocument — joined display names + the proforma\'s own snapshot columns', () => {
+describe("ProformasRepository.findByIdForDocument — joined display names + the proforma's own snapshot columns", () => {
   const PROFORMA_ID = '88888888-8888-8888-8888-888888888888';
 
-  it('joins customers and projects (for display names only) and returns the row — technicalSpec/pricingBreakdown come from the proforma\'s own columns, no quotations join', async () => {
+  it("joins customers and projects (for display names only) and returns the row — technicalSpec/pricingBreakdown come from the proforma's own columns, no quotations join", async () => {
     const joinedRow = {
       id: PROFORMA_ID,
       proformaNumber: 'PF-FY2026-27-0001',
@@ -465,7 +473,9 @@ describe('ProformasRepository.issue — project stage auto-advance', () => {
       .fn()
       .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
       .mockReturnValueOnce(
-        makeProformaInsertChain(() => {}, [{ id: 'pf-1', projectId: PROJECT_ID }]),
+        makeProformaInsertChain(() => {}, [
+          { id: 'pf-1', projectId: PROJECT_ID },
+        ]),
       )
       .mockReturnValue(makeLinesInsertChain());
     const withTenant = jest.fn(
@@ -477,15 +487,15 @@ describe('ProformasRepository.issue — project stage auto-advance', () => {
     return { row, setValues, withTenant };
   };
 
-  it('advances the project to PROFORMA in the issue transaction', async () => {
-    const { setValues, withTenant } = await runIssue('QUOTATION');
+  it('advances a project still at LEAD to QUOTATION in the issue transaction', async () => {
+    const { setValues, withTenant } = await runIssue('LEAD');
 
     // One transaction for the quotation CAS, the proforma insert and the
     // stage move together — an issued proforma can never commit next to a
     // project that failed to advance.
     expect(withTenant).toHaveBeenCalledTimes(1);
     expect(setValues).toContainEqual(
-      expect.objectContaining({ status: 'PROFORMA' }),
+      expect.objectContaining({ status: 'QUOTATION' }),
     );
   });
 
@@ -496,7 +506,7 @@ describe('ProformasRepository.issue — project stage auto-advance', () => {
 
       expect(row).toMatchObject({ id: 'pf-1' });
       expect(setValues).not.toContainEqual(
-        expect.objectContaining({ status: 'PROFORMA' }),
+        expect.objectContaining({ status: 'QUOTATION' }),
       );
     },
   );

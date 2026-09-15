@@ -7,10 +7,7 @@ describe('project status DAG', () => {
   it('allows the happy-path chain LEAD through COMPLETED', () => {
     const chain = [
       'LEAD',
-      'SITE_SURVEY',
-      'SPEC_CALCULATION',
       'QUOTATION',
-      'PROFORMA',
       'CONTRACT',
       'EXECUTION',
       'COMPLETED',
@@ -22,7 +19,11 @@ describe('project status DAG', () => {
 
   it('allows CANCELLED from each non-terminal status except EXECUTION', () => {
     for (const [from, next] of Object.entries(PROJECT_STATUS_TRANSITIONS)) {
-      if (from === 'EXECUTION' || from === 'COMPLETED' || from === 'CANCELLED') {
+      if (
+        from === 'EXECUTION' ||
+        from === 'COMPLETED' ||
+        from === 'CANCELLED'
+      ) {
         expect(next.includes('CANCELLED')).toBe(false);
       } else {
         expect(next).toContain('CANCELLED');

@@ -1,17 +1,15 @@
 import type { ProjectStatus } from '../../database/schema/projects';
 
 /**
- * Allowed next statuses per TAD §3.4 project status DAG.
- * Blocking side-effects (survey upload, quote approval, etc.) land in later slices.
+ * Allowed next statuses. Creating a quotation and signing a contract move
+ * the project on their own (autoAdvanceProject); the buttons exist for the
+ * moves that have no document behind them.
  */
 export const PROJECT_STATUS_TRANSITIONS: Readonly<
   Record<ProjectStatus, readonly ProjectStatus[]>
 > = {
-  LEAD: ['SITE_SURVEY', 'CANCELLED'],
-  SITE_SURVEY: ['SPEC_CALCULATION', 'CANCELLED'],
-  SPEC_CALCULATION: ['QUOTATION', 'CANCELLED'],
-  QUOTATION: ['PROFORMA', 'CANCELLED'],
-  PROFORMA: ['CONTRACT', 'CANCELLED'],
+  LEAD: ['QUOTATION', 'CANCELLED'],
+  QUOTATION: ['CONTRACT', 'CANCELLED'],
   CONTRACT: ['EXECUTION', 'CANCELLED'],
   EXECUTION: ['COMPLETED'],
   COMPLETED: [],

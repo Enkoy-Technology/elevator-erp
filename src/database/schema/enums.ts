@@ -36,12 +36,12 @@ export const customerTypeEnum = pgEnum('customer_type', [
   'GOVERNMENT',
 ]);
 
+// Lead → Quotation → Contract → Execution → Completed. The survey, the spec
+// calculation and the proforma are not stages: the specs live on the
+// quotation, and the proforma is the approved quotation itself.
 export const projectStatusEnum = pgEnum('project_status', [
   'LEAD',
-  'SITE_SURVEY',
-  'SPEC_CALCULATION',
   'QUOTATION',
-  'PROFORMA',
   'CONTRACT',
   'EXECUTION',
   'COMPLETED',
@@ -207,8 +207,7 @@ export const contractStatusEnum = pgEnum('contract_status', [
 ]);
 
 /** An instalment is a plan until an invoice is actually raised for it. */
-export const contractInstalmentStatusEnum = pgEnum('contract_instalment_status', [
-  'PENDING',
-  'INVOICED',
-  'CANCELLED',
-]);
+export const contractInstalmentStatusEnum = pgEnum(
+  'contract_instalment_status',
+  ['PENDING', 'INVOICED', 'CANCELLED'],
+);

@@ -1,5 +1,4 @@
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3002/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3002/v1';
 
 const ACCESS_KEY = 'erp.accessToken';
 const REFRESH_KEY = 'erp.refreshToken';
@@ -234,20 +233,34 @@ export interface ProductTypePayload {
   liftGeometry?: boolean;
 }
 
-export const listProductTypes = (): Promise<ProductTypeRow[]> => apiFetch<ProductTypeRow[]>('/product-types');
+export const listProductTypes = (): Promise<ProductTypeRow[]> =>
+  apiFetch<ProductTypeRow[]>('/product-types');
 
-export const createProductType = (payload: ProductTypePayload): Promise<ProductTypeRow> =>
-  apiFetch<ProductTypeRow>('/product-types', { method: 'POST', body: JSON.stringify(payload) });
+export const createProductType = (
+  payload: ProductTypePayload,
+): Promise<ProductTypeRow> =>
+  apiFetch<ProductTypeRow>('/product-types', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 
-export const updateProductType = (id: string, payload: Partial<ProductTypePayload>): Promise<ProductTypeRow> =>
-  apiFetch<ProductTypeRow>(`/product-types/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+export const updateProductType = (
+  id: string,
+  payload: Partial<ProductTypePayload>,
+): Promise<ProductTypeRow> =>
+  apiFetch<ProductTypeRow>(`/product-types/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
 
 export const deleteProductType = (id: string): Promise<void> =>
   apiFetch<void>(`/product-types/${id}`, { method: 'DELETE' });
 
 /** Name for a code, falling back to the code itself for a retired product. */
-export const productName = (rows: readonly ProductTypeRow[], code: string): string =>
-  rows.find((row) => row.code === code)?.name ?? code;
+export const productName = (
+  rows: readonly ProductTypeRow[],
+  code: string,
+): string => rows.find((row) => row.code === code)?.name ?? code;
 
 export interface CalcInputPayload {
   productType: ProductType;
@@ -271,8 +284,13 @@ export interface CalcInputPayload {
  * What the calculator accepts: a passenger lift can be described by its
  * shaft and floors alone; the classic figures are then filled in by the API.
  */
-export type CalcRequestPayload = Pick<CalcInputPayload, 'productType' | 'marginPercent' | 'taxPercent'> &
-  Partial<Omit<CalcInputPayload, 'productType' | 'marginPercent' | 'taxPercent'>>;
+export type CalcRequestPayload = Pick<
+  CalcInputPayload,
+  'productType' | 'marginPercent' | 'taxPercent'
+> &
+  Partial<
+    Omit<CalcInputPayload, 'productType' | 'marginPercent' | 'taxPercent'>
+  >;
 
 export interface CalcResult {
   /** The complete input the figures came from, derived fields filled in. */
@@ -405,9 +423,7 @@ export const listCustomers = (options?: {
     params.set('pageSize', String(options.pageSize));
   }
   const query = params.toString();
-  return apiFetch<Paginated<Customer>>(
-    `/customers${query ? `?${query}` : ''}`,
-  );
+  return apiFetch<Paginated<Customer>>(`/customers${query ? `?${query}` : ''}`);
 };
 
 export const checkCustomerDuplicate = (payload: {
@@ -557,20 +573,10 @@ export interface CustomerOverview {
 }
 
 export const getCustomerOverview = (id: string): Promise<CustomerOverview> =>
-  apiFetch<CustomerOverview>(
-    `/customers/${encodeURIComponent(id)}/overview`,
-  );
+  apiFetch<CustomerOverview>(`/customers/${encodeURIComponent(id)}/overview`);
 
 export type ProjectStatus =
-  | 'LEAD'
-  | 'SITE_SURVEY'
-  | 'SPEC_CALCULATION'
-  | 'QUOTATION'
-  | 'PROFORMA'
-  | 'CONTRACT'
-  | 'EXECUTION'
-  | 'COMPLETED'
-  | 'CANCELLED';
+  'LEAD' | 'QUOTATION' | 'CONTRACT' | 'EXECUTION' | 'COMPLETED' | 'CANCELLED';
 
 export interface Project {
   id: string;
@@ -617,9 +623,7 @@ export const listProjects = (options?: {
     params.set('pageSize', String(options.pageSize));
   }
   const query = params.toString();
-  return apiFetch<Paginated<Project>>(
-    `/projects${query ? `?${query}` : ''}`,
-  );
+  return apiFetch<Paginated<Project>>(`/projects${query ? `?${query}` : ''}`);
 };
 
 export const createProject = (
@@ -645,17 +649,13 @@ export const NEXT_PROJECT_STATUSES: Record<
   ProjectStatus,
   readonly ProjectStatus[]
 > = {
-  LEAD: ['SITE_SURVEY', 'CANCELLED'],
-  SITE_SURVEY: ['SPEC_CALCULATION', 'CANCELLED'],
-  SPEC_CALCULATION: ['QUOTATION', 'CANCELLED'],
-  QUOTATION: ['PROFORMA', 'CANCELLED'],
-  PROFORMA: ['CONTRACT', 'CANCELLED'],
+  LEAD: ['QUOTATION', 'CANCELLED'],
+  QUOTATION: ['CONTRACT', 'CANCELLED'],
   CONTRACT: ['EXECUTION', 'CANCELLED'],
   EXECUTION: ['COMPLETED'],
   COMPLETED: [],
   CANCELLED: [],
 };
-
 
 export const EMPLOYEE_ROLES = [
   'CEO',
@@ -716,9 +716,7 @@ export const listEmployees = (options?: {
     params.set('pageSize', String(options.pageSize));
   }
   const query = params.toString();
-  return apiFetch<Paginated<Employee>>(
-    `/employees${query ? `?${query}` : ''}`,
-  );
+  return apiFetch<Paginated<Employee>>(`/employees${query ? `?${query}` : ''}`);
 };
 
 export const createEmployee = (
@@ -810,11 +808,7 @@ export const ASSET_CATEGORIES = [
 ] as const;
 export type AssetCategory = (typeof ASSET_CATEGORIES)[number];
 
-export const ASSET_STATUSES = [
-  'ACTIVE',
-  'INACTIVE',
-  'DECOMMISSIONED',
-] as const;
+export const ASSET_STATUSES = ['ACTIVE', 'INACTIVE', 'DECOMMISSIONED'] as const;
 export type AssetStatus = (typeof ASSET_STATUSES)[number];
 
 export interface Asset {
@@ -952,9 +946,7 @@ export const createNotification = (payload: {
     body: JSON.stringify(payload),
   });
 
-export const markNotificationRead = (
-  id: string,
-): Promise<AppNotification> =>
+export const markNotificationRead = (id: string): Promise<AppNotification> =>
   apiFetch<AppNotification>(`/notifications/${id}/read`, {
     method: 'PATCH',
   });
@@ -1066,9 +1058,12 @@ export interface Technician {
 }
 
 /** Active technical staff, for the assignment pickers. Open to every maintenance role. */
-export const listTechnicians = (): Promise<Technician[]> => apiFetch<Technician[]>('/maintenance/technicians');
+export const listTechnicians = (): Promise<Technician[]> =>
+  apiFetch<Technician[]>('/maintenance/technicians');
 
-export const getMaintenanceContract = (id: string): Promise<MaintenanceContract> =>
+export const getMaintenanceContract = (
+  id: string,
+): Promise<MaintenanceContract> =>
   apiFetch<MaintenanceContract>(`/maintenance/contracts/${id}`);
 
 export const createMaintenanceContract = (
@@ -1232,13 +1227,7 @@ export const getSettings = (): Promise<TenantSettings> =>
   apiFetch<TenantSettings>('/settings');
 
 export type ProjectPipelineStatus =
-  | 'LEAD'
-  | 'SITE_SURVEY'
-  | 'SPEC_CALCULATION'
-  | 'QUOTATION'
-  | 'PROFORMA'
-  | 'CONTRACT'
-  | 'EXECUTION';
+  'LEAD' | 'QUOTATION' | 'CONTRACT' | 'EXECUTION';
 
 export interface PipelineStage {
   status: ProjectPipelineStatus;
@@ -1321,7 +1310,10 @@ export type DocumentFormat = 'pdf' | 'docx' | 'xlsx';
  * assumes a JSON body. Shared by download and print so the 401-refresh dance
  * lives in one place.
  */
-const fetchDocument = async (path: string, retryOn401 = true): Promise<Blob> => {
+const fetchDocument = async (
+  path: string,
+  retryOn401 = true,
+): Promise<Blob> => {
   const token = getAccessToken();
   const response = await fetch(`${API_URL}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -1342,7 +1334,10 @@ const fetchDocument = async (path: string, retryOn401 = true): Promise<Blob> => 
  * Content-Disposition — smaller, and the two are guaranteed to agree since
  * both come from the same source data.
  */
-const downloadDocument = async (path: string, filename: string): Promise<void> => {
+const downloadDocument = async (
+  path: string,
+  filename: string,
+): Promise<void> => {
   const url = URL.createObjectURL(await fetchDocument(path));
   const anchor = document.createElement('a');
   anchor.href = url;
@@ -1507,7 +1502,10 @@ export interface Quotation {
 
 /** Same shape the calc engine takes, minus taxPercent — VAT is resolved
  *  server-side from the statutory rates table, never client-supplied. */
-export interface CreateQuotationPayload extends Omit<CalcInputPayload, 'taxPercent'> {
+export interface CreateQuotationPayload extends Omit<
+  CalcInputPayload,
+  'taxPercent'
+> {
   validUntil?: string;
   notes?: string;
 }
@@ -1626,7 +1624,9 @@ export interface QuotationLineSpecFields {
  * key instead of blanking it.
  */
 export type QuotationLineSpecInput = {
-  [K in keyof QuotationLineSpecFields]?: NonNullable<QuotationLineSpecFields[K]>;
+  [K in keyof QuotationLineSpecFields]?: NonNullable<
+    QuotationLineSpecFields[K]
+  >;
 };
 
 /** One lift on page 1's line table (their "No of Units" column is `quantity`). */
@@ -1660,7 +1660,8 @@ export interface QuotationLine extends QuotationLineSpecFields {
  * the other or the API 400s.
  */
 export interface CreateQuotationLinePayload
-  extends Omit<CalcRequestPayload, 'taxPercent' | 'stops'>,
+  extends
+    Omit<CalcRequestPayload, 'taxPercent' | 'stops'>,
     QuotationLineSpecInput {
   stops?: number;
   /** 1..999, defaults to 1. */
@@ -1865,9 +1866,7 @@ export const listProformas = (options?: {
     params.set('pageSize', String(options.pageSize));
   }
   const query = params.toString();
-  return apiFetch<Paginated<Proforma>>(
-    `/proformas${query ? `?${query}` : ''}`,
-  );
+  return apiFetch<Paginated<Proforma>>(`/proformas${query ? `?${query}` : ''}`);
 };
 
 export const convertQuotationToProforma = (
@@ -1879,10 +1878,7 @@ export const convertQuotationToProforma = (
     body: JSON.stringify(validUntil ? { validUntil } : {}),
   });
 
-export const cancelProforma = (
-  id: string,
-  reason: string,
-): Promise<Proforma> =>
+export const cancelProforma = (id: string, reason: string): Promise<Proforma> =>
   apiFetch<Proforma>(`/proformas/${id}/cancel`, {
     method: 'POST',
     body: JSON.stringify({ reason }),
@@ -1989,7 +1985,9 @@ export const listInvoices = (options?: {
     params.set('pageSize', String(options.pageSize));
   }
   const query = params.toString();
-  return apiFetch<Paginated<InvoiceListRow>>(`/invoices${query ? `?${query}` : ''}`);
+  return apiFetch<Paginated<InvoiceListRow>>(
+    `/invoices${query ? `?${query}` : ''}`,
+  );
 };
 
 export interface CreateInvoiceLinePayload {
@@ -2039,12 +2037,7 @@ export const downloadInvoiceDocument = (
   );
 
 export type PaymentMethod =
-  | 'CASH'
-  | 'BANK_TRANSFER'
-  | 'CHEQUE'
-  | 'CBE_BIRR'
-  | 'TELEBIRR'
-  | 'OTHER';
+  'CASH' | 'BANK_TRANSFER' | 'CHEQUE' | 'CBE_BIRR' | 'TELEBIRR' | 'OTHER';
 
 export interface PaymentAllocation {
   id: string;
@@ -2176,7 +2169,9 @@ export const listPayments = (options?: {
     params.set('pageSize', String(options.pageSize));
   }
   const query = params.toString();
-  return apiFetch<Paginated<PaymentListRow>>(`/payments${query ? `?${query}` : ''}`);
+  return apiFetch<Paginated<PaymentListRow>>(
+    `/payments${query ? `?${query}` : ''}`,
+  );
 };
 
 export type PaymentExportFormat = 'csv' | 'xlsx';
@@ -2184,11 +2179,20 @@ export type PaymentExportFormat = 'csv' | 'xlsx';
 /** GET /payments?format=csv|xlsx with the same filters as listPayments — same blob-download helper as downloadAgingReport/downloadCustomerStatement. */
 export const downloadPayments = (
   format: PaymentExportFormat,
-  options?: { customerId?: string; method?: PaymentMethod; from?: string; to?: string; q?: string },
+  options?: {
+    customerId?: string;
+    method?: PaymentMethod;
+    from?: string;
+    to?: string;
+    q?: string;
+  },
 ): Promise<void> => {
   const params = paymentListParams(options);
   params.set('format', format);
-  return downloadDocument(`/payments?${params.toString()}`, `payments.${format}`);
+  return downloadDocument(
+    `/payments?${params.toString()}`,
+    `payments.${format}`,
+  );
 };
 
 export interface BankAccount {
@@ -2241,7 +2245,10 @@ export const getAgingReport = (): Promise<AgingRow[]> =>
 export type ReportFormat = 'csv' | 'xlsx' | 'pdf';
 
 export const downloadAgingReport = (format: ReportFormat): Promise<void> =>
-  downloadDocument(`/invoices/aging?format=${format}`, `aging-report.${format}`);
+  downloadDocument(
+    `/invoices/aging?format=${format}`,
+    `aging-report.${format}`,
+  );
 
 export type StatementRowKind = 'invoice' | 'payment' | 'withholding';
 
@@ -2376,7 +2383,9 @@ export const listOutbox = (options?: {
     params.set('pageSize', String(options.pageSize));
   }
   const query = params.toString();
-  return apiFetch<Paginated<OutboundMessage>>(`/outbox${query ? `?${query}` : ''}`);
+  return apiFetch<Paginated<OutboundMessage>>(
+    `/outbox${query ? `?${query}` : ''}`,
+  );
 };
 
 export type OutboxExportFormat = 'csv' | 'xlsx';
@@ -2384,7 +2393,12 @@ export type OutboxExportFormat = 'csv' | 'xlsx';
 /** GET /outbox?format=csv|xlsx with the same filters as listOutbox — same blob-download helper as downloadPayments. */
 export const downloadOutbox = (
   format: OutboxExportFormat,
-  options?: { status?: MessageStatus; channel?: MessageChannel; from?: string; to?: string },
+  options?: {
+    status?: MessageStatus;
+    channel?: MessageChannel;
+    from?: string;
+    to?: string;
+  },
 ): Promise<void> => {
   const params = outboxListParams(options);
   params.set('format', format);
@@ -2397,7 +2411,10 @@ export const getOutboxProvider = (): Promise<{ provider: string }> =>
 
 /** Queue a test SMS to a handset the operator holds; shows up in the log within a minute. */
 export const sendTestSms = (phone: string): Promise<OutboundMessage> =>
-  apiFetch<OutboundMessage>('/outbox/test', { method: 'POST', body: JSON.stringify({ phone }) });
+  apiFetch<OutboundMessage>('/outbox/test', {
+    method: 'POST',
+    body: JSON.stringify({ phone }),
+  });
 
 /* ---- messaging: templates and broadcasts ---------------------------- */
 
@@ -2435,27 +2452,48 @@ export interface BroadcastResult {
   sendAt: string | null;
 }
 
-export const listMessageTemplates = (): Promise<{ saved: MessageTemplate[]; starters: StarterTemplate[] }> =>
-  apiFetch('/messaging/templates');
+export const listMessageTemplates = (): Promise<{
+  saved: MessageTemplate[];
+  starters: StarterTemplate[];
+}> => apiFetch('/messaging/templates');
 
-export const createMessageTemplate = (payload: { name: string; body: string }): Promise<MessageTemplate> =>
-  apiFetch<MessageTemplate>('/messaging/templates', { method: 'POST', body: JSON.stringify(payload) });
+export const createMessageTemplate = (payload: {
+  name: string;
+  body: string;
+}): Promise<MessageTemplate> =>
+  apiFetch<MessageTemplate>('/messaging/templates', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 
 export const updateMessageTemplate = (
   id: string,
   payload: { name?: string; body?: string },
 ): Promise<MessageTemplate> =>
-  apiFetch<MessageTemplate>(`/messaging/templates/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+  apiFetch<MessageTemplate>(`/messaging/templates/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
 
 export const deleteMessageTemplate = (id: string): Promise<void> =>
   apiFetch<void>(`/messaging/templates/${id}`, { method: 'DELETE' });
 
 /** Counts only — who would be reached, who would be held. Sends nothing. */
-export const previewBroadcast = (payload: BroadcastPayload): Promise<BroadcastResult> =>
-  apiFetch<BroadcastResult>('/messaging/broadcasts/preview', { method: 'POST', body: JSON.stringify(payload) });
+export const previewBroadcast = (
+  payload: BroadcastPayload,
+): Promise<BroadcastResult> =>
+  apiFetch<BroadcastResult>('/messaging/broadcasts/preview', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 
-export const sendBroadcast = (payload: BroadcastPayload): Promise<BroadcastResult> =>
-  apiFetch<BroadcastResult>('/messaging/broadcasts', { method: 'POST', body: JSON.stringify(payload) });
+export const sendBroadcast = (
+  payload: BroadcastPayload,
+): Promise<BroadcastResult> =>
+  apiFetch<BroadcastResult>('/messaging/broadcasts', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 
 /** Retry a FAILED message: QUEUED, due immediately, attempts NOT reset. */
 export const retryOutboxMessage = (id: string): Promise<OutboundMessage> =>
@@ -2536,7 +2574,9 @@ export const listContracts = (options?: {
     params.set('pageSize', String(options.pageSize));
   }
   const query = params.toString();
-  return apiFetch<Paginated<ContractListRow>>(`/contracts${query ? `?${query}` : ''}`);
+  return apiFetch<Paginated<ContractListRow>>(
+    `/contracts${query ? `?${query}` : ''}`,
+  );
 };
 
 export type ContractExportFormat = 'csv' | 'xlsx';
@@ -2545,11 +2585,18 @@ export type ContractExportFormat = 'csv' | 'xlsx';
  *  the whole filtered set, not just the loaded page. */
 export const downloadContracts = (
   format: ContractExportFormat,
-  options?: { projectId?: string; customerId?: string; status?: ContractStatus },
+  options?: {
+    projectId?: string;
+    customerId?: string;
+    status?: ContractStatus;
+  },
 ): Promise<void> => {
   const params = contractListParams(options);
   params.set('format', format);
-  return downloadDocument(`/contracts?${params.toString()}`, `contracts.${format}`);
+  return downloadDocument(
+    `/contracts?${params.toString()}`,
+    `contracts.${format}`,
+  );
 };
 
 export const getContract = (id: string): Promise<Contract> =>
@@ -2577,7 +2624,10 @@ export const updateContract = (
   });
 
 /** DRAFT -> SIGNED. `signedAt` is an ISO date; the API defaults it to today. */
-export const signContract = (id: string, signedAt?: string): Promise<Contract> =>
+export const signContract = (
+  id: string,
+  signedAt?: string,
+): Promise<Contract> =>
   apiFetch<Contract>(`/contracts/${id}/sign`, {
     method: 'POST',
     body: JSON.stringify(signedAt ? { signedAt } : {}),

@@ -167,7 +167,7 @@ capacity multiplier, speed premium, door premium, installation cost, freight cos
 percent, and total price. Supports template mode for reusable configurations.
 PROJECTS
 Master entity for elevator installation projects tracking the full sales-to-delivery lifecycle. Status enum:
-LEAD, SITE_SURVEY, SPEC_CALCULATION, QUOTATION, PROFORMA, CONTRACT, EXECUTION,
+LEAD, QUOTATION, CONTRACT, EXECUTION, (since 2026-09-15; survey, spec calculation and proforma stages were removed)
 COMPLETED, CANCELLED. Contains site geolocation, financial fields (quoted_amount,
 contract_amount), timeline tracking, and assignment fields (sales_rep_id, technical_lead_id,
 project_manager_id).

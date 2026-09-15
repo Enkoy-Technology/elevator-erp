@@ -90,7 +90,7 @@ Never commit `.env` or any file containing secrets.
 
 - Elevator specs follow EN 81-20/50, ISO 8100, ASME A17.1 standards.
 - Pricing uses arbitrary-precision decimal arithmetic (never float for money). Currency is **ETB**.
-- Project status workflow is a DAG: LEAD -> SITE_SURVEY -> SPEC_CALCULATION -> QUOTATION -> PROFORMA -> CONTRACT -> EXECUTION -> COMPLETED.
+- Project status workflow is a DAG: LEAD -> QUOTATION -> CONTRACT -> EXECUTION -> COMPLETED (plus CANCELLED). Survey, spec calculation and proforma are not stages: the specs live on the quotation, the proforma is the approved quotation.
 - Maintenance recurrence: DAILY, WEEKLY, BIWEEKLY, MONTHLY, QUARTERLY, BIANNUAL, ANNUAL, CUSTOM.
 - Breakdown severity: EMERGENCY (30min SLA), CRITICAL (60min), HIGH (4hr), MEDIUM (24hr), LOW (48hr).
 - Inventory transactions are an immutable ledger. Never delete, only create reversing entries.

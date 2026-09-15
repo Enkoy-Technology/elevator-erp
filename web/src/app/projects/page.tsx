@@ -35,10 +35,7 @@ import { formatEtb } from '@/lib/money';
 
 const STATUS_LABEL: Record<ProjectStatus, string> = {
   LEAD: 'Lead',
-  SITE_SURVEY: 'Site survey',
-  SPEC_CALCULATION: 'Spec calculation',
   QUOTATION: 'Quotation',
-  PROFORMA: 'Proforma',
   CONTRACT: 'Contract',
   EXECUTION: 'Execution',
   COMPLETED: 'Completed',
@@ -48,7 +45,6 @@ const STATUS_LABEL: Record<ProjectStatus, string> = {
 /** The stages worth filtering by — the same set the old pill row offered. */
 const STAGE_FILTERS = [
   'LEAD',
-  'SITE_SURVEY',
   'QUOTATION',
   'CONTRACT',
   'EXECUTION',
@@ -61,10 +57,7 @@ const STAGE_TONE: Record<
   'neutral' | 'active' | 'good' | 'warn' | 'danger'
 > = {
   LEAD: 'neutral',
-  SITE_SURVEY: 'neutral',
-  SPEC_CALCULATION: 'neutral',
   QUOTATION: 'warn',
-  PROFORMA: 'warn',
   CONTRACT: 'active',
   EXECUTION: 'active',
   COMPLETED: 'good',

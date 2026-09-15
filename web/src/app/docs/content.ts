@@ -68,11 +68,13 @@ const ICON = {
     'M17 20h5v-2a3 3 0 0 0-5.4-1.9M17 20H7m10 0v-2c0-.7-.1-1.3-.4-1.9M7 20H2v-2a3 3 0 0 1 5.4-1.9M7 20v-2c0-.7.1-1.3.4-1.9m0 0a5 5 0 0 1 9.2 0M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z',
   gauge: 'M3 13h8V3H3v10Zm0 8h8v-6H3v6Zm10 0h8V11h-8v10Zm0-18v6h8V3h-8Z',
   calc: 'M9 7h6m-6 4h6m-6 4h3M5 3h14a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z',
-  contact: 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7Z',
+  contact:
+    'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7Z',
   folder:
     'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2',
   doc: 'M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.6a1 1 0 0 1 .7.3l5.4 5.4a1 1 0 0 1 .3.7V19a2 2 0 0 1-2 2Z',
-  stamp: 'M6 21h12M8 17h8a1 1 0 0 0 1-1v-1H7v1a1 1 0 0 0 1 1Zm1-4V9a3 3 0 0 1 6 0v4',
+  stamp:
+    'M6 21h12M8 17h8a1 1 0 0 0 1-1v-1H7v1a1 1 0 0 0 1 1Zm1-4V9a3 3 0 0 1 6 0v4',
   money:
     'M12 6v12m3-8.5c0-1.4-1.3-2.5-3-2.5s-3 1.1-3 2.5 1.3 2 3 2 3 .6 3 2-1.3 2.5-3 2.5-3-1.1-3-2.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
   card: 'M2.3 9h19.5m-16.5 5.3h6m-6 2.2h3M4.5 19.5h15a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5h-15A1.5 1.5 0 0 0 3 6v12a1.5 1.5 0 0 0 1.5 1.5Z',
@@ -80,7 +82,8 @@ const ICON = {
   receipt:
     'M6 3v18l2-1.5L10 21l2-1.5L14 21l2-1.5L18 21V3l-2 1.5L14 3l-2 1.5L10 3 8 4.5 6 3Zm3 6h6M9 13h6',
   bank: 'M3 10h18M5 10v8m4-8v8m6-8v8m4-8v8M2 20h20M12 3 3 8h18l-9-5Z',
-  percent: 'M19 5 5 19M6.5 9a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Zm11 11a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z',
+  percent:
+    'M19 5 5 19M6.5 9a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Zm11 11a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z',
   building:
     'M19 21V5a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5m-4 0h4',
   wrench:
@@ -90,8 +93,10 @@ const ICON = {
   clock: 'M12 7v5l3 2m6-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
   sliders:
     'M12 6V4m0 2a2 2 0 1 0 0 4m0-4a2 2 0 1 1 0 4m-6 8a2 2 0 1 0 0-4m0 4a2 2 0 1 1 0-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 1 0 0-4m0 4a2 2 0 1 1 0-4m0 4v2m0-6V4',
-  terminal: 'm5 8 4 4-4 4m6 1h8M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z',
-  scale: 'M12 3v18M8 21h8M3 8l4-4 4 4M3 8a4 4 0 0 0 8 0M13 12l4-4 4 4m-8 0a4 4 0 0 0 8 0',
+  terminal:
+    'm5 8 4 4-4 4m6 1h8M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z',
+  scale:
+    'M12 3v18M8 21h8M3 8l4-4 4 4M3 8a4 4 0 0 0 8 0M13 12l4-4 4 4m-8 0a4 4 0 0 0 8 0',
   server:
     'M4 5h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm0 8h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1Zm3-5h.01M7 16h.01',
 };
@@ -113,7 +118,8 @@ export const DOC_GROUPS: DocGroup[] = [
       {
         id: 'overview',
         title: 'System overview',
-        tagline: 'One multi-tenant ERP for elevator & electromechanical companies',
+        tagline:
+          'One multi-tenant ERP for elevator & electromechanical companies',
         icon: ICON.book,
         body: [
           'The platform runs a Shining Star–style elevator business end to end: a lead becomes a site survey, the survey becomes a calculated technical spec and an ETB price, the price becomes a quotation, then a proforma, then an invoice, then collected cash — and after handover the same machine becomes a maintenance contract with scheduled visits and breakdown tickets.',
@@ -157,7 +163,10 @@ export const DOC_GROUPS: DocGroup[] = [
         ],
         facts: [
           { label: '/src/modules', value: 'Feature modules' },
-          { label: '/src/common', value: 'Guards, filters, export, shared math' },
+          {
+            label: '/src/common',
+            value: 'Guards, filters, export, shared math',
+          },
           { label: '/src/database', value: 'Drizzle schema, migrations, RLS' },
           { label: '/src/config', value: 'Environment validation' },
           { label: 'API port', value: '3002 (local dev)' },
@@ -212,19 +221,70 @@ export const DOC_GROUPS: DocGroup[] = [
           'The sidebar filters itself by the signed-in user’s role using the same lists that decorate the controllers. When a controller’s @Roles() changes, the navigation entry changes with it in the same commit — otherwise a user sees a menu item that answers 403.',
         ],
         facts: [
-          { label: 'CEO', value: 'Full access (super-role). Strategic planning, financial and final project approval, system administration.' },
-          { label: 'ADMIN', value: 'System Administrator. Full access (super-role): settings, employees, messages, rates.' },
-          { label: 'GENERAL_MANAGER', value: 'Day-to-day operations: every module read, projects and approvals, staff below management, reports.' },
-          { label: 'MARKETING_MANAGER', value: 'Customer database, leads (projects at LEAD), marketing reports. Campaigns are not built yet.' },
-          { label: 'SALES_MANAGER', value: 'Sales, quotation and customer modules: approves quotes and prices, issues proformas and contracts, maintenance agreements; reads invoices.' },
-          { label: 'SALESPERSON', value: 'Registers customers, prepares and submits quotations, moves leads through the pipeline, reads proformas and contracts.' },
-          { label: 'FINANCE_OFFICER', value: 'Finance, reporting and invoice modules: invoices, payments, expenses, banks, receivables, rates.' },
-          { label: 'OFFICE_MANAGER', value: 'Employee records (below management), internal communication: notifications, SMS messages.' },
-          { label: 'TECHNICAL_MANAGER', value: 'Installation: calculator, quotation lines, projects and their stages, contract handover, assets, maintenance.' },
-          { label: 'MAINTENANCE_ENGINEER', value: 'Service scheduling, visits, emergency response and breakdown repair; assets; reads customers and specs.' },
-          { label: 'STORE_KEEPER', value: 'Inventory: the asset register today; stock, issuance and purchase requests when the inventory module ships.' },
-          { label: 'SECRETARY', value: 'Reception and documents: registers customers, opens breakdown calls, reads and prints quotations, proformas and contracts.' },
-          { label: 'CUSTOMER', value: 'Reserved for the customer portal (not built).' },
+          {
+            label: 'CEO',
+            value:
+              'Full access (super-role). Strategic planning, financial and final project approval, system administration.',
+          },
+          {
+            label: 'ADMIN',
+            value:
+              'System Administrator. Full access (super-role): settings, employees, messages, rates.',
+          },
+          {
+            label: 'GENERAL_MANAGER',
+            value:
+              'Day-to-day operations: every module read, projects and approvals, staff below management, reports.',
+          },
+          {
+            label: 'MARKETING_MANAGER',
+            value:
+              'Customer database, leads (projects at LEAD), marketing reports. Campaigns are not built yet.',
+          },
+          {
+            label: 'SALES_MANAGER',
+            value:
+              'Sales, quotation and customer modules: approves quotes and prices, issues proformas and contracts, maintenance agreements; reads invoices.',
+          },
+          {
+            label: 'SALESPERSON',
+            value:
+              'Registers customers, prepares and submits quotations, moves leads through the pipeline, reads proformas and contracts.',
+          },
+          {
+            label: 'FINANCE_OFFICER',
+            value:
+              'Finance, reporting and invoice modules: invoices, payments, expenses, banks, receivables, rates.',
+          },
+          {
+            label: 'OFFICE_MANAGER',
+            value:
+              'Employee records (below management), internal communication: notifications, SMS messages.',
+          },
+          {
+            label: 'TECHNICAL_MANAGER',
+            value:
+              'Installation: calculator, quotation lines, projects and their stages, contract handover, assets, maintenance.',
+          },
+          {
+            label: 'MAINTENANCE_ENGINEER',
+            value:
+              'Service scheduling, visits, emergency response and breakdown repair; assets; reads customers and specs.',
+          },
+          {
+            label: 'STORE_KEEPER',
+            value:
+              'Inventory: the asset register today; stock, issuance and purchase requests when the inventory module ships.',
+          },
+          {
+            label: 'SECRETARY',
+            value:
+              'Reception and documents: registers customers, opens breakdown calls, reads and prints quotations, proformas and contracts.',
+          },
+          {
+            label: 'CUSTOMER',
+            value: 'Reserved for the customer portal (not built).',
+          },
         ],
       },
     ],
@@ -264,14 +324,35 @@ export const DOC_GROUPS: DocGroup[] = [
           'Pricing is the company’s ETB price sheet, not a cost model, and the formula that turns the sheet into a price is the company’s own: Settings → Pricing → List-price formula. The starter is “Base price + (N − refN) × perStop + (C − refC) × perKg”, where Base price, refN, refC, perStop and perKg are the product’s figures from Products & prices, N is the stops (a car stacking lift’s parking levels), C the rated capacity in kg and rise the travel in metres. It is evaluated exactly as written, per line, before margin and VAT — write “max(0, N − refN)” if a lift below the base machine should cost the base rather than less. Brackets, + − × ÷, thousands separators, unit suffixes (630kg) and max(), min(), round() are understood; a formula that does not parse or gives a negative price is refused on save. A product with its own formula ignores the company one.',
         ],
         facts: [
-          { label: 'Passenger / hospital (10 stops, 630 kg)', value: 'ETB 7,000,000 + 80,000/stop + 1,000/kg' },
-          { label: 'Panoramic / home (10 stops, 630 kg)', value: 'ETB 8,000,000 + 80,000/stop + 1,000/kg' },
-          { label: 'Cargo / goods lift (2 stops, 1,000 kg)', value: 'ETB 8,000,000 + 150,000/stop + 400/kg' },
-          { label: 'Car lift (2 stops, 3,000 kg)', value: 'ETB 11,000,000 + 300,000/stop + 500/kg' },
-          { label: 'Car platform lift (2 stops, 3,000 kg)', value: 'ETB 5,200,000 + 250,000/stop + 400/kg' },
-          { label: 'Car stacking lift (2 levels, 2,000 kg)', value: 'ETB 5,200,000 + 500,000/level + 400/kg' },
+          {
+            label: 'Passenger / hospital (10 stops, 630 kg)',
+            value: 'ETB 7,000,000 + 80,000/stop + 1,000/kg',
+          },
+          {
+            label: 'Panoramic / home (10 stops, 630 kg)',
+            value: 'ETB 8,000,000 + 80,000/stop + 1,000/kg',
+          },
+          {
+            label: 'Cargo / goods lift (2 stops, 1,000 kg)',
+            value: 'ETB 8,000,000 + 150,000/stop + 400/kg',
+          },
+          {
+            label: 'Car lift (2 stops, 3,000 kg)',
+            value: 'ETB 11,000,000 + 300,000/stop + 500/kg',
+          },
+          {
+            label: 'Car platform lift (2 stops, 3,000 kg)',
+            value: 'ETB 5,200,000 + 250,000/stop + 400/kg',
+          },
+          {
+            label: 'Car stacking lift (2 levels, 2,000 kg)',
+            value: 'ETB 5,200,000 + 500,000/level + 400/kg',
+          },
           { label: 'Escalator (6 m rise)', value: 'ETB 6,000,000 + 500,000/m' },
-          { label: 'Starter formula', value: 'Base price + (N − refN) × perStop + (C − refC) × perKg' },
+          {
+            label: 'Starter formula',
+            value: 'Base price + (N − refN) × perStop + (C − refC) × perKg',
+          },
         ],
         flows: [
           {
@@ -295,7 +376,8 @@ export const DOC_GROUPS: DocGroup[] = [
           {
             method: 'POST',
             path: '/elevator-specs/calculate',
-            roles: 'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER',
+            roles:
+              'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER',
             note: 'Stateless — returns specs and pricing without persisting.',
           },
         ],
@@ -311,13 +393,50 @@ export const DOC_GROUPS: DocGroup[] = [
           'Finance can pull a customer statement: every invoice, payment and allocation for that account in one document.',
         ],
         endpoints: [
-          { method: 'GET', path: '/customers', roles: 'MARKETING_MANAGER, SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, FINANCE_OFFICER, SECRETARY', note: 'Paginated list with search.' },
-          { method: 'POST', path: '/customers/check-duplicate', roles: 'MARKETING_MANAGER, SALES_MANAGER, SALESPERSON, SECRETARY', note: 'Run before create; returns likely matches.' },
-          { method: 'GET', path: '/customers/:id', roles: 'MARKETING_MANAGER, SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, FINANCE_OFFICER, SECRETARY', note: 'Single account.' },
-          { method: 'GET', path: '/customers/:id/statement', roles: 'FINANCE_OFFICER', note: 'Account statement document.' },
-          { method: 'POST', path: '/customers', roles: 'MARKETING_MANAGER, SALES_MANAGER, SALESPERSON, SECRETARY', note: 'Create.' },
-          { method: 'PATCH', path: '/customers/:id', roles: 'MARKETING_MANAGER, SALES_MANAGER, SALESPERSON, SECRETARY', note: 'Update.' },
-          { method: 'DELETE', path: '/customers/:id', roles: 'SALES_MANAGER', note: 'Remove.' },
+          {
+            method: 'GET',
+            path: '/customers',
+            roles:
+              'MARKETING_MANAGER, SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, FINANCE_OFFICER, SECRETARY',
+            note: 'Paginated list with search.',
+          },
+          {
+            method: 'POST',
+            path: '/customers/check-duplicate',
+            roles: 'MARKETING_MANAGER, SALES_MANAGER, SALESPERSON, SECRETARY',
+            note: 'Run before create; returns likely matches.',
+          },
+          {
+            method: 'GET',
+            path: '/customers/:id',
+            roles:
+              'MARKETING_MANAGER, SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, FINANCE_OFFICER, SECRETARY',
+            note: 'Single account.',
+          },
+          {
+            method: 'GET',
+            path: '/customers/:id/statement',
+            roles: 'FINANCE_OFFICER',
+            note: 'Account statement document.',
+          },
+          {
+            method: 'POST',
+            path: '/customers',
+            roles: 'MARKETING_MANAGER, SALES_MANAGER, SALESPERSON, SECRETARY',
+            note: 'Create.',
+          },
+          {
+            method: 'PATCH',
+            path: '/customers/:id',
+            roles: 'MARKETING_MANAGER, SALES_MANAGER, SALESPERSON, SECRETARY',
+            note: 'Update.',
+          },
+          {
+            method: 'DELETE',
+            path: '/customers/:id',
+            roles: 'SALES_MANAGER',
+            note: 'Remove.',
+          },
         ],
       },
       {
@@ -328,35 +447,50 @@ export const DOC_GROUPS: DocGroup[] = [
         body: [
           'There is no Projects menu: a project is opened on the customer form (the first one) or from the customer’s page (+ New project), and the customer’s page lists all of them with their stage. The pipeline view at /projects still exists for moving projects between stages; “View all” on a customer’s page leads there.',
           'A project is one opportunity for one customer. Its status is not a free-text field: the allowed transitions are a directed acyclic graph, and an illegal move raises a WorkflowTransitionError rather than silently corrupting the pipeline.',
-          'Any status except EXECUTION can be cancelled. COMPLETED and CANCELLED are terminal — nothing moves out of them, which is what makes historical reporting trustworthy.',
+          'Five stages: LEAD, QUOTATION, CONTRACT, EXECUTION, COMPLETED. Creating a quotation moves a lead to QUOTATION and signing a contract moves it to CONTRACT on their own; the buttons on the customer page and the pipeline exist for the moves with no document behind them. Any status except EXECUTION can be cancelled. COMPLETED and CANCELLED are terminal — nothing moves out of them, which is what makes historical reporting trustworthy.',
         ],
         flows: [
           {
             title: 'Project status DAG',
-            steps: [
-              'LEAD',
-              'SITE_SURVEY',
-              'SPEC_CALCULATION',
-              'QUOTATION',
-              'PROFORMA',
-              'CONTRACT',
-              'EXECUTION',
-              'COMPLETED',
-            ],
+            steps: ['LEAD', 'QUOTATION', 'CONTRACT', 'EXECUTION', 'COMPLETED'],
             note: 'CANCELLED is reachable from every stage up to CONTRACT. Once a project reaches EXECUTION the only remaining move is COMPLETED.',
           },
         ],
         endpoints: [
-          { method: 'GET', path: '/projects', roles: 'MARKETING_MANAGER, SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, SECRETARY', note: 'Paginated pipeline.' },
-          { method: 'GET', path: '/projects/:id', roles: 'MARKETING_MANAGER, SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, SECRETARY', note: 'Single project.' },
-          { method: 'POST', path: '/projects', roles: 'MARKETING_MANAGER, SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER', note: 'Create at LEAD.' },
-          { method: 'PATCH', path: '/projects/:id/status', roles: 'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER', note: 'Transition — validated against the DAG.' },
+          {
+            method: 'GET',
+            path: '/projects',
+            roles:
+              'MARKETING_MANAGER, SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, SECRETARY',
+            note: 'Paginated pipeline.',
+          },
+          {
+            method: 'GET',
+            path: '/projects/:id',
+            roles:
+              'MARKETING_MANAGER, SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, SECRETARY',
+            note: 'Single project.',
+          },
+          {
+            method: 'POST',
+            path: '/projects',
+            roles:
+              'MARKETING_MANAGER, SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER',
+            note: 'Create at LEAD.',
+          },
+          {
+            method: 'PATCH',
+            path: '/projects/:id/status',
+            roles: 'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER',
+            note: 'Transition — validated against the DAG.',
+          },
         ],
       },
       {
         id: 'quotations',
         title: 'Quotations',
-        tagline: 'One document: draft, submit, approve. Approval issues the proforma.',
+        tagline:
+          'One document: draft, submit, approve. Approval issues the proforma.',
         icon: ICON.doc,
         body: [
           'A quotation snapshots the calculator output against a project: the technical block, the priced lines, the margin and the VAT as they stood the day it was quoted. Later price-list changes never rewrite an issued quote.',
@@ -367,26 +501,85 @@ export const DOC_GROUPS: DocGroup[] = [
         rules: [
           'Floors served is a list of the landings the lift stops at, bottom to top: B is the basement, G the ground floor, M the mezzanine, then the numbered floors. So B,G,M,1,2,3,4,5,6,7,8,9,10 is thirteen landings.',
           'That one field produces three things on the printed offer: the stop count, the "B+G+M+10" on page 1, and the "13/13/13" floors/stops/doors row on the specification sheet. They cannot disagree with each other because none of them is typed by hand.',
-          'Doors are stops multiplied by entrances per stop. A through-car lift opening on two sides has two doors per landing; the client\'s own quotation has one entrance, hence 13/13/13 rather than 13/13/26.',
+          "Doors are stops multiplied by entrances per stop. A through-car lift opening on two sides has two doors per landing; the client's own quotation has one entrance, hence 13/13/13 rather than 13/13/26.",
         ],
         flows: [
           {
             title: 'Quotation lifecycle',
-            steps: ['DRAFT', 'PENDING_APPROVAL', 'Proforma issued', '→ Contract / → Invoice'],
+            steps: [
+              'DRAFT',
+              'PENDING_APPROVAL',
+              'Proforma issued',
+              '→ Contract / → Invoice',
+            ],
             note: 'Branches: DRAFT and PENDING_APPROVAL can go EXPIRED; PENDING_APPROVAL can go REJECTED. Both are dead ends.',
           },
         ],
         endpoints: [
-          { method: 'GET', path: '/quotations', roles: 'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, FINANCE_OFFICER, MAINTENANCE_ENGINEER, SECRETARY', note: 'Paginated list.' },
-          { method: 'GET', path: '/quotations/:id', roles: 'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, FINANCE_OFFICER, MAINTENANCE_ENGINEER, SECRETARY', note: 'Single quote with lines.' },
-          { method: 'GET', path: '/quotations/:id/document', roles: 'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, FINANCE_OFFICER, MAINTENANCE_ENGINEER, SECRETARY', note: 'Branded PDF or DOCX.' },
-          { method: 'POST', path: '/projects/:projectId/quotations', roles: 'SALES_MANAGER, SALESPERSON', note: 'Create a draft against a project.' },
-          { method: 'POST', path: '/quotations/:id/submit', roles: 'SALES_MANAGER, SALESPERSON', note: 'DRAFT → PENDING_APPROVAL.' },
-          { method: 'POST', path: '/quotations/:id/convert-to-proforma', roles: 'SALES_MANAGER', note: 'Approve and issue the proforma in one transaction (what the Approve button calls).' },
-          { method: 'GET', path: '/proformas/:id/document', roles: 'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, FINANCE_OFFICER, SECRETARY', note: 'The proforma as branded PDF or DOCX.' },
-          { method: 'POST', path: '/proformas/:id/cancel', roles: 'SALES_MANAGER', note: 'Cancel the proforma with a reason. Never a deletion.' },
-          { method: 'POST', path: '/quotations/:id/reject', roles: 'SALES_MANAGER', note: 'PENDING_APPROVAL → REJECTED.' },
-          { method: 'POST', path: '/quotations/:id/expire', roles: 'SALES_MANAGER', note: 'Lapse an undecided quote.' },
+          {
+            method: 'GET',
+            path: '/quotations',
+            roles:
+              'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, FINANCE_OFFICER, MAINTENANCE_ENGINEER, SECRETARY',
+            note: 'Paginated list.',
+          },
+          {
+            method: 'GET',
+            path: '/quotations/:id',
+            roles:
+              'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, FINANCE_OFFICER, MAINTENANCE_ENGINEER, SECRETARY',
+            note: 'Single quote with lines.',
+          },
+          {
+            method: 'GET',
+            path: '/quotations/:id/document',
+            roles:
+              'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, FINANCE_OFFICER, MAINTENANCE_ENGINEER, SECRETARY',
+            note: 'Branded PDF or DOCX.',
+          },
+          {
+            method: 'POST',
+            path: '/projects/:projectId/quotations',
+            roles: 'SALES_MANAGER, SALESPERSON',
+            note: 'Create a draft against a project.',
+          },
+          {
+            method: 'POST',
+            path: '/quotations/:id/submit',
+            roles: 'SALES_MANAGER, SALESPERSON',
+            note: 'DRAFT → PENDING_APPROVAL.',
+          },
+          {
+            method: 'POST',
+            path: '/quotations/:id/convert-to-proforma',
+            roles: 'SALES_MANAGER',
+            note: 'Approve and issue the proforma in one transaction (what the Approve button calls).',
+          },
+          {
+            method: 'GET',
+            path: '/proformas/:id/document',
+            roles:
+              'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, FINANCE_OFFICER, SECRETARY',
+            note: 'The proforma as branded PDF or DOCX.',
+          },
+          {
+            method: 'POST',
+            path: '/proformas/:id/cancel',
+            roles: 'SALES_MANAGER',
+            note: 'Cancel the proforma with a reason. Never a deletion.',
+          },
+          {
+            method: 'POST',
+            path: '/quotations/:id/reject',
+            roles: 'SALES_MANAGER',
+            note: 'PENDING_APPROVAL → REJECTED.',
+          },
+          {
+            method: 'POST',
+            path: '/quotations/:id/expire',
+            roles: 'SALES_MANAGER',
+            note: 'Lapse an undecided quote.',
+          },
         ],
       },
       {
@@ -408,21 +601,67 @@ export const DOC_GROUPS: DocGroup[] = [
           },
         ],
         endpoints: [
-          { method: 'POST', path: '/proformas/:id/convert-to-invoice', roles: 'FINANCE_OFFICER', note: 'Carries the proforma’s lines across.' },
-          { method: 'POST', path: '/invoices', roles: 'FINANCE_OFFICER', note: 'Standalone invoice with its own lines.' },
-          { method: 'GET', path: '/invoices', roles: 'FINANCE_OFFICER, SALES_MANAGER', note: 'Paginated, with outstanding amount per row.' },
-          { method: 'GET', path: '/invoices/aging', roles: 'FINANCE_OFFICER', note: 'Aged receivables report.' },
-          { method: 'GET', path: '/invoices/:id', roles: 'FINANCE_OFFICER, SALES_MANAGER', note: 'Single invoice.' },
-          { method: 'GET', path: '/invoices/:id/document', roles: 'FINANCE_OFFICER, SALES_MANAGER', note: 'Branded PDF or DOCX.' },
-          { method: 'POST', path: '/invoices/:id/void', roles: 'FINANCE_OFFICER', note: 'Void — never a row deletion.' },
-          { method: 'PATCH', path: '/invoices/:id/fiscal', roles: 'FINANCE_OFFICER', note: 'Annotate with the legal fiscal receipt details.' },
-          { method: 'POST', path: '/invoices/:id/withholding', roles: 'FINANCE_OFFICER', note: 'Record tax withheld at source.' },
+          {
+            method: 'POST',
+            path: '/proformas/:id/convert-to-invoice',
+            roles: 'FINANCE_OFFICER',
+            note: 'Carries the proforma’s lines across.',
+          },
+          {
+            method: 'POST',
+            path: '/invoices',
+            roles: 'FINANCE_OFFICER',
+            note: 'Standalone invoice with its own lines.',
+          },
+          {
+            method: 'GET',
+            path: '/invoices',
+            roles: 'FINANCE_OFFICER, SALES_MANAGER',
+            note: 'Paginated, with outstanding amount per row.',
+          },
+          {
+            method: 'GET',
+            path: '/invoices/aging',
+            roles: 'FINANCE_OFFICER',
+            note: 'Aged receivables report.',
+          },
+          {
+            method: 'GET',
+            path: '/invoices/:id',
+            roles: 'FINANCE_OFFICER, SALES_MANAGER',
+            note: 'Single invoice.',
+          },
+          {
+            method: 'GET',
+            path: '/invoices/:id/document',
+            roles: 'FINANCE_OFFICER, SALES_MANAGER',
+            note: 'Branded PDF or DOCX.',
+          },
+          {
+            method: 'POST',
+            path: '/invoices/:id/void',
+            roles: 'FINANCE_OFFICER',
+            note: 'Void — never a row deletion.',
+          },
+          {
+            method: 'PATCH',
+            path: '/invoices/:id/fiscal',
+            roles: 'FINANCE_OFFICER',
+            note: 'Annotate with the legal fiscal receipt details.',
+          },
+          {
+            method: 'POST',
+            path: '/invoices/:id/withholding',
+            roles: 'FINANCE_OFFICER',
+            note: 'Record tax withheld at source.',
+          },
         ],
       },
       {
         id: 'payments',
         title: 'Payments',
-        tagline: 'Receipts, allocations, and a double-submit that cannot double-charge',
+        tagline:
+          'Receipts, allocations, and a double-submit that cannot double-charge',
         icon: ICON.card,
         body: [
           'A payment records cash arriving through one of six settlement rails: cash, bank transfer, cheque, CBE Birr, telebirr or other. Recording it is separate from allocating it — one payment can settle several invoices, and an unallocated payment is a legitimate state, not an error.',
@@ -443,11 +682,36 @@ export const DOC_GROUPS: DocGroup[] = [
           },
         ],
         endpoints: [
-          { method: 'POST', path: '/payments', roles: 'FINANCE_OFFICER', note: 'Record a receipt. Accepts an idempotency key.' },
-          { method: 'GET', path: '/payments', roles: 'FINANCE_OFFICER', note: 'Paginated list.' },
-          { method: 'POST', path: '/payments/:id/allocations', roles: 'FINANCE_OFFICER', note: 'Apply the payment across invoices.' },
-          { method: 'POST', path: '/payments/:id/reverse', roles: 'FINANCE_OFFICER', note: 'Reversing entry, not a deletion.' },
-          { method: 'GET', path: '/payments/:id/document', roles: 'FINANCE_OFFICER', note: 'Receipt PDF or DOCX.' },
+          {
+            method: 'POST',
+            path: '/payments',
+            roles: 'FINANCE_OFFICER',
+            note: 'Record a receipt. Accepts an idempotency key.',
+          },
+          {
+            method: 'GET',
+            path: '/payments',
+            roles: 'FINANCE_OFFICER',
+            note: 'Paginated list.',
+          },
+          {
+            method: 'POST',
+            path: '/payments/:id/allocations',
+            roles: 'FINANCE_OFFICER',
+            note: 'Apply the payment across invoices.',
+          },
+          {
+            method: 'POST',
+            path: '/payments/:id/reverse',
+            roles: 'FINANCE_OFFICER',
+            note: 'Reversing entry, not a deletion.',
+          },
+          {
+            method: 'GET',
+            path: '/payments/:id/document',
+            roles: 'FINANCE_OFFICER',
+            note: 'Receipt PDF or DOCX.',
+          },
         ],
       },
       {
@@ -467,8 +731,18 @@ export const DOC_GROUPS: DocGroup[] = [
           { label: 'd90_plus', value: '91 days and beyond' },
         ],
         endpoints: [
-          { method: 'GET', path: '/invoices/aging', roles: 'FINANCE_OFFICER', note: 'Bucketed ageing across the tenant.' },
-          { method: 'GET', path: '/customers/:id/statement', roles: 'FINANCE_OFFICER', note: 'Per-customer statement document.' },
+          {
+            method: 'GET',
+            path: '/invoices/aging',
+            roles: 'FINANCE_OFFICER',
+            note: 'Bucketed ageing across the tenant.',
+          },
+          {
+            method: 'GET',
+            path: '/customers/:id/statement',
+            roles: 'FINANCE_OFFICER',
+            note: 'Per-customer statement document.',
+          },
         ],
       },
       {
@@ -481,10 +755,30 @@ export const DOC_GROUPS: DocGroup[] = [
           'Correcting an expense creates a reversing entry. The original row keeps its RECORDED status forever; the REVERSED status labels the reversing entry itself, not the row it corrects. Nothing in the ledger is ever mutated after the fact.',
         ],
         endpoints: [
-          { method: 'POST', path: '/expenses', roles: 'FINANCE_OFFICER', note: 'Record an expense.' },
-          { method: 'GET', path: '/expenses', roles: 'FINANCE_OFFICER', note: 'Paginated list.' },
-          { method: 'GET', path: '/expenses/:id', roles: 'FINANCE_OFFICER', note: 'Single expense.' },
-          { method: 'POST', path: '/expenses/:id/reverse', roles: 'FINANCE_OFFICER', note: 'Creates a reversing entry.' },
+          {
+            method: 'POST',
+            path: '/expenses',
+            roles: 'FINANCE_OFFICER',
+            note: 'Record an expense.',
+          },
+          {
+            method: 'GET',
+            path: '/expenses',
+            roles: 'FINANCE_OFFICER',
+            note: 'Paginated list.',
+          },
+          {
+            method: 'GET',
+            path: '/expenses/:id',
+            roles: 'FINANCE_OFFICER',
+            note: 'Single expense.',
+          },
+          {
+            method: 'POST',
+            path: '/expenses/:id/reverse',
+            roles: 'FINANCE_OFFICER',
+            note: 'Creates a reversing entry.',
+          },
         ],
       },
       {
@@ -498,13 +792,48 @@ export const DOC_GROUPS: DocGroup[] = [
           'Bank accounts are API-only today: the endpoints below are live, but the admin UI has no screen for them yet. Until one exists, a tenant with no bank account on file cannot record a bank transfer, cheque, CBE Birr or telebirr payment — those methods require an account id, so only cash and other are usable.',
         ],
         endpoints: [
-          { method: 'POST', path: '/bank-accounts', roles: 'FINANCE_OFFICER', note: 'Create an account.' },
-          { method: 'GET', path: '/bank-accounts', roles: 'FINANCE_OFFICER', note: 'List accounts.' },
-          { method: 'PATCH', path: '/bank-accounts/:id', roles: 'FINANCE_OFFICER', note: 'Update account details.' },
-          { method: 'POST', path: '/bank-accounts/:id/transactions', roles: 'FINANCE_OFFICER', note: 'Record a bank transaction.' },
-          { method: 'POST', path: '/bank-accounts/:id/transactions/:txId/reverse', roles: 'FINANCE_OFFICER', note: 'Reversing entry.' },
-          { method: 'GET', path: '/bank-accounts/:id/transactions', roles: 'FINANCE_OFFICER', note: 'Account ledger.' },
-          { method: 'GET', path: '/bank-accounts/:id/unreconciled', roles: 'FINANCE_OFFICER', note: 'Transactions awaiting a match.' },
+          {
+            method: 'POST',
+            path: '/bank-accounts',
+            roles: 'FINANCE_OFFICER',
+            note: 'Create an account.',
+          },
+          {
+            method: 'GET',
+            path: '/bank-accounts',
+            roles: 'FINANCE_OFFICER',
+            note: 'List accounts.',
+          },
+          {
+            method: 'PATCH',
+            path: '/bank-accounts/:id',
+            roles: 'FINANCE_OFFICER',
+            note: 'Update account details.',
+          },
+          {
+            method: 'POST',
+            path: '/bank-accounts/:id/transactions',
+            roles: 'FINANCE_OFFICER',
+            note: 'Record a bank transaction.',
+          },
+          {
+            method: 'POST',
+            path: '/bank-accounts/:id/transactions/:txId/reverse',
+            roles: 'FINANCE_OFFICER',
+            note: 'Reversing entry.',
+          },
+          {
+            method: 'GET',
+            path: '/bank-accounts/:id/transactions',
+            roles: 'FINANCE_OFFICER',
+            note: 'Account ledger.',
+          },
+          {
+            method: 'GET',
+            path: '/bank-accounts/:id/unreconciled',
+            roles: 'FINANCE_OFFICER',
+            note: 'Transactions awaiting a match.',
+          },
         ],
       },
       {
@@ -530,8 +859,18 @@ export const DOC_GROUPS: DocGroup[] = [
           'Never hard-code a rate in application code — read it from the table for the document’s date.',
         ],
         endpoints: [
-          { method: 'GET', path: '/rates', roles: 'Any authenticated user', note: 'Current or as-of-date rate lookup.' },
-          { method: 'POST', path: '/rates', roles: 'ADMIN', note: 'Publish a new version; closes the previous one.' },
+          {
+            method: 'GET',
+            path: '/rates',
+            roles: 'Any authenticated user',
+            note: 'Current or as-of-date rate lookup.',
+          },
+          {
+            method: 'POST',
+            path: '/rates',
+            roles: 'ADMIN',
+            note: 'Publish a new version; closes the previous one.',
+          },
         ],
       },
     ],
@@ -539,7 +878,8 @@ export const DOC_GROUPS: DocGroup[] = [
   {
     id: 'operations',
     title: 'Operations',
-    blurb: 'The installed base, the people who service it, and the alerts that keep both moving.',
+    blurb:
+      'The installed base, the people who service it, and the alerts that keep both moving.',
     sections: [
       {
         id: 'employees',
@@ -550,9 +890,24 @@ export const DOC_GROUPS: DocGroup[] = [
           'Employees carry the staff record and the role that governs what its holder can reach. Administration is ADMIN-only: the screen that grants access is itself the most sensitive screen in the system.',
         ],
         endpoints: [
-          { method: 'GET', path: '/employees', roles: 'ADMIN, GENERAL_MANAGER, OFFICE_MANAGER', note: 'Paginated staff list.' },
-          { method: 'POST', path: '/employees', roles: 'ADMIN, GENERAL_MANAGER, OFFICE_MANAGER', note: 'Create. A Sales Manager may only grant roles below management.' },
-          { method: 'PATCH', path: '/employees/:id', roles: 'ADMIN, GENERAL_MANAGER, OFFICE_MANAGER', note: 'Update details or role.' },
+          {
+            method: 'GET',
+            path: '/employees',
+            roles: 'ADMIN, GENERAL_MANAGER, OFFICE_MANAGER',
+            note: 'Paginated staff list.',
+          },
+          {
+            method: 'POST',
+            path: '/employees',
+            roles: 'ADMIN, GENERAL_MANAGER, OFFICE_MANAGER',
+            note: 'Create. A Sales Manager may only grant roles below management.',
+          },
+          {
+            method: 'PATCH',
+            path: '/employees/:id',
+            roles: 'ADMIN, GENERAL_MANAGER, OFFICE_MANAGER',
+            note: 'Update details or role.',
+          },
         ],
       },
       {
@@ -565,11 +920,40 @@ export const DOC_GROUPS: DocGroup[] = [
           'Assets are active, inactive or decommissioned. A decommissioned machine keeps its whole service history — the record outlives the equipment.',
         ],
         endpoints: [
-          { method: 'GET', path: '/assets', roles: 'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, STORE_KEEPER', note: 'Paginated list.' },
-          { method: 'GET', path: '/assets/:id', roles: 'Same as list', note: 'Single asset.' },
-          { method: 'POST', path: '/assets', roles: 'SALES_MANAGER, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, STORE_KEEPER', note: 'Register a machine.' },
-          { method: 'PATCH', path: '/assets/:id', roles: 'SALES_MANAGER, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, STORE_KEEPER', note: 'Update.' },
-          { method: 'DELETE', path: '/assets/:id', roles: 'SALES_MANAGER, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, STORE_KEEPER', note: 'Remove.' },
+          {
+            method: 'GET',
+            path: '/assets',
+            roles:
+              'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, STORE_KEEPER',
+            note: 'Paginated list.',
+          },
+          {
+            method: 'GET',
+            path: '/assets/:id',
+            roles: 'Same as list',
+            note: 'Single asset.',
+          },
+          {
+            method: 'POST',
+            path: '/assets',
+            roles:
+              'SALES_MANAGER, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, STORE_KEEPER',
+            note: 'Register a machine.',
+          },
+          {
+            method: 'PATCH',
+            path: '/assets/:id',
+            roles:
+              'SALES_MANAGER, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, STORE_KEEPER',
+            note: 'Update.',
+          },
+          {
+            method: 'DELETE',
+            path: '/assets/:id',
+            roles:
+              'SALES_MANAGER, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, STORE_KEEPER',
+            note: 'Remove.',
+          },
         ],
       },
       {
@@ -590,15 +974,63 @@ export const DOC_GROUPS: DocGroup[] = [
           },
         ],
         endpoints: [
-          { method: 'GET', path: '/maintenance/contracts', roles: 'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, FINANCE_OFFICER', note: 'Paginated contracts.' },
-          { method: 'POST', path: '/maintenance/contracts', roles: 'SALES_MANAGER, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER', note: 'Create a contract with its recurrence and agreement terms.' },
-          { method: 'PATCH', path: '/maintenance/contracts/:id', roles: 'SALES_MANAGER, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER', note: 'Update, pause or end.' },
-          { method: 'GET', path: '/maintenance/contracts/:id/agreement', roles: 'Same as contracts list', note: 'Maintenance & Service Agreement PDF.' },
-          { method: 'POST', path: '/maintenance/contracts/:id/visits', roles: 'TECHNICAL_MANAGER, MAINTENANCE_ENGINEER', note: 'Log a service visit.' },
-          { method: 'GET', path: '/maintenance/contracts/:id/visits', roles: 'Same as contracts list', note: 'Visit history.' },
-          { method: 'GET', path: '/maintenance/breakdowns', roles: 'SALES_MANAGER, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, SECRETARY', note: 'Paginated tickets.' },
-          { method: 'POST', path: '/maintenance/breakdowns', roles: 'SALES_MANAGER, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, SECRETARY', note: 'Report a breakdown.' },
-          { method: 'PATCH', path: '/maintenance/breakdowns/:id', roles: 'TECHNICAL_MANAGER, MAINTENANCE_ENGINEER', note: 'Assign or close.' },
+          {
+            method: 'GET',
+            path: '/maintenance/contracts',
+            roles:
+              'SALES_MANAGER, SALESPERSON, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, FINANCE_OFFICER',
+            note: 'Paginated contracts.',
+          },
+          {
+            method: 'POST',
+            path: '/maintenance/contracts',
+            roles: 'SALES_MANAGER, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER',
+            note: 'Create a contract with its recurrence and agreement terms.',
+          },
+          {
+            method: 'PATCH',
+            path: '/maintenance/contracts/:id',
+            roles: 'SALES_MANAGER, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER',
+            note: 'Update, pause or end.',
+          },
+          {
+            method: 'GET',
+            path: '/maintenance/contracts/:id/agreement',
+            roles: 'Same as contracts list',
+            note: 'Maintenance & Service Agreement PDF.',
+          },
+          {
+            method: 'POST',
+            path: '/maintenance/contracts/:id/visits',
+            roles: 'TECHNICAL_MANAGER, MAINTENANCE_ENGINEER',
+            note: 'Log a service visit.',
+          },
+          {
+            method: 'GET',
+            path: '/maintenance/contracts/:id/visits',
+            roles: 'Same as contracts list',
+            note: 'Visit history.',
+          },
+          {
+            method: 'GET',
+            path: '/maintenance/breakdowns',
+            roles:
+              'SALES_MANAGER, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, SECRETARY',
+            note: 'Paginated tickets.',
+          },
+          {
+            method: 'POST',
+            path: '/maintenance/breakdowns',
+            roles:
+              'SALES_MANAGER, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, SECRETARY',
+            note: 'Report a breakdown.',
+          },
+          {
+            method: 'PATCH',
+            path: '/maintenance/breakdowns/:id',
+            roles: 'TECHNICAL_MANAGER, MAINTENANCE_ENGINEER',
+            note: 'Assign or close.',
+          },
         ],
       },
       {
@@ -610,16 +1042,38 @@ export const DOC_GROUPS: DocGroup[] = [
           'Notifications are the in-app feed: general messages, quote decisions, work assignments and maintenance alerts. Unlike SMS they cost nothing and never leave the system, so they carry the routine traffic.',
         ],
         endpoints: [
-          { method: 'GET', path: '/notifications', roles: 'Any authenticated user', note: 'The signed-in user’s feed.' },
-          { method: 'POST', path: '/notifications', roles: 'MARKETING_MANAGER, SALES_MANAGER, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, OFFICE_MANAGER, SECRETARY', note: 'Send a notification.' },
-          { method: 'POST', path: '/notifications/read-all', roles: 'Any authenticated user', note: 'Clear the badge.' },
-          { method: 'PATCH', path: '/notifications/:id/read', roles: 'Any authenticated user', note: 'Mark one as read.' },
+          {
+            method: 'GET',
+            path: '/notifications',
+            roles: 'Any authenticated user',
+            note: 'The signed-in user’s feed.',
+          },
+          {
+            method: 'POST',
+            path: '/notifications',
+            roles:
+              'MARKETING_MANAGER, SALES_MANAGER, TECHNICAL_MANAGER, MAINTENANCE_ENGINEER, OFFICE_MANAGER, SECRETARY',
+            note: 'Send a notification.',
+          },
+          {
+            method: 'POST',
+            path: '/notifications/read-all',
+            roles: 'Any authenticated user',
+            note: 'Clear the badge.',
+          },
+          {
+            method: 'PATCH',
+            path: '/notifications/:id/read',
+            roles: 'Any authenticated user',
+            note: 'Mark one as read.',
+          },
         ],
       },
       {
         id: 'messages',
         title: 'SMS outbox',
-        tagline: 'A durable queue, real money per message, and consent on record',
+        tagline:
+          'A durable queue, real money per message, and consent on record',
         icon: ICON.sms,
         body: [
           'Nothing sends an SMS directly. Every outbound message is written to an outbox table inside the same transaction as the thing that caused it, so a message is queued if and only if the business event actually committed. A dispatcher then drains the queue once a minute.',
@@ -642,17 +1096,60 @@ export const DOC_GROUPS: DocGroup[] = [
           { label: 'Backoff', value: '1m → 5m → 30m' },
           { label: 'Providers', value: 'AfroMessage, GeezSMS, no-op' },
           { label: 'Non-prod guard', value: 'Number allowlist' },
-          { label: 'Database role', value: 'Dedicated least-privilege dispatcher' },
+          {
+            label: 'Database role',
+            value: 'Dedicated least-privilege dispatcher',
+          },
         ],
         endpoints: [
-          { method: 'GET', path: '/outbox', roles: 'ADMIN, GENERAL_MANAGER, OFFICE_MANAGER, MARKETING_MANAGER', note: 'Delivery log with status, segments and cost.' },
-          { method: 'GET', path: '/outbox/provider', roles: 'ADMIN, OFFICE_MANAGER', note: 'Which provider is live, without reading server logs.' },
-          { method: 'GET', path: '/messaging/templates', roles: 'GENERAL_MANAGER, OFFICE_MANAGER, MARKETING_MANAGER', note: 'Saved templates plus the built-in starters (Enkutatash, Genna, Timkat, Eid, Meskel, announcements).' },
-          { method: 'POST', path: '/messaging/templates', roles: 'GENERAL_MANAGER, OFFICE_MANAGER, MARKETING_MANAGER', note: 'Save wording; {{name}} and {{company}} are filled per recipient.' },
-          { method: 'POST', path: '/messaging/broadcasts/preview', roles: 'GENERAL_MANAGER, OFFICE_MANAGER, MARKETING_MANAGER', note: 'How many would receive it and how many are held for no phone or consent. Sends nothing.' },
-          { method: 'POST', path: '/messaging/broadcasts', roles: 'GENERAL_MANAGER, OFFICE_MANAGER, MARKETING_MANAGER', note: 'One SMS per employee (by role) or customer; sendAt schedules it. Every row lands in the log tagged BROADCAST.' },
-          { method: 'POST', path: '/outbox/test', roles: 'ADMIN, OFFICE_MANAGER', note: 'Queue a test SMS to a handset you hold — proves the GeezSMS gateway before customers depend on it.' },
-          { method: 'POST', path: '/outbox/:id/retry', roles: 'ADMIN, OFFICE_MANAGER', note: 'Requeue a failed message.' },
+          {
+            method: 'GET',
+            path: '/outbox',
+            roles: 'ADMIN, GENERAL_MANAGER, OFFICE_MANAGER, MARKETING_MANAGER',
+            note: 'Delivery log with status, segments and cost.',
+          },
+          {
+            method: 'GET',
+            path: '/outbox/provider',
+            roles: 'ADMIN, OFFICE_MANAGER',
+            note: 'Which provider is live, without reading server logs.',
+          },
+          {
+            method: 'GET',
+            path: '/messaging/templates',
+            roles: 'GENERAL_MANAGER, OFFICE_MANAGER, MARKETING_MANAGER',
+            note: 'Saved templates plus the built-in starters (Enkutatash, Genna, Timkat, Eid, Meskel, announcements).',
+          },
+          {
+            method: 'POST',
+            path: '/messaging/templates',
+            roles: 'GENERAL_MANAGER, OFFICE_MANAGER, MARKETING_MANAGER',
+            note: 'Save wording; {{name}} and {{company}} are filled per recipient.',
+          },
+          {
+            method: 'POST',
+            path: '/messaging/broadcasts/preview',
+            roles: 'GENERAL_MANAGER, OFFICE_MANAGER, MARKETING_MANAGER',
+            note: 'How many would receive it and how many are held for no phone or consent. Sends nothing.',
+          },
+          {
+            method: 'POST',
+            path: '/messaging/broadcasts',
+            roles: 'GENERAL_MANAGER, OFFICE_MANAGER, MARKETING_MANAGER',
+            note: 'One SMS per employee (by role) or customer; sendAt schedules it. Every row lands in the log tagged BROADCAST.',
+          },
+          {
+            method: 'POST',
+            path: '/outbox/test',
+            roles: 'ADMIN, OFFICE_MANAGER',
+            note: 'Queue a test SMS to a handset you hold — proves the GeezSMS gateway before customers depend on it.',
+          },
+          {
+            method: 'POST',
+            path: '/outbox/:id/retry',
+            roles: 'ADMIN, OFFICE_MANAGER',
+            note: 'Requeue a failed message.',
+          },
         ],
       },
       {
@@ -685,12 +1182,42 @@ export const DOC_GROUPS: DocGroup[] = [
           'The default locale, the maintenance reminder lead time and the payment reminder offsets (for example day 0, day 7, day 30 past due) are configured here rather than compiled in.',
         ],
         endpoints: [
-          { method: 'GET', path: '/settings', roles: 'Every staff role', note: 'Current tenant settings (read-only below admin).' },
-          { method: 'PATCH', path: '/settings', roles: 'ADMIN', note: 'Update branding, locale and reminder cadence.' },
-          { method: 'GET', path: '/product-types', roles: 'Every quoting role', note: 'Products and their base prices and rates; seeds the company list on first use.' },
-          { method: 'POST', path: '/product-types', roles: 'GENERAL_MANAGER, SALES_MANAGER', note: 'Add a product. The code is derived from the name.' },
-          { method: 'PATCH', path: '/product-types/:id', roles: 'GENERAL_MANAGER, SALES_MANAGER', note: 'Rename or reprice. Existing quotations keep their prices.' },
-          { method: 'DELETE', path: '/product-types/:id', roles: 'GENERAL_MANAGER, SALES_MANAGER', note: 'Retire a product; quotations that used it are untouched.' },
+          {
+            method: 'GET',
+            path: '/settings',
+            roles: 'Every staff role',
+            note: 'Current tenant settings (read-only below admin).',
+          },
+          {
+            method: 'PATCH',
+            path: '/settings',
+            roles: 'ADMIN',
+            note: 'Update branding, locale and reminder cadence.',
+          },
+          {
+            method: 'GET',
+            path: '/product-types',
+            roles: 'Every quoting role',
+            note: 'Products and their base prices and rates; seeds the company list on first use.',
+          },
+          {
+            method: 'POST',
+            path: '/product-types',
+            roles: 'GENERAL_MANAGER, SALES_MANAGER',
+            note: 'Add a product. The code is derived from the name.',
+          },
+          {
+            method: 'PATCH',
+            path: '/product-types/:id',
+            roles: 'GENERAL_MANAGER, SALES_MANAGER',
+            note: 'Rename or reprice. Existing quotations keep their prices.',
+          },
+          {
+            method: 'DELETE',
+            path: '/product-types/:id',
+            roles: 'GENERAL_MANAGER, SALES_MANAGER',
+            note: 'Retire a product; quotations that used it are untouched.',
+          },
         ],
       },
     ],
@@ -698,7 +1225,8 @@ export const DOC_GROUPS: DocGroup[] = [
   {
     id: 'reference',
     title: 'Reference',
-    blurb: 'The conventions every module obeys, and the ground rules the product is built on.',
+    blurb:
+      'The conventions every module obeys, and the ground rules the product is built on.',
     sections: [
       {
         id: 'api',
@@ -712,18 +1240,50 @@ export const DOC_GROUPS: DocGroup[] = [
           'Inputs are validated by DTOs with class-validator at the boundary; anything arriving from an external API is parsed with a Zod schema before it is trusted.',
         ],
         facts: [
-          { label: 'List response', value: '{ items, page, pageSize, total, totalPages }' },
-          { label: 'Query', value: 'page (1-based), pageSize (default 20, max 100)' },
+          {
+            label: 'List response',
+            value: '{ items, page, pageSize, total, totalPages }',
+          },
+          {
+            label: 'Query',
+            value: 'page (1-based), pageSize (default 20, max 100)',
+          },
           { label: 'Errors', value: 'RFC 7807 Problem Details' },
           { label: 'Auth', value: 'Bearer JWT with a tenant_id claim' },
-          { label: 'Documents', value: '?format=pdf | docx on any /document route' },
-          { label: 'Idempotency', value: 'Idempotency-Key header on POST /payments' },
+          {
+            label: 'Documents',
+            value: '?format=pdf | docx on any /document route',
+          },
+          {
+            label: 'Idempotency',
+            value: 'Idempotency-Key header on POST /payments',
+          },
         ],
         endpoints: [
-          { method: 'POST', path: '/auth/login', roles: 'Public', note: 'Returns access and refresh tokens.' },
-          { method: 'POST', path: '/auth/refresh', roles: 'Public (valid refresh token)', note: 'Rotate the access token.' },
-          { method: 'POST', path: '/auth/logout', roles: 'Any authenticated user', note: 'Revoke the session.' },
-          { method: 'GET', path: '/auth/me', roles: 'Any authenticated user', note: 'Current user, role and tenant.' },
+          {
+            method: 'POST',
+            path: '/auth/login',
+            roles: 'Public',
+            note: 'Returns access and refresh tokens.',
+          },
+          {
+            method: 'POST',
+            path: '/auth/refresh',
+            roles: 'Public (valid refresh token)',
+            note: 'Rotate the access token.',
+          },
+          {
+            method: 'POST',
+            path: '/auth/logout',
+            roles: 'Any authenticated user',
+            note: 'Revoke the session.',
+          },
+          {
+            method: 'GET',
+            path: '/auth/me',
+            roles: 'Any authenticated user',
+            note: 'Current user, role and tenant.',
+          },
         ],
       },
       {
@@ -746,7 +1306,8 @@ export const DOC_GROUPS: DocGroup[] = [
       {
         id: 'compliance',
         title: 'Ethiopian context',
-        tagline: 'What the law requires, and what the product deliberately does not do',
+        tagline:
+          'What the law requires, and what the product deliberately does not do',
         icon: ICON.shield,
         body: [
           'The ERP does not issue Ethiopia’s legal tax document and does not pretend to. It keeps the internal accounts-receivable book and annotates each invoice with the fiscal receipt raised alongside it. Treating the ERP as the system of record for tax would be a compliance claim the software cannot honour.',
@@ -772,8 +1333,14 @@ export const DOC_GROUPS: DocGroup[] = [
         facts: [
           { label: 'pnpm run dev', value: 'Database, migrate, API and UI' },
           { label: 'pnpm test', value: 'Full unit suite' },
-          { label: 'pnpm run test:e2e', value: 'End-to-end against a live database' },
-          { label: 'pnpm run db:migrate', value: 'Apply migrations (owner role)' },
+          {
+            label: 'pnpm run test:e2e',
+            value: 'End-to-end against a live database',
+          },
+          {
+            label: 'pnpm run db:migrate',
+            value: 'Apply migrations (owner role)',
+          },
           { label: 'pnpm run typecheck', value: 'Strict TypeScript check' },
           { label: 'pnpm run lint --fix', value: 'Lint and autofix' },
         ],
@@ -824,44 +1391,62 @@ export const DOC_GROUPS: DocGroup[] = [
         ],
         checks: [
           {
-            action: 'Sign in at /login with the demo workspace and the CEO account.',
-            expect: 'The dashboard loads with charts and the sidebar shows your name and role at the bottom.',
+            action:
+              'Sign in at /login with the demo workspace and the CEO account.',
+            expect:
+              'The dashboard loads with charts and the sidebar shows your name and role at the bottom.',
           },
           {
-            action: 'Open Projects. Pick any project at Lead and press → Site survey.',
-            expect: 'The stage cell changes immediately and the available transition buttons change with it.',
+            action:
+              'Open Projects. Pick any project at Lead and press → Site survey.',
+            expect:
+              'The stage cell changes immediately and the available transition buttons change with it.',
           },
           {
-            action: 'Open Quotations → New quotation, choose a project, press Start the offer.',
-            expect: 'A DRAFT quotation is created and you land on its edit page with one lift already on it.',
+            action:
+              'Open Quotations → New quotation, choose a project, press Start the offer.',
+            expect:
+              'A DRAFT quotation is created and you land on its edit page with one lift already on it.',
           },
           {
-            action: 'On the first lift, set the capacity, speed and floors, then press Save & price this lift.',
-            expect: 'The lift row shows a price and a one-line description built from the fields you typed.',
+            action:
+              'On the first lift, set the capacity, speed and floors, then press Save & price this lift.',
+            expect:
+              'The lift row shows a price and a one-line description built from the fields you typed.',
           },
           {
             action: 'Type the floor labels as B,G,M,1,2,3,4,5,6,7,8,9,10.',
-            expect: 'The stop count and the floors/stops/doors summary fill themselves in — you never type 13/13/13 by hand.',
+            expect:
+              'The stop count and the floors/stops/doors summary fill themselves in — you never type 13/13/13 by hand.',
           },
           {
-            action: 'Press + Add lift and change something on the copy, then save it.',
-            expect: 'Two lifts are listed, the reorder arrows become usable, and the total covers both.',
+            action:
+              'Press + Add lift and change something on the copy, then save it.',
+            expect:
+              'Two lifts are listed, the reorder arrows become usable, and the total covers both.',
           },
           {
-            action: 'In the Price box, type the round figure the customer pays — try 7,835,000 — and press Apply this price.',
-            expect: 'Subtotal, VAT and Grand total appear beneath it and add up exactly. The discount against the calculator is shown, labelled Internal — not printed.',
+            action:
+              'In the Price box, type the round figure the customer pays — try 7,835,000 — and press Apply this price.',
+            expect:
+              'Subtotal, VAT and Grand total appear beneath it and add up exactly. The discount against the calculator is shown, labelled Internal — not printed.',
           },
           {
-            action: 'Fill in the commercial terms: reference, delivery days, validity, parts warranty, free service.',
-            expect: 'Each accepts a value and the form saves without complaint.',
+            action:
+              'Fill in the commercial terms: reference, delivery days, validity, parts warranty, free service.',
+            expect:
+              'Each accepts a value and the form saves without complaint.',
           },
           {
-            action: 'Set the payment milestones so the percentages total 100, then save.',
-            expect: 'The running total reads 100%. Saving a schedule that totals anything else is refused with a clear message.',
+            action:
+              'Set the payment milestones so the percentages total 100, then save.',
+            expect:
+              'The running total reads 100%. Saving a schedule that totals anything else is refused with a clear message.',
           },
           {
             action: 'Submit the quotation, then approve it.',
-            expect: 'The status moves DRAFT → PENDING_APPROVAL → Approved · proforma issued, and the proforma number appears under the status on the same row with its own Proforma print and download.',
+            expect:
+              'The status moves DRAFT → PENDING_APPROVAL → Approved · proforma issued, and the proforma number appears under the status on the same row with its own Proforma print and download.',
           },
         ],
       },
@@ -876,36 +1461,49 @@ export const DOC_GROUPS: DocGroup[] = [
         ],
         checks: [
           {
-            action: 'From the Quotations list, use Download… on your quotation and pick PDF.',
+            action:
+              'From the Quotations list, use Download… on your quotation and pick PDF.',
             expect: 'A PDF downloads and opens.',
           },
           {
-            action: 'On page 1, add up the line table and compare it to the Total price line above the VAT.',
-            expect: 'They are identical. Total price + VAT = Grand total, to the cent.',
+            action:
+              'On page 1, add up the line table and compare it to the Total price line above the VAT.',
+            expect:
+              'They are identical. Total price + VAT = Grand total, to the cent.',
           },
           {
-            action: 'Look for the words margin, discount, or the calculator’s original figure anywhere on the document.',
-            expect: 'None of them appear. The customer never sees what the price was before negotiation.',
+            action:
+              'Look for the words margin, discount, or the calculator’s original figure anywhere on the document.',
+            expect:
+              'None of them appear. The customer never sees what the price was before negotiation.',
           },
           {
-            action: 'Check the letterhead and the footer on every page, including the last.',
-            expect: 'Both appear on every page in the same position, with page numbers reading 1 / n.',
+            action:
+              'Check the letterhead and the footer on every page, including the last.',
+            expect:
+              'Both appear on every page in the same position, with page numbers reading 1 / n.',
           },
           {
             action: 'Read page 2 against the client’s own spec sheet.',
-            expect: 'The rows match theirs: capacity, speed, travel height, floors/stops/doors, pit, overhead, shaft, car, door, roping, traction machine, control system.',
+            expect:
+              'The rows match theirs: capacity, speed, travel height, floors/stops/doors, pit, overhead, shaft, car, door, roping, traction machine, control system.',
           },
           {
             action: 'Scroll to the appendix pages.',
-            expect: 'The standing text and the numbered component/brand table are there, in the order set under Settings.',
+            expect:
+              'The standing text and the numbered component/brand table are there, in the order set under Settings.',
           },
           {
-            action: 'Select text in the PDF and copy it — try the company name and the document title.',
-            expect: 'Words copy as words. Letters separated by spaces mean the text layer has broken and the document is no longer searchable.',
+            action:
+              'Select text in the PDF and copy it — try the company name and the document title.',
+            expect:
+              'Words copy as words. Letters separated by spaces mean the text layer has broken and the document is no longer searchable.',
           },
           {
-            action: 'Download the same quotation as Word, and download the proforma as PDF.',
-            expect: 'Both open, both show the line items, and neither discloses the margin.',
+            action:
+              'Download the same quotation as Word, and download the proforma as PDF.',
+            expect:
+              'Both open, both show the line items, and neither discloses the margin.',
           },
         ],
       },
@@ -919,28 +1517,36 @@ export const DOC_GROUPS: DocGroup[] = [
         ],
         checks: [
           {
-            action: 'Open Invoices → New invoice and raise one against your proforma.',
-            expect: 'The invoice carries the proforma’s figures and claims its own gapless number.',
+            action:
+              'Open Invoices → New invoice and raise one against your proforma.',
+            expect:
+              'The invoice carries the proforma’s figures and claims its own gapless number.',
           },
           {
             action: 'Download the invoice PDF.',
-            expect: 'It prints, and it carries the NOT A FISCAL RECEIPT notice while the fiscal fields are empty.',
+            expect:
+              'It prints, and it carries the NOT A FISCAL RECEIPT notice while the fiscal fields are empty.',
           },
           {
-            action: 'Record a part payment against it from Payments → New payment.',
-            expect: 'The invoice moves to partly paid and the outstanding figure drops by exactly what you entered.',
+            action:
+              'Record a part payment against it from Payments → New payment.',
+            expect:
+              'The invoice moves to partly paid and the outstanding figure drops by exactly what you entered.',
           },
           {
             action: 'Record a second payment that settles the remainder.',
-            expect: 'The invoice reads settled and the outstanding figure is zero.',
+            expect:
+              'The invoice reads settled and the outstanding figure is zero.',
           },
           {
             action: 'Open Receivables.',
-            expect: 'The ageing buckets reflect what is genuinely outstanding, and your settled invoice has left them.',
+            expect:
+              'The ageing buckets reflect what is genuinely outstanding, and your settled invoice has left them.',
           },
           {
             action: 'Download the customer statement and the ageing report.',
-            expect: 'Both render, and the statement’s closing balance matches what Receivables shows.',
+            expect:
+              'Both render, and the statement’s closing balance matches what Receivables shows.',
           },
         ],
       },
@@ -955,35 +1561,46 @@ export const DOC_GROUPS: DocGroup[] = [
         checks: [
           {
             action: 'Open Contracts and issue one from your accepted proforma.',
-            expect: 'A DRAFT contract appears with its own number and the proforma’s value copied onto it.',
+            expect:
+              'A DRAFT contract appears with its own number and the proforma’s value copied onto it.',
           },
           {
             action: 'Download the contract while it is still a draft.',
-            expect: 'It prints as CONTRACT DRAFT, with no signature date and a line saying it is not binding until signed.',
+            expect:
+              'It prints as CONTRACT DRAFT, with no signature date and a line saying it is not binding until signed.',
           },
           {
             action: 'Sign the contract, then download it again.',
-            expect: 'It now prints as CONTRACT, carries the signature date, and has a two-column signature block.',
+            expect:
+              'It now prints as CONTRACT, carries the signature date, and has a two-column signature block.',
           },
           {
-            action: 'Open the contract’s payment schedule and agree the instalments.',
-            expect: 'The instalments save as a set and the schedule totals the contract value.',
+            action:
+              'Open the contract’s payment schedule and agree the instalments.',
+            expect:
+              'The instalments save as a set and the schedule totals the contract value.',
           },
           {
             action: 'Record the handover, naming who accepted it.',
-            expect: 'The completion certificate and the warranty certificate both become downloadable, and the warranty expiry is counted from the handover date.',
+            expect:
+              'The completion certificate and the warranty certificate both become downloadable, and the warranty expiry is counted from the handover date.',
           },
           {
-            action: 'Open Assets, add a lift, then Maintenance → New contract against it.',
-            expect: 'The asset saves and the maintenance contract schedules its first visit.',
+            action:
+              'Open Assets, add a lift, then Maintenance → New contract against it.',
+            expect:
+              'The asset saves and the maintenance contract schedules its first visit.',
           },
           {
-            action: 'Log a service visit, filling in what was inspected, what was replaced and what you recommend.',
-            expect: 'The maintenance report prints those three as separate sections, not as one block of prose.',
+            action:
+              'Log a service visit, filling in what was inspected, what was replaced and what you recommend.',
+            expect:
+              'The maintenance report prints those three as separate sections, not as one block of prose.',
           },
           {
             action: 'Raise a breakdown at EMERGENCY severity.',
-            expect: 'It appears with a 30-minute SLA and, if a technician with a phone and consent is assigned, an SMS is queued in Messages.',
+            expect:
+              'It appears with a 30-minute SLA and, if a technician with a phone and consent is assigned, an SMS is queued in Messages.',
           },
         ],
       },
@@ -998,7 +1615,8 @@ export const DOC_GROUPS: DocGroup[] = [
         checks: [
           {
             action: 'Open Settings → Document text.',
-            expect: 'The standing sections are listed in print order, each showing the first line of its text.',
+            expect:
+              'The standing sections are listed in print order, each showing the first line of its text.',
           },
           {
             action: 'Edit one section, change a sentence, and save.',
@@ -1006,19 +1624,23 @@ export const DOC_GROUPS: DocGroup[] = [
           },
           {
             action: 'Download any quotation PDF again.',
-            expect: 'The appendix carries your edit. Nothing else on the document moved.',
+            expect:
+              'The appendix carries your edit. Nothing else on the document moved.',
           },
           {
             action: 'Move a section up or down the print order.',
-            expect: 'The next document you download prints the sections in the new order.',
+            expect:
+              'The next document you download prints the sections in the new order.',
           },
           {
             action: 'Stop a section printing, then download again.',
-            expect: 'The section is gone from the document but its text is still on the settings screen, ready to switch back on.',
+            expect:
+              'The section is gone from the document but its text is still on the settings screen, ready to switch back on.',
           },
           {
             action: 'Open Settings → Components & brands and change a brand.',
-            expect: 'The numbered component table on the appendix pages shows the change.',
+            expect:
+              'The numbered component table on the appendix pages shows the change.',
           },
         ],
       },
@@ -1033,27 +1655,38 @@ export const DOC_GROUPS: DocGroup[] = [
         ],
         checks: [
           {
-            action: 'Sign out and sign back in as a technician or a finance user rather than the CEO.',
-            expect: 'The sidebar shows fewer sections. Nothing they cannot use is offered to them.',
+            action:
+              'Sign out and sign back in as a technician or a finance user rather than the CEO.',
+            expect:
+              'The sidebar shows fewer sections. Nothing they cannot use is offered to them.',
           },
           {
-            action: 'As a non-sales user, try to reach a quotation edit page by typing its URL directly.',
-            expect: 'The request is refused. Hiding the button is not the control; the API is.',
+            action:
+              'As a non-sales user, try to reach a quotation edit page by typing its URL directly.',
+            expect:
+              'The request is refused. Hiding the button is not the control; the API is.',
           },
           {
-            action: 'As a finance user, try to sign a contract or approve a quotation.',
-            expect: 'Refused, with a message naming the role that is allowed to.',
+            action:
+              'As a finance user, try to sign a contract or approve a quotation.',
+            expect:
+              'Refused, with a message naming the role that is allowed to.',
           },
           {
-            action: 'Set a discount approval threshold under Settings, then quote a discount larger than it.',
-            expect: 'The quotation cannot be submitted until someone signs the discount off.',
+            action:
+              'Set a discount approval threshold under Settings, then quote a discount larger than it.',
+            expect:
+              'The quotation cannot be submitted until someone signs the discount off.',
           },
           {
-            action: 'Re-price that quotation to a much larger discount after it has been approved.',
-            expect: 'The old approval no longer counts and the discount must be signed off again.',
+            action:
+              'Re-price that quotation to a much larger discount after it has been approved.',
+            expect:
+              'The old approval no longer counts and the discount must be signed off again.',
           },
           {
-            action: 'Sign in to a second workspace and look for the first workspace’s customers and quotations.',
+            action:
+              'Sign in to a second workspace and look for the first workspace’s customers and quotations.',
             expect: 'None of them exist. Not hidden — absent.',
           },
         ],

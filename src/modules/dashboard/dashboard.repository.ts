@@ -146,10 +146,7 @@ const TOTALS_ROLES: readonly UserRole[] = [
 /** Stages a project can still be won from — excludes COMPLETED and CANCELLED. */
 const OPEN_STAGES: readonly ProjectStatus[] = [
   'LEAD',
-  'SITE_SURVEY',
-  'SPEC_CALCULATION',
   'QUOTATION',
-  'PROFORMA',
   'CONTRACT',
   'EXECUTION',
 ];

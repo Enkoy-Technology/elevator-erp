@@ -136,10 +136,7 @@ export class ProformasRepository {
     }
   }
 
-  async findById(
-    tenantId: string,
-    id: string,
-  ): Promise<ProformaRecord | null> {
+  async findById(tenantId: string, id: string): Promise<ProformaRecord | null> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       const rows = await tx
         .select()
@@ -185,11 +182,17 @@ export class ProformasRepository {
         .from(proformas)
         .leftJoin(
           customers,
-          and(eq(proformas.tenantId, customers.tenantId), eq(proformas.customerId, customers.id)),
+          and(
+            eq(proformas.tenantId, customers.tenantId),
+            eq(proformas.customerId, customers.id),
+          ),
         )
         .leftJoin(
           projects,
-          and(eq(proformas.tenantId, projects.tenantId), eq(proformas.projectId, projects.id)),
+          and(
+            eq(proformas.tenantId, projects.tenantId),
+            eq(proformas.projectId, projects.id),
+          ),
         )
         .where(eq(proformas.id, id))
         .limit(1);
@@ -386,14 +389,12 @@ export class ProformasRepository {
           warrantyPartsMonths: quote.warrantyPartsMonths,
           warrantyFreeServiceMonths: quote.warrantyFreeServiceMonths,
           validityDays: quote.validityDays,
-          paymentTerms: terms.map(
-            (term): ProformaPaymentTerm => ({
-              sequence: term.sequence,
-              label: term.label,
-              percent: term.percent,
-              triggerEvent: term.triggerEvent,
-            }),
-          ),
+          paymentTerms: terms.map((term): ProformaPaymentTerm => ({
+            sequence: term.sequence,
+            label: term.label,
+            percent: term.percent,
+            triggerEvent: term.triggerEvent,
+          })),
           issuedByUserId: userId,
           validUntil,
           status: 'ISSUED',
@@ -417,27 +418,26 @@ export class ProformasRepository {
         .where(eq(quotationLines.quotationId, quote.id))
         .orderBy(asc(quotationLines.sequence));
       if (sourceLines.length > 0) {
-        await tx.insert(proformaLines).values(
-          sourceLines.map(
-            ({
-              id: _id,
-              quotationId: _quotationId,
-              createdAt: _createdAt,
-              updatedAt: _updatedAt,
-              ...line
-            }) => ({ ...line, tenantId, proformaId: row.id }),
-          ),
-        );
+        await tx
+          .insert(proformaLines)
+          .values(
+            sourceLines.map(
+              ({
+                id: _id,
+                quotationId: _quotationId,
+                createdAt: _createdAt,
+                updatedAt: _updatedAt,
+                ...line
+              }) => ({ ...line, tenantId, proformaId: row.id }),
+            ),
+          );
       }
 
-      // 5. The project's stage follows the work: issuing the proforma IS the
-      // PROFORMA event, so advance it here, in this same transaction, rather
-      // than making someone re-declare it through
-      // ProjectsService.updateStatus (whose hasIssuedProforma gate exists
-      // precisely to look for the row inserted above). Silent no-op if the
-      // project is already at or past PROFORMA or is CANCELLED; never throws,
-      // so a stalled stage can't roll back an issued proforma.
-      await autoAdvanceProject(tx, quote.projectId, 'PROFORMA');
+      // 5. The project's stage follows the work: a quoted project is at
+      // QUOTATION at the least. Silent no-op if it is already there or past
+      // it, or CANCELLED; never throws, so a stalled stage can't roll back
+      // an issued proforma.
+      await autoAdvanceProject(tx, quote.projectId, 'QUOTATION');
       return row;
     });
   }

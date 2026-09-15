@@ -35,15 +35,7 @@ export interface DemoCustomer {
 
 export interface DemoProject {
   name: string;
-  status:
-    | 'LEAD'
-    | 'SITE_SURVEY'
-    | 'SPEC_CALCULATION'
-    | 'QUOTATION'
-    | 'PROFORMA'
-    | 'CONTRACT'
-    | 'EXECUTION'
-    | 'COMPLETED';
+  status: 'LEAD' | 'QUOTATION' | 'CONTRACT' | 'EXECUTION' | 'COMPLETED';
   /** Only where the stage has got far enough to have a number. */
   quotedAmountEtb?: string;
   contractAmountEtb?: string;
@@ -64,7 +56,7 @@ export const DEMO_CUSTOMERS: readonly DemoCustomer[] = [
         quotedAmountEtb: '8521500.00',
         contractAmountEtb: '7835000.00',
       },
-      { name: 'Ayat Zone 4 — Block C Lift', status: 'SITE_SURVEY' },
+      { name: 'Ayat Zone 4 — Block C Lift', status: 'LEAD' },
     ],
   },
   {
@@ -77,7 +69,7 @@ export const DEMO_CUSTOMERS: readonly DemoCustomer[] = [
     projects: [
       {
         name: 'Ethio Hospital — Bed Elevator Block B',
-        status: 'PROFORMA',
+        status: 'QUOTATION',
         quotedAmountEtb: '9120000.00',
       },
     ],
@@ -123,7 +115,7 @@ export const DEMO_CUSTOMERS: readonly DemoCustomer[] = [
       { name: 'Summit Residences — Lift A', status: 'LEAD' },
       {
         name: 'CMC Apartments — Lifts 1-3',
-        status: 'SPEC_CALCULATION',
+        status: 'LEAD',
       },
     ],
   },
@@ -149,7 +141,7 @@ export const DEMO_CUSTOMERS: readonly DemoCustomer[] = [
     email: 'sales@flintstone.example',
     phone: '+251116187000',
     city: 'Addis Ababa',
-    projects: [{ name: 'Lebu Estate — Lift B', status: 'SITE_SURVEY' }],
+    projects: [{ name: 'Lebu Estate — Lift B', status: 'LEAD' }],
   },
   {
     name: 'Ato Getu Gelete',

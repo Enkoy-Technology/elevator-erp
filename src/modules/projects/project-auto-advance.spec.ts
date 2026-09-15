@@ -23,11 +23,15 @@ const makeTx = (projectRows: unknown[]) => {
   updateChain.where = jest.fn(() => Promise.resolve([]));
 
   const update = jest.fn(() => updateChain);
-  return { tx: { select: jest.fn(() => selectChain), update }, update, setValues };
+  return {
+    tx: { select: jest.fn(() => selectChain), update },
+    update,
+    setValues,
+  };
 };
 
 describe('autoAdvanceProject', () => {
-  it.each<ProjectStatus>(['LEAD', 'SITE_SURVEY', 'SPEC_CALCULATION'])(
+  it.each<ProjectStatus>(['LEAD'])(
     'advances a project at %s forward to QUOTATION',
     async (status) => {
       const { tx, update, setValues } = makeTx([{ status }]);
@@ -39,19 +43,17 @@ describe('autoAdvanceProject', () => {
     },
   );
 
-  it.each<ProjectStatus>([
-    'LEAD',
-    'SITE_SURVEY',
-    'SPEC_CALCULATION',
-    'QUOTATION',
-  ])('advances a project at %s forward to PROFORMA', async (status) => {
-    const { tx, update, setValues } = makeTx([{ status }]);
+  it.each<ProjectStatus>(['LEAD', 'QUOTATION'])(
+    'advances a project at %s forward to CONTRACT',
+    async (status) => {
+      const { tx, update, setValues } = makeTx([{ status }]);
 
-    await autoAdvanceProject(tx as never, PROJECT_ID, 'PROFORMA');
+      await autoAdvanceProject(tx as never, PROJECT_ID, 'CONTRACT');
 
-    expect(update).toHaveBeenCalledTimes(1);
-    expect(setValues[0]).toMatchObject({ status: 'PROFORMA' });
-  });
+      expect(update).toHaveBeenCalledTimes(1);
+      expect(setValues[0]).toMatchObject({ status: 'CONTRACT' });
+    },
+  );
 
   it('is a silent no-op when the project is already at the target stage', async () => {
     const { tx, update } = makeTx([{ status: 'QUOTATION' }]);
@@ -63,7 +65,7 @@ describe('autoAdvanceProject', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it.each<ProjectStatus>(['PROFORMA', 'CONTRACT', 'EXECUTION', 'COMPLETED'])(
+  it.each<ProjectStatus>(['CONTRACT', 'EXECUTION', 'COMPLETED'])(
     'never moves a project at %s backwards to QUOTATION',
     async (status) => {
       const { tx, update } = makeTx([{ status }]);
@@ -80,7 +82,7 @@ describe('autoAdvanceProject', () => {
       const { tx, update } = makeTx([{ status }]);
 
       await autoAdvanceProject(tx as never, PROJECT_ID, 'QUOTATION');
-      await autoAdvanceProject(tx as never, PROJECT_ID, 'PROFORMA');
+      await autoAdvanceProject(tx as never, PROJECT_ID, 'CONTRACT');
 
       expect(update).not.toHaveBeenCalled();
     },

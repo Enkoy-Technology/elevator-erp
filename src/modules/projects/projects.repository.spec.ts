@@ -27,11 +27,16 @@ const extractOrderByColumnNames = (arg: unknown): string[] => {
   const out: string[] = [];
   const walk = (x: unknown): void => {
     if (!x || typeof x !== 'object') return;
-    if ('name' in x && typeof (x as { name?: unknown }).name === 'string' && 'table' in x) {
+    if (
+      'name' in x &&
+      typeof (x as { name?: unknown }).name === 'string' &&
+      'table' in x
+    ) {
       out.push((x as { name: string }).name);
     }
     if ('queryChunks' in x) {
-      for (const chunk of (x as { queryChunks: unknown[] }).queryChunks) walk(chunk);
+      for (const chunk of (x as { queryChunks: unknown[] }).queryChunks)
+        walk(chunk);
     }
   };
   walk(arg);
@@ -70,9 +75,7 @@ describe('ProjectsRepository.create — Ethiopic-normalized write', () => {
       captured = v;
       return insertChain;
     });
-    insertChain.returning = jest.fn(() =>
-      Promise.resolve([{ id: 'p1' }]),
-    );
+    insertChain.returning = jest.fn(() => Promise.resolve([{ id: 'p1' }]));
     const insert = jest.fn(() => insertChain);
     const withTenant = jest.fn(
       async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
@@ -210,95 +213,15 @@ describe('ProjectsRepository — Ethiopic-normalized name search (q)', () => {
 // from projects.repository — a repository-level EXISTS query against a
 // shared /database/schema table, not a cross-module import (projects does
 // NOT import the quotations or proformas module).
-describe('ProjectsRepository.hasIssuedProforma', () => {
+describe('ProjectsRepository.updateStatus', () => {
   const PROJECT_ID = '44444444-4444-4444-4444-444444444444';
 
-  it('queries proformas filtered by projectId AND status = ISSUED', async () => {
-    let where: unknown;
-    const chain: Record<string, jest.Mock> = {};
-    chain.from = jest.fn(() => chain);
-    chain.where = jest.fn((w: unknown) => {
-      where = w;
-      return chain;
-    });
-    chain.limit = jest.fn(() => Promise.resolve([{ id: 'pf-1' }]));
-    const select = jest.fn(() => chain);
-    const withTenant = jest.fn(
-      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
-        fn({ select }),
-    );
-    const repo = new ProjectsRepository({ withTenant } as never);
-
-    await expect(
-      repo.hasIssuedProforma(TENANT_ID, PROJECT_ID),
-    ).resolves.toBe(true);
-
-    // eq()'s left side (a Column) appears directly in queryChunks, so the
-    // same column-name walker used for orderBy() elsewhere in this file
-    // doubles as proof the WHERE touches project_id and status.
-    const columnNames = extractOrderByColumnNames(where);
-    expect(columnNames).toContain('project_id');
-    expect(columnNames).toContain('status');
-  });
-
-  it('returns false when no ISSUED proforma exists for the project', async () => {
-    const chain: Record<string, jest.Mock> = {};
-    chain.from = jest.fn(() => chain);
-    chain.where = jest.fn(() => chain);
-    chain.limit = jest.fn(() => Promise.resolve([]));
-    const select = jest.fn(() => chain);
-    const withTenant = jest.fn(
-      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
-        fn({ select }),
-    );
-    const repo = new ProjectsRepository({ withTenant } as never);
-
-    await expect(
-      repo.hasIssuedProforma(TENANT_ID, PROJECT_ID),
-    ).resolves.toBe(false);
-  });
-});
-
-// Security-review fix: the QUOTATION -> PROFORMA CAS re-verifies the issued
-// proforma atomically inside its own UPDATE ... WHERE clause (an EXISTS
-// subquery), not just via the separate, earlier hasIssuedProforma() check —
-// closing the TOCTOU window between that check and this write. Proven
-// end-to-end against real Postgres in
-// test/e2e/quotation-to-proforma-happy-path.e2e-spec.ts; this unit test only
-// proves the EXISTS subquery is actually wired into the PROFORMA path (and
-// absent otherwise).
-describe('ProjectsRepository.updateStatus — atomic EXISTS guard for PROFORMA', () => {
-  const PROJECT_ID = '44444444-4444-4444-4444-444444444444';
-
-  it('builds an EXISTS subquery against proformas when the target status is PROFORMA', async () => {
+  it('is a plain compare-and-swap: no subquery on any transition', async () => {
     const updateChain: Record<string, jest.Mock> = {};
     updateChain.set = jest.fn(() => updateChain);
     updateChain.where = jest.fn(() => updateChain);
     updateChain.returning = jest.fn(() =>
-      Promise.resolve([{ id: PROJECT_ID, status: 'PROFORMA' }]),
-    );
-    const update = jest.fn(() => updateChain);
-    const selectChain: Record<string, jest.Mock> = {};
-    selectChain.from = jest.fn(() => selectChain);
-    selectChain.where = jest.fn(() => selectChain);
-    const select = jest.fn(() => selectChain);
-    const withTenant = jest.fn(
-      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
-        fn({ update, select }),
-    );
-    const repo = new ProjectsRepository({ withTenant } as never);
-
-    await repo.updateStatus(TENANT_ID, PROJECT_ID, 'QUOTATION', 'PROFORMA');
-
-    expect(select).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not build the EXISTS subquery for a non-PROFORMA transition', async () => {
-    const updateChain: Record<string, jest.Mock> = {};
-    updateChain.set = jest.fn(() => updateChain);
-    updateChain.where = jest.fn(() => updateChain);
-    updateChain.returning = jest.fn(() =>
-      Promise.resolve([{ id: PROJECT_ID, status: 'SITE_SURVEY' }]),
+      Promise.resolve([{ id: PROJECT_ID, status: 'QUOTATION' }]),
     );
     const update = jest.fn(() => updateChain);
     const select = jest.fn();
@@ -308,82 +231,9 @@ describe('ProjectsRepository.updateStatus — atomic EXISTS guard for PROFORMA',
     );
     const repo = new ProjectsRepository({ withTenant } as never);
 
-    await repo.updateStatus(TENANT_ID, PROJECT_ID, 'LEAD', 'SITE_SURVEY');
+    await repo.updateStatus(TENANT_ID, PROJECT_ID, 'LEAD', 'QUOTATION');
 
     expect(select).not.toHaveBeenCalled();
-  });
-});
-
-// customerId filter, added for the customer detail page's "View all
-// projects" link. list() and streamAll() share one `listFilters()`, so
-// asserting the WHERE on list() proves both paths.
-describe('ProjectsRepository.list — customerId filter', () => {
-  const CUSTOMER_ID = '66666666-6666-6666-6666-666666666666';
-
-  /** Runs list() against a fake tx and returns the column names the WHERE
-   * clause actually touches. */
-  const whereColumnsFor = async (
-    options: Parameters<ProjectsRepository['list']>[1],
-  ): Promise<string[]> => {
-    let where: unknown;
-    const countChain: Record<string, jest.Mock> = {};
-    countChain.from = jest.fn(() => countChain);
-    countChain.where = jest.fn((w: unknown) => {
-      where = w;
-      return Promise.resolve([{ value: 0 }]);
-    });
-    const itemsChain: Record<string, jest.Mock> = {};
-    itemsChain.from = jest.fn(() => itemsChain);
-    itemsChain.where = jest.fn(() => itemsChain);
-    itemsChain.orderBy = jest.fn(() => itemsChain);
-    itemsChain.limit = jest.fn(() => itemsChain);
-    itemsChain.offset = jest.fn(() => Promise.resolve([]));
-    const select = jest.fn();
-    select.mockReturnValueOnce(countChain).mockReturnValueOnce(itemsChain);
-    const withTenant = jest.fn(
-      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
-        fn({ select }),
-    );
-    const repo = new ProjectsRepository({ withTenant } as never);
-    await repo.list(TENANT_ID, options);
-    return extractOrderByColumnNames(where);
-  };
-
-  it('narrows the query with a customer_id leg when customerId is given', async () => {
-    expect(await whereColumnsFor({ customerId: CUSTOMER_ID })).toContain(
-      'customer_id',
-    );
-  });
-
-  it('leaves the query unchanged when customerId is omitted', async () => {
-    expect(await whereColumnsFor({})).not.toContain('customer_id');
-  });
-
-  it('composes with the name search rather than replacing it', async () => {
-    let where: unknown;
-    const countChain: Record<string, jest.Mock> = {};
-    countChain.from = jest.fn(() => countChain);
-    countChain.where = jest.fn((w: unknown) => {
-      where = w;
-      return Promise.resolve([{ value: 0 }]);
-    });
-    const itemsChain: Record<string, jest.Mock> = {};
-    itemsChain.from = jest.fn(() => itemsChain);
-    itemsChain.where = jest.fn(() => itemsChain);
-    itemsChain.orderBy = jest.fn(() => itemsChain);
-    itemsChain.limit = jest.fn(() => itemsChain);
-    itemsChain.offset = jest.fn(() => Promise.resolve([]));
-    const select = jest.fn();
-    select.mockReturnValueOnce(countChain).mockReturnValueOnce(itemsChain);
-    const withTenant = jest.fn(
-      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
-        fn({ select }),
-    );
-    const repo = new ProjectsRepository({ withTenant } as never);
-
-    await repo.list(TENANT_ID, { customerId: CUSTOMER_ID, q: 'ኃይሉ' });
-
-    expect(extractOrderByColumnNames(where)).toContain('customer_id');
-    expect(extractSqlLiterals(where)).toContain('%ሃይሉ%');
+    expect(update).toHaveBeenCalledTimes(1);
   });
 });

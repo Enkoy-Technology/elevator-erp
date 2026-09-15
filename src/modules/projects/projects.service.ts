@@ -37,10 +37,7 @@ export class ProjectsService {
     return this.projectsRepository.streamAll(user.tenantId, options);
   }
 
-  async getById(
-    user: AuthenticatedUser,
-    id: string,
-  ): Promise<ProjectRecord> {
+  async getById(user: AuthenticatedUser, id: string): Promise<ProjectRecord> {
     const row = await this.projectsRepository.findById(user.tenantId, id);
     if (!row) {
       throw new NotFoundException('Project not found');
@@ -52,11 +49,7 @@ export class ProjectsService {
     user: AuthenticatedUser,
     dto: CreateProjectDto,
   ): Promise<ProjectRecord> {
-    return this.projectsRepository.create(
-      user.tenantId,
-      user.userId,
-      dto,
-    );
+    return this.projectsRepository.create(user.tenantId, user.userId, dto);
   }
 
   /**
@@ -76,18 +69,6 @@ export class ProjectsService {
     if (!canTransitionProjectStatus(project.status, nextStatus)) {
       throw new WorkflowTransitionError(
         `Cannot transition project from ${project.status} to ${nextStatus}`,
-      );
-    }
-    // DAG gate: QUOTATION -> PROFORMA is only reachable once an approved
-    // quotation has actually been converted (ProformasRepository.issue) —
-    // see projectsRepository.hasIssuedProforma for why this is a schema-level
-    // check rather than a cross-module import.
-    if (
-      nextStatus === 'PROFORMA' &&
-      !(await this.projectsRepository.hasIssuedProforma(user.tenantId, id))
-    ) {
-      throw new WorkflowTransitionError(
-        `Project ${id} has no issued proforma — convert an approved quotation to a proforma before advancing to PROFORMA`,
       );
     }
     return this.projectsRepository.updateStatus(

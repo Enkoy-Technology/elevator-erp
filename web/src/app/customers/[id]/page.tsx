@@ -100,10 +100,7 @@ const CUSTOMER_TYPE_LABEL: Record<CustomerType, string> = {
 // an unpaid invoice.
 const PROJECT_TONE: Record<ProjectStatus, Tone> = {
   LEAD: 'neutral',
-  SITE_SURVEY: 'neutral',
-  SPEC_CALCULATION: 'neutral',
   QUOTATION: 'warn',
-  PROFORMA: 'warn',
   CONTRACT: 'active',
   EXECUTION: 'active',
   COMPLETED: 'good',
@@ -112,10 +109,7 @@ const PROJECT_TONE: Record<ProjectStatus, Tone> = {
 
 const PROJECT_LABEL: Record<ProjectStatus, string> = {
   LEAD: 'Lead',
-  SITE_SURVEY: 'Site survey',
-  SPEC_CALCULATION: 'Spec calculation',
   QUOTATION: 'Quotation',
-  PROFORMA: 'Proforma',
   CONTRACT: 'Contract',
   EXECUTION: 'Execution',
   COMPLETED: 'Completed',
@@ -176,7 +170,7 @@ const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   OTHER: 'Other',
 };
 
-/** 'MONTHLY' -> 'Monthly', 'SPEC_CALCULATION' -> 'Spec calculation'. */
+/** 'MONTHLY' -> 'Monthly', 'PENDING_APPROVAL' -> 'Pending approval'. */
 const sentenceCase = (value: string): string =>
   value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, ' ');
 

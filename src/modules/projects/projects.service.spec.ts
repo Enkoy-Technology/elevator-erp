@@ -51,16 +51,12 @@ describe('ProjectsService', () => {
     findById: jest.fn(),
     create: jest.fn(),
     updateStatus: jest.fn(),
-    hasIssuedProforma: jest.fn(),
   };
 
   const service = new ProjectsService(repo as never);
 
   beforeEach(() => {
     jest.clearAllMocks();
-    // Only exercised by the PROFORMA-bound tests below; harmless default for
-    // every other transition target.
-    repo.hasIssuedProforma.mockResolvedValue(true);
   });
 
   it('creates a project at LEAD', async () => {
@@ -70,22 +66,18 @@ describe('ProjectsService', () => {
     };
     repo.create.mockResolvedValue(sample);
     await expect(service.create(user, dto)).resolves.toEqual(sample);
-    expect(repo.create).toHaveBeenCalledWith(
-      user.tenantId,
-      user.userId,
-      dto,
-    );
+    expect(repo.create).toHaveBeenCalledWith(user.tenantId, user.userId, dto);
   });
 
-  it('allows LEAD -> SITE_SURVEY', async () => {
+  it('allows LEAD -> QUOTATION', async () => {
     repo.findById.mockResolvedValue(sample);
     repo.updateStatus.mockResolvedValue({
       ...sample,
-      status: 'SITE_SURVEY',
+      status: 'QUOTATION',
     });
     await expect(
-      service.updateStatus(user, sample.id, 'SITE_SURVEY'),
-    ).resolves.toMatchObject({ status: 'SITE_SURVEY' });
+      service.updateStatus(user, sample.id, 'QUOTATION'),
+    ).resolves.toMatchObject({ status: 'QUOTATION' });
   });
 
   it('rejects illegal LEAD -> CONTRACT with WorkflowTransitionError', async () => {
@@ -96,37 +88,8 @@ describe('ProjectsService', () => {
     expect(repo.updateStatus).not.toHaveBeenCalled();
   });
 
-  it('advances QUOTATION -> PROFORMA once an issued proforma exists for the project', async () => {
-    repo.findById.mockResolvedValue({ ...sample, status: 'QUOTATION' });
-    repo.hasIssuedProforma.mockResolvedValue(true);
-    repo.updateStatus.mockResolvedValue({ ...sample, status: 'PROFORMA' });
-    await expect(
-      service.updateStatus(user, sample.id, 'PROFORMA'),
-    ).resolves.toMatchObject({ status: 'PROFORMA' });
-    expect(repo.hasIssuedProforma).toHaveBeenCalledWith(
-      user.tenantId,
-      sample.id,
-    );
-    expect(repo.updateStatus).toHaveBeenCalledWith(
-      user.tenantId,
-      sample.id,
-      'QUOTATION',
-      'PROFORMA',
-      {},
-    );
-  });
-
-  it('blocks QUOTATION -> PROFORMA when no issued proforma exists for the project (DAG gate)', async () => {
-    repo.findById.mockResolvedValue({ ...sample, status: 'QUOTATION' });
-    repo.hasIssuedProforma.mockResolvedValue(false);
-    await expect(
-      service.updateStatus(user, sample.id, 'PROFORMA'),
-    ).rejects.toBeInstanceOf(WorkflowTransitionError);
-    expect(repo.updateStatus).not.toHaveBeenCalled();
-  });
-
   it('records the deal value alongside the status change', async () => {
-    repo.findById.mockResolvedValue({ ...sample, status: 'PROFORMA' });
+    repo.findById.mockResolvedValue({ ...sample, status: 'QUOTATION' });
     repo.updateStatus.mockResolvedValue({ ...sample, status: 'CONTRACT' });
     await expect(
       service.updateStatus(user, sample.id, 'CONTRACT', {
@@ -136,7 +99,7 @@ describe('ProjectsService', () => {
     expect(repo.updateStatus).toHaveBeenCalledWith(
       user.tenantId,
       sample.id,
-      'PROFORMA',
+      'QUOTATION',
       'CONTRACT',
       { contractAmountEtb: '165000.00' },
     );
