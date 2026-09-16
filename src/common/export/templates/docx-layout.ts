@@ -338,6 +338,7 @@ export const buildDocxDocument = (opts: DocxDocumentOptions): Document => {
   const header = new Header({
     children: [
       new Paragraph({
+        alignment: AlignmentType.CENTER,
         spacing: { after: 120 },
         children: [
           new TextRun({
