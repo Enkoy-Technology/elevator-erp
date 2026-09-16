@@ -166,7 +166,11 @@ describe('DocumentPdfService PDF smoke test (real Chromium)', () => {
   };
 
   it('renders the invoice template with an Amharic customer name and a large total, and shows NOT A FISCAL RECEIPT when the fiscal columns are null', async () => {
-    const pdf = await service.renderDocumentPdf('invoice', baseInvoiceData, invoiceBranding);
+    const pdf = await service.renderDocumentPdf(
+      'invoice',
+      baseInvoiceData,
+      invoiceBranding,
+    );
 
     expect(pdf.subarray(0, 5).toString('ascii')).toBe('%PDF-');
 
@@ -222,7 +226,8 @@ describe('DocumentPdfService PDF smoke test (real Chromium)', () => {
     const line = {
       sequence: 1,
       productType: 'PASSENGER',
-      specSummary: '800KG -10persons / Speed 1.5m/s / B+G+M+10 / 13 floors/13 doors',
+      specSummary:
+        '800KG -10persons / Speed 1.5m/s / B+G+M+10 / 13 floors/13 doors',
       quantity: 1,
       unitPriceEtb: '6813043.48',
       lineTotalEtb: '6813043.48',
@@ -279,10 +284,26 @@ describe('DocumentPdfService PDF smoke test (real Chromium)', () => {
       deliveryDays: 150,
       lines: [line, { ...line, sequence: 2 }],
       paymentTerms: [
-        { percent: '50.00', label: 'Payable upon signing of the contract', triggerEvent: 'SIGNING' },
-        { percent: '30.00', label: 'Payable upon submission of shipping documents', triggerEvent: 'SHIPPING' },
-        { percent: '10.00', label: 'Payable upon delivery to site', triggerEvent: 'DELIVERY' },
-        { percent: '10.00', label: 'Payable after commissioning', triggerEvent: 'COMMISSIONING' },
+        {
+          percent: '50.00',
+          label: 'Payable upon signing of the contract',
+          triggerEvent: 'SIGNING',
+        },
+        {
+          percent: '30.00',
+          label: 'Payable upon submission of shipping documents',
+          triggerEvent: 'SHIPPING',
+        },
+        {
+          percent: '10.00',
+          label: 'Payable upon delivery to site',
+          triggerEvent: 'DELIVERY',
+        },
+        {
+          percent: '10.00',
+          label: 'Payable after commissioning',
+          triggerEvent: 'COMMISSIONING',
+        },
       ],
     };
     const boilerplate = Array.from({ length: 6 }, (_unused, index) => ({
@@ -310,17 +331,16 @@ describe('DocumentPdfService PDF smoke test (real Chromium)', () => {
       // The page furniture, once per page — not once per document.
       const letterheads = text.split('Enkoy Elevators PLC').length - 1;
       expect(letterheads).toBeGreaterThanOrEqual(total);
-      expect(text).toContain(`1 / ${total}`);
-      expect(text).toContain(`${total} / ${total}`);
+      // The footer prints the page number in front of "Tel:" on every page.
+      expect(text).toMatch(/\b1\s+Tel:/);
+      expect(text).toMatch(new RegExp(`\\b${total}\\s+Tel:`));
 
       // The document title survives as ONE word: tracking above ~0.05em makes
       // Chromium write literal spaces into the text layer.
       expect(text).toContain('QUOTATION');
-      // The slogan too. It is the most heavily tracked string in either
-      // margin box (uppercased at 8.5px), so it is the first thing to
-      // shatter into "L I F T I N G" if the ceiling is raised again — and
-      // nothing used to assert it.
-      expect(text).toContain('LIFTING ETHIOPIA');
+      // The footer address too: bold 9px in the margin box, the string most
+      // likely to shatter into letters if tracking is ever raised there.
+      expect(text).toContain('Bole Road, Addis Ababa');
 
       // The client's three figures, to the cent.
       expect(text).toContain('6,813,043.48 ETB');
@@ -376,8 +396,9 @@ describe('DocumentPdfService PDF smoke test (real Chromium)', () => {
       expect(letterheads).toBeGreaterThanOrEqual(total);
 
       // Chromium's own page counter, proving the footer band rendered.
-      expect(text).toContain(`1 / ${total}`);
-      expect(text).toContain(`${total} / ${total}`);
+      // The footer prints the page number in front of "Tel:" on every page.
+      expect(text).toMatch(/\b1\s+Tel:/);
+      expect(text).toMatch(new RegExp(`\\b${total}\\s+Tel:`));
     } finally {
       await parser.destroy();
     }
