@@ -319,12 +319,7 @@ export class DocumentPdfService implements OnModuleDestroy {
       // The page counter is Chromium's own — these class names are the
       // documented hook, not ours, and only work inside these templates.
       const footerTemplate = bands.foot
-        ? `<div style="${bandStyle}padding:0 18mm 4mm;color:#57534e;">
-             <div style="border-top:1px solid #d6cfc4;padding-top:2mm;display:flex;justify-content:space-between;gap:8mm;">
-               <div style="flex:1;">${bands.foot}</div>
-               <div style="white-space:nowrap;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>
-             </div>
-           </div>`
+        ? `<div style="${bandStyle}padding:0 18mm 4mm;">${bands.foot}</div>`
         : '<span></span>';
 
       const pdf = await page.pdf({

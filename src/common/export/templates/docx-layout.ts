@@ -330,85 +330,23 @@ export interface DocxDocumentOptions {
 export const buildDocxDocument = (opts: DocxDocumentOptions): Document => {
   const { branding, documentTitle, footerNote, children } = opts;
   const b: DocumentBranding | null = branding;
-  const primary = hexOf(b?.primaryColor);
   const phones = (b?.phones ?? []).filter(Boolean);
-  const contact = [
-    b?.address,
-    [b?.websiteUrl, b?.email].filter(Boolean).join(' · '),
-    phones.length ? `Tel: ${phones.join(' / ')}` : '',
-  ]
-    .filter(Boolean)
-    .join('   ·   ');
 
   // The company's paper: name (Word has no logo here — the image would
   // need an in-memory buffer) top left, address block top right in small
   // grey type, a rule in the brand colour; the title opens the page, centred.
-  const addressLines = (b?.address ?? '')
-    .split(/\r?\n|,\s*/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const cell = (children: Paragraph[]) =>
-    new TableCell({
-      borders: {
-        top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-        bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-        left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-        right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-      },
-      width: { size: 50, type: WidthType.PERCENTAGE },
-      children: children.map((p) => p),
-    });
   const header = new Header({
     children: [
-      new Table({
-        width: { size: 100, type: WidthType.PERCENTAGE },
-        rows: [
-          new TableRow({
-            children: [
-              cell([
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: b?.name ?? '',
-                      bold: true,
-                      size: 28,
-                      color: INK,
-                    }),
-                  ],
-                }),
-                ...(b?.slogan
-                  ? [
-                      new Paragraph({
-                        children: [
-                          new TextRun({
-                            text: b.slogan,
-                            size: 16,
-                            color: SOFT,
-                          }),
-                        ],
-                      }),
-                    ]
-                  : []),
-              ]),
-              cell(
-                addressLines.map(
-                  (line) =>
-                    new Paragraph({
-                      alignment: AlignmentType.RIGHT,
-                      children: [
-                        new TextRun({ text: line, size: 16, color: SOFT }),
-                      ],
-                    }),
-                ),
-              ),
-            ],
-          }),
-        ],
-      }),
       new Paragraph({
         spacing: { after: 120 },
-        border: { bottom: border(primary, 12) },
-        children: [],
+        children: [
+          new TextRun({
+            text: b?.name ?? '',
+            bold: true,
+            size: 28,
+            color: INK,
+          }),
+        ],
       }),
     ],
   });
@@ -449,38 +387,59 @@ export const buildDocxDocument = (opts: DocxDocumentOptions): Document => {
         footers: {
           default: new Footer({
             children: [
+              ...(b?.address
+                ? [
+                    new Paragraph({
+                      alignment: AlignmentType.CENTER,
+                      children: [
+                        new TextRun({
+                          text: b.address,
+                          bold: true,
+                          size: 16,
+                          color: INK,
+                        }),
+                      ],
+                    }),
+                  ]
+                : []),
               new Paragraph({
-                border: { top: border(RULE, 4) },
+                alignment: AlignmentType.CENTER,
                 children: [
-                  new TextRun({ text: contact, size: 14, color: SOFT }),
-                ],
-              }),
-              new Paragraph({
-                children: [
-                  new TextRun({ text: footerNote, size: 14, color: SOFT }),
-                ],
-              }),
-              new Paragraph({
-                alignment: AlignmentType.RIGHT,
-                children: [
-                  new TextRun({ text: 'Page ', size: 14, color: SOFT }),
                   new TextRun({
                     children: [PageNumber.CURRENT],
-                    size: 14,
-                    color: SOFT,
+                    bold: true,
+                    size: 16,
+                    color: INK,
                   }),
-                  new TextRun({ text: ' of ', size: 14, color: SOFT }),
-                  new TextRun({
-                    children: [PageNumber.TOTAL_PAGES],
-                    size: 14,
-                    color: SOFT,
-                  }),
+                  ...(phones.length
+                    ? [
+                        new TextRun({
+                          text: `   Tel: ${phones.join('/')}`,
+                          bold: true,
+                          size: 16,
+                          color: INK,
+                        }),
+                      ]
+                    : []),
                 ],
               }),
             ],
           }),
         },
-        children: [...letterhead, ...children],
+        children: [
+          ...letterhead,
+          ...children,
+          ...(footerNote
+            ? [
+                new Paragraph({
+                  spacing: { before: 240 },
+                  children: [
+                    new TextRun({ text: footerNote, size: 14, color: SOFT }),
+                  ],
+                }),
+              ]
+            : []),
+        ],
       },
     ],
   });

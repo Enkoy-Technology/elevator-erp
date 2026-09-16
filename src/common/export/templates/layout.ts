@@ -222,15 +222,7 @@ export const renderLayout = (opts: LayoutOptions): string => {
   } = opts;
   const b = asDocumentBranding(branding);
   const primary = sanitizeHex(b?.primaryColor);
-  const phones = (b?.phones ?? []).filter(Boolean).map(esc).join(' / ');
-  // The address block top right, one line per part — the way the company's
-  // own letterhead sets it.
-  const addressLines = (b?.address ?? '')
-    .split(/\r?\n|,\s*/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map(esc)
-    .join('<br/>');
+  const phones = (b?.phones ?? []).filter(Boolean).map(esc).join('/');
 
   // The two bands below are rendered by Chromium into the page MARGIN
   // BOXES, which are an isolated context with no access to this document's
@@ -245,35 +237,21 @@ export const renderLayout = (opts: LayoutOptions): string => {
   // left, and the address block top right in small grey type. The document
   // title is not up here — it opens the page, centred. A tenant with no
   // logo yet gets its name where the logo would be.
-  const headerHtml = `
-    <table style="width:100%;border-collapse:collapse;"><tbody><tr>
-      <td style="padding:0;vertical-align:top;border:none;">
-        ${
-          b?.logoUrl
-            ? `<img src="${esc(b.logoUrl)}" alt="" style="max-height:16mm;max-width:90mm;width:auto;height:auto;display:block;" />`
-            : `<div style="font-size:14px;font-weight:bold;line-height:1.25;color:#17150f;">${esc(b?.name ?? '')}</div>`
-        }
-        ${b?.slogan ? `<div style="margin-top:2px;font-size:8px;letter-spacing:0.4px;text-transform:uppercase;color:#57534e;">${esc(b.slogan)}</div>` : ''}
-      </td>
-      <td style="width:1%;text-align:right;white-space:nowrap;vertical-align:top;border:none;font-size:8.5px;line-height:1.4;color:#57534e;">
-        ${addressLines}
-      </td>
-    </tr></tbody></table>`;
+  // The letterhead is the company's logo and nothing else. A tenant with
+  // no logo yet gets its name where the logo would be.
+  const headerHtml = b?.logoUrl
+    ? `<img src="${esc(b.logoUrl)}" alt="" style="max-height:16mm;max-width:95mm;width:auto;height:auto;display:block;" />`
+    : `<div style="font-size:14px;font-weight:bold;line-height:1.25;color:#17150f;">${esc(b?.name ?? '')}</div>`;
 
-  // Website and email on the left, phone on the right — the company's own
-  // footer. The renderer adds the page counter after this.
+  // The client's own footer: the address on one line, the page number and
+  // "Tel:" with both numbers on the next, centred and bold. Nothing else.
+  // .pageNumber is Chromium's hook and only counts inside the footer band,
+  // which is exactly where the renderer puts this.
   const footerHtml = `
-      <div style="display:flex;justify-content:space-between;gap:8mm;">
-        <div>${[
-          b?.address,
-          [b?.websiteUrl, b?.email].filter(Boolean).join(' &middot; '),
-        ]
-          .filter(Boolean)
-          .map((line) => esc(line).replace(/&amp;middot;/g, '&middot;'))
-          .join('<br/>')}</div>
-        <div style="text-align:right;white-space:nowrap;">${phones ? `Tel: ${phones}` : ''}</div>
-      </div>
-      ${footerNote ? `<div style="margin-top:1mm;">${esc(footerNote)}</div>` : ''}`;
+      <div style="text-align:center;font-weight:bold;font-size:9px;line-height:1.5;color:#17150f;">
+        ${b?.address ? `<div>${esc(b.address)}</div>` : ''}
+        <div><span class="pageNumber"></span>${phones ? ` &nbsp;Tel: ${phones}` : ''}</div>
+      </div>`;
 
   const watermarkHtml = b?.watermarkUrl
     ? `<div class="watermark"><img src="${esc(b.watermarkUrl)}" alt="" /></div>`
@@ -550,6 +528,7 @@ export const renderLayout = (opts: LayoutOptions): string => {
   ${watermarkHtml}
   ${coverHtml}
   ${bodyHtml}
+  ${footerNote ? `<p class="fineprint" style="margin-top:14px;">${esc(footerNote)}</p>` : ''}
 </body>
 </html>`;
 };

@@ -1,5 +1,8 @@
 import type { TenantBranding } from '../document-pdf.service';
-import { buildQuotationHtml, type QuotationTemplateData } from './quotation.template';
+import {
+  buildQuotationHtml,
+  type QuotationTemplateData,
+} from './quotation.template';
 
 // formatEtb() itself (grouping, null/''/garbage handling, and the
 // PDF/docx-shared-formatter assertion) is covered in money-format.spec.ts —
@@ -64,13 +67,14 @@ describe('buildQuotationHtml', () => {
     expect(html).toContain('#123456'); // tenant primary colour drives the CSS
   });
 
-  it('renders the branding letterhead (name, slogan, address, phones)', () => {
+  it('renders the letterhead (the name where the logo would be) and the footer (address, both phones)', () => {
     const html = buildQuotationHtml(data, branding);
     expect(html).toContain('Enkoy Elevators PLC');
-    expect(html).toContain('Lifting Ethiopia');
+    // The client's paper carries the logo alone up top and the address with
+    // the numbers below; the slogan is not printed.
+    expect(html).not.toContain('Lifting Ethiopia');
     expect(html).toContain('Bole Road, Addis Ababa');
-    expect(html).toContain('+251 11 123 4567');
-    expect(html).toContain('+251 91 234 5678');
+    expect(html).toContain('Tel: +251 11 123 4567/+251 91 234 5678');
   });
 
   it('escapes HTML in tenant/customer/quotation-data strings to prevent injection', () => {
@@ -102,7 +106,10 @@ describe('buildQuotationHtml', () => {
     // quotation.docx-template.spec.ts's regression test for that renderer).
     // 3-digit hex was, and remains, valid CSS, so this is a display-only
     // change for the PDF path.
-    const html = buildQuotationHtml(data, { ...branding, primaryColor: '#abc' });
+    const html = buildQuotationHtml(data, {
+      ...branding,
+      primaryColor: '#abc',
+    });
     expect(html).toContain('#aabbcc');
     expect(html).not.toContain('--primary: #abc;');
   });
