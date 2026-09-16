@@ -583,6 +583,43 @@ export const DOC_GROUPS: DocGroup[] = [
         ],
       },
       {
+        id: 'money-in',
+        title: 'Invoices, payments, receivables',
+        tagline: 'Three words for one job: bill the customer, get paid, chase who has not',
+        icon: ICON.receipt,
+        body: [
+          'Finance shows two menu entries, Invoices and Receivables, and the invoices page has a second tab, Payments. They are not three modules. They are the three moments of one workflow — you send a bill, money arrives, and you look at who still owes — and each one is a different question about the same contract.',
+          'An invoice is the bill you send: “you owe us this many birr for this contract.” An elevator contract is usually billed in instalments — an advance at signing, a second bill when the machine is delivered, the balance at commissioning — so one contract produces several invoices over months.',
+          'A payment is money that actually arrived — cash, bank transfer, cheque, CBE Birr, telebirr — and a note of which invoice it pays off. It is kept as its own record, not as a “paid” tick on the invoice, because real money rarely matches one bill exactly: a customer pays one lump sum against three instalments, pays an advance before any invoice exists, or pays 400,000 against a 500,000 bill. One record per receipt, allocated across invoices, is the only shape that survives all three.',
+          'Receivables is not something you create. It is a report over the two above: for every customer, what has been billed minus what has been paid, and how many days overdue each open bill is. It is the list you pick up the phone with.',
+          'Where to find each: Invoices → the Invoices menu entry. Payments → the Payments tab on that same page, or the Record payment action on any invoice row; there is no separate menu entry. Receivables → the Receivables menu entry, and per customer on the customer page.',
+        ],
+        facts: [
+          {
+            label: 'Invoice',
+            value:
+              'A bill you send — “you owe us X birr for this contract”. In practice: the advance, on-delivery and on-commissioning bills for each contract.',
+          },
+          {
+            label: 'Payment',
+            value:
+              'Money that arrived (cash, CBE Birr, telebirr, cheque…) and which invoice it pays off. In practice: “the customer paid 500k today”.',
+          },
+          {
+            label: 'Receivables',
+            value:
+              'A report: who still owes what, and how late — 30, 60, 90 days. In practice: the list you chase on the phone.',
+          },
+        ],
+        flows: [
+          {
+            title: 'One workflow, three views',
+            steps: ['Contract', 'Invoice', 'Payment', 'Receivables'],
+            note: 'Bill → get paid → see who has not. The invoice says what is owed, the payment says what came in, receivables is the difference with a due date on it.',
+          },
+        ],
+      },
+      {
         id: 'invoices',
         title: 'Invoices',
         tagline: 'The internal AR document — never the legal tax receipt',
@@ -667,6 +704,7 @@ export const DOC_GROUPS: DocGroup[] = [
           'A payment records cash arriving through one of six settlement rails: cash, bank transfer, cheque, CBE Birr, telebirr or other. Recording it is separate from allocating it — one payment can settle several invoices, and an unallocated payment is a legitimate state, not an error.',
           'Recording accepts an idempotency key. The key is stored with a fingerprint of the request body: replaying the identical request returns the original result, replaying the same key with a different body is rejected as a conflict, and a request still in flight is reported as in-progress rather than processed twice. A jittery connection or an impatient second click can no longer create a duplicate receipt.',
           'Payments are reversed, never deleted, and every reversal is its own entry.',
+          'Payments have no menu entry of their own. They live as a tab on the invoices page and as the Record payment action on each invoice row, because in day-to-day use a payment is always looked at next to the bill it settles. See Invoices, payments, receivables above for the plain-language difference between the three.',
         ],
         flows: [
           {
