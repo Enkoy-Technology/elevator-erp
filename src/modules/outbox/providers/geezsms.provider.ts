@@ -6,11 +6,18 @@ const BASE_URL = 'https://api.geezsms.com/api/v1';
 const REQUEST_TIMEOUT_MS = 10_000;
 
 interface GeezSmsBody {
+  // Shape in the vendor's Postman collection (never seen live).
   message_status?: string;
   api_log_id?: number | string;
   message?: string;
   log?: string;
+  // Shape the live API actually returns (observed 2026-09-16, HTTP 200):
+  //   {"error":false,"msg":"SMS has been sent successfully.","sms_units":1,
+  //    "cost_etb":0.4025,"contact_count":1,
+  //    "data":{"msg":"SMS_SENT_SUCCSSFULLY","date":"...","api_log_id":6924804}}
   error?: unknown;
+  msg?: string;
+  data?: { api_log_id?: number | string };
 }
 
 /**
@@ -43,15 +50,18 @@ interface GeezSmsBody {
  * `Http::asForm()` (which sends urlencoded, not multipart) against this same
  * endpoint; urlencoded avoids multipart boundary handling for one HTTP POST.
  *
- * UNVERIFIED (flagged here and in the report — watch this on the first live
- * test):
- *  - The vendor's collection shows no FAILURE example for `/sms/send`
- *    itself (only a prose description on the separate bulk-send request:
- *    "an error flag... and an optional message"). This adapter treats
- *    `message_status !== 'success'` (including its absence) as failure and
- *    surfaces whatever of `error`/`message`/`log` is present — the exact
- *    failure JSON shape (rejected phone, low balance, bad token) has not
- *    been observed.
+ * The first live test (2026-09-16) showed the API does NOT return that
+ * documented shape: a delivered SMS comes back as `{"error":false, "msg":
+ * ..., "data":{"api_log_id":...}}` (see GeezSmsBody). Treating that as a
+ * failure re-sent the same SMS on every retry, so success is now either
+ * shape — `message_status === 'success'` or `error === false` — with the
+ * log id read from wherever it sits.
+ *
+ * UNVERIFIED (watch this on the first live failure):
+ *  - No FAILURE body has been observed yet (rejected phone, low balance,
+ *    bad token). This adapter treats anything that is neither success shape
+ *    as failure and surfaces whatever of `error`/`msg`/`message`/`log` is
+ *    present.
  *  - The collection's phone-format description literally says the number
  *    "must start with 2519" (mobile prefix), with no mention of Safaricom
  *    Ethiopia's 07-prefixed numbers. Confirm Safaricom-SIM delivery
@@ -106,9 +116,14 @@ export class GeezSmsProvider implements SmsProvider {
       throw new Error(`GeezSMS returned a non-JSON response (HTTP ${response.status})`);
     }
 
-    if (!response.ok || parsed.message_status !== 'success' || parsed.error) {
+    const succeeded =
+      response.ok &&
+      !parsed.error &&
+      (parsed.message_status === 'success' || parsed.error === false);
+    if (!succeeded) {
       const rawDetail =
         stringifyErrorField(parsed.error) ||
+        parsed.msg ||
         parsed.message ||
         parsed.log ||
         `HTTP ${response.status}, message_status=${parsed.message_status ?? 'unknown'}`;
@@ -121,7 +136,8 @@ export class GeezSmsProvider implements SmsProvider {
       throw new Error(`GeezSMS send failed: ${redactSecret(rawDetail, this.token)}`);
     }
 
-    if (parsed.api_log_id === undefined || parsed.api_log_id === null) {
+    const apiLogId = parsed.api_log_id ?? parsed.data?.api_log_id;
+    if (apiLogId === undefined || apiLogId === null) {
       // The one documented success example always carries api_log_id — a
       // "success" body without one means the shape changed since this was
       // verified. Surfacing that loudly (via lastError) beats inventing a
@@ -130,7 +146,7 @@ export class GeezSmsProvider implements SmsProvider {
         'GeezSMS reported success but api_log_id was missing — response shape may have changed since this adapter was verified',
       );
     }
-    return { providerMessageId: String(parsed.api_log_id) };
+    return { providerMessageId: String(apiLogId) };
   }
 }
 
@@ -138,7 +154,8 @@ const networkErrorMessage = (err: unknown): string =>
   err instanceof Error ? err.message : String(err);
 
 const stringifyErrorField = (value: unknown): string | undefined => {
-  if (value === undefined || value === null || value === false) {
+  // In the live shape `error` is a boolean flag, not a detail — the detail is `msg`.
+  if (value === undefined || value === null || typeof value === 'boolean') {
     return undefined;
   }
   return typeof value === 'string' ? value : JSON.stringify(value);

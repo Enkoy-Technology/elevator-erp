@@ -65,6 +65,33 @@ describe('GeezSmsProvider', () => {
     expect(init?.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it('accepts the shape the live API actually returns (error:false, data.api_log_id)', async () => {
+    // Captured from a real send on 2026-09-16 — not the Postman-documented shape.
+    fetchSpy.mockResolvedValue(
+      jsonResponse(200, {
+        error: false,
+        msg: 'SMS has been sent successfully.',
+        sms_units: 1,
+        cost_etb: 0.4025,
+        contact_count: 1,
+        data: { msg: 'SMS_SENT_SUCCSSFULLY', date: '2026-09-16T21:01:03+03:00', api_log_id: 6924804 },
+      }),
+    );
+    await expect(new GeezSmsProvider(TOKEN).send(TEST_PHONE, 'hi')).resolves.toEqual({
+      providerMessageId: '6924804',
+    });
+  });
+
+  it('treats error:true as failure and surfaces msg, without leaking the credential', async () => {
+    fetchSpy.mockResolvedValue(
+      jsonResponse(200, { error: true, msg: `insufficient balance ${TOKEN}` }),
+    );
+    const err = await new GeezSmsProvider(TOKEN).send(TEST_PHONE, 'hi').catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/insufficient balance/);
+    expect((err as Error).message).not.toContain(TOKEN);
+  });
+
   it('omits shortcode_id when none is configured', async () => {
     fetchSpy.mockResolvedValue(
       jsonResponse(200, { message_status: 'success', api_log_id: 1 }),

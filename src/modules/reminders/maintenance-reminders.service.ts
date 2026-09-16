@@ -73,7 +73,7 @@ export class MaintenanceReminderService {
             tenantId,
             channel: 'SMS',
             recipient: contract.technicianPhone,
-            body: technicianBody(contract),
+            body: technicianSmsBody(contract),
             // Includes the technician id (nit fix) — without it, reassigning
             // a contract before the service date reuses the SAME dedupeKey
             // the old technician already consumed, and the outbox's own
@@ -185,13 +185,14 @@ export class MaintenanceReminderService {
         return;
       }
       const body = `New breakdown assigned: ${info.title} at ${info.customerName} (${info.assetName}). Severity: ${info.severity}.`;
+      const smsBody = `አዲስ ብልሽት ተመድቦልዎታል፦ ${info.title} — ${info.customerName} (${info.assetName})። ደረጃ፦ ${severityAm(info.severity)}።`;
 
       if (info.technicianPhone) {
         const outcome = await this.enqueueSafely({
           tenantId,
           channel: 'SMS',
           recipient: info.technicianPhone,
-          body,
+          body: smsBody,
           dedupeKey: `breakdown:${breakdownId}:${info.assignedUserId}`,
           subjectKind: 'BREAKDOWN',
           subjectId: breakdownId,
@@ -294,6 +295,26 @@ function effectiveConsentAt(recipient: {
 function technicianBody(contract: DueMaintenanceReminder): string {
   const siteSuffix = contract.site ? `, ${contract.site}` : '';
   return `Maintenance visit due ${contract.nextServiceAt}: ${contract.assetName} at ${contract.customerName}${siteSuffix}.`;
+}
+
+// Technicians get their SMS in Amharic (client request, 2026-09-16); the
+// in-app notification keeps the English body above because the UI is
+// English. Kept short on purpose — Amharic is UCS-2, 70 chars per SMS unit.
+function technicianSmsBody(contract: DueMaintenanceReminder): string {
+  const siteSuffix = contract.site ? `፣ ${contract.site}` : '';
+  return `የጥገና ጉብኝት ቀጠሮ ${contract.nextServiceAt}፦ ${contract.assetName} በ${contract.customerName}${siteSuffix}።`;
+}
+
+const SEVERITY_AM: Record<string, string> = {
+  EMERGENCY: 'አስቸኳይ',
+  CRITICAL: 'ወሳኝ',
+  HIGH: 'ከፍተኛ',
+  MEDIUM: 'መካከለኛ',
+  LOW: 'ዝቅተኛ',
+};
+
+function severityAm(severity: string): string {
+  return SEVERITY_AM[severity] ?? severity;
 }
 
 function customerBody(contract: DueMaintenanceReminder): string {
