@@ -49,7 +49,11 @@ export class TenantBrandingProvider {
         watermarkUrl: branding?.watermarkUrl ?? null,
         websiteUrl: branding?.websiteUrl ?? null,
         address: branding?.officialAddress ?? '',
-        phones: branding?.contactPhone ? [branding.contactPhone] : [],
+        // "a / b" on the settings page prints as two numbers.
+        phones: (branding?.contactPhone ?? '')
+          .split('/')
+          .map((p) => p.trim())
+          .filter(Boolean),
         email: branding?.contactEmail ?? null,
         primaryColor: branding?.primaryColorHex ?? DEFAULT_PRIMARY,
       };

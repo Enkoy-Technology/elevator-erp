@@ -148,10 +148,10 @@ export class UpdateSettingsDto {
   @IsEmail()
   contactEmail?: string | null;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: '+251 911 675 505 / +251 989 077 777' })
   @IsOptional()
   @IsString()
-  @MaxLength(32)
+  @MaxLength(64)
   contactPhone?: string | null;
 
   @ApiPropertyOptional({ enum: LOCALES, example: 'en' })

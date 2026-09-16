@@ -331,10 +331,11 @@ export const buildDocxDocument = (opts: DocxDocumentOptions): Document => {
   const { branding, documentTitle, footerNote, children } = opts;
   const b: DocumentBranding | null = branding;
   const primary = hexOf(b?.primaryColor);
+  const phones = (b?.phones ?? []).filter(Boolean);
   const contact = [
-    b?.websiteUrl,
-    b?.email,
-    (b?.phones ?? []).filter(Boolean).join(' · '),
+    b?.address,
+    [b?.websiteUrl, b?.email].filter(Boolean).join(' · '),
+    phones.length ? `Tel: ${phones.join(' / ')}` : '',
   ]
     .filter(Boolean)
     .join('   ·   ');

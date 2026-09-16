@@ -222,7 +222,7 @@ export const renderLayout = (opts: LayoutOptions): string => {
   } = opts;
   const b = asDocumentBranding(branding);
   const primary = sanitizeHex(b?.primaryColor);
-  const phones = (b?.phones ?? []).filter(Boolean).map(esc).join(' &middot; ');
+  const phones = (b?.phones ?? []).filter(Boolean).map(esc).join(' / ');
   // The address block top right, one line per part — the way the company's
   // own letterhead sets it.
   const addressLines = (b?.address ?? '')
@@ -250,7 +250,7 @@ export const renderLayout = (opts: LayoutOptions): string => {
       <td style="padding:0;vertical-align:top;border:none;">
         ${
           b?.logoUrl
-            ? `<img src="${esc(b.logoUrl)}" alt="" style="height:18mm;width:auto;display:block;" />`
+            ? `<img src="${esc(b.logoUrl)}" alt="" style="max-height:16mm;max-width:90mm;width:auto;height:auto;display:block;" />`
             : `<div style="font-size:14px;font-weight:bold;line-height:1.25;color:#17150f;">${esc(b?.name ?? '')}</div>`
         }
         ${b?.slogan ? `<div style="margin-top:2px;font-size:8px;letter-spacing:0.4px;text-transform:uppercase;color:#57534e;">${esc(b.slogan)}</div>` : ''}
@@ -264,8 +264,14 @@ export const renderLayout = (opts: LayoutOptions): string => {
   // footer. The renderer adds the page counter after this.
   const footerHtml = `
       <div style="display:flex;justify-content:space-between;gap:8mm;">
-        <div>${[b?.websiteUrl, b?.email].filter(Boolean).map(esc).join('<br/>')}</div>
-        <div style="text-align:right;">${phones}</div>
+        <div>${[
+          b?.address,
+          [b?.websiteUrl, b?.email].filter(Boolean).join(' &middot; '),
+        ]
+          .filter(Boolean)
+          .map((line) => esc(line).replace(/&amp;middot;/g, '&middot;'))
+          .join('<br/>')}</div>
+        <div style="text-align:right;white-space:nowrap;">${phones ? `Tel: ${phones}` : ''}</div>
       </div>
       ${footerNote ? `<div style="margin-top:1mm;">${esc(footerNote)}</div>` : ''}`;
 
