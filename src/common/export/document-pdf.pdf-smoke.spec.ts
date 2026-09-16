@@ -329,7 +329,7 @@ describe('DocumentPdfService PDF smoke test (real Chromium)', () => {
       expect(total).toBeGreaterThanOrEqual(3);
 
       // The page furniture, once per page — not once per document.
-      const letterheads = text.split('Enkoy Elevators PLC').length - 1;
+      const letterheads = text.split('Bole Road, Addis Ababa').length - 1;
       expect(letterheads).toBeGreaterThanOrEqual(total);
       // The footer prints the page number in front of "Tel:" on every page.
       expect(text).toMatch(/\b1\s+Tel:/);
@@ -392,7 +392,7 @@ describe('DocumentPdfService PDF smoke test (real Chromium)', () => {
       expect(total).toBeGreaterThan(1);
 
       // Once per page, not once per document.
-      const letterheads = text.split('Enkoy Elevators PLC').length - 1;
+      const letterheads = text.split('Bole Road, Addis Ababa').length - 1;
       expect(letterheads).toBeGreaterThanOrEqual(total);
 
       // Chromium's own page counter, proving the footer band rendered.

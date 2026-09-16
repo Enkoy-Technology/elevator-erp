@@ -1,4 +1,5 @@
 import type { TenantBranding } from '../document-pdf.service';
+import { LETTERHEAD_LOGO_DATA_URI } from '../assets/letterhead-logo';
 import { ETHIOPIC_FONT_FACE_CSS } from './fonts';
 
 const DEFAULT_PRIMARY = '#1B2A4A';
@@ -239,11 +240,10 @@ export const renderLayout = (opts: LayoutOptions): string => {
   // logo yet gets its name where the logo would be.
   // The letterhead is the company's logo and nothing else. A tenant with
   // no logo yet gets its name where the logo would be.
-  const headerHtml = `<div style="text-align:center;">${
-    b?.logoUrl
-      ? `<img src="${esc(b.logoUrl)}" alt="" style="max-height:18mm;max-width:120mm;width:auto;height:auto;display:inline-block;" />`
-      : `<div style="font-size:14px;font-weight:bold;line-height:1.25;color:#17150f;">${esc(b?.name ?? '')}</div>`
-  }</div>`;
+  // The letterhead mark is the company's own file, shipped in the code
+  // (see assets/letterhead-logo.ts) — not the settings logo, which serves
+  // the screens. Centred, alone.
+  const headerHtml = `<div style="text-align:center;"><img src="${LETTERHEAD_LOGO_DATA_URI}" alt="" style="max-height:18mm;max-width:120mm;width:auto;height:auto;display:inline-block;" /></div>`;
 
   // The client's own footer: the address on one line, the page number and
   // "Tel:" with both numbers on the next, centred and bold. Nothing else.
