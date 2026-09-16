@@ -8,7 +8,6 @@ export type MessageKey =
   | 'nav.quotations'
   | 'nav.contracts'
   | 'nav.invoices'
-  | 'nav.payments'
   | 'nav.receivables'
   | 'nav.employees'
   | 'nav.assets'
@@ -76,7 +75,6 @@ const en: Record<MessageKey, string> = {
   'nav.quotations': 'Quotations',
   'nav.contracts': 'Contracts',
   'nav.invoices': 'Invoices',
-  'nav.payments': 'Payments',
   'nav.receivables': 'Receivables',
   'nav.employees': 'Employees',
   'nav.assets': 'Assets',
@@ -150,7 +148,6 @@ const am: Record<MessageKey, string> = {
   'nav.quotations': 'የዋጋ ማቅረቢያ',
   'nav.contracts': 'ውል',
   'nav.invoices': 'ደረሰኞች',
-  'nav.payments': 'ክፍያዎች',
   'nav.receivables': 'ተቀባይ ሂሳቦች',
   'nav.employees': 'ሰራተኞች',
   'nav.assets': 'ንብረቶች',
