@@ -20,6 +20,7 @@ import {
 } from '../../common/pagination';
 import type { TenantTransaction } from '../../database/database.types';
 import {
+  contractInstalments,
   contracts,
   customers,
   documentSequences,
@@ -32,6 +33,7 @@ import {
 import { TenantDbService } from '../../database/tenant-db.service';
 import { autoAdvanceProject } from '../projects/project-auto-advance';
 import { buildContractNumber } from './contract-number';
+import { instalmentsFromPercents } from './instalment-schedule';
 
 export type ContractRecord = typeof contracts.$inferSelect;
 
@@ -211,6 +213,10 @@ export class ContractsRepository {
           projectId: proformas.projectId,
           customerId: proformas.customerId,
           totalEtb: proformas.totalEtb,
+          paymentTerms: proformas.paymentTerms,
+          deliveryDays: proformas.deliveryDays,
+          warrantyPartsMonths: proformas.warrantyPartsMonths,
+          warrantyFreeServiceMonths: proformas.warrantyFreeServiceMonths,
         })
         .from(proformas)
         .where(eq(proformas.id, proformaId))
@@ -279,12 +285,33 @@ export class ContractsRepository {
           contractNumber: buildContractNumber(fiscalYear.label, claimed.lastValue),
           fiscalYearLabel: fiscalYear.label,
           contractValueEtb: proforma.totalEtb,
+          // The deal's own terms, so the draft prints what was offered rather
+          // than "as stated in the attached proforma". Still editable while
+          // DRAFT, like every other clause.
+          warrantyMonths: proforma.warrantyPartsMonths,
+          freeMaintenanceMonths: proforma.warrantyFreeServiceMonths,
+          deliveryWorkingDays: proforma.deliveryDays,
           issuedByUserId: userId,
           status: 'DRAFT',
         })
         .returning();
       if (!row) {
         throw new Error('Failed to insert contract');
+      }
+      const schedule = instalmentsFromPercents(
+        proforma.paymentTerms ?? [],
+        proforma.totalEtb,
+      );
+      if (schedule) {
+        await tx.insert(contractInstalments).values(
+          schedule.map((line, index) => ({
+            tenantId,
+            contractId: row.id,
+            sequence: index + 1,
+            label: line.label,
+            amountEtb: line.amountEtb,
+          })),
+        );
       }
       // Deliberately NOT advanced here: a draft nobody has signed is not a
       // CONTRACT-stage project. sign() below is the event.

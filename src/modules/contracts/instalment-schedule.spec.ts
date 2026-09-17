@@ -1,4 +1,8 @@
-import { scheduleMismatchReason, scheduleTotalEtb } from './instalment-schedule';
+import {
+  instalmentsFromPercents,
+  scheduleMismatchReason,
+  scheduleTotalEtb,
+} from './instalment-schedule';
 
 describe('scheduleTotalEtb', () => {
   it('sums to 2dp without float drift', () => {
@@ -41,5 +45,43 @@ describe('scheduleMismatchReason', () => {
 
   it('treats 1000 and 1000.00 as equal', () => {
     expect(scheduleMismatchReason([{ amountEtb: '1000' }], '1000.00')).toBeNull();
+  });
+});
+
+describe('instalmentsFromPercents', () => {
+  it('turns a whole percentage schedule into cents that add up exactly', () => {
+    const lines = instalmentsFromPercents(
+      [
+        { label: 'On signing', percent: '33.33' },
+        { label: 'On delivery', percent: '33.33' },
+        { label: 'On commissioning', percent: '33.34' },
+      ],
+      '1000000.00',
+    );
+    expect(lines).toEqual([
+      { label: 'On signing', amountEtb: '333300.00' },
+      { label: 'On delivery', amountEtb: '333300.00' },
+      { label: 'On commissioning', amountEtb: '333400.00' },
+    ]);
+    expect(scheduleMismatchReason(lines!, '1000000.00')).toBeNull();
+  });
+
+  it('gives the largest row the rounding remainder, never a trailing 0% row', () => {
+    const lines = instalmentsFromPercents(
+      [
+        { label: 'a', percent: '40.00' },
+        { label: 'b', percent: '60.00' },
+        { label: 'retention', percent: '0.00' },
+      ],
+      '100.01',
+    );
+    expect(lines!.map((l) => l.amountEtb)).toEqual(['40.00', '60.01', '0.00']);
+  });
+
+  it('is null for an empty or partial (deposit-only) schedule', () => {
+    expect(instalmentsFromPercents([], '100.00')).toBeNull();
+    expect(
+      instalmentsFromPercents([{ label: 'Deposit', percent: '30.00' }], '100.00'),
+    ).toBeNull();
   });
 });
