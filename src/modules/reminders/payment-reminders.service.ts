@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { InvalidPhoneNumberError, SmsConsentRequiredError } from '../../common/exceptions';
@@ -36,7 +36,7 @@ type EnqueueOutcome = 'SENT' | 'NO_CONSENT' | 'INVALID_PHONE' | 'FAILED';
  * a `users` login, so there is no inbox to put anything in.
  */
 @Injectable()
-export class PaymentReminderService {
+export class PaymentReminderService implements OnApplicationBootstrap {
   private readonly logger = new Logger(PaymentReminderService.name);
 
   constructor(
@@ -44,6 +44,24 @@ export class PaymentReminderService {
     private readonly remindersRepository: PaymentReminderRepository,
     private readonly outboxService: OutboxService,
   ) {}
+
+  /**
+   * Also sweep on boot. The demo API sleeps between requests (Render free
+   * plan), so a 06:00 @Cron never fires on an idle day; the first request of
+   * the morning boots the process and this catches the day up. Safe to run
+   * any number of times: every SMS carries a dedupeKey the outbox swallows
+   * repeats of, and the in-app notification dedupes on its linkPath.
+   */
+  onApplicationBootstrap(): void {
+    // Not under Jest: an e2e file's app.init() would sweep the shared dev
+    // database mid-test and race its own teardown.
+    if (process.env.NODE_ENV === 'test') {
+      return;
+    }
+    void this.runDailyReminders().catch((err: unknown) => {
+      this.logger.error(`Payment reminders boot sweep failed: ${errorMessage(err)}`);
+    });
+  }
 
   @Cron(CronExpression.EVERY_DAY_AT_7AM)
   async runDailyReminders(): Promise<void> {
