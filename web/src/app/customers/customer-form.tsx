@@ -103,7 +103,8 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
         name,
         email: email || undefined,
         phone,
-        tinNumber: tinNumber.trim(),
+        // Optional; null (not '') so an edit can clear a TIN entered by mistake.
+        tinNumber: tinNumber.trim() || null,
         city: city || undefined,
         customerType,
         // Omit unless the operator actually toggled it — this is a
@@ -267,14 +268,13 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
           </select>
         </Field>
         <Field
-          label="TIN"
+          label="TIN (optional)"
           htmlFor="tinNumber"
-          hint="Printed in the parties clause of contracts."
+          hint="Printed in the parties clause of contracts when present."
         >
           <input
             id="tinNumber"
             inputMode="numeric"
-            required
             pattern="\d{10}"
             title="10-digit TIN"
             maxLength={10}

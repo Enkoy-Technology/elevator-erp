@@ -33,14 +33,16 @@ export class CreateCustomerDto {
   @MaxLength(200)
   legalName?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: '0067673517',
-    description: 'Tax Identification Number, printed on contracts.',
+    description:
+      'Tax Identification Number, printed on contracts when present. Optional — many private customers have none; null clears it.',
   })
+  @IsOptional()
   @Matches(/^\d{10}$/, {
     message: 'tinNumber must be the 10-digit Ethiopian TIN',
   })
-  tinNumber!: string;
+  tinNumber?: string | null;
 
   @ApiPropertyOptional({ example: 'ops@addisheights.et' })
   @IsOptional()

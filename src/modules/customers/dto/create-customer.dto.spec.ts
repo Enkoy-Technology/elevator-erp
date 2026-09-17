@@ -40,3 +40,22 @@ describe('CreateCustomerDto/UpdateCustomerDto phone', () => {
     expect(errors.filter((e) => e.property === 'phone')).not.toHaveLength(0);
   });
 });
+
+describe('CreateCustomerDto tinNumber', () => {
+  const base = { name: 'Addis Heights PLC', phone: '0911234567' };
+  const tinErrors = async (input: object) =>
+    (await validate(plainToInstance(CreateCustomerDto, input))).filter(
+      (e) => e.property === 'tinNumber',
+    );
+
+  it('is optional — absent and null both pass', async () => {
+    expect(await tinErrors(base)).toHaveLength(0);
+    expect(await tinErrors({ ...base, tinNumber: null })).toHaveLength(0);
+  });
+
+  it('still has to be the 10-digit TIN when given', async () => {
+    expect(await tinErrors({ ...base, tinNumber: '0067673517' })).toHaveLength(0);
+    expect(await tinErrors({ ...base, tinNumber: '12345' })).not.toHaveLength(0);
+    expect(await tinErrors({ ...base, tinNumber: '' })).not.toHaveLength(0);
+  });
+});
