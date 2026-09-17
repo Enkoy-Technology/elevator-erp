@@ -1,6 +1,8 @@
 'use client';
 
-import type { ChangeEvent, Dispatch, SetStateAction } from 'react';
+import { useState, type Dispatch, type SetStateAction } from 'react';
+
+import { NumberInput } from '@/app/quotations/number-input';
 
 import { formatNumber } from '@/lib/money';
 import {
@@ -41,6 +43,16 @@ const field =
 
 const label =
   'mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500';
+
+type NumberKey =
+  | 'shaftWidthMm'
+  | 'shaftDepthMm'
+  | 'floors'
+  | 'capacityKg'
+  | 'stops'
+  | 'travelHeightM'
+  | 'speedMs'
+  | 'doorWidthMm';
 
 export const isStandardLift = (productType: string): boolean =>
   productType === 'PASSENGER';
@@ -96,10 +108,33 @@ export const LiftInputs = ({
   setForm: Dispatch<SetStateAction<CalcInputPayload>>;
   products: readonly ProductTypeRow[];
 }) => {
-  const setNumber =
-    (key: keyof CalcInputPayload) => (event: ChangeEvent<HTMLInputElement>) => {
-      setForm((prev) => ({ ...prev, [key]: Number(event.target.value) }));
-    };
+  // What the salesperson has typed, kept as text so "1." survives until the
+  // next digit; the form only ever sees the number. A browser number input
+  // here showed spinner arrows and could not be cleared to retype — the
+  // client asked for typing, not arrows.
+  const [drafts, setDrafts] = useState<Partial<Record<NumberKey, string>>>({});
+  const numberField = (key: NumberKey, text: string) => {
+    // A draft is only shown while it still means the form's value; a Reset
+    // or any other outside change to the form drops it.
+    const draft = drafts[key];
+    const value =
+      draft !== undefined && Number(draft) === form[key]
+        ? draft
+        : String(form[key] ?? '');
+    return (
+    <label>
+      <span className={label}>{text}</span>
+      <NumberInput
+        className={field}
+        value={value}
+        onValueChange={(raw) => {
+          setDrafts((prev) => ({ ...prev, [key]: raw }));
+          setForm((prev) => ({ ...prev, [key]: Number(raw) }));
+        }}
+      />
+    </label>
+    );
+  };
   const standard = isStandardLift(form.productType);
 
   return (
@@ -136,42 +171,9 @@ export const LiftInputs = ({
 
       {standard ? (
         <div className="grid grid-cols-2 gap-3">
-          <label>
-            <span className={label}>Shaft width (mm)</span>
-            <input
-              className={field}
-              type="number"
-              min={1000}
-              max={6000}
-              value={form.shaftWidthMm ?? ''}
-              onChange={setNumber('shaftWidthMm')}
-              required
-            />
-          </label>
-          <label>
-            <span className={label}>Shaft depth (mm)</span>
-            <input
-              className={field}
-              type="number"
-              min={1000}
-              max={6000}
-              value={form.shaftDepthMm ?? ''}
-              onChange={setNumber('shaftDepthMm')}
-              required
-            />
-          </label>
-          <label>
-            <span className={label}>Number of floors</span>
-            <input
-              className={field}
-              type="number"
-              min={2}
-              max={64}
-              value={form.floors ?? ''}
-              onChange={setNumber('floors')}
-              required
-            />
-          </label>
+          {numberField('shaftWidthMm', 'Shaft width (mm)')}
+          {numberField('shaftDepthMm', 'Shaft depth (mm)')}
+          {numberField('floors', 'Number of floors')}
           <p className="col-span-2 text-xs text-slate-500">
             Persons, rated load, speed, car and door follow from the shaft and
             the floors — the company&apos;s standard passenger table.
@@ -182,68 +184,11 @@ export const LiftInputs = ({
       <div className="grid grid-cols-2 gap-3">
         {standard ? null : (
           <>
-            <label>
-              <span className={label}>Capacity (kg)</span>
-              <input
-                className={field}
-                type="number"
-                min={320}
-                max={5000}
-                value={form.capacityKg}
-                onChange={setNumber('capacityKg')}
-                required
-              />
-            </label>
-            <label>
-              <span className={label}>Stops</span>
-              <input
-                className={field}
-                type="number"
-                min={2}
-                max={64}
-                value={form.stops}
-                onChange={setNumber('stops')}
-                required
-              />
-            </label>
-            <label>
-              <span className={label}>Travel height / rise (m)</span>
-              <input
-                className={field}
-                type="number"
-                min={3}
-                max={200}
-                step="0.01"
-                value={form.travelHeightM}
-                onChange={setNumber('travelHeightM')}
-                required
-              />
-            </label>
-            <label>
-              <span className={label}>Speed (m/s)</span>
-              <input
-                className={field}
-                type="number"
-                min={0.4}
-                max={10}
-                step="0.01"
-                value={form.speedMs}
-                onChange={setNumber('speedMs')}
-                required
-              />
-            </label>
-            <label>
-              <span className={label}>Door width (mm)</span>
-              <input
-                className={field}
-                type="number"
-                min={700}
-                max={1400}
-                value={form.doorWidthMm}
-                onChange={setNumber('doorWidthMm')}
-                required
-              />
-            </label>
+            {numberField('capacityKg', 'Capacity (kg)')}
+            {numberField('stops', 'Stops')}
+            {numberField('travelHeightM', 'Travel height / rise (m)')}
+            {numberField('speedMs', 'Speed (m/s)')}
+            {numberField('doorWidthMm', 'Door width (mm)')}
           </>
         )}
       </div>
@@ -348,6 +293,7 @@ export const LiftResult = ({
                   'Shaft W×D (mm)',
                   `${formatNumber(result.technical.shaftWidthMm)} × ${formatNumber(result.technical.shaftDepthMm)}`,
                 ],
+                ['Standard lift', result.technical.standardLift ?? '—'],
                 ['Floors / stops', formatNumber(result.input.stops)],
                 ['Travel (m)', String(result.input.travelHeightM)],
               ] as const
@@ -454,6 +400,9 @@ export const LiftResult = ({
             ['Base price', result.pricing.basePrice],
             ['Additional stops / rise', result.pricing.stopsAdjustment],
             ['Additional capacity', result.pricing.capacityAdjustment],
+            ...(result.pricing.listVatIncluded
+              ? ([['Less VAT included in list', `-${result.pricing.listVatIncluded}`]] as const)
+              : []),
             ['List price', result.pricing.totalBeforeMargin],
           ] as const
         ).map(([k, v]) => (
