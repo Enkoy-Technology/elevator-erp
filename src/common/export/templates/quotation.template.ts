@@ -94,6 +94,7 @@ export const TECH_ROWS: ReadonlyArray<{
   { key: 'carDepthMm', label: 'Car depth', unit: 'mm' },
   { key: 'shaftWidthMm', label: 'Shaft width', unit: 'mm' },
   { key: 'shaftDepthMm', label: 'Shaft depth', unit: 'mm' },
+  { key: 'standardLift', label: 'Standard lift' },
   { key: 'pitDepthMm', label: 'Pit depth', unit: 'mm' },
   { key: 'motorPowerKw', label: 'Motor power', unit: 'kW' },
   { key: 'guideRailSpec', label: 'Guide rail' },

@@ -43,6 +43,7 @@ const EMPTY_GEOMETRY: Omit<TechnicalSpecs, 'productType'> = {
   carHeightMm: null,
   shaftWidthMm: null,
   shaftDepthMm: null,
+  standardLift: null,
   pitDepthMm: null,
   overheadClearanceMm: null,
   counterweightMassKg: null,
@@ -61,9 +62,9 @@ export class ElevatorCalcService {
     tenantId: string,
     request: CalcRequest,
   ): Promise<CalcResult> {
-    const [product, formula] = await Promise.all([
+    const [product, { formula, priceListVatPercent }] = await Promise.all([
       this.productTypes.findByCode(tenantId, request.productType),
-      this.productTypes.pricingFormula(tenantId),
+      this.productTypes.pricingSettings(tenantId),
     ]);
     if (!product) {
       throw new BadRequestException(
@@ -91,14 +92,23 @@ export class ElevatorCalcService {
       throw err;
     }
     const { basePrice, stopsAdjustment, capacityAdjustment } = priced;
-    const totalBeforeMargin = basePrice
-      .plus(stopsAdjustment)
-      .plus(capacityAdjustment);
-    if (!totalBeforeMargin.isFinite() || totalBeforeMargin.isNegative()) {
+    const listPrice = basePrice.plus(stopsAdjustment).plus(capacityAdjustment);
+    if (!listPrice.isFinite() || listPrice.isNegative()) {
       throw new BadRequestException(
-        `The pricing formula under Settings gives ${totalBeforeMargin.toFixed(2)} for ${input.stops} stops at ${input.capacityKg} kg; a list price cannot be negative.`,
+        `The pricing formula under Settings gives ${listPrice.toFixed(2)} for ${input.stops} stops at ${input.capacityKg} kg; a list price cannot be negative.`,
       );
     }
+    // The client's sheet is gross — 7,000,000 is what the customer pays,
+    // VAT in — so the net is the list divided by 1.15, and VAT is what is
+    // left, not list × 15%: that way net + VAT is the sheet figure exactly.
+    const listVatIncluded =
+      priceListVatPercent === null || D(priceListVatPercent).isZero()
+        ? null
+        : listPrice.minus(
+            listPrice.div(D(1).plus(D(priceListVatPercent).div(100))).toDP(2),
+          );
+    const totalBeforeMargin =
+      listVatIncluded === null ? listPrice : listPrice.minus(listVatIncluded);
     const marginAmount = totalBeforeMargin.mul(D(input.marginPercent).div(100));
     const subtotalWithMargin = totalBeforeMargin.plus(marginAmount);
     const taxAmount = subtotalWithMargin.mul(D(input.taxPercent).div(100));
@@ -122,12 +132,19 @@ export class ElevatorCalcService {
           N: input.stops,
           C: input.capacityKg,
           rise: input.travelHeightM,
-        })} = ${renderFormula(money(totalBeforeMargin), {})}`,
+        })} = ${renderFormula(money(listPrice), {})}${
+          listVatIncluded === null
+            ? ''
+            : `; less ${priceListVatPercent}% VAT included in the list = ${renderFormula(money(totalBeforeMargin), {})}`
+        }`,
       },
       pricing: {
         basePrice: money(basePrice),
         stopsAdjustment: money(stopsAdjustment),
         capacityAdjustment: money(capacityAdjustment),
+        ...(listVatIncluded === null
+          ? {}
+          : { listVatIncluded: money(listVatIncluded) }),
         totalBeforeMargin: money(totalBeforeMargin),
         marginAmount: money(marginAmount),
         subtotalWithMargin: money(subtotalWithMargin),
@@ -210,8 +227,12 @@ const resolve = (
       carWidthMm: lift.carWidthMm,
       carDepthMm: lift.carDepthMm,
       carHeightMm: PASSENGER_CAR_HEIGHT_MM,
-      shaftWidthMm: lift.shaftWidthMm,
-      shaftDepthMm: lift.shaftDepthMm,
+      // The building's shaft, as entered — what the salesperson typed must
+      // be what the spec sheet says. The standard row it maps to is named
+      // beside it rather than silently replacing it.
+      shaftWidthMm,
+      shaftDepthMm,
+      standardLift: `${lift.persons}-person lift, ${lift.shaftWidthMm} × ${lift.shaftDepthMm} mm standard shaft`,
     };
     return { input, technical, notes };
   }
@@ -283,6 +304,7 @@ const computeLiftGeometry = (
     carHeightMm: car.heightMm,
     shaftWidthMm: shaft.widthMm,
     shaftDepthMm: shaft.depthMm,
+    standardLift: null,
     pitDepthMm: computePitDepthMm(input.stops, input.speedMs),
     overheadClearanceMm: computeOverheadClearanceMm(
       input.stops,

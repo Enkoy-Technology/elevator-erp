@@ -47,9 +47,9 @@ export class ProductTypesController {
       'Products and their prices, in display order. Seeds the company list on first use.',
   })
   async list(@CurrentUser() user: AuthenticatedUser) {
-    const [rows, companyFormula] = await Promise.all([
+    const [rows, { formula: companyFormula }] = await Promise.all([
       this.productTypes.list(user.tenantId),
-      this.productTypes.pricingFormula(user.tenantId),
+      this.productTypes.pricingSettings(user.tenantId),
     ]);
     // The formula each row is actually priced with, its own figures written
     // in — so the list reads like the price sheet.

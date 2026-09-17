@@ -14,7 +14,10 @@ const productTypes = {
     const row = DEFAULT_PRODUCT_TYPES.find((p) => p.code === code);
     return row ? { ...row, tenantId: TENANT_ID, id: code, sortOrder: 0 } : null;
   }),
-  pricingFormula: jest.fn(async () => DEFAULT_PRICING_FORMULA),
+  pricingSettings: jest.fn(async () => ({
+    formula: DEFAULT_PRICING_FORMULA,
+    priceListVatPercent: null,
+  })),
 } as unknown as ProductTypesRepository;
 
 /** §4.1 technical fixture; pricing comes from the §4.2 product price list. */
@@ -87,9 +90,10 @@ describe('ElevatorCalcService', () => {
     });
 
     it('floors at the reference machine when the formula says max(0, …)', async () => {
-      (productTypes.pricingFormula as jest.Mock).mockResolvedValueOnce(
-        'base + max(0, N - 10) * perStop + max(0, C - 630) * perKg',
-      );
+      (productTypes.pricingSettings as jest.Mock).mockResolvedValueOnce({
+        formula: 'base + max(0, N - 10) * perStop + max(0, C - 630) * perKg',
+        priceListVatPercent: null,
+      });
       const result = await calc({
         ...WORKED_EXAMPLE,
         stops: 5,
@@ -102,10 +106,37 @@ describe('ElevatorCalcService', () => {
       expect(result.pricing.totalPrice).toBe('7000000.00');
     });
 
+    it('divides the VAT out of a VAT-inclusive price list so net + VAT is the sheet figure', async () => {
+      (productTypes.pricingSettings as jest.Mock).mockResolvedValueOnce({
+        formula: DEFAULT_PRICING_FORMULA,
+        priceListVatPercent: '15.00',
+      });
+      const result = await calc({
+        ...WORKED_EXAMPLE,
+        stops: 10,
+        capacityKg: 630,
+        marginPercent: 0,
+        taxPercent: 15,
+      });
+      // The sheet says 7,000,000 for the base machine, VAT in.
+      expect(result.pricing.basePrice).toBe('7000000.00');
+      expect(result.pricing.listVatIncluded).toBe('913043.48');
+      expect(result.pricing.totalBeforeMargin).toBe('6086956.52');
+      expect(result.pricing.taxAmount).toBe('913043.48');
+      expect(result.pricing.totalPrice).toBe('7000000.00');
+      expect(result.formula.working).toMatch(/less 15.00% VAT included in the list = 6,086,956.52/);
+    });
+
+    it('leaves an ex-VAT price list alone — no listVatIncluded row', async () => {
+      const result = await calc({ ...WORKED_EXAMPLE, marginPercent: 0, taxPercent: 0 });
+      expect(result.pricing.listVatIncluded).toBeUndefined();
+    });
+
     it('splits a non-additive formula into what the stops added and what the capacity added', async () => {
-      (productTypes.pricingFormula as jest.Mock).mockResolvedValueOnce(
-        'base + N * C * 10',
-      );
+      (productTypes.pricingSettings as jest.Mock).mockResolvedValueOnce({
+        formula: 'base + N * C * 10',
+        priceListVatPercent: null,
+      });
       const result = await calc({
         ...WORKED_EXAMPLE,
         stops: 12,
@@ -120,9 +151,10 @@ describe('ElevatorCalcService', () => {
     });
 
     it('refuses to quote off a formula that cannot be evaluated', async () => {
-      (productTypes.pricingFormula as jest.Mock).mockResolvedValueOnce(
-        'base + price',
-      );
+      (productTypes.pricingSettings as jest.Mock).mockResolvedValueOnce({
+        formula: 'base + price',
+        priceListVatPercent: null,
+      });
       await expect(calc(WORKED_EXAMPLE)).rejects.toThrow(
         /pricing formula under Settings/,
       );
@@ -373,6 +405,12 @@ describe('ElevatorCalcService', () => {
       const result = await standard({ shaftWidthMm: 2000, shaftDepthMm: 1800 });
       expect(result.technical.capacityPersons).toBe(10);
       expect(result.notes[0]).toMatch(/not a standard shaft/);
+      // The spec sheet says the building's shaft, and names the row beside it.
+      expect(result.technical.shaftWidthMm).toBe(2000);
+      expect(result.technical.shaftDepthMm).toBe(1800);
+      expect(result.technical.standardLift).toBe(
+        '10-person lift, 1980 × 1750 mm standard shaft',
+      );
     });
 
     it('tells the salesperson when nothing fits', async () => {

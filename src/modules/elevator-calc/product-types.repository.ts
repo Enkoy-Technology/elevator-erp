@@ -206,15 +206,26 @@ export class ProductTypesRepository {
     });
   }
 
-  /** The tenant's list-price formula, or the starter when none is saved. */
-  pricingFormula(tenantId: string): Promise<string> {
+  /**
+   * The tenant's list-price formula (the starter when none is saved) and the
+   * VAT rate baked into its price list (null: the list is ex-VAT).
+   */
+  pricingSettings(
+    tenantId: string,
+  ): Promise<{ formula: string; priceListVatPercent: string | null }> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       const [row] = await tx
-        .select({ pricingFormula: tenants.pricingFormula })
+        .select({
+          pricingFormula: tenants.pricingFormula,
+          priceListVatPercent: tenants.priceListVatPercent,
+        })
         .from(tenants)
         .where(eq(tenants.id, tenantId))
         .limit(1);
-      return row?.pricingFormula ?? DEFAULT_PRICING_FORMULA;
+      return {
+        formula: row?.pricingFormula ?? DEFAULT_PRICING_FORMULA,
+        priceListVatPercent: row?.priceListVatPercent ?? null,
+      };
     });
   }
 

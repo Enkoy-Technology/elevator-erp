@@ -93,6 +93,7 @@ const SPEC_ROWS: readonly SpecRow[] = [
   { key: 'carHeightMm', label: 'Car height', unit: 'mm' },
   { key: 'shaftWidthMm', label: 'Shaft width', unit: 'mm' },
   { key: 'shaftDepthMm', label: 'Shaft depth', unit: 'mm' },
+  { key: 'standardLift', label: 'Standard lift' },
   { key: 'pitDepthMm', label: 'Pit depth', unit: 'mm' },
   { key: 'overheadClearanceMm', label: 'Overhead clearance', unit: 'mm' },
   { key: 'counterweightMassKg', label: 'Counterweight mass', unit: 'kg' },

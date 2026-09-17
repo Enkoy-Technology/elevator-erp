@@ -84,8 +84,15 @@ export interface TechnicalSpecs {
   carWidthMm: number | null;
   carDepthMm: number | null;
   carHeightMm: number | null;
+  /** The shaft the lift is specified for — the building's own, as entered. */
   shaftWidthMm: number | null;
   shaftDepthMm: number | null;
+  /**
+   * For a standard passenger lift: the table row it is built as, e.g.
+   * "8-person lift, 1835 × 1750 mm standard shaft". Null for the classic
+   * (computed) geometry and on snapshots taken before this field existed.
+   */
+  standardLift: string | null;
   pitDepthMm: number | null;
   overheadClearanceMm: number | null;
   counterweightMassKg: string | null;
@@ -101,6 +108,12 @@ export interface PricingBreakdown {
   basePrice: string;
   stopsAdjustment: string;
   capacityAdjustment: string;
+  /**
+   * Present only when the tenant's price list is VAT-inclusive: the VAT
+   * divided out of the list figure so that `totalBeforeMargin` is net.
+   * base + stops + capacity − this = totalBeforeMargin.
+   */
+  listVatIncluded?: string;
   totalBeforeMargin: string;
   marginAmount: string;
   subtotalWithMargin: string;

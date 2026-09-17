@@ -323,6 +323,7 @@ const renderSpecTable = (line: DocumentLineData): string => {
     ['Depth of Pit (mm)', text(tech.pitDepthMm)],
     ['O/H height of overhead (mm)', text(tech.overheadClearanceMm)],
     ['Shaft size (W x D)', dims([tech.shaftWidthMm, tech.shaftDepthMm])],
+    ['Standard lift', text(tech.standardLift)],
     [
       'Car size (W x D x H)',
       dims([tech.carWidthMm, tech.carDepthMm, tech.carHeightMm]),

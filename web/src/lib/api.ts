@@ -321,6 +321,8 @@ export interface CalcResult {
     carHeightMm: number | null;
     shaftWidthMm: number | null;
     shaftDepthMm: number | null;
+    /** "8-person lift, 1835 × 1750 mm standard shaft" for a table lift; null otherwise. */
+    standardLift?: string | null;
     pitDepthMm: number | null;
     overheadClearanceMm: number | null;
     counterweightMassKg: string | null;
@@ -334,6 +336,8 @@ export interface CalcResult {
     basePrice: string;
     stopsAdjustment: string;
     capacityAdjustment: string;
+    /** Only when the price list is VAT-inclusive: what was divided out of it. */
+    listVatIncluded?: string;
     totalBeforeMargin: string;
     marginAmount: string;
     subtotalWithMargin: string;
@@ -409,7 +413,7 @@ export interface Customer {
 
 export interface CreateCustomerPayload {
   name: string;
-  tinNumber?: string;
+  tinNumber?: string | null;
   email?: string;
   phone?: string;
   city?: string;
@@ -1230,6 +1234,7 @@ export interface TenantSettings {
   paymentReminderOffsetDays: number[];
   /** The list-price formula the calculator evaluates, edited here. */
   pricingFormula: string;
+  priceListVatPercent: string | null;
   /** Last-run result of the daily maintenance-reminder cron's consent gate
    * (task-3 §3.4) — both null until that cron has ever run once. Read-only. */
   maintenanceReminderConsentSkippedLastRunAt: string | null;
@@ -2356,6 +2361,7 @@ export const updateSettings = (payload: {
   maintenanceReminderDays?: number;
   paymentReminderOffsetDays?: number[];
   pricingFormula?: string | null;
+  priceListVatPercent?: string | null;
 }): Promise<TenantSettings> =>
   apiFetch<TenantSettings>('/settings', {
     method: 'PATCH',
