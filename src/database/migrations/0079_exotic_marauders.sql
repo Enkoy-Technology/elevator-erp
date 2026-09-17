@@ -1,0 +1,1 @@
+ALTER TABLE "tenants" ADD COLUMN "price_list_vat_percent" numeric(5, 2);

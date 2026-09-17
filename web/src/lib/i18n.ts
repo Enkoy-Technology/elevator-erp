@@ -53,6 +53,8 @@ export type MessageKey =
   | 'settings.pricing'
   | 'settings.pricingFormula'
   | 'settings.pricingFormulaHelp'
+  | 'settings.priceListVatPercent'
+  | 'settings.priceListVatPercentHelp'
   | 'settings.maintenanceReminderDays'
   | 'settings.maintenanceReminderDaysHelp'
   | 'settings.paymentReminderOffsetDays'
@@ -122,6 +124,9 @@ const en: Record<MessageKey, string> = {
   'settings.pricingFormula': 'List-price formula',
   'settings.pricingFormulaHelp':
     'Evaluated exactly, per quotation line, before margin and VAT, for every product that has no formula of its own. Names: Base price, N (stops), C (capacity in kg), rise (travel in m), refN and refC (the stops and kg the base price includes), perStop and perKg (the product’s rates). Use + − × ÷, brackets, and max(), min(), round(). Starter: Base price + (N - refN) * perStop + (C - refC) * perKg. Leave blank to go back to it.',
+  'settings.priceListVatPercent': 'VAT included in the price list (%)',
+  'settings.priceListVatPercentHelp':
+    'Set this when the price sheet quotes what the customer pays, VAT in — 7,000,000 for the base machine means 6,086,956.52 net plus 15% VAT. The calculator divides it out before margin and VAT, so the offer’s total equals the sheet figure. Leave blank if the sheet is ex-VAT.',
   'settings.maintenanceReminderDays': 'Maintenance reminder window (days)',
   'settings.maintenanceReminderDaysHelp':
     'How many days ahead of a scheduled visit the reminder SMS goes out.',
@@ -194,6 +199,9 @@ const am: Record<MessageKey, string> = {
   'settings.pricingFormula': 'የዝርዝር ዋጋ ቀመር',
   'settings.pricingFormulaHelp':
     'በእያንዳንዱ የዋጋ ማቅረቢያ መስመር ላይ ከትርፍ እና ከቫት በፊት በትክክል ይሰላል። ስሞች፦ Base price፣ N (ፎቆች)፣ C (የመሸከም አቅም በኪግ)፣ perStop፣ perKg።',
+  'settings.priceListVatPercent': 'በዋጋ ዝርዝሩ ውስጥ የተካተተ ቫት (%)',
+  'settings.priceListVatPercentHelp':
+    'የዋጋ ዝርዝሩ ቫትን ጨምሮ ከሆነ ይህን ያስቀምጡ፤ ማስያው ከትርፍ እና ከቫት በፊት ያወጣዋል። ዝርዝሩ ያለ ቫት ከሆነ ባዶ ይተዉት።',
   'settings.maintenanceReminderDays': 'የጥገና ማስታወሻ ጊዜ (ቀናት)',
   'settings.maintenanceReminderDaysHelp':
     'ከቀጠሮው ስንት ቀናት ቀደም ብሎ የማስታወሻ ኤስኤምኤስ እንደሚላክ።',

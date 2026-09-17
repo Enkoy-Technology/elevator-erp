@@ -208,4 +208,17 @@ export class UpdateSettingsDto {
   @Validate(IsPricingFormulaConstraint)
   /** Null resets the tenant to the starter formula. */
   pricingFormula?: string | null;
+
+  @ApiPropertyOptional({
+    example: '15.00',
+    description:
+      'VAT rate already included in the product price list, as a percent. Set it when the sheet quotes gross figures (7,000,000 is what the customer pays, VAT in): the calculator divides it out before margin and VAT. Null: the list is ex-VAT.',
+    nullable: true,
+  })
+  @ValidateIf((o: UpdateSettingsDto) => o.priceListVatPercent !== null)
+  @IsOptional()
+  @Matches(/^(100(\.00?)?|\d{1,2}(\.\d{1,2})?)$/, {
+    message: 'priceListVatPercent must be a percent between 0 and 100 with up to 2 decimals',
+  })
+  priceListVatPercent?: string | null;
 }

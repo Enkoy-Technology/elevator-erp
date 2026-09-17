@@ -136,6 +136,7 @@ export default function SettingsPage() {
   const [defaultLocale, setDefaultLocale] = useState<AppLocale>('en');
   const [maintenanceReminderDays, setMaintenanceReminderDays] = useState(3);
   const [pricingFormula, setPricingFormula] = useState('');
+  const [priceListVatPercent, setPriceListVatPercent] = useState('');
   // Comma-separated in the UI (e.g. "0, 7, 30") — parsed to number[] on
   // submit; simplest control for a short, small-cardinality list (I7).
   const [paymentReminderOffsetDaysText, setPaymentReminderOffsetDaysText] =
@@ -163,6 +164,7 @@ export default function SettingsPage() {
       setLocale(data.defaultLocale);
       setMaintenanceReminderDays(data.maintenanceReminderDays);
       setPricingFormula(data.pricingFormula);
+      setPriceListVatPercent(data.priceListVatPercent ?? '');
       setPaymentReminderOffsetDaysText(
         data.paymentReminderOffsetDays.join(', '),
       );
@@ -220,6 +222,8 @@ export default function SettingsPage() {
         ),
         // Blank means back to the starter formula.
         pricingFormula: pricingFormula.trim() || null,
+        // Blank means the list is ex-VAT.
+        priceListVatPercent: priceListVatPercent.trim() || null,
       });
       applySettings(data);
       setSuccess(t('settings.saved'));
@@ -523,6 +527,22 @@ export default function SettingsPage() {
                     />
                     <p className="mt-1 text-xs text-slate-400">
                       {t('settings.pricingFormulaHelp')}
+                    </p>
+                  </div>
+                  <div>
+                    <label className={labelClass} htmlFor="priceListVatPercent">
+                      {t('settings.priceListVatPercent')}
+                    </label>
+                    <input
+                      id="priceListVatPercent"
+                      className={`${fieldClass} max-w-[10rem]`}
+                      inputMode="decimal"
+                      placeholder="15"
+                      value={priceListVatPercent}
+                      onChange={(e) => setPriceListVatPercent(e.target.value)}
+                    />
+                    <p className="mt-1 text-xs text-slate-400">
+                      {t('settings.priceListVatPercentHelp')}
                     </p>
                   </div>
                 </section>

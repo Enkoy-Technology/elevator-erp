@@ -51,6 +51,17 @@ export const tenants = pgTable('tenants', {
    */
   pricingFormula: text('pricing_formula'),
   /**
+   * The VAT rate already baked into the product price list, as a percent
+   * ("15.00"). The client's 2026-09 sheet quotes gross figures — 7,000,000
+   * is what the customer pays, VAT in — so the calculator divides it out
+   * before margin and VAT are applied. Null: the list is ex-VAT, nothing is
+   * divided out. Same "tenant setting" path as pricingFormula above.
+   */
+  priceListVatPercent: numeric('price_list_vat_percent', {
+    precision: 5,
+    scale: 2,
+  }),
+  /**
    * Last-run result of the nightly customer-balance reconciliation (task-2
    * brief §2.5) — the "somewhere an admin can see it" surface: read back
    * through GET /settings, written by BalanceReconciliationService after

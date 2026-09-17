@@ -14,6 +14,8 @@ export type SettingsRecord = typeof tenantBranding.$inferSelect & {
   paymentReminderOffsetDays: number[];
   /** The stored formula, or the starter when none has been saved. */
   pricingFormula: string;
+  /** VAT already baked into the price list, as a percent; null when the list is ex-VAT. */
+  priceListVatPercent: string | null;
   /** Last-run result of the nightly balance reconciliation (task-2 §2.5) —
    * both null until the job has ever run. Read-only: never part of
    * UpdateSettingsDto, only BalanceReconciliationService writes these. */
@@ -40,6 +42,7 @@ const TENANT_SETTINGS_COLUMNS = {
   maintenanceReminderDays: tenants.maintenanceReminderDays,
   paymentReminderOffsetDays: tenants.paymentReminderOffsetDays,
   pricingFormula: tenants.pricingFormula,
+  priceListVatPercent: tenants.priceListVatPercent,
   balanceReconciliationLastRunAt: tenants.balanceReconciliationLastRunAt,
   balanceReconciliationMismatchCount:
     tenants.balanceReconciliationMismatchCount,
@@ -135,7 +138,8 @@ export class SettingsRepository {
         dto.fiscalYearStart !== undefined ||
         dto.maintenanceReminderDays !== undefined ||
         dto.paymentReminderOffsetDays !== undefined ||
-        dto.pricingFormula !== undefined;
+        dto.pricingFormula !== undefined ||
+        dto.priceListVatPercent !== undefined;
       const [tenant] = touchesTenant
         ? await tx
             .update(tenants)
@@ -152,6 +156,9 @@ export class SettingsRepository {
                 : {}),
               ...(dto.pricingFormula !== undefined
                 ? { pricingFormula: dto.pricingFormula?.trim() ?? null }
+                : {}),
+              ...(dto.priceListVatPercent !== undefined
+                ? { priceListVatPercent: dto.priceListVatPercent }
                 : {}),
               updatedAt: new Date(),
             })
