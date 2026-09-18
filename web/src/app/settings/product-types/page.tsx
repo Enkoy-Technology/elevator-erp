@@ -135,12 +135,12 @@ export default function ProductTypesPage() {
     },
     {
       id: 'perKg',
-      header: 'Per extra kg',
+      header: 'Per extra capacity',
       meta: { align: 'right' },
       cell: ({ row }) =>
         Number(row.original.perKgEtb) === 0
           ? '—'
-          : formatEtb(row.original.perKgEtb),
+          : `${formatEtb(row.original.perKgEtb)} / ${row.original.kgStep.toLocaleString('en-ET')} kg`,
     },
     {
       id: 'formula',

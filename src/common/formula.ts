@@ -32,6 +32,12 @@ export interface FormulaScope {
   refN: Decimal.Value;
   /** The capacity the product's base price includes, kg. */
   refC: Decimal.Value;
+  /**
+   * The kilograms one perKg step covers — the sheet prices passenger lifts
+   * "per 100 kg" and car and goods lifts "per 1,000 kg". 1 when the rate is
+   * literally per kilogram.
+   */
+  kgStep: Decimal.Value;
   /** Travel height in metres — an escalator's rise. */
   rise: Decimal.Value;
 }
@@ -66,6 +72,9 @@ const ALIASES: Record<string, keyof FormulaScope> = {
   basec: 'refC',
   base_c: 'refC',
   basecapacity: 'refC',
+  kgstep: 'kgStep',
+  kg_step: 'kgStep',
+  step: 'kgStep',
   rise: 'rise',
   travel: 'rise',
   height: 'rise',
@@ -315,7 +324,7 @@ class Parser {
       const key = ALIASES[lower];
       if (!key) {
         throw new FormulaError(
-          `Unknown name "${token.name}". Use base, N (stops), C (capacity kg), rise (m), refN, refC, perStop or perKg.`,
+          `Unknown name "${token.name}". Use base, N (stops), C (capacity kg), rise (m), refN, refC, perStop, perKg or kgStep.`,
         );
       }
       return new Decimal(this.scope[key]);
@@ -354,19 +363,26 @@ const MAX_PRICE = new Decimal('1e12');
  * large lift, and a flat product with both rates at zero — so a division
  * that only fails at one of them is refused here, not on the next quotation.
  */
-const passenger = { perStop: '80000', perKg: '1000', refN: 10, refC: 630 };
+const passenger = {
+  perStop: '80000',
+  perKg: '100000',
+  kgStep: 100,
+  refN: 10,
+  refC: 630,
+};
 const PROBE_SCOPES: readonly FormulaScope[] = [
-  { base: '7000000', N: 12, C: 1000, rise: 33, ...passenger },
-  { base: '7000000', N: 10, C: 630, rise: 27, ...passenger },
-  { base: '7000000', N: 2, C: 320, rise: 3, ...passenger },
-  { base: '12000000', N: 64, C: 5000, rise: 189, ...passenger },
+  { base: '7000000', N: 12, C: 1000, rise: 42, ...passenger },
+  { base: '7000000', N: 10, C: 630, rise: 35, ...passenger },
+  { base: '7000000', N: 2, C: 320, rise: 7, ...passenger },
+  { base: '12000000', N: 64, C: 5000, rise: 224, ...passenger },
   {
     base: '11000000',
     N: 2,
     C: 3000,
-    rise: 3,
+    rise: 7,
     perStop: '300000',
-    perKg: '500',
+    perKg: '500000',
+    kgStep: 1000,
     refN: 2,
     refC: 3000,
   },
@@ -377,6 +393,7 @@ const PROBE_SCOPES: readonly FormulaScope[] = [
     rise: 6,
     perStop: '0',
     perKg: '0',
+    kgStep: 1,
     refN: 10,
     refC: 630,
   },
@@ -390,7 +407,8 @@ const NAME_LABELS: Record<keyof FormulaScope, string> = {
   perKg: 'perKg',
   refN: 'refN',
   refC: 'refC',
-  rise: 'rise',
+  kgStep: 'kgStep',
+  rise: 'Rise',
 };
 
 const formatValue = (value: Decimal.Value): string => {
@@ -431,12 +449,13 @@ export const renderFormula = (
               ? NAME_LABELS[key]
               : token.name;
     } else {
-      text = token.value;
+      // Printed the way the client's sheet writes it: × and −, never * and -.
+      text = token.value === '*' ? '×' : token.value === '-' ? '−' : token.value;
     }
     // A sign with nothing (or an operator, or an opening bracket) before it
     // is unary: it hugs what follows.
     const unary =
-      (text === '-' || text === '+') &&
+      (text === '−' || text === '+') &&
       (prev === undefined || (prev.kind === 'op' && prev.value !== ')'));
     const tight =
       out.length === 0 ||
@@ -480,10 +499,12 @@ export const formulaProblem = (formula: string): string | null => {
 /**
  * The company's formula (2026-09-14 price sheet), the starter every tenant
  * begins with: base, plus the stops above the product's own reference,
- * plus the kilograms above the product's own reference capacity. Written
+ * plus the capacity above the product's own reference, in the product's
+ * own steps (per 100 kg for a passenger lift, per 1,000 kg for a car lift)
+ * so the text reads exactly as the sheet writes it. Written
  * with the product's rates and references so one formula prices a
  * passenger lift (10 stops, 630 kg), a car lift (2 stops, 3,000 kg) and a
  * flat product alike; an escalator carries its own formula on the rise.
  */
 export const DEFAULT_PRICING_FORMULA =
-  'Base price + (N - refN) * perStop + (C - refC) * perKg';
+  'Base price + (N − refN) × perStop + ((C − refC) / kgStep) × perKg';

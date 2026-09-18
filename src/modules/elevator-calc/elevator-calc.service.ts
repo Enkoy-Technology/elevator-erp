@@ -124,6 +124,7 @@ export class ElevatorCalcService {
       perKg: product.perKgEtb,
       refN: product.refStops,
       refC: product.refCapacityKg,
+      kgStep: product.kgStep,
     };
     const applied = product.formula ?? formula;
 
@@ -211,9 +212,8 @@ const resolve = (
       productType: request.productType,
       capacityKg: lift.loadKg,
       stops: floors,
-      travelHeightM: Number(
-        (Math.max(1, floors - 1) * FLOOR_HEIGHT_M).toFixed(2),
-      ),
+      // The client's rule: 3,500 mm per floor, times the floor count.
+      travelHeightM: Number((floors * FLOOR_HEIGHT_M).toFixed(2)),
       speedMs,
       machineRoomType,
       doorType: lift.door === 'CO' ? 'CENTER_OPEN' : 'TELESCOPIC',
@@ -280,8 +280,8 @@ const resolve = (
   return { input, technical, notes };
 };
 
-/** Travel between floors when only the floor count is known. */
-const FLOOR_HEIGHT_M = 3.0;
+/** Floor pitch when only the floor count is known — the client's 3,500 mm per floor. */
+const FLOOR_HEIGHT_M = 3.5;
 
 /** The §4.1 EN 81 lift block, for every product with lift geometry on. */
 const computeLiftGeometry = (

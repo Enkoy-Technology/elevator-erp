@@ -45,7 +45,7 @@ export class CreateProductTypeDto {
 
   @ApiPropertyOptional({
     example: '1000.00',
-    description: 'Added per kg above refCapacityKg. 0 for a flat price.',
+    description: 'Added per kgStep kilograms above refCapacityKg. 0 for a flat price.',
     default: '0',
   })
   @IsOptional()
@@ -81,6 +81,18 @@ export class CreateProductTypeDto {
   @Min(1)
   @Max(50000)
   refCapacityKg?: number;
+
+  @ApiPropertyOptional({
+    example: 100,
+    default: 1,
+    description:
+      'Kilograms one perKgEtb step covers — the sheet prices passenger lifts per 100 kg and car / goods lifts per 1,000 kg (kgStep in the formula).',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10000)
+  kgStep?: number;
 
   @ApiPropertyOptional({
     example: 3500,
@@ -158,6 +170,18 @@ export class UpdateProductTypeDto {
   @Min(1)
   @Max(50000)
   refCapacityKg?: number;
+
+  @ApiPropertyOptional({
+    example: 100,
+    default: 1,
+    description:
+      'Kilograms one perKgEtb step covers — the sheet prices passenger lifts per 100 kg and car / goods lifts per 1,000 kg (kgStep in the formula).',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10000)
+  kgStep?: number;
 
   @ApiPropertyOptional({
     example: 3500,

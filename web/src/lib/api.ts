@@ -221,6 +221,8 @@ export interface ProductTypeRow {
   basePriceEtb: string;
   perStopEtb: string;
   perKgEtb: string;
+  /** Kilograms one perKgEtb step covers (100 on the passenger class, 1,000 on car and goods lifts). */
+  kgStep: number;
   /** The machine the base price includes: refN and refC in the formula. */
   refStops: number;
   refCapacityKg: number;
@@ -241,6 +243,7 @@ export interface ProductTypePayload {
   basePriceEtb: string;
   perStopEtb?: string;
   perKgEtb?: string;
+  kgStep?: number;
   refStops?: number;
   refCapacityKg?: number;
   minCapacityKg?: number | null;

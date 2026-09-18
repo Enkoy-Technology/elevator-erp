@@ -24,7 +24,8 @@ export function ProductTypeForm({ existing }: { existing?: ProductTypeRow }) {
   const [perStopEtb, setPerStopEtb] = useState(
     existing?.perStopEtb ?? '80000.00',
   );
-  const [perKgEtb, setPerKgEtb] = useState(existing?.perKgEtb ?? '1000.00');
+  const [perKgEtb, setPerKgEtb] = useState(existing?.perKgEtb ?? '100000.00');
+  const [kgStep, setKgStep] = useState(String(existing?.kgStep ?? 100));
   const [refStops, setRefStops] = useState(String(existing?.refStops ?? 10));
   const [refCapacityKg, setRefCapacityKg] = useState(
     String(existing?.refCapacityKg ?? 630),
@@ -48,6 +49,7 @@ export function ProductTypeForm({ existing }: { existing?: ProductTypeRow }) {
       basePriceEtb: basePriceEtb.trim(),
       perStopEtb: perStopEtb.trim() || '0',
       perKgEtb: perKgEtb.trim() || '0',
+      kgStep: Number(kgStep) || 1,
       refStops: Number(refStops) || 10,
       refCapacityKg: Number(refCapacityKg) || 630,
       // Blank means no floor.
@@ -187,7 +189,11 @@ export function ProductTypeForm({ existing }: { existing?: ProductTypeRow }) {
             onChange={(e) => setPerStopEtb(e.target.value)}
           />
         </Field>
-        <Field label="Per kg above base (ETB)" htmlFor="perKgEtb">
+        <Field
+          label="Per capacity step above base (ETB)"
+          htmlFor="perKgEtb"
+          hint="The sheet: 100,000 per 100 kg on a passenger lift, 500,000 per 1,000 kg on a car lift."
+        >
           <input
             id="perKgEtb"
             inputMode="decimal"
@@ -195,6 +201,18 @@ export function ProductTypeForm({ existing }: { existing?: ProductTypeRow }) {
             className={fieldClass}
             value={perKgEtb}
             onChange={(e) => setPerKgEtb(e.target.value)}
+          />
+        </Field>
+        <Field label="Capacity step (kg)" htmlFor="kgStep">
+          <input
+            id="kgStep"
+            type="number"
+            min={1}
+            max={10000}
+            required
+            className={fieldClass}
+            value={kgStep}
+            onChange={(e) => setKgStep(e.target.value)}
           />
         </Field>
         <Field

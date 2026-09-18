@@ -391,7 +391,7 @@ describe('ElevatorCalcService', () => {
       expect(result.input).toMatchObject({
         capacityKg: 630,
         stops: 8,
-        travelHeightM: 21,
+        travelHeightM: 28, // 8 floors × 3.5 m — the client's rule
         speedMs: 1.0,
         doorType: 'CENTER_OPEN',
         doorWidthMm: 800,

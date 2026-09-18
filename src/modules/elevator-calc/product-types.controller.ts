@@ -60,6 +60,7 @@ export class ProductTypesController {
         perKg: row.perKgEtb,
         refN: row.refStops,
         refC: row.refCapacityKg,
+        kgStep: row.kgStep,
       }),
     }));
   }
@@ -81,6 +82,7 @@ export class ProductTypesController {
       perKgEtb: dto.perKgEtb ?? '0',
       refStops: dto.refStops ?? 10,
       refCapacityKg: dto.refCapacityKg ?? 630,
+      kgStep: dto.kgStep ?? 1,
       minCapacityKg: dto.minCapacityKg ?? null,
       formula: dto.formula?.trim() || null,
       liftGeometry: dto.liftGeometry ?? true,

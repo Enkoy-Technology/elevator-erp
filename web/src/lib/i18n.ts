@@ -123,7 +123,7 @@ const en: Record<MessageKey, string> = {
   'settings.pricing': 'Pricing',
   'settings.pricingFormula': 'List-price formula',
   'settings.pricingFormulaHelp':
-    'Evaluated exactly, per quotation line, before margin and VAT, for every product that has no formula of its own. Names: Base price, N (stops), C (capacity in kg), rise (travel in m), refN and refC (the stops and kg the base price includes), perStop and perKg (the product’s rates). Use + − × ÷, brackets, and max(), min(), round(). Starter: Base price + (N - refN) * perStop + (C - refC) * perKg. Leave blank to go back to it.',
+    'Evaluated exactly, per quotation line, before margin and VAT, for every product that has no formula of its own. Names: Base price, N (stops), C (capacity in kg), rise (travel in m), refN and refC (the stops and kg the base price includes), perStop and perKg (the product’s rates). Use + − × ÷, brackets, and max(), min(), round(). kgStep is the kilograms one perKg step covers (100 on a passenger lift, 1,000 on a car lift). Starter: Base price + (N − refN) × perStop + ((C − refC) / kgStep) × perKg. Leave blank to go back to it.',
   'settings.priceListVatPercent': 'VAT included in the price list (%)',
   'settings.priceListVatPercentHelp':
     'Set this when the price sheet quotes what the customer pays, VAT in — 7,000,000 for the base machine means 6,086,956.52 net plus 15% VAT. The calculator divides it out before margin and VAT, so the offer’s total equals the sheet figure. Leave blank if the sheet is ex-VAT.',

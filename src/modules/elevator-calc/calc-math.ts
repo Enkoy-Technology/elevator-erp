@@ -41,6 +41,7 @@ export interface ProductRates {
   perKgEtb: string;
   refStops: number;
   refCapacityKg: number;
+  kgStep: number;
 }
 
 export const computeProductPrice = (
@@ -60,6 +61,7 @@ export const computeProductPrice = (
     perKg: rates.perKgEtb,
     refN: rates.refStops,
     refC: rates.refCapacityKg,
+    kgStep: rates.kgStep,
     rise: travelHeightM,
   };
   const basePrice = D(rates.basePriceEtb);
