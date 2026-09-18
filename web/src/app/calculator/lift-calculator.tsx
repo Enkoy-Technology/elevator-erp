@@ -58,6 +58,20 @@ export const isStandardLift = (productType: string): boolean =>
   productType === "PASSENGER";
 
 /** The request the API wants: shaft and floors for a standard lift, everything for the rest. */
+/**
+ * The capacity to start a product at: its own minimum when the current figure
+ * is below it (a car lift is sold from 3,500 kg — better to open on that
+ * than to type 1,000 and be told no), otherwise what was there.
+ */
+export const startingCapacityKg = (
+  products: readonly ProductTypeRow[],
+  productType: string,
+  currentKg: number,
+): number => {
+  const min = products.find((p) => p.code === productType)?.minCapacityKg;
+  return min != null && currentKg < min ? min : currentKg;
+};
+
 /** Whether the product's price is its rise (an escalator) — the one product that still asks for it. */
 export const usesRise = (
   products: readonly ProductTypeRow[],
@@ -161,6 +175,11 @@ export const LiftInputs = ({
             setForm((prev) => ({
               ...prev,
               productType: e.target.value,
+              capacityKg: startingCapacityKg(
+                products,
+                e.target.value,
+                prev.capacityKg,
+              ),
             }))
           }
         >

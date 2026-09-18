@@ -3,7 +3,7 @@
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { usesRise } from "@/app/calculator/lift-calculator";
+import { startingCapacityKg, usesRise } from "@/app/calculator/lift-calculator";
 import { Field } from "@/components/form-page";
 import {
   btnGhost,
@@ -446,9 +446,13 @@ export const LinesEditor = ({
                         className={fieldClass}
                         disabled={!editable}
                         value={draft.productType}
-                        onChange={(e) =>
-                          setField(line, "productType", e.target.value)
-                        }
+                        onChange={(e) => {
+                          const next = { ...draftFor(line), productType: e.target.value };
+                          next.capacityKg = String(
+                            startingCapacityKg(products, e.target.value, Number(next.capacityKg) || 0),
+                          );
+                          setDrafts((prev) => ({ ...prev, [line.id]: next }));
+                        }}
                       >
                         {products.map((p) => (
                           <option key={p.code} value={p.code}>

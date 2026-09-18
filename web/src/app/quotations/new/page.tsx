@@ -5,6 +5,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 
 import {
   LiftInputs,
+  startingCapacityKg,
   LiftResult,
   toRequest,
   WORKED_EXAMPLE,
@@ -104,7 +105,17 @@ export default function NewQuotationPage() {
         : products[0]?.code;
     if (productType) {
       setForm((prev) =>
-        prev.productType === productType ? prev : { ...prev, productType },
+        prev.productType === productType
+          ? prev
+          : {
+              ...prev,
+              productType,
+              capacityKg: startingCapacityKg(
+                products,
+                productType,
+                prev.capacityKg,
+              ),
+            },
       );
     }
     setResult(null);
