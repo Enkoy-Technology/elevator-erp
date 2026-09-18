@@ -384,10 +384,12 @@ export const renderLayout = (opts: LayoutOptions): string => {
 
   /* ---- watermark: the brand mark, faint, behind the text of every page.
      position:fixed is repeated on every printed page by Chromium — the one
-     use of it here, since it has no height for content to run under. */
+     use of it here, since it has no height for content to run under.
+     0.08 vanished on the client's printer (a laser drops tones that light);
+     0.16 prints and still sits behind the text. */
   .watermark {
     position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 130mm; z-index: -1; opacity: 0.08; pointer-events: none;
+    width: 130mm; z-index: -1; opacity: 0.16; pointer-events: none;
   }
   .watermark img { width: 100%; height: auto; display: block; }
   .head-rule { height: 3px; background: var(--primary); margin: 6px 0 0; }
