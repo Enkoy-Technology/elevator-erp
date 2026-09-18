@@ -350,19 +350,10 @@ ${
     : ''
 }
   ${renderSignaturePair(
-    {
-      caption: 'For the Client',
-      lines: [d.customerName, 'Name, signature and date'],
-    },
-    {
-      caption: 'For the Supplier',
-      lines: [branding?.name, 'Name, signature and date'],
-    },
+    { caption: 'For the Client', lines: [d.customerName] },
+    { caption: 'For the Supplier', lines: [branding?.name] },
   )}
-  ${renderSignaturePair(
-    { caption: 'Witness 1', lines: ['Name, signature and date'] },
-    { caption: 'Witness 2', lines: ['Name, signature and date'] },
-  )}`;
+  ${renderSignaturePair({ caption: 'Witness 1' }, { caption: 'Witness 2' })}`;
 
   return renderLayout({
     branding,
