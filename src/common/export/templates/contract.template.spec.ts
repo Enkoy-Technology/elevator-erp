@@ -166,3 +166,24 @@ describe('buildContractHtml', () => {
     expect(html).not.toContain('<script>');
   });
 });
+
+describe('contract instalment table — Due column', () => {
+  it('omits the Due column when no instalment has a date (event-based schedule from the proforma)', () => {
+    const html = buildContractHtml(
+      {
+        ...signed,
+        instalments: [
+          { label: 'Advance on signing', amountEtb: '3600000.00', dueDate: null },
+          { label: 'On commissioning', amountEtb: '900000.00', dueDate: null },
+        ],
+      },
+      branding,
+    );
+    expect(html).not.toContain('<th>Due</th>');
+  });
+
+  it('keeps the Due column once any instalment is dated', () => {
+    const html = buildContractHtml(signed, branding);
+    expect(html).toContain('<th>Due</th>');
+  });
+});

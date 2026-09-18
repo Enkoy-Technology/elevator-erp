@@ -154,16 +154,20 @@ const instalmentTable = (
   total: string,
 ): string => {
   const totalNum = Number(total) || 0;
+  // A schedule copied from the proforma is event-based ("50% on signing")
+  // and carries no dates; a column of dashes reads as something missing,
+  // so the Due column only appears once at least one date has been set.
+  const withDates = instalments.some((row) => row.dueDate);
   const rows = instalments
     .map((row, i) => {
       const share =
         totalNum > 0
           ? Math.round((Number(row.amountEtb) / totalNum) * 1000) / 10
           : null;
-      return `<tr><td class="num">${i + 1}</td><td>${esc(row.label)}</td><td class="num">${share == null ? '—' : `${share}%`}</td><td class="num">${formatEtb(row.amountEtb)}</td><td>${esc(fmtDate(row.dueDate))}</td></tr>`;
+      return `<tr><td class="num">${i + 1}</td><td>${esc(row.label)}</td><td class="num">${share == null ? '—' : `${share}%`}</td><td class="num">${formatEtb(row.amountEtb)}</td>${withDates ? `<td>${esc(fmtDate(row.dueDate))}</td>` : ''}</tr>`;
     })
     .join('');
-  return `<table class="lines"><thead><tr><th class="num">#</th><th>Instalment</th><th class="num">Share</th><th class="num">Amount</th><th>Due</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return `<table class="lines"><thead><tr><th class="num">#</th><th>Instalment</th><th class="num">Share</th><th class="num">Amount</th>${withDates ? '<th>Due</th>' : ''}</tr></thead><tbody>${rows}</tbody></table>`;
 };
 
 /**

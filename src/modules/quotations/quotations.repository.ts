@@ -739,6 +739,7 @@ const legacyLineValues = (
     productType?: string;
     capacityKg?: number;
     speedMs?: number;
+    machineRoomType?: string;
   };
   const technical = (quotation.technicalSpec ?? {}) as {
     capacityPersons?: number | null;
@@ -766,18 +767,31 @@ const legacyLineValues = (
     quantity: 1,
     unitPriceEtb: exVatTotalEtb,
     lineTotalEtb: exVatTotalEtb,
-    machineRoomLabel: null,
+    // The company's standard configuration, so the proforma and the
+    // contract's Article 2 print a real machine instead of "—". Same
+    // defaults the lines editor offers; each is editable there.
+    machineRoomLabel: calcInput.machineRoomType ?? 'MRL',
     floorLabels: null,
     floorDisplaySummary: null,
-    doorHeightMm: null,
-    ropingRatio: null,
-    tractionMachineType: null,
-    controlSystem: null,
-    powerSupply: null,
-    lightSupply: null,
+    doorHeightMm: STANDARD_LINE.doorHeightMm,
+    ropingRatio: STANDARD_LINE.ropingRatio,
+    tractionMachineType: STANDARD_LINE.tractionMachineType,
+    controlSystem: STANDARD_LINE.controlSystem,
+    powerSupply: STANDARD_LINE.powerSupply,
+    lightSupply: STANDARD_LINE.lightSupply,
     entranceCount: null,
   };
 };
+
+/** What every Shining Star machine is unless the offer says otherwise (client's own spec sheet). */
+const STANDARD_LINE = {
+  doorHeightMm: 2100,
+  ropingRatio: '2:1',
+  tractionMachineType: 'Gearless',
+  controlSystem: 'Simplex',
+  powerSupply: '380V AC 50HZ 3-phase 4 lines',
+  lightSupply: '240V AC 50HZ Single phase',
+} as const;
 
 /**
  * The synthesized read-path row. `id` is the quotation's OWN id, and
