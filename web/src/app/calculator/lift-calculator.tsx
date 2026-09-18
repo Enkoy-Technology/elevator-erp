@@ -310,7 +310,7 @@ export const LiftResult = ({
                 ],
                 ["Standard lift", result.technical.standardLift ?? "—"],
                 ["Floors / stops", formatNumber(result.input.stops)],
-                ["Travel (m)", String(result.input.travelHeightM)],
+                ["Travel (mm)", formatNumber(Math.round(result.input.travelHeightM * 1000))],
               ] as const
             ).map(([k, v]) => (
               <div key={k}>
@@ -339,7 +339,7 @@ export const LiftResult = ({
             [
               ["Persons", formatNumber(result.technical.capacityPersons)],
               ["Stops", formatNumber(result.input.stops)],
-              ["Travel (m)", String(result.input.travelHeightM)],
+              ["Travel (mm)", formatNumber(Math.round(result.input.travelHeightM * 1000))],
               [
                 "Car W×D×H (mm)",
                 `${formatNumber(result.technical.carWidthMm)}×${formatNumber(result.technical.carDepthMm)}×${formatNumber(result.technical.carHeightMm)}`,
