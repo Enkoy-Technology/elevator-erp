@@ -51,7 +51,7 @@ export default function CalculatorPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const next = await calculateSpecs(toRequest(form));
+      const next = await calculateSpecs(toRequest(form, products));
       setResult(next);
     } catch (err) {
       setResult(null);

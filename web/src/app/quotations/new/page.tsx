@@ -115,7 +115,7 @@ export default function NewQuotationPage() {
     setError(null);
     setCalculating(true);
     try {
-      setResult(await calculateSpecs(toRequest(form)));
+      setResult(await calculateSpecs(toRequest(form, products)));
     } catch (err) {
       setResult(null);
       setError(
@@ -134,7 +134,7 @@ export default function NewQuotationPage() {
     setCreating(true);
     setError(null);
     try {
-      const { taxPercent: _scenario, ...lift } = toRequest(form);
+      const { taxPercent: _scenario, ...lift } = toRequest(form, products);
       const quotation = await createQuotationFromCalc(projectId, {
         ...lift,
         vatApplies,

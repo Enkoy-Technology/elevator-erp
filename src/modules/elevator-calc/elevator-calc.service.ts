@@ -1,6 +1,6 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from "@nestjs/common";
 
-import { FormulaError, renderFormula } from '../../common/formula';
+import { FormulaError, renderFormula } from "../../common/formula";
 
 import {
   computeCarDimensions,
@@ -16,27 +16,27 @@ import {
   passengerCapacity,
   qty2,
   selectGuideRail,
-} from './calc-math';
+} from "./calc-math";
 import {
   PASSENGER_CAR_HEIGHT_MM,
   SMALLEST_PASSENGER_SHAFT,
   selectPassengerLift,
   speedForFloors,
-} from './passenger-table';
-import { ProductTypesRepository } from './product-types.repository';
+} from "./passenger-table";
+import { ProductTypesRepository } from "./product-types.repository";
 import type {
   CalcInput,
   CalcResult,
   TechnicalSpecs,
   CalcRequest,
-} from './types';
+} from "./types";
 
 /**
  * §4.1 defines lift geometry only. Escalators and car platform lifts are
  * priced flat (§4.2.1) and have no EN 81 car, shaft, counterweight or rail —
  * so they carry no technical block rather than a lift's one.
  */
-const EMPTY_GEOMETRY: Omit<TechnicalSpecs, 'productType'> = {
+const EMPTY_GEOMETRY: Omit<TechnicalSpecs, "productType"> = {
   capacityPersons: null,
   carWidthMm: null,
   carDepthMm: null,
@@ -73,9 +73,12 @@ export class ElevatorCalcService {
     }
 
     const { input, technical, notes } = resolve(request, product.liftGeometry);
-    if (product.minCapacityKg !== null && input.capacityKg < product.minCapacityKg) {
+    if (
+      product.minCapacityKg !== null &&
+      input.capacityKg < product.minCapacityKg
+    ) {
       throw new BadRequestException(
-        `${product.name} is sold from ${product.minCapacityKg.toLocaleString('en-US')} kg — ${input.capacityKg.toLocaleString('en-US')} kg is below the minimum.`,
+        `${product.name} is sold from ${product.minCapacityKg.toLocaleString("en-US")} kg — ${input.capacityKg.toLocaleString("en-US")} kg is below the minimum.`,
       );
     }
 
@@ -91,7 +94,7 @@ export class ElevatorCalcService {
     } catch (err) {
       if (err instanceof FormulaError) {
         throw new BadRequestException(
-          `The pricing formula ${product.formula ? `on ${product.name}` : 'under Settings'} cannot be evaluated: ${err.message}`,
+          `The pricing formula ${product.formula ? `on ${product.name}` : "under Settings"} cannot be evaluated: ${err.message}`,
         );
       }
       throw err;
@@ -140,7 +143,7 @@ export class ElevatorCalcService {
           rise: input.travelHeightM,
         })} = ${renderFormula(money(listPrice), {})}${
           listVatIncluded === null
-            ? ''
+            ? ""
             : `; less ${priceListVatPercent}% VAT included in the list = ${renderFormula(money(totalBeforeMargin), {})}`
         }`,
       },
@@ -176,11 +179,11 @@ const resolve = (
   liftGeometry: boolean,
 ): { input: CalcInput; technical: TechnicalSpecs; notes: string[] } => {
   const notes: string[] = [];
-  const machineRoomType = request.machineRoomType ?? 'MRL';
-  const buildingUsage = request.buildingUsage ?? 'COMMERCIAL';
+  const machineRoomType = request.machineRoomType ?? "MRL";
+  const buildingUsage = request.buildingUsage ?? "COMMERCIAL";
 
   const standard =
-    request.productType === 'PASSENGER' &&
+    request.productType === "PASSENGER" &&
     request.shaftWidthMm !== undefined &&
     request.shaftDepthMm !== undefined &&
     request.floors !== undefined;
@@ -216,7 +219,7 @@ const resolve = (
       travelHeightM: Number((floors * FLOOR_HEIGHT_M).toFixed(2)),
       speedMs,
       machineRoomType,
-      doorType: lift.door === 'CO' ? 'CENTER_OPEN' : 'TELESCOPIC',
+      doorType: lift.door === "CO" ? "CENTER_OPEN" : "TELESCOPIC",
       doorWidthMm: lift.doorWidthMm,
       buildingUsage,
       marginPercent: request.marginPercent,
@@ -243,28 +246,25 @@ const resolve = (
   }
 
   const missing = (
-    [
-      'capacityKg',
-      'stops',
-      'travelHeightM',
-      'speedMs',
-      'doorType',
-      'doorWidthMm',
-    ] as const
+    ["capacityKg", "stops", "speedMs", "doorType", "doorWidthMm"] as const
   ).filter((key) => request[key] === undefined);
   if (missing.length > 0) {
     throw new BadRequestException(
-      request.productType === 'PASSENGER'
-        ? 'Give the shaft (shaftWidthMm, shaftDepthMm) and floors, or every figure: ' +
-            missing.join(', ')
-        : `Missing ${missing.join(', ')}`,
+      request.productType === "PASSENGER"
+        ? "Give the shaft (shaftWidthMm, shaftDepthMm) and floors, or every figure: " +
+            missing.join(", ")
+        : `Missing ${missing.join(", ")}`,
     );
   }
   const input: CalcInput = {
     productType: request.productType,
     capacityKg: request.capacityKg!,
     stops: request.stops!,
-    travelHeightM: request.travelHeightM!,
+    // The client's rule for every lift: 3,500 mm per floor × the stops.
+    // Only an escalator sends its own figure — its price is its rise.
+    travelHeightM:
+      request.travelHeightM ??
+      Number((request.stops! * FLOOR_HEIGHT_M).toFixed(2)),
     speedMs: request.speedMs!,
     machineRoomType,
     doorType: request.doorType!,
@@ -286,7 +286,7 @@ const FLOOR_HEIGHT_M = 3.5;
 /** The §4.1 EN 81 lift block, for every product with lift geometry on. */
 const computeLiftGeometry = (
   input: CalcInput,
-): Omit<TechnicalSpecs, 'productType'> => {
+): Omit<TechnicalSpecs, "productType"> => {
   const car = computeCarDimensions(input.capacityKg, input.buildingUsage);
   const shaft = computeShaftDimensions(car.widthMm, car.depthMm, input.speedMs);
   const counterweight = computeCounterweightMassKg(
