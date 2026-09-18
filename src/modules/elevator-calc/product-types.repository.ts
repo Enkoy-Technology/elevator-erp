@@ -28,6 +28,7 @@ export const DEFAULT_PRODUCT_TYPES: readonly {
   perKgEtb: string;
   refStops: number;
   refCapacityKg: number;
+  minCapacityKg: number | null;
   formula: string | null;
   liftGeometry: boolean;
 }[] = [
@@ -90,6 +91,8 @@ export const DEFAULT_PRODUCT_TYPES: readonly {
     2,
     3000,
     true,
+    null,
+    3500,
   ),
   product(
     'CAR_PLATFORM_LIFT',
@@ -100,6 +103,8 @@ export const DEFAULT_PRODUCT_TYPES: readonly {
     2,
     3000,
     false,
+    null,
+    3500,
   ),
   // N is the number of parking levels (L on the price sheet).
   product(
@@ -111,6 +116,8 @@ export const DEFAULT_PRODUCT_TYPES: readonly {
     2,
     2000,
     false,
+    null,
+    3500,
   ),
   product(
     'ESCALATOR',
@@ -135,6 +142,7 @@ function product(
   refCapacityKg: number,
   liftGeometry: boolean,
   formula: string | null = null,
+  minCapacityKg: number | null = null,
 ) {
   return {
     code,
@@ -144,6 +152,7 @@ function product(
     perKgEtb,
     refStops,
     refCapacityKg,
+    minCapacityKg,
     formula,
     liftGeometry,
   };
@@ -165,6 +174,7 @@ export interface ProductTypeInput {
   perKgEtb: string;
   refStops: number;
   refCapacityKg: number;
+  minCapacityKg: number | null;
   formula: string | null;
   liftGeometry: boolean;
 }

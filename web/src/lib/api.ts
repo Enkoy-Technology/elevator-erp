@@ -224,6 +224,8 @@ export interface ProductTypeRow {
   /** The machine the base price includes: refN and refC in the formula. */
   refStops: number;
   refCapacityKg: number;
+  /** The smallest rated load it is sold at, kg; null for no floor. */
+  minCapacityKg: number | null;
   /** This product's own formula, or null for the company formula under Settings. */
   formula: string | null;
   /** The formula this row is priced with, its own figures written in. */
@@ -241,6 +243,7 @@ export interface ProductTypePayload {
   perKgEtb?: string;
   refStops?: number;
   refCapacityKg?: number;
+  minCapacityKg?: number | null;
   formula?: string | null;
   liftGeometry?: boolean;
 }

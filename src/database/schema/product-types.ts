@@ -43,6 +43,12 @@ export const productTypes = pgTable(
     refStops: integer('ref_stops').notNull().default(10),
     /** The capacity the base price includes (refC in the formula). */
     refCapacityKg: integer('ref_capacity_kg').notNull().default(630),
+    /**
+     * The smallest rated load this product is sold at, kg; the calculator
+     * refuses less. Null: no floor. The client's car lifts, platforms and
+     * stacking lifts start at 3,500 kg.
+     */
+    minCapacityKg: integer('min_capacity_kg'),
     /** This product's own formula; null means the company formula under Settings. */
     formula: text('formula'),
     /** Whether the EN 81 lift geometry block applies (false for escalators). */

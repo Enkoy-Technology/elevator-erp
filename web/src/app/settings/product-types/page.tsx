@@ -117,6 +117,9 @@ export default function ProductTypesPage() {
           <span className="text-[11px] text-slate-500">
             {row.original.refStops} stops ·{' '}
             {row.original.refCapacityKg.toLocaleString('en-ET')} kg
+            {row.original.minCapacityKg != null
+              ? ` · min ${row.original.minCapacityKg.toLocaleString('en-ET')} kg`
+              : ''}
           </span>
         </span>
       ),

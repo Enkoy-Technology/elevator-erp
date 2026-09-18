@@ -81,6 +81,7 @@ export class ProductTypesController {
       perKgEtb: dto.perKgEtb ?? '0',
       refStops: dto.refStops ?? 10,
       refCapacityKg: dto.refCapacityKg ?? 630,
+      minCapacityKg: dto.minCapacityKg ?? null,
       formula: dto.formula?.trim() || null,
       liftGeometry: dto.liftGeometry ?? true,
     });

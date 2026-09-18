@@ -132,6 +132,12 @@ describe('ElevatorCalcService', () => {
       expect(result.pricing.listVatIncluded).toBeUndefined();
     });
 
+    it('refuses a capacity below the product minimum (car lifts are sold from 3,500 kg)', async () => {
+      await expect(
+        calc({ ...WORKED_EXAMPLE, productType: 'CAR_LIFT', capacityKg: 3000, marginPercent: 0, taxPercent: 0 }),
+      ).rejects.toThrow(/sold from 3,500 kg/);
+    });
+
     it('splits a non-additive formula into what the stops added and what the capacity added', async () => {
       (productTypes.pricingSettings as jest.Mock).mockResolvedValueOnce({
         formula: 'base + N * C * 10',
@@ -197,8 +203,28 @@ describe('ElevatorCalcService', () => {
       expect(await baseOf('PANORAMIC')).toBe('8000000.00');
       expect(await baseOf('HOME')).toBe('8000000.00');
       expect(await baseOf('CARGO')).toBe('8000000.00');
-      expect(await baseOf('CAR_LIFT')).toBe('11000000.00');
-      expect(await baseOf('CAR_STACKING_LIFT')).toBe('5200000.00');
+    });
+
+    it('prices a car product at its smallest sellable machine, not the sheet base (sold from 3,500 kg)', async () => {
+      const cheapest = async (productType: string): Promise<string> => {
+        const row = DEFAULT_PRODUCT_TYPES.find((p) => p.code === productType)!;
+        return (
+          await calc({
+            ...WORKED_EXAMPLE,
+            productType,
+            stops: row.refStops,
+            capacityKg: row.minCapacityKg!,
+            marginPercent: 0,
+            taxPercent: 0,
+          })
+        ).pricing.totalPrice;
+      };
+      // 11,000,000 + (3,500 − 3,000) × 500
+      expect(await cheapest('CAR_LIFT')).toBe('11250000.00');
+      // 5,200,000 + (3,500 − 3,000) × 400
+      expect(await cheapest('CAR_PLATFORM_LIFT')).toBe('5400000.00');
+      // 5,200,000 + (3,500 − 2,000) × 400
+      expect(await cheapest('CAR_STACKING_LIFT')).toBe('5800000.00');
     });
 
     it('refuses a product that is not in the list', async () => {
@@ -327,6 +353,8 @@ describe('ElevatorCalcService', () => {
         const result = await calc({
           ...WORKED_EXAMPLE,
           productType,
+          // A car platform is sold from 3,500 kg; the fixture's 1,000 kg is a passenger figure.
+          capacityKg: 3500,
         });
 
         expect(result.technical.productType).toBe(productType);

@@ -83,6 +83,19 @@ export class CreateProductTypeDto {
   refCapacityKg?: number;
 
   @ApiPropertyOptional({
+    example: 3500,
+    nullable: true,
+    description:
+      'The smallest rated load this product is sold at, kg — the calculator refuses less. Null for no floor.',
+  })
+  @ValidateIf((o: { minCapacityKg?: number | null }) => o.minCapacityKg !== null)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(50000)
+  minCapacityKg?: number | null;
+
+  @ApiPropertyOptional({
     example: 'Base price + (rise - 6) * 500,000',
     description:
       'This product’s own formula. Omit or null to use the company formula under Settings. Same names: base, N, C, rise, refN, refC, perStop, perKg.',
@@ -145,6 +158,19 @@ export class UpdateProductTypeDto {
   @Min(1)
   @Max(50000)
   refCapacityKg?: number;
+
+  @ApiPropertyOptional({
+    example: 3500,
+    nullable: true,
+    description:
+      'The smallest rated load this product is sold at, kg — the calculator refuses less. Null for no floor.',
+  })
+  @ValidateIf((o: { minCapacityKg?: number | null }) => o.minCapacityKg !== null)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(50000)
+  minCapacityKg?: number | null;
 
   @ApiPropertyOptional({
     example: 'Base price + (rise - 6) * 500,000',

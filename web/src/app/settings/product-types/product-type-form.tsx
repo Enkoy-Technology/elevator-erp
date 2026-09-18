@@ -29,6 +29,9 @@ export function ProductTypeForm({ existing }: { existing?: ProductTypeRow }) {
   const [refCapacityKg, setRefCapacityKg] = useState(
     String(existing?.refCapacityKg ?? 630),
   );
+  const [minCapacityKg, setMinCapacityKg] = useState(
+    existing?.minCapacityKg == null ? '' : String(existing.minCapacityKg),
+  );
   const [formula, setFormula] = useState(existing?.formula ?? '');
   const [liftGeometry, setLiftGeometry] = useState(
     existing?.liftGeometry ?? true,
@@ -47,6 +50,8 @@ export function ProductTypeForm({ existing }: { existing?: ProductTypeRow }) {
       perKgEtb: perKgEtb.trim() || '0',
       refStops: Number(refStops) || 10,
       refCapacityKg: Number(refCapacityKg) || 630,
+      // Blank means no floor.
+      minCapacityKg: minCapacityKg.trim() ? Number(minCapacityKg) : null,
       // Blank means the company formula under Settings.
       formula: formula.trim() || null,
       liftGeometry,
@@ -155,6 +160,21 @@ export function ProductTypeForm({ existing }: { existing?: ProductTypeRow }) {
             className={fieldClass}
             value={refCapacityKg}
             onChange={(e) => setRefCapacityKg(e.target.value)}
+          />
+        </Field>
+        <Field
+          label="Minimum capacity (kg)"
+          htmlFor="minCapacityKg"
+          hint="The calculator refuses less. Blank for no floor."
+        >
+          <input
+            id="minCapacityKg"
+            type="number"
+            min={1}
+            max={50000}
+            className={fieldClass}
+            value={minCapacityKg}
+            onChange={(e) => setMinCapacityKg(e.target.value)}
           />
         </Field>
         <Field label="Per stop above base (ETB)" htmlFor="perStopEtb">

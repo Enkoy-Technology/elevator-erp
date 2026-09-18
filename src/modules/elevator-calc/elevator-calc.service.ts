@@ -73,6 +73,11 @@ export class ElevatorCalcService {
     }
 
     const { input, technical, notes } = resolve(request, product.liftGeometry);
+    if (product.minCapacityKg !== null && input.capacityKg < product.minCapacityKg) {
+      throw new BadRequestException(
+        `${product.name} is sold from ${product.minCapacityKg.toLocaleString('en-US')} kg — ${input.capacityKg.toLocaleString('en-US')} kg is below the minimum.`,
+      );
+    }
 
     let priced: ReturnType<typeof computeProductPrice>;
     try {

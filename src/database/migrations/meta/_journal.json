@@ -561,6 +561,13 @@
       "when": 1789636494707,
       "tag": "0079_exotic_marauders",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1789741340795,
+      "tag": "0080_fixed_champions",
+      "breakpoints": true
     }
   ]
 }
