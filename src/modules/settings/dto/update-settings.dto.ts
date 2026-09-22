@@ -218,7 +218,8 @@ export class UpdateSettingsDto {
   @ValidateIf((o: UpdateSettingsDto) => o.priceListVatPercent !== null)
   @IsOptional()
   @Matches(/^(100(\.00?)?|\d{1,2}(\.\d{1,2})?)$/, {
-    message: 'priceListVatPercent must be a percent between 0 and 100 with up to 2 decimals',
+    message:
+      'priceListVatPercent must be a percent between 0 and 100 with up to 2 decimals',
   })
   priceListVatPercent?: string | null;
 }

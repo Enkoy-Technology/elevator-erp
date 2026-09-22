@@ -1,4 +1,4 @@
-import Decimal from "decimal.js";
+import Decimal from 'decimal.js';
 
 /**
  * A small arithmetic language for the price formula the client types under
@@ -43,53 +43,53 @@ export interface FormulaScope {
 }
 
 const ALIASES: Record<string, keyof FormulaScope> = {
-  base: "base",
-  baseprice: "base",
-  base_price: "base",
-  b: "base",
-  n: "N",
-  stops: "N",
-  floors: "N",
-  l: "N",
-  levels: "N",
-  c: "C",
-  capacity: "C",
-  kg: "C",
-  load: "C",
-  perstop: "perStop",
-  per_stop: "perStop",
-  ratestop: "perStop",
-  perkg: "perKg",
-  per_kg: "perKg",
-  ratekg: "perKg",
-  refn: "refN",
-  ref_n: "refN",
-  basen: "refN",
-  base_n: "refN",
-  basestops: "refN",
-  refc: "refC",
-  ref_c: "refC",
-  basec: "refC",
-  base_c: "refC",
-  basecapacity: "refC",
-  kgstep: "kgStep",
-  kg_step: "kgStep",
-  step: "kgStep",
-  rise: "rise",
-  travel: "rise",
-  height: "rise",
-  h: "rise",
+  base: 'base',
+  baseprice: 'base',
+  base_price: 'base',
+  b: 'base',
+  n: 'N',
+  stops: 'N',
+  floors: 'N',
+  l: 'N',
+  levels: 'N',
+  c: 'C',
+  capacity: 'C',
+  kg: 'C',
+  load: 'C',
+  perstop: 'perStop',
+  per_stop: 'perStop',
+  ratestop: 'perStop',
+  perkg: 'perKg',
+  per_kg: 'perKg',
+  ratekg: 'perKg',
+  refn: 'refN',
+  ref_n: 'refN',
+  basen: 'refN',
+  base_n: 'refN',
+  basestops: 'refN',
+  refc: 'refC',
+  ref_c: 'refC',
+  basec: 'refC',
+  base_c: 'refC',
+  basecapacity: 'refC',
+  kgstep: 'kgStep',
+  kg_step: 'kgStep',
+  step: 'kgStep',
+  rise: 'rise',
+  travel: 'rise',
+  height: 'rise',
+  h: 'rise',
 };
 
 const FUNCTIONS: Record<string, (args: Decimal[]) => Decimal> = {
   max: (args) => {
     if (args.length === 0)
-      throw new FormulaError("max() needs at least one value");
+      throw new FormulaError('max() needs at least one value');
     return Decimal.max(...args);
   },
   min: (args) => {
     if (args.length === 0)
-      throw new FormulaError("min() needs at least one value");
+      throw new FormulaError('min() needs at least one value');
     return Decimal.min(...args);
   },
   round: ([x]) =>
@@ -105,28 +105,28 @@ export class FormulaError extends Error {}
 export const MAX_FORMULA_LENGTH = 500;
 
 type Token =
-  | { kind: "num"; value: Decimal }
-  | { kind: "id"; name: string }
-  | { kind: "op"; value: string };
+  | { kind: 'num'; value: Decimal }
+  | { kind: 'id'; name: string }
+  | { kind: 'op'; value: string };
 
 const UNIT_SUFFIX = /^(kg|mm|m|etb|birr)/i;
 
 const SYMBOLS: Record<string, string> = {
-  "×": "*",
-  "÷": "/",
-  "−": "-",
-  "–": "-",
-  "—": "-",
+  '×': '*',
+  '÷': '/',
+  '−': '-',
+  '–': '-',
+  '—': '-',
 };
 
 const tokenize = (source: string): Token[] => {
   // "base price" is one identifier; do it before anything else.
-  const text = source.replace(/base\s+price/gi, "base");
+  const text = source.replace(/base\s+price/gi, 'base');
   const tokens: Token[] = [];
   // Inside a function's argument list a comma separates arguments, never
   // digit groups: min(5,100) is two values. Outside, 80,000 is one number.
-  const parens: ("fn" | "group")[] = [];
-  const inArgs = (): boolean => parens[parens.length - 1] === "fn";
+  const parens: ('fn' | 'group')[] = [];
+  const inArgs = (): boolean => parens[parens.length - 1] === 'fn';
   let i = 0;
   while (i < text.length) {
     const ch = text[i]!;
@@ -144,7 +144,7 @@ const tokenize = (source: string): Token[] => {
         if (/[0-9.]/.test(c)) {
           j++;
         } else if (
-          c === "," &&
+          c === ',' &&
           !inArgs() &&
           /^\d{3}(?!\d)/.test(text.slice(j + 1))
         ) {
@@ -153,15 +153,15 @@ const tokenize = (source: string): Token[] => {
           break;
         }
       }
-      const raw = text.slice(i, j).replace(/,/g, "");
+      const raw = text.slice(i, j).replace(/,/g, '');
       if (!/^\d*\.?\d+$|^\d+\.?\d*$/.test(raw)) {
         throw new FormulaError(`Not a number: "${text.slice(i, j)}"`);
       }
-      tokens.push({ kind: "num", value: new Decimal(raw) });
+      tokens.push({ kind: 'num', value: new Decimal(raw) });
       i = j;
       // a unit glued to the number is noise: 630kg, 2400mm
       const unit = UNIT_SUFFIX.exec(text.slice(i));
-      if (unit && !/[a-z0-9_]/i.test(text[i + unit[0].length] ?? "")) {
+      if (unit && !/[a-z0-9_]/i.test(text[i + unit[0].length] ?? '')) {
         i += unit[0].length;
       }
       continue;
@@ -169,29 +169,29 @@ const tokenize = (source: string): Token[] => {
     if (/[a-z_]/i.test(ch)) {
       let j = i;
       while (j < text.length && /[a-z0-9_]/i.test(text[j]!)) j++;
-      tokens.push({ kind: "id", name: text.slice(i, j) });
+      tokens.push({ kind: 'id', name: text.slice(i, j) });
       i = j;
       continue;
     }
-    if ("+-*/(),".includes(ch)) {
-      if (ch === "(") {
+    if ('+-*/(),'.includes(ch)) {
+      if (ch === '(') {
         const prev = tokens[tokens.length - 1];
         parens.push(
-          prev?.kind === "id" && prev.name.toLowerCase() in FUNCTIONS
-            ? "fn"
-            : "group",
+          prev?.kind === 'id' && prev.name.toLowerCase() in FUNCTIONS
+            ? 'fn'
+            : 'group',
         );
-      } else if (ch === ")") {
+      } else if (ch === ')') {
         parens.pop();
       }
-      tokens.push({ kind: "op", value: ch });
+      tokens.push({ kind: 'op', value: ch });
       i++;
       continue;
     }
     // The signs the help text and the docs print.
     const symbol = SYMBOLS[ch];
     if (symbol) {
-      tokens.push({ kind: "op", value: symbol });
+      tokens.push({ kind: 'op', value: symbol });
       i++;
       continue;
     }
@@ -215,7 +215,7 @@ class Parser {
 
   parse(): Decimal {
     if (this.tokens.length === 0) {
-      throw new FormulaError("The formula is empty");
+      throw new FormulaError('The formula is empty');
     }
     const value = this.expression();
     if (this.pos < this.tokens.length) {
@@ -232,15 +232,15 @@ class Parser {
 
   private isOp(value: string): boolean {
     const t = this.peek();
-    return t?.kind === "op" && t.value === value;
+    return t?.kind === 'op' && t.value === value;
   }
 
   private expression(): Decimal {
     let left = this.term();
-    while (this.isOp("+") || this.isOp("-")) {
+    while (this.isOp('+') || this.isOp('-')) {
       const op = (this.tokens[this.pos++] as { value: string }).value;
       const right = this.term();
-      left = op === "+" ? left.plus(right) : left.minus(right);
+      left = op === '+' ? left.plus(right) : left.minus(right);
     }
     return left;
   }
@@ -248,22 +248,22 @@ class Parser {
   private term(): Decimal {
     let left = this.unary();
     for (;;) {
-      if (this.isOp("*") || this.isOp("/")) {
+      if (this.isOp('*') || this.isOp('/')) {
         const op = (this.tokens[this.pos++] as { value: string }).value;
         const right = this.unary();
-        if (op === "/" && right.isZero()) {
-          throw new FormulaError("Division by zero");
+        if (op === '/' && right.isZero()) {
+          throw new FormulaError('Division by zero');
         }
-        left = op === "*" ? left.mul(right) : left.div(right);
+        left = op === '*' ? left.mul(right) : left.div(right);
         continue;
       }
       // Implicit multiplication: "(C - 630) 1000", "2 N", ") ("
       const next = this.peek();
       if (
         next &&
-        (next.kind === "num" ||
-          next.kind === "id" ||
-          (next.kind === "op" && next.value === "("))
+        (next.kind === 'num' ||
+          next.kind === 'id' ||
+          (next.kind === 'op' && next.value === '('))
       ) {
         left = left.mul(this.unary());
         continue;
@@ -273,11 +273,11 @@ class Parser {
   }
 
   private unary(): Decimal {
-    if (this.isOp("-")) {
+    if (this.isOp('-')) {
       this.pos++;
       return this.unary().neg();
     }
-    if (this.isOp("+")) {
+    if (this.isOp('+')) {
       this.pos++;
       return this.unary();
     }
@@ -287,35 +287,35 @@ class Parser {
   private primary(): Decimal {
     const token = this.tokens[this.pos++];
     if (!token) {
-      throw new FormulaError("The formula ends too early");
+      throw new FormulaError('The formula ends too early');
     }
-    if (token.kind === "num") {
+    if (token.kind === 'num') {
       return token.value;
     }
-    if (token.kind === "op" && token.value === "(") {
+    if (token.kind === 'op' && token.value === '(') {
       const value = this.expression();
-      if (!this.isOp(")")) {
+      if (!this.isOp(')')) {
         throw new FormulaError('Missing ")"');
       }
       this.pos++;
       return value;
     }
-    if (token.kind === "id") {
+    if (token.kind === 'id') {
       const lower = token.name.toLowerCase();
       const fn = FUNCTIONS[lower];
       // A name before "(" is a call only for a known function; "N (C - 630)"
       // is the variable N times the bracket.
-      if (fn && this.isOp("(")) {
+      if (fn && this.isOp('(')) {
         this.pos++;
         const args: Decimal[] = [];
-        if (!this.isOp(")")) {
+        if (!this.isOp(')')) {
           args.push(this.expression());
-          while (this.isOp(",")) {
+          while (this.isOp(',')) {
             this.pos++;
             args.push(this.expression());
           }
         }
-        if (!this.isOp(")")) {
+        if (!this.isOp(')')) {
           throw new FormulaError(`Missing ")" after ${token.name}(`);
         }
         this.pos++;
@@ -333,9 +333,9 @@ class Parser {
   }
 
   private describe(token: Token): string {
-    return token.kind === "num"
+    return token.kind === 'num'
       ? token.value.toString()
-      : token.kind === "id"
+      : token.kind === 'id'
         ? token.name
         : token.value;
   }
@@ -355,7 +355,7 @@ export const evaluateFormula = (
 };
 
 /** Well inside numeric(14,2); a list price past this is a typo, not a lift. */
-const MAX_PRICE = new Decimal("1e12");
+const MAX_PRICE = new Decimal('1e12');
 
 /**
  * The points a formula is tried at before it is saved: the reference
@@ -364,35 +364,35 @@ const MAX_PRICE = new Decimal("1e12");
  * that only fails at one of them is refused here, not on the next quotation.
  */
 const passenger = {
-  perStop: "80000",
-  perKg: "100000",
+  perStop: '80000',
+  perKg: '100000',
   kgStep: 100,
   refN: 10,
   refC: 630,
 };
 const PROBE_SCOPES: readonly FormulaScope[] = [
-  { base: "7000000", N: 12, C: 1000, rise: 42, ...passenger },
-  { base: "7000000", N: 10, C: 630, rise: 35, ...passenger },
-  { base: "7000000", N: 2, C: 320, rise: 7, ...passenger },
-  { base: "12000000", N: 64, C: 5000, rise: 224, ...passenger },
+  { base: '7000000', N: 12, C: 1000, rise: 42, ...passenger },
+  { base: '7000000', N: 10, C: 630, rise: 35, ...passenger },
+  { base: '7000000', N: 2, C: 320, rise: 7, ...passenger },
+  { base: '12000000', N: 64, C: 5000, rise: 224, ...passenger },
   {
-    base: "11000000",
+    base: '11000000',
     N: 2,
     C: 3000,
     rise: 7,
-    perStop: "300000",
-    perKg: "500000",
+    perStop: '300000',
+    perKg: '500000',
     kgStep: 1000,
     refN: 2,
     refC: 3000,
   },
   {
-    base: "6000000",
+    base: '6000000',
     N: 10,
     C: 630,
     rise: 6,
-    perStop: "0",
-    perKg: "0",
+    perStop: '0',
+    perKg: '0',
     kgStep: 1,
     refN: 10,
     refC: 630,
@@ -400,21 +400,21 @@ const PROBE_SCOPES: readonly FormulaScope[] = [
 ];
 
 const NAME_LABELS: Record<keyof FormulaScope, string> = {
-  base: "Base price",
-  N: "N",
-  C: "C",
-  perStop: "perStop",
-  perKg: "perKg",
-  refN: "refN",
-  refC: "refC",
-  kgStep: "kgStep",
-  rise: "Rise",
+  base: 'Base price',
+  N: 'N',
+  C: 'C',
+  perStop: 'perStop',
+  perKg: 'perKg',
+  refN: 'refN',
+  refC: 'refC',
+  kgStep: 'kgStep',
+  rise: 'Rise',
 };
 
 const formatValue = (value: Decimal.Value): string => {
   const d = new Decimal(value);
-  const [whole, fraction] = d.toFixed().split(".");
-  const grouped = whole!.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const [whole, fraction] = d.toFixed().split('.');
+  const grouped = whole!.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   return fraction ? `${grouped}.${fraction}` : grouped;
 };
 
@@ -434,9 +434,9 @@ export const renderFormula = (
   let prevUnary = false;
   for (const token of tokenize(formula)) {
     let text: string;
-    if (token.kind === "num") {
+    if (token.kind === 'num') {
       text = formatValue(token.value);
-    } else if (token.kind === "id") {
+    } else if (token.kind === 'id') {
       const lower = token.name.toLowerCase();
       const key = ALIASES[lower];
       const given = key === undefined ? undefined : values[key];
@@ -451,28 +451,28 @@ export const renderFormula = (
     } else {
       // Printed the way the client's sheet writes it: × and −, never * and -.
       text =
-        token.value === "*" ? "×" : token.value === "-" ? "−" : token.value;
+        token.value === '*' ? '×' : token.value === '-' ? '−' : token.value;
     }
     // A sign with nothing (or an operator, or an opening bracket) before it
     // is unary: it hugs what follows.
     const unary =
-      (text === "−" || text === "+") &&
-      (prev === undefined || (prev.kind === "op" && prev.value !== ")"));
+      (text === '−' || text === '+') &&
+      (prev === undefined || (prev.kind === 'op' && prev.value !== ')'));
     const tight =
       out.length === 0 ||
       prevUnary ||
-      text === ")" ||
-      text === "," ||
-      (prev?.kind === "op" && prev.value === "(") ||
-      (text === "(" &&
-        prev?.kind === "id" &&
+      text === ')' ||
+      text === ',' ||
+      (prev?.kind === 'op' && prev.value === '(') ||
+      (text === '(' &&
+        prev?.kind === 'id' &&
         prev.name.toLowerCase() in FUNCTIONS) ||
       unary;
     out.push(tight ? text : ` ${text}`);
     prev = token;
     prevUnary = unary;
   }
-  return out.join("");
+  return out.join('');
 };
 
 /** Parse-and-evaluate against sample lifts; the error message if any fails, else null. */
@@ -508,4 +508,4 @@ export const formulaProblem = (formula: string): string | null => {
  * flat product alike; an escalator carries its own formula on the rise.
  */
 export const DEFAULT_PRICING_FORMULA =
-  "Base price + (N − refN) × perStop + ((C − refC) / kgStep) × perKg";
+  'Base price + (N − refN) × perStop + ((C − refC) / kgStep) × perKg';

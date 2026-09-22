@@ -1,7 +1,14 @@
-import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  type OnApplicationBootstrap,
+} from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
-import { InvalidPhoneNumberError, SmsConsentRequiredError } from '../../common/exceptions';
+import {
+  InvalidPhoneNumberError,
+  SmsConsentRequiredError,
+} from '../../common/exceptions';
 import { canSmsRecipient, logSmsConsentSkip } from '../../common/sms-consent';
 import type { EnqueueMessageInput } from '../outbox/outbox.service';
 import { OutboxService } from '../outbox/outbox.service';
@@ -53,7 +60,9 @@ export class WarrantyReminderService implements OnApplicationBootstrap {
       return;
     }
     void this.runDailyReminders().catch((err: unknown) => {
-      this.logger.error(`Warranty reminders boot sweep failed: ${errorMessage(err)}`);
+      this.logger.error(
+        `Warranty reminders boot sweep failed: ${errorMessage(err)}`,
+      );
     });
   }
 
@@ -131,7 +140,9 @@ export class WarrantyReminderService implements OnApplicationBootstrap {
     );
   }
 
-  private async enqueueSafely(input: EnqueueMessageInput): Promise<EnqueueOutcome> {
+  private async enqueueSafely(
+    input: EnqueueMessageInput,
+  ): Promise<EnqueueOutcome> {
     try {
       await this.outboxService.enqueue(input);
       return 'SENT';

@@ -118,7 +118,12 @@ export class ContractsRepository {
         .orderBy(desc(contracts.createdAt), asc(contracts.id))
         .limit(pageSize)
         .offset(offset);
-      return toPaginatedResult(items, Number(totalRow?.value ?? 0), page, pageSize);
+      return toPaginatedResult(
+        items,
+        Number(totalRow?.value ?? 0),
+        page,
+        pageSize,
+      );
     });
   }
 
@@ -282,7 +287,10 @@ export class ContractsRepository {
           proformaId: proforma.id,
           projectId: proforma.projectId,
           customerId: proforma.customerId,
-          contractNumber: buildContractNumber(fiscalYear.label, claimed.lastValue),
+          contractNumber: buildContractNumber(
+            fiscalYear.label,
+            claimed.lastValue,
+          ),
           fiscalYearLabel: fiscalYear.label,
           contractValueEtb: proforma.totalEtb,
           // The deal's own terms, so the draft prints what was offered rather
@@ -415,7 +423,11 @@ export class ContractsRepository {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       const [row] = await tx
         .update(contracts)
-        .set({ status: 'CANCELLED', cancelReason: reason, updatedAt: new Date() })
+        .set({
+          status: 'CANCELLED',
+          cancelReason: reason,
+          updatedAt: new Date(),
+        })
         .where(
           and(eq(contracts.id, id), inArray(contracts.status, CANCELLABLE)),
         )

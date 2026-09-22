@@ -14,7 +14,10 @@ export interface ScheduleLine {
  */
 export const scheduleTotalEtb = (lines: readonly ScheduleLine[]): string =>
   lines
-    .reduce((acc, line) => acc.plus(new Decimal(line.amountEtb)), new Decimal(0))
+    .reduce(
+      (acc, line) => acc.plus(new Decimal(line.amountEtb)),
+      new Decimal(0),
+    )
     .toFixed(2);
 
 /**

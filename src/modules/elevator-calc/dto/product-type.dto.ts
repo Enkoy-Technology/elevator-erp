@@ -45,7 +45,8 @@ export class CreateProductTypeDto {
 
   @ApiPropertyOptional({
     example: '1000.00',
-    description: 'Added per kgStep kilograms above refCapacityKg. 0 for a flat price.',
+    description:
+      'Added per kgStep kilograms above refCapacityKg. 0 for a flat price.',
     default: '0',
   })
   @IsOptional()
@@ -100,7 +101,9 @@ export class CreateProductTypeDto {
     description:
       'The smallest rated load this product is sold at, kg — the calculator refuses less. Null for no floor.',
   })
-  @ValidateIf((o: { minCapacityKg?: number | null }) => o.minCapacityKg !== null)
+  @ValidateIf(
+    (o: { minCapacityKg?: number | null }) => o.minCapacityKg !== null,
+  )
   @IsOptional()
   @IsInt()
   @Min(1)
@@ -189,7 +192,9 @@ export class UpdateProductTypeDto {
     description:
       'The smallest rated load this product is sold at, kg — the calculator refuses less. Null for no floor.',
   })
-  @ValidateIf((o: { minCapacityKg?: number | null }) => o.minCapacityKg !== null)
+  @ValidateIf(
+    (o: { minCapacityKg?: number | null }) => o.minCapacityKg !== null,
+  )
   @IsOptional()
   @IsInt()
   @Min(1)

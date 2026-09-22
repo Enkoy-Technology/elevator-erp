@@ -1,17 +1,17 @@
-"use client";
+'use client';
 
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from 'react';
 
-import { NumberInput } from "@/app/quotations/number-input";
+import { NumberInput } from '@/app/quotations/number-input';
 
-import { formatNumber } from "@/lib/money";
+import { formatNumber } from '@/lib/money';
 import {
   productName,
   type CalcInputPayload,
   type CalcRequestPayload,
   type CalcResult,
   type ProductTypeRow,
-} from "@/lib/api";
+} from '@/lib/api';
 
 /**
  * A passenger lift is described by its shaft and floors alone: the company's
@@ -19,7 +19,7 @@ import {
  * figures below stay for every other product.
  */
 export const WORKED_EXAMPLE: CalcInputPayload = {
-  productType: "PASSENGER",
+  productType: 'PASSENGER',
   shaftWidthMm: 1835,
   shaftDepthMm: 1750,
   floors: 12,
@@ -27,10 +27,10 @@ export const WORKED_EXAMPLE: CalcInputPayload = {
   stops: 12,
   travelHeightM: 45,
   speedMs: 1.6,
-  machineRoomType: "MRL",
-  doorType: "CENTER_OPEN",
+  machineRoomType: 'MRL',
+  doorType: 'CENTER_OPEN',
   doorWidthMm: 900,
-  buildingUsage: "COMMERCIAL",
+  buildingUsage: 'COMMERCIAL',
   // The calculator shows the list price only; margin and VAT belong to the
   // quotation, where the statutory rate and the agreed price live.
   marginPercent: 0,
@@ -38,24 +38,24 @@ export const WORKED_EXAMPLE: CalcInputPayload = {
 };
 
 const field =
-  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm " +
-  "outline-none transition focus:border-navy-600 focus:ring-2 focus:ring-navy-600/20";
+  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm ' +
+  'outline-none transition focus:border-navy-600 focus:ring-2 focus:ring-navy-600/20';
 
 const label =
-  "mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500";
+  'mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500';
 
 type NumberKey =
-  | "shaftWidthMm"
-  | "shaftDepthMm"
-  | "floors"
-  | "capacityKg"
-  | "stops"
-  | "travelHeightM"
-  | "speedMs"
-  | "doorWidthMm";
+  | 'shaftWidthMm'
+  | 'shaftDepthMm'
+  | 'floors'
+  | 'capacityKg'
+  | 'stops'
+  | 'travelHeightM'
+  | 'speedMs'
+  | 'doorWidthMm';
 
 export const isStandardLift = (productType: string): boolean =>
-  productType === "PASSENGER";
+  productType === 'PASSENGER';
 
 /** The request the API wants: shaft and floors for a standard lift, everything for the rest. */
 /**
@@ -78,7 +78,7 @@ export const usesRise = (
   productType: string,
 ): boolean =>
   /\brise\b/i.test(
-    products.find((p) => p.code === productType)?.effectiveFormula ?? "",
+    products.find((p) => p.code === productType)?.effectiveFormula ?? '',
   );
 
 export const toRequest = (
@@ -112,12 +112,12 @@ export const toRequest = (
 };
 
 const doorLabel = (input: CalcInputPayload): string =>
-  `${input.doorType === "CENTER_OPEN" ? "CO" : input.doorType === "TELESCOPIC" ? "2S" : "Side"} ${formatNumber(input.doorWidthMm)} × 2,100`;
+  `${input.doorType === 'CENTER_OPEN' ? 'CO' : input.doorType === 'TELESCOPIC' ? '2S' : 'Side'} ${formatNumber(input.doorWidthMm)} × 2,100`;
 
 export const formatMoney = (value: string): string =>
-  new Intl.NumberFormat("en-ET", {
-    style: "currency",
-    currency: "ETB",
+  new Intl.NumberFormat('en-ET', {
+    style: 'currency',
+    currency: 'ETB',
   }).format(Number(value));
 
 /**
@@ -147,7 +147,7 @@ export const LiftInputs = ({
     const value =
       draft !== undefined && Number(draft) === form[key]
         ? draft
-        : String(form[key] ?? "");
+        : String(form[key] ?? '');
     return (
       <label>
         <span className={label}>{text}</span>
@@ -203,9 +203,9 @@ export const LiftInputs = ({
 
       {standard ? (
         <div className="grid grid-cols-2 gap-3">
-          {numberField("shaftWidthMm", "Shaft width (mm)")}
-          {numberField("shaftDepthMm", "Shaft depth (mm)")}
-          {numberField("floors", "Number of floors")}
+          {numberField('shaftWidthMm', 'Shaft width (mm)')}
+          {numberField('shaftDepthMm', 'Shaft depth (mm)')}
+          {numberField('floors', 'Number of floors')}
           <p className="col-span-2 text-xs text-slate-500">
             Persons, rated load, speed, car and door follow from the shaft and
             the floors — the company&apos;s standard passenger table.
@@ -216,13 +216,13 @@ export const LiftInputs = ({
       <div className="grid grid-cols-2 gap-3">
         {standard ? null : (
           <>
-            {numberField("capacityKg", "Capacity (kg)")}
-            {numberField("stops", "Stops")}
+            {numberField('capacityKg', 'Capacity (kg)')}
+            {numberField('stops', 'Stops')}
             {usesRise(products, form.productType)
-              ? numberField("travelHeightM", "Rise (m)")
+              ? numberField('travelHeightM', 'Rise (m)')
               : null}
-            {numberField("speedMs", "Speed (m/s)")}
-            {numberField("doorWidthMm", "Door width (mm)")}
+            {numberField('speedMs', 'Speed (m/s)')}
+            {numberField('doorWidthMm', 'Door width (mm)')}
           </>
         )}
       </div>
@@ -235,7 +235,7 @@ export const LiftInputs = ({
           onChange={(e) =>
             setForm((prev) => ({
               ...prev,
-              machineRoomType: e.target.value as "MR" | "MRL",
+              machineRoomType: e.target.value as 'MR' | 'MRL',
             }))
           }
         >
@@ -253,7 +253,7 @@ export const LiftInputs = ({
             onChange={(e) =>
               setForm((prev) => ({
                 ...prev,
-                doorType: e.target.value as CalcInputPayload["doorType"],
+                doorType: e.target.value as CalcInputPayload['doorType'],
               }))
             }
           >
@@ -273,7 +273,7 @@ export const LiftInputs = ({
             setForm((prev) => ({
               ...prev,
               buildingUsage: e.target
-                .value as CalcInputPayload["buildingUsage"],
+                .value as CalcInputPayload['buildingUsage'],
             }))
           }
         >
@@ -315,21 +315,24 @@ export const LiftResult = ({
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
             {(
               [
-                ["Persons", formatNumber(result.technical.capacityPersons)],
-                ["Rated load (kg)", formatNumber(result.input.capacityKg)],
-                ["Speed (m/s)", String(result.input.speedMs)],
+                ['Persons', formatNumber(result.technical.capacityPersons)],
+                ['Rated load (kg)', formatNumber(result.input.capacityKg)],
+                ['Speed (m/s)', String(result.input.speedMs)],
                 [
-                  "Car W×D×CH (mm)",
+                  'Car W×D×CH (mm)',
                   `${formatNumber(result.technical.carWidthMm)} × ${formatNumber(result.technical.carDepthMm)} × ${formatNumber(result.technical.carHeightMm)}`,
                 ],
-                ["Door (mm)", doorLabel(result.input)],
+                ['Door (mm)', doorLabel(result.input)],
                 [
-                  "Shaft W×D (mm)",
+                  'Shaft W×D (mm)',
                   `${formatNumber(result.technical.shaftWidthMm)} × ${formatNumber(result.technical.shaftDepthMm)}`,
                 ],
-                ["Standard lift", result.technical.standardLift ?? "—"],
-                ["Floors / stops", formatNumber(result.input.stops)],
-                ["Travel (mm)", formatNumber(Math.round(result.input.travelHeightM * 1000))],
+                ['Standard lift', result.technical.standardLift ?? '—'],
+                ['Floors / stops', formatNumber(result.input.stops)],
+                [
+                  'Travel (mm)',
+                  formatNumber(Math.round(result.input.travelHeightM * 1000)),
+                ],
               ] as const
             ).map(([k, v]) => (
               <div key={k}>
@@ -356,39 +359,42 @@ export const LiftResult = ({
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
           {(
             [
-              ["Persons", formatNumber(result.technical.capacityPersons)],
-              ["Stops", formatNumber(result.input.stops)],
-              ["Travel (mm)", formatNumber(Math.round(result.input.travelHeightM * 1000))],
+              ['Persons', formatNumber(result.technical.capacityPersons)],
+              ['Stops', formatNumber(result.input.stops)],
               [
-                "Car W×D×H (mm)",
+                'Travel (mm)',
+                formatNumber(Math.round(result.input.travelHeightM * 1000)),
+              ],
+              [
+                'Car W×D×H (mm)',
                 `${formatNumber(result.technical.carWidthMm)}×${formatNumber(result.technical.carDepthMm)}×${formatNumber(result.technical.carHeightMm)}`,
               ],
               [
-                "Shaft W×D (mm)",
+                'Shaft W×D (mm)',
                 `${formatNumber(result.technical.shaftWidthMm)}×${formatNumber(result.technical.shaftDepthMm)}`,
               ],
-              ["Pit depth (mm)", formatNumber(result.technical.pitDepthMm)],
+              ['Pit depth (mm)', formatNumber(result.technical.pitDepthMm)],
               [
-                "Overhead (mm)",
+                'Overhead (mm)',
                 formatNumber(result.technical.overheadClearanceMm),
               ],
               [
-                "Counterweight (kg)",
+                'Counterweight (kg)',
                 formatNumber(result.technical.counterweightMassKg, {
                   decimals: 2,
                 }),
               ],
               [
-                "Motor (kW)",
+                'Motor (kW)',
                 formatNumber(result.technical.motorPowerKw, {
                   decimals: 2,
                 }),
               ],
-              ["Guide rail", result.technical.guideRailSpec ?? "—"],
+              ['Guide rail', result.technical.guideRailSpec ?? '—'],
               [
-                "Machine room W×D×H (mm)",
+                'Machine room W×D×H (mm)',
                 result.technical.machineRoomWidthMm === null
-                  ? "None (MRL)"
+                  ? 'None (MRL)'
                   : `${formatNumber(result.technical.machineRoomWidthMm)}×${formatNumber(result.technical.machineRoomDepthMm)}×${formatNumber(result.technical.machineRoomHeightMm)}`,
               ],
             ] as const
@@ -433,18 +439,18 @@ export const LiftResult = ({
       <dl className="space-y-2 text-sm">
         {(
           [
-            ["Base price", result.pricing.basePrice],
-            ["Additional stops / rise", result.pricing.stopsAdjustment],
-            ["Additional capacity", result.pricing.capacityAdjustment],
+            ['Base price', result.pricing.basePrice],
+            ['Additional stops / rise', result.pricing.stopsAdjustment],
+            ['Additional capacity', result.pricing.capacityAdjustment],
             ...(result.pricing.listVatIncluded
               ? ([
                   [
-                    "Less VAT included in list",
+                    'Less VAT included in list',
                     `-${result.pricing.listVatIncluded}`,
                   ],
                 ] as const)
               : []),
-            ["List price", result.pricing.totalBeforeMargin],
+            ['List price', result.pricing.totalBeforeMargin],
           ] as const
         ).map(([k, v]) => (
           <div

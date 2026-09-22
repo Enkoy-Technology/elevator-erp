@@ -54,8 +54,12 @@ describe('CreateCustomerDto tinNumber', () => {
   });
 
   it('still has to be the 10-digit TIN when given', async () => {
-    expect(await tinErrors({ ...base, tinNumber: '0067673517' })).toHaveLength(0);
-    expect(await tinErrors({ ...base, tinNumber: '12345' })).not.toHaveLength(0);
+    expect(await tinErrors({ ...base, tinNumber: '0067673517' })).toHaveLength(
+      0,
+    );
+    expect(await tinErrors({ ...base, tinNumber: '12345' })).not.toHaveLength(
+      0,
+    );
     expect(await tinErrors({ ...base, tinNumber: '' })).not.toHaveLength(0);
   });
 });

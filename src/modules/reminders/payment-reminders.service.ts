@@ -1,7 +1,14 @@
-import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  type OnApplicationBootstrap,
+} from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
-import { InvalidPhoneNumberError, SmsConsentRequiredError } from '../../common/exceptions';
+import {
+  InvalidPhoneNumberError,
+  SmsConsentRequiredError,
+} from '../../common/exceptions';
 import { formatEtb } from '../../common/export/templates/money-format';
 import { canSmsRecipient, logSmsConsentSkip } from '../../common/sms-consent';
 import type { EnqueueMessageInput } from '../outbox/outbox.service';
@@ -59,7 +66,9 @@ export class PaymentReminderService implements OnApplicationBootstrap {
       return;
     }
     void this.runDailyReminders().catch((err: unknown) => {
-      this.logger.error(`Payment reminders boot sweep failed: ${errorMessage(err)}`);
+      this.logger.error(
+        `Payment reminders boot sweep failed: ${errorMessage(err)}`,
+      );
     });
   }
 
@@ -78,7 +87,8 @@ export class PaymentReminderService implements OnApplicationBootstrap {
   }
 
   private async remindOneTenant(tenantId: string): Promise<void> {
-    const dueInvoices = await this.remindersRepository.listDueInvoices(tenantId);
+    const dueInvoices =
+      await this.remindersRepository.listDueInvoices(tenantId);
     let sent = 0;
     let consentSkipped = 0;
     let invalidPhoneSkipped = 0;
@@ -134,7 +144,9 @@ export class PaymentReminderService implements OnApplicationBootstrap {
     );
   }
 
-  private async enqueueSafely(input: EnqueueMessageInput): Promise<EnqueueOutcome> {
+  private async enqueueSafely(
+    input: EnqueueMessageInput,
+  ): Promise<EnqueueOutcome> {
     try {
       await this.outboxService.enqueue(input);
       return 'SENT';

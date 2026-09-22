@@ -40,11 +40,15 @@ describe('scheduleMismatchReason', () => {
   });
 
   it('rejects a one-cent mismatch — no tolerance', () => {
-    expect(scheduleMismatchReason([{ amountEtb: '999999.99' }], '1000000.00')).not.toBeNull();
+    expect(
+      scheduleMismatchReason([{ amountEtb: '999999.99' }], '1000000.00'),
+    ).not.toBeNull();
   });
 
   it('treats 1000 and 1000.00 as equal', () => {
-    expect(scheduleMismatchReason([{ amountEtb: '1000' }], '1000.00')).toBeNull();
+    expect(
+      scheduleMismatchReason([{ amountEtb: '1000' }], '1000.00'),
+    ).toBeNull();
   });
 });
 
@@ -81,7 +85,10 @@ describe('instalmentsFromPercents', () => {
   it('is null for an empty or partial (deposit-only) schedule', () => {
     expect(instalmentsFromPercents([], '100.00')).toBeNull();
     expect(
-      instalmentsFromPercents([{ label: 'Deposit', percent: '30.00' }], '100.00'),
+      instalmentsFromPercents(
+        [{ label: 'Deposit', percent: '30.00' }],
+        '100.00',
+      ),
     ).toBeNull();
   });
 });

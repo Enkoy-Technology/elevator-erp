@@ -1,16 +1,16 @@
-"use client";
+'use client';
 
-import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
-import { startingCapacityKg, usesRise } from "@/app/calculator/lift-calculator";
-import { Field } from "@/components/form-page";
+import { startingCapacityKg, usesRise } from '@/app/calculator/lift-calculator';
+import { Field } from '@/components/form-page';
 import {
   btnGhost,
   btnSecondary,
   fieldClass,
   labelClass,
-} from "@/components/form-styles";
+} from '@/components/form-styles';
 import {
   ApiError,
   addQuotationLine,
@@ -23,12 +23,12 @@ import {
   type CreateQuotationLinePayload,
   type ProductType,
   type QuotationLine,
-} from "@/lib/api";
-import { formatEtb } from "@/lib/money";
+} from '@/lib/api';
+import { formatEtb } from '@/lib/money';
 
-import { describeFloorPlan } from "../../floor-plan";
-import { FloorPicker } from "../../floor-picker";
-import { NumberInput } from "../../number-input";
+import { describeFloorPlan } from '../../floor-plan';
+import { FloorPicker } from '../../floor-picker';
+import { NumberInput } from '../../number-input';
 
 /**
  * Page 1 of the client's proforma is a line table with a "No of Units"
@@ -52,10 +52,10 @@ interface LineDraft {
   stops: string;
   travelHeightM: string;
   speedMs: string;
-  machineRoomType: "MR" | "MRL";
-  doorType: "CENTER_OPEN" | "TELESCOPIC" | "SWING";
+  machineRoomType: 'MR' | 'MRL';
+  doorType: 'CENTER_OPEN' | 'TELESCOPIC' | 'SWING';
   doorWidthMm: string;
-  buildingUsage: "RESIDENTIAL" | "COMMERCIAL" | "HOSPITAL" | "INDUSTRIAL";
+  buildingUsage: 'RESIDENTIAL' | 'COMMERCIAL' | 'HOSPITAL' | 'INDUSTRIAL';
   marginPercent: string;
   quantity: string;
   machineRoomLabel: string;
@@ -78,34 +78,34 @@ interface LineDraft {
  * a lift is genuinely different, ignored otherwise.
  */
 export const NEW_LINE: LineDraft = {
-  productType: "PASSENGER",
-  shaftWidthMm: "1835",
-  shaftDepthMm: "1750",
-  capacityKg: "1000",
-  stops: "12",
-  travelHeightM: "45",
-  speedMs: "1.6",
-  machineRoomType: "MRL",
-  doorType: "CENTER_OPEN",
-  doorWidthMm: "900",
-  buildingUsage: "COMMERCIAL",
-  marginPercent: "0",
-  quantity: "1",
-  machineRoomLabel: "MRL",
-  floorLabels: "",
-  doorHeightMm: "2100",
-  ropingRatio: "2:1",
-  tractionMachineType: "Gearless",
-  controlSystem: "Simplex",
-  powerSupply: "380V AC 50HZ 3-phase 4 lines",
-  lightSupply: "240V AC 50HZ Single phase",
-  entranceCount: "1",
-  specSummary: "",
+  productType: 'PASSENGER',
+  shaftWidthMm: '1835',
+  shaftDepthMm: '1750',
+  capacityKg: '1000',
+  stops: '12',
+  travelHeightM: '45',
+  speedMs: '1.6',
+  machineRoomType: 'MRL',
+  doorType: 'CENTER_OPEN',
+  doorWidthMm: '900',
+  buildingUsage: 'COMMERCIAL',
+  marginPercent: '0',
+  quantity: '1',
+  machineRoomLabel: 'MRL',
+  floorLabels: '',
+  doorHeightMm: '2100',
+  ropingRatio: '2:1',
+  tractionMachineType: 'Gearless',
+  controlSystem: 'Simplex',
+  powerSupply: '380V AC 50HZ 3-phase 4 lines',
+  lightSupply: '240V AC 50HZ Single phase',
+  entranceCount: '1',
+  specSummary: '',
 };
 
 const str = (
   value: number | string | null | undefined,
-  fallback = "",
+  fallback = '',
 ): string => (value === null || value === undefined ? fallback : String(value));
 
 const toDraft = (line: QuotationLine): LineDraft => {
@@ -123,7 +123,7 @@ const toDraft = (line: QuotationLine): LineDraft => {
     doorWidthMm: str(calc?.doorWidthMm, NEW_LINE.doorWidthMm),
     buildingUsage: calc?.buildingUsage ?? NEW_LINE.buildingUsage,
     marginPercent: str(calc?.marginPercent, NEW_LINE.marginPercent),
-    quantity: str(line.quantity, "1"),
+    quantity: str(line.quantity, '1'),
     machineRoomLabel: str(line.machineRoomLabel),
     floorLabels: str(line.floorLabels),
     doorHeightMm: str(line.doorHeightMm),
@@ -139,17 +139,17 @@ const toDraft = (line: QuotationLine): LineDraft => {
 
 const num = (value: string, fallback: number): number => {
   const parsed = Number(value);
-  return Number.isFinite(parsed) && value.trim() !== "" ? parsed : fallback;
+  return Number.isFinite(parsed) && value.trim() !== '' ? parsed : fallback;
 };
 
 /** Blank means "leave it alone": the API's validators reject null on every
  *  spec field, so an empty box omits the key instead of blanking it. */
 const text = (value: string): string | undefined =>
-  value.trim() === "" ? undefined : value.trim();
+  value.trim() === '' ? undefined : value.trim();
 
 /** A passenger lift is described by its shaft; the standard table fills in the rest. */
 const isStandardLift = (draft: LineDraft): boolean =>
-  draft.productType === "PASSENGER";
+  draft.productType === 'PASSENGER';
 
 const toPayload = (
   draft: LineDraft,
@@ -275,7 +275,7 @@ export const LinesEditor = ({
       );
       onLinesChange([...lines, created]);
       setOpenId(created.id);
-    }, "Failed to add the lift");
+    }, 'Failed to add the lift');
 
   const saveLine = (line: QuotationLine) =>
     void run(async () => {
@@ -289,7 +289,7 @@ export const LinesEditor = ({
         const { [line.id]: _dropped, ...rest } = prev;
         return rest;
       });
-    }, "Failed to save the lift");
+    }, 'Failed to save the lift');
 
   const deleteLine = (line: QuotationLine) =>
     void run(async () => {
@@ -298,7 +298,7 @@ export const LinesEditor = ({
         const { [line.id]: _dropped, ...rest } = prev;
         return rest;
       });
-    }, "Failed to remove the lift");
+    }, 'Failed to remove the lift');
 
   const move = (index: number, delta: number) =>
     void run(async () => {
@@ -306,7 +306,7 @@ export const LinesEditor = ({
       const target = index + delta;
       [order[index], order[target]] = [order[target], order[index]];
       onLinesChange(await reorderQuotationLines(quotationId, order));
-    }, "Failed to reorder the lifts");
+    }, 'Failed to reorder the lifts');
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -325,8 +325,8 @@ export const LinesEditor = ({
       </div>
       <p className="mt-1 text-xs text-slate-500">
         {editable
-          ? "One row per lift, in the order they print. A new lift starts as a copy of the one above it — change what differs. Each lift is priced by the calculator the moment you save it."
-          : "This quotation has left DRAFT, so its lifts can no longer be changed."}
+          ? 'One row per lift, in the order they print. A new lift starts as a copy of the one above it — change what differs. Each lift is priced by the calculator the moment you save it.'
+          : 'This quotation has left DRAFT, so its lifts can no longer be changed.'}
       </p>
 
       {error ? (
@@ -386,16 +386,16 @@ export const LinesEditor = ({
                     </span>
                     <span className="block text-xs text-slate-500">
                       {draft.quantity} unit
-                      {num(draft.quantity, 1) === 1 ? "" : "s"}
+                      {num(draft.quantity, 1) === 1 ? '' : 's'}
                       {plan
                         ? ` · ${plan.displaySummary} · ${plan.floorsStopsDoors}`
-                        : ""}
-                      {dirty ? " · unsaved" : ""}
+                        : ''}
+                      {dirty ? ' · unsaved' : ''}
                     </span>
                   </span>
                 </button>
                 <span className="shrink-0 text-right text-sm font-semibold tabular-nums text-navy-800">
-                  {line.lineTotalEtb ? formatEtb(line.lineTotalEtb) : "—"}
+                  {line.lineTotalEtb ? formatEtb(line.lineTotalEtb) : '—'}
                 </span>
                 {editable ? (
                   <span className="flex shrink-0 items-center">
@@ -426,8 +426,8 @@ export const LinesEditor = ({
                       aria-label={`Remove lift ${line.sequence}`}
                       title={
                         lines.length === 1
-                          ? "A quotation needs at least one lift"
-                          : "Remove this lift"
+                          ? 'A quotation needs at least one lift'
+                          : 'Remove this lift'
                       }
                       className={`${btnGhost} px-1.5 text-slate-400 hover:text-red-600 disabled:opacity-25`}
                     >
@@ -447,9 +447,16 @@ export const LinesEditor = ({
                         disabled={!editable}
                         value={draft.productType}
                         onChange={(e) => {
-                          const next = { ...draftFor(line), productType: e.target.value };
+                          const next = {
+                            ...draftFor(line),
+                            productType: e.target.value,
+                          };
                           next.capacityKg = String(
-                            startingCapacityKg(products, e.target.value, Number(next.capacityKg) || 0),
+                            startingCapacityKg(
+                              products,
+                              e.target.value,
+                              Number(next.capacityKg) || 0,
+                            ),
                           );
                           setDrafts((prev) => ({ ...prev, [line.id]: next }));
                         }}
@@ -467,7 +474,7 @@ export const LinesEditor = ({
                         id={`qty-${line.id}`}
                         disabled={!editable}
                         value={draft.quantity}
-                        onValueChange={(v) => setField(line, "quantity", v)}
+                        onValueChange={(v) => setField(line, 'quantity', v)}
                       />
                     </Field>
                     {isStandardLift(draft) ? (
@@ -481,7 +488,7 @@ export const LinesEditor = ({
                             disabled={!editable}
                             value={draft.shaftWidthMm}
                             onValueChange={(v) =>
-                              setField(line, "shaftWidthMm", v)
+                              setField(line, 'shaftWidthMm', v)
                             }
                           />
                         </Field>
@@ -491,14 +498,14 @@ export const LinesEditor = ({
                           hint={
                             line.calcInput?.floors !== undefined &&
                             line.technicalSpec
-                              ? `Standard lift: ${line.technicalSpec.capacityPersons ?? "—"} persons · ${line.calcInput.capacityKg} kg · ${line.calcInput.speedMs} m/s · door ${line.calcInput.doorWidthMm} mm` +
+                              ? `Standard lift: ${line.technicalSpec.capacityPersons ?? '—'} persons · ${line.calcInput.capacityKg} kg · ${line.calcInput.speedMs} m/s · door ${line.calcInput.doorWidthMm} mm` +
                                 (line.technicalSpec.shaftWidthMm !==
                                   line.calcInput.shaftWidthMm ||
                                 line.technicalSpec.shaftDepthMm !==
                                   line.calcInput.shaftDepthMm
                                   ? ` · fits a ${line.technicalSpec.shaftWidthMm} × ${line.technicalSpec.shaftDepthMm} standard shaft inside the ${line.calcInput.shaftWidthMm} × ${line.calcInput.shaftDepthMm} entered.`
-                                  : ".")
-                              : "Persons, load, speed, car and door follow from the shaft and the floors."
+                                  : '.')
+                              : 'Persons, load, speed, car and door follow from the shaft and the floors.'
                           }
                         >
                           <NumberInput
@@ -506,7 +513,7 @@ export const LinesEditor = ({
                             disabled={!editable}
                             value={draft.shaftDepthMm}
                             onValueChange={(v) =>
-                              setField(line, "shaftDepthMm", v)
+                              setField(line, 'shaftDepthMm', v)
                             }
                           />
                         </Field>
@@ -517,7 +524,7 @@ export const LinesEditor = ({
                           id={`cap-${line.id}`}
                           disabled={!editable}
                           value={draft.capacityKg}
-                          onValueChange={(v) => setField(line, "capacityKg", v)}
+                          onValueChange={(v) => setField(line, 'capacityKg', v)}
                         />
                       </Field>
                     )}
@@ -533,26 +540,26 @@ export const LinesEditor = ({
                       hint={
                         plan
                           ? `${plan.stops} landings · prints as ${plan.displaySummary} · ${plan.floorsStopsDoors} floors/stops/doors`
-                          : "Pick every landing the lift stops at. B = basement, G = ground, M = mezzanine."
+                          : 'Pick every landing the lift stops at. B = basement, G = ground, M = mezzanine.'
                       }
                     >
                       <FloorPicker
                         value={draft.floorLabels}
                         disabled={!editable}
-                        onChange={(next) => setField(line, "floorLabels", next)}
+                        onChange={(next) => setField(line, 'floorLabels', next)}
                       />
                     </Field>
 
                     <Field
                       label="Stops"
                       htmlFor={`stops-${line.id}`}
-                      hint={plan ? "Counted from the floors above." : undefined}
+                      hint={plan ? 'Counted from the floors above.' : undefined}
                     >
                       <NumberInput
                         id={`stops-${line.id}`}
                         disabled={!editable || plan !== null}
                         value={plan ? String(plan.stops) : draft.stops}
-                        onValueChange={(v) => setField(line, "stops", v)}
+                        onValueChange={(v) => setField(line, 'stops', v)}
                       />
                     </Field>
 
@@ -565,7 +572,7 @@ export const LinesEditor = ({
                               disabled={!editable}
                               value={draft.travelHeightM}
                               onValueChange={(v) =>
-                                setField(line, "travelHeightM", v)
+                                setField(line, 'travelHeightM', v)
                               }
                             />
                           </Field>
@@ -575,7 +582,7 @@ export const LinesEditor = ({
                             id={`speed-${line.id}`}
                             disabled={!editable}
                             value={draft.speedMs}
-                            onValueChange={(v) => setField(line, "speedMs", v)}
+                            onValueChange={(v) => setField(line, 'speedMs', v)}
                           />
                         </Field>
                       </>
@@ -589,7 +596,7 @@ export const LinesEditor = ({
                         value={draft.machineRoomType}
                         onChange={(e) => {
                           const machineRoomType = e.target.value as
-                            "MR" | "MRL";
+                            'MR' | 'MRL';
                           setDrafts((prev) => ({
                             ...prev,
                             [line.id]: {
@@ -598,12 +605,12 @@ export const LinesEditor = ({
                               // The printed label follows the choice unless
                               // someone has worded it themselves.
                               machineRoomLabel:
-                                draftFor(line).machineRoomLabel === "" ||
-                                draftFor(line).machineRoomLabel === "MRL" ||
-                                draftFor(line).machineRoomLabel === "WITH MR"
-                                  ? machineRoomType === "MRL"
-                                    ? "MRL"
-                                    : "WITH MR"
+                                draftFor(line).machineRoomLabel === '' ||
+                                draftFor(line).machineRoomLabel === 'MRL' ||
+                                draftFor(line).machineRoomLabel === 'WITH MR'
+                                  ? machineRoomType === 'MRL'
+                                    ? 'MRL'
+                                    : 'WITH MR'
                                   : draftFor(line).machineRoomLabel,
                             },
                           }));
@@ -624,8 +631,8 @@ export const LinesEditor = ({
                           onChange={(e) =>
                             setField(
                               line,
-                              "doorType",
-                              e.target.value as LineDraft["doorType"],
+                              'doorType',
+                              e.target.value as LineDraft['doorType'],
                             )
                           }
                         >
@@ -644,8 +651,8 @@ export const LinesEditor = ({
                         onChange={(e) =>
                           setField(
                             line,
-                            "buildingUsage",
-                            e.target.value as LineDraft["buildingUsage"],
+                            'buildingUsage',
+                            e.target.value as LineDraft['buildingUsage'],
                           )
                         }
                       >
@@ -663,7 +670,7 @@ export const LinesEditor = ({
                           disabled={!editable}
                           value={draft.doorWidthMm}
                           onValueChange={(v) =>
-                            setField(line, "doorWidthMm", v)
+                            setField(line, 'doorWidthMm', v)
                           }
                         />
                       </Field>
@@ -675,7 +682,7 @@ export const LinesEditor = ({
                         disabled={!editable}
                         value={draft.marginPercent}
                         onValueChange={(v) =>
-                          setField(line, "marginPercent", v)
+                          setField(line, 'marginPercent', v)
                         }
                       />
                     </Field>
@@ -701,7 +708,7 @@ export const LinesEditor = ({
                             disabled={!editable}
                             value={draft.entranceCount}
                             onValueChange={(v) =>
-                              setField(line, "entranceCount", v)
+                              setField(line, 'entranceCount', v)
                             }
                           />
                         </Field>
@@ -717,7 +724,7 @@ export const LinesEditor = ({
                             placeholder="MRL"
                             value={draft.machineRoomLabel}
                             onChange={(e) =>
-                              setField(line, "machineRoomLabel", e.target.value)
+                              setField(line, 'machineRoomLabel', e.target.value)
                             }
                           />
                         </Field>
@@ -730,7 +737,7 @@ export const LinesEditor = ({
                             disabled={!editable}
                             value={draft.doorHeightMm}
                             onValueChange={(v) =>
-                              setField(line, "doorHeightMm", v)
+                              setField(line, 'doorHeightMm', v)
                             }
                           />
                         </Field>
@@ -742,7 +749,7 @@ export const LinesEditor = ({
                             placeholder="2:1"
                             value={draft.ropingRatio}
                             onChange={(e) =>
-                              setField(line, "ropingRatio", e.target.value)
+                              setField(line, 'ropingRatio', e.target.value)
                             }
                           />
                         </Field>
@@ -759,7 +766,7 @@ export const LinesEditor = ({
                             onChange={(e) =>
                               setField(
                                 line,
-                                "tractionMachineType",
+                                'tractionMachineType',
                                 e.target.value,
                               )
                             }
@@ -776,7 +783,7 @@ export const LinesEditor = ({
                             placeholder="Simplex"
                             value={draft.controlSystem}
                             onChange={(e) =>
-                              setField(line, "controlSystem", e.target.value)
+                              setField(line, 'controlSystem', e.target.value)
                             }
                           />
                         </Field>
@@ -791,7 +798,7 @@ export const LinesEditor = ({
                             placeholder="380V AC 50HZ 3-phase 4 lines"
                             value={draft.powerSupply}
                             onChange={(e) =>
-                              setField(line, "powerSupply", e.target.value)
+                              setField(line, 'powerSupply', e.target.value)
                             }
                           />
                         </Field>
@@ -806,7 +813,7 @@ export const LinesEditor = ({
                             placeholder="240V AC 50HZ Single phase"
                             value={draft.lightSupply}
                             onChange={(e) =>
-                              setField(line, "lightSupply", e.target.value)
+                              setField(line, 'lightSupply', e.target.value)
                             }
                           />
                         </Field>
@@ -823,7 +830,7 @@ export const LinesEditor = ({
                             placeholder="800KG -10persons / Speed 1.5m/s / B+G+M+10 / 13 floors/13 doors"
                             value={draft.specSummary}
                             onChange={(e) =>
-                              setField(line, "specSummary", e.target.value)
+                              setField(line, 'specSummary', e.target.value)
                             }
                           />
                         </Field>
@@ -839,14 +846,14 @@ export const LinesEditor = ({
                         onClick={() => saveLine(line)}
                         className={`${btnSecondary} disabled:opacity-40`}
                       >
-                        {busy ? "Pricing…" : "Save & price this lift"}
+                        {busy ? 'Pricing…' : 'Save & price this lift'}
                       </button>
                     ) : null}
                     <span className="text-xs text-slate-500">
-                      Calculator:{" "}
-                      {line.unitPriceEtb ? formatEtb(line.unitPriceEtb) : "—"}{" "}
-                      per unit,{" "}
-                      {line.lineTotalEtb ? formatEtb(line.lineTotalEtb) : "—"}{" "}
+                      Calculator:{' '}
+                      {line.unitPriceEtb ? formatEtb(line.unitPriceEtb) : '—'}{' '}
+                      per unit,{' '}
+                      {line.lineTotalEtb ? formatEtb(line.lineTotalEtb) : '—'}{' '}
                       for the line (ex VAT)
                     </span>
                   </div>

@@ -1,7 +1,14 @@
-import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  type OnApplicationBootstrap,
+} from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
-import { InvalidPhoneNumberError, SmsConsentRequiredError } from '../../common/exceptions';
+import {
+  InvalidPhoneNumberError,
+  SmsConsentRequiredError,
+} from '../../common/exceptions';
 import { canSmsRecipient, logSmsConsentSkip } from '../../common/sms-consent';
 import type { CreateNotificationDto } from '../notifications/dto/notification.dto';
 import { NotificationsRepository } from '../notifications/notifications.repository';
@@ -58,7 +65,9 @@ export class MaintenanceReminderService implements OnApplicationBootstrap {
       return;
     }
     void this.runDailyReminders().catch((err: unknown) => {
-      this.logger.error(`Maintenance reminders boot sweep failed: ${errorMessage(err)}`);
+      this.logger.error(
+        `Maintenance reminders boot sweep failed: ${errorMessage(err)}`,
+      );
     });
   }
 
@@ -247,7 +256,9 @@ export class MaintenanceReminderService implements OnApplicationBootstrap {
     }
   }
 
-  private async enqueueSafely(input: EnqueueMessageInput): Promise<EnqueueOutcome> {
+  private async enqueueSafely(
+    input: EnqueueMessageInput,
+  ): Promise<EnqueueOutcome> {
     try {
       await this.outboxService.enqueue(input);
       return 'SENT';
@@ -275,19 +286,26 @@ export class MaintenanceReminderService implements OnApplicationBootstrap {
   private async notifySafely(
     tenantId: string,
     userId: string,
-    dto: Omit<CreateNotificationDto, 'userId'> & { type: 'MAINTENANCE' | 'ASSIGNMENT'; linkPath: string },
+    dto: Omit<CreateNotificationDto, 'userId'> & {
+      type: 'MAINTENANCE' | 'ASSIGNMENT';
+      linkPath: string;
+    },
   ): Promise<void> {
     try {
-      const alreadyNotified = await this.notificationsRepository.existsByLinkPath(
-        tenantId,
-        userId,
-        dto.type,
-        dto.linkPath,
-      );
+      const alreadyNotified =
+        await this.notificationsRepository.existsByLinkPath(
+          tenantId,
+          userId,
+          dto.type,
+          dto.linkPath,
+        );
       if (alreadyNotified) {
         return;
       }
-      await this.notificationsRepository.create(tenantId, null, { userId, ...dto });
+      await this.notificationsRepository.create(tenantId, null, {
+        userId,
+        ...dto,
+      });
     } catch (err) {
       this.logger.error(
         `Failed to create in-app notification for user ${userId}: ${errorMessage(err)}`,

@@ -586,7 +586,8 @@ export const DOC_GROUPS: DocGroup[] = [
       {
         id: 'money-in',
         title: 'Invoices, payments, receivables',
-        tagline: 'Three words for one job: bill the customer, get paid, chase who has not',
+        tagline:
+          'Three words for one job: bill the customer, get paid, chase who has not',
         icon: ICON.receipt,
         body: [
           'Finance shows two menu entries, Invoices and Receivables, and the invoices page has a second tab, Payments. They are not three modules. They are the three moments of one workflow — you send a bill, money arrives, and you look at who still owes — and each one is a different question about the same contract.',

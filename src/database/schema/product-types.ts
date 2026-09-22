@@ -36,9 +36,16 @@ export const productTypes = pgTable(
     /** UPPER_SNAKE, derived from the name on creation and then fixed. */
     code: text('code').notNull(),
     name: text('name').notNull(),
-    basePriceEtb: numeric('base_price_etb', { precision: 14, scale: 2 }).notNull(),
-    perStopEtb: numeric('per_stop_etb', { precision: 12, scale: 2 }).notNull().default('0'),
-    perKgEtb: numeric('per_kg_etb', { precision: 12, scale: 2 }).notNull().default('0'),
+    basePriceEtb: numeric('base_price_etb', {
+      precision: 14,
+      scale: 2,
+    }).notNull(),
+    perStopEtb: numeric('per_stop_etb', { precision: 12, scale: 2 })
+      .notNull()
+      .default('0'),
+    perKgEtb: numeric('per_kg_etb', { precision: 12, scale: 2 })
+      .notNull()
+      .default('0'),
     /** Kilograms one perKgEtb step covers: 100 on the sheet's passenger lifts, 1,000 on car and goods lifts, 1 for a literal per-kg rate. */
     kgStep: integer('kg_step').notNull().default(1),
     /** The stops the base price includes (refN in the formula). */
