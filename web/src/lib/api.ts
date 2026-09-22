@@ -1380,65 +1380,43 @@ const downloadDocument = async (
   URL.revokeObjectURL(url);
 };
 
-/** Long enough for the print dialog to have taken the blob. */
+/** Long enough for the viewer tab to have taken the blob. */
 const PRINT_CLEANUP_MS = 60_000;
 
 /**
- * Print a document instead of saving it: the same PDF the download produces,
- * loaded into a hidden iframe and sent straight to the print dialog. Safari
- * refuses to print a PDF inside an iframe, so fall back to opening it in a
- * tab — and if the browser blocks that too, say so rather than doing nothing.
+ * Print a document: the same PDF the download produces, opened in its own
+ * tab in the browser's PDF viewer, where the print dialog (Ctrl+P or the
+ * viewer's own button) prints what is on screen.
  *
- * ponytail: resolves when the dialog is handed the document, not when it
- * closes; the caller's busy state clears a moment early. Wire `afterprint`
- * through if that ever reads wrong.
+ * It used to load the PDF into a hidden, zero-size iframe and call
+ * contentWindow.print() — which on Chromium since v81 races the PDF
+ * viewer: the frame's onload fires before the page is rendered, and the
+ * client's Windows machines printed a blank sheet every time (it only
+ * worked on a fast Mac by timing). A tab has no such race.
+ *
+ * The tab is opened on the click, BEFORE the download: a pop-up opened
+ * after a slow fetch loses the user gesture and is blocked.
  */
 export const printDocument = async (path: string): Promise<void> => {
-  const url = URL.createObjectURL(await fetchDocument(path));
-  const frame = document.createElement('iframe');
-  frame.setAttribute('aria-hidden', 'true');
-  frame.style.cssText =
-    'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
-  const cleanup = (): void => {
-    frame.remove();
-    URL.revokeObjectURL(url);
-  };
-  await new Promise<void>((resolve, reject) => {
-    frame.onload = () => {
-      const view = frame.contentWindow;
-      try {
-        if (!view) {
-          throw new Error('no print view');
-        }
-        view.addEventListener('afterprint', cleanup);
-        view.focus();
-        view.print();
-        // Not every browser fires afterprint; release the blob regardless.
-        window.setTimeout(cleanup, PRINT_CLEANUP_MS);
-        resolve();
-        return;
-      } catch {
-        frame.remove();
-      }
-      // The iframe refused to print (Safari): show the PDF in a tab instead.
-      window.setTimeout(() => URL.revokeObjectURL(url), PRINT_CLEANUP_MS);
-      if (window.open(url, '_blank')) {
-        resolve();
-        return;
-      }
-      reject(
-        new Error(
-          'The browser blocked the print window. Allow pop-ups for this site, or use PDF to download it.',
-        ),
-      );
-    };
-    frame.onerror = () => {
-      cleanup();
-      reject(new Error('The document could not be opened for printing.'));
-    };
-    document.body.appendChild(frame);
-    frame.src = url;
-  });
+  const tab = window.open('', '_blank');
+  if (!tab) {
+    throw new Error(
+      'The browser blocked the print window. Allow pop-ups for this site, or use PDF to download it.',
+    );
+  }
+  tab.document.title = 'Preparing document…';
+  tab.document.body.innerHTML =
+    '<p style="font:15px system-ui;padding:24px;color:#444">Preparing the document for printing…</p>';
+  let blob: Blob;
+  try {
+    blob = await fetchDocument(path);
+  } catch (err) {
+    tab.close();
+    throw err;
+  }
+  const url = URL.createObjectURL(blob);
+  tab.location.replace(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), PRINT_CLEANUP_MS);
 };
 
 export const printQuotationDocument = (id: string): Promise<void> =>
