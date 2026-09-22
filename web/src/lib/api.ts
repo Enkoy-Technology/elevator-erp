@@ -625,6 +625,7 @@ export interface CreateProjectPayload {
   name: string;
   code?: string;
   productType?: string;
+  siteAddressLine1?: string;
   siteCity?: string;
   buildingName?: string;
   notes?: string;

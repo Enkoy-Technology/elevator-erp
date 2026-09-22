@@ -35,15 +35,17 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
     customer.smsConsentAt !== null &&
     customer.smsConsentRevokedAt === null;
 
+  // The project IS the client: one name, used for both records. The client
+  // asked for this outright — "project means basically customer".
   const [name, setName] = useState(customer?.name ?? '');
   const [email, setEmail] = useState(customer?.email ?? '');
   const [phone, setPhone] = useState(customer?.phone ?? '');
   const [tinNumber, setTinNumber] = useState(customer?.tinNumber ?? '');
-  // Create only: a customer arrives with the building they want a lift in,
-  // so the first project is opened on the same form.
-  const [projectName, setProjectName] = useState('');
   const [products, setProducts] = useState<ProductTypeRow[]>([]);
   const [productType, setProductType] = useState('');
+  const [addressLine1, setAddressLine1] = useState(
+    customer?.addressLine1 ?? '',
+  );
   const [city, setCity] = useState(
     customer?.city ?? (customer ? '' : 'Addis Ababa'),
   );
@@ -105,6 +107,7 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
         phone,
         // Optional; null (not '') so an edit can clear a TIN entered by mistake.
         tinNumber: tinNumber.trim() || null,
+        addressLine1: addressLine1.trim() || undefined,
         city: city || undefined,
         customerType,
         // Omit unless the operator actually toggled it — this is a
@@ -121,14 +124,16 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
         router.push(`/customers/${editId}`);
       } else {
         const created = await createCustomer(payload);
-        if (projectName.trim()) {
-          await createProject({
-            customerId: created.id,
-            name: projectName.trim(),
-            productType: productType || undefined,
-            siteCity: city || undefined,
-          });
-        }
+        // One name, one client: the project carries the same name, so every
+        // document that prints the project as the client prints what was
+        // typed here.
+        await createProject({
+          customerId: created.id,
+          name: name.trim(),
+          productType: productType || undefined,
+          siteAddressLine1: addressLine1.trim() || undefined,
+          siteCity: city || undefined,
+        });
         router.push(`/customers/${created.id}`);
       }
     } catch (err) {
@@ -166,9 +171,11 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
   return (
     <FormPage
       eyebrow="Sales"
-      title={editId ? 'Edit customer' : 'New customer'}
+      title={editId ? 'Edit project' : 'New project'}
       description={
-        editId ? undefined : 'Look-alike customers are flagged as a warning.'
+        editId
+          ? undefined
+          : 'One record: the project is the client. Look-alike names are flagged as a warning.'
       }
       backHref="/customers"
       backLabel="Customers"
@@ -239,8 +246,15 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
         </div>
       ) : null}
 
-      <FormSection title="Identity">
-        <Field label="Name" htmlFor="name">
+      <FormSection
+        title="Project"
+        description="The project is the client — its name is what every quotation and contract prints."
+      >
+        <Field
+          label="Project name"
+          htmlFor="name"
+          hint="The client as the documents name them: “70 DEREJA”, “Belachew”."
+        >
           <input
             id="name"
             className={fieldClass}
@@ -283,6 +297,15 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
             onChange={(e) => setTinNumber(e.target.value)}
           />
         </Field>
+        <Field label="Address" htmlFor="addressLine1">
+          <input
+            id="addressLine1"
+            className={fieldClass}
+            maxLength={200}
+            value={addressLine1}
+            onChange={(e) => setAddressLine1(e.target.value)}
+          />
+        </Field>
         <Field label="City" htmlFor="city">
           <input
             id="city"
@@ -291,53 +314,6 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
             onChange={(e) => setCity(e.target.value)}
           />
         </Field>
-      </FormSection>
-
-      {!editId ? (
-        <FormSection
-          title="First project"
-
-          description="The building or site this customer wants a lift for. It opens at Lead; leave blank to add projects later from the customer's page."
-        >
-          <Field
-            label="Project name"
-            htmlFor="projectName"
-            hint="Usually the building: “Bole Twin Towers — Lift A”."
-          >
-            <input
-              id="projectName"
-
-              className={fieldClass}
-
-              maxLength={200}
-
-              value={projectName}
-
-              onChange={(e) => setProjectName(e.target.value)}
-            />
-          </Field>
-          <Field
-            label="Product"
-            htmlFor="productType"
-            hint="The quotation starts from this product's base price and formula."
-          >
-            <select
-              id="productType"
-              className={fieldClass}
-              value={productType}
-              onChange={(e) => setProductType(e.target.value)}
-            >
-              {products.map((p) => (
-                <option key={p.code} value={p.code}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </FormSection>
-      ) : null}
-
-      <FormSection title="Contact">
         <Field label="Email" htmlFor="email">
           <input
             id="email"
@@ -360,6 +336,26 @@ export const CustomerForm = ({ customer }: { customer: Customer | null }) => {
             onBlur={() => void checkSimilar()}
           />
         </Field>
+        {!editId ? (
+          <Field
+            label="Product"
+            htmlFor="productType"
+            hint="The quotation starts from this product's base price and formula."
+          >
+            <select
+              id="productType"
+              className={fieldClass}
+              value={productType}
+              onChange={(e) => setProductType(e.target.value)}
+            >
+              {products.map((p) => (
+                <option key={p.code} value={p.code}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : null}
       </FormSection>
 
       <FormSection title="SMS consent">
