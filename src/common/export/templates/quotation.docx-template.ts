@@ -12,6 +12,7 @@ import {
   signatureTable,
   textBlock,
 } from './docx-layout';
+import { documentReferenceCode } from './commercial-document';
 import { formatEtb, netOfTaxEtb } from './money-format';
 import {
   fmtDate,
@@ -44,6 +45,8 @@ export const buildQuotationDocx = (
   const d = data as QuotationTemplateData;
   const tech = d.technicalSpec ?? {};
   const primary = branding?.primaryColor ?? null;
+  // Same one line the PDF prints: the salespeople and the model code.
+  const reference = documentReferenceCode(d.salesName, d.referenceCode);
 
   const techRows = TECH_ROWS.filter((r) => tech[r.key] != null).map((r) =>
     row(
@@ -66,19 +69,14 @@ export const buildQuotationDocx = (
     plateTable(
       [
         { label: 'Quote No.', value: d.quoteNumber },
+        ...(reference ? [{ label: 'Reference code', value: reference }] : []),
         { label: 'Issued', value: fmtDate(d.createdAt) },
         { label: 'Valid Until', value: fmtDate(d.validUntil) },
         { label: 'Status', value: d.status },
       ],
       primary,
     ),
-    partiesTable(branding, {
-      label: 'Prepared For',
-      lines: [
-        d.projectName,
-        ...(d.preparedByName ? [`Prepared by: ${d.preparedByName}`] : []),
-      ],
-    }),
+    partiesTable(branding, { label: 'Prepared For', lines: [d.projectName] }),
     heading('Equipment', primary),
     // docx's Table rejects a zero-row table (unlike an empty HTML <table>,
     // which the PDF template tolerates silently) — fall back to a single

@@ -46,6 +46,7 @@ describe('QuotationsService', () => {
     discountPercent: null,
     discountApprovedByUserId: null,
     referenceCode: null,
+    salesName: null,
     deliveryDays: null,
     warrantyPartsMonths: null,
     warrantyFreeServiceMonths: null,
@@ -545,6 +546,7 @@ describe('QuotationsService', () => {
     it("saves the client's 50/30/10/10 schedule alongside the prose", async () => {
       await service.updateTerms(user, draft.id, {
         referenceCode: 'Rodas FUJIHD-E02',
+        salesName: 'KALKIDAN AND MIKA',
         deliveryDays: 150,
         warrantyPartsMonths: 60,
         warrantyFreeServiceMonths: 12,
@@ -559,6 +561,7 @@ describe('QuotationsService', () => {
 
       expect(repo.updateTerms).toHaveBeenCalledWith(user.tenantId, draft.id, {
         referenceCode: 'Rodas FUJIHD-E02',
+        salesName: 'KALKIDAN AND MIKA',
         deliveryDays: 150,
         warrantyPartsMonths: 60,
         warrantyFreeServiceMonths: 12,
@@ -571,9 +574,17 @@ describe('QuotationsService', () => {
       await service.updateTerms(user, draft.id, {
         deliveryDays: 120,
         referenceCode: undefined,
+        salesName: undefined,
       });
       expect(repo.updateTerms).toHaveBeenCalledWith(user.tenantId, draft.id, {
         deliveryDays: 120,
+      });
+    });
+
+    it('writes an explicit null sales name through, to clear it', async () => {
+      await service.updateTerms(user, draft.id, { salesName: null });
+      expect(repo.updateTerms).toHaveBeenCalledWith(user.tenantId, draft.id, {
+        salesName: null,
       });
     });
 

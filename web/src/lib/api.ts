@@ -1665,6 +1665,11 @@ export interface Quotation {
   discountApprovedByUserId: string | null;
 
   // ---- commercial terms printed as prose on page 1 (see updateQuotationTerms).
+  /** The people on the offer, e.g. "KALKIDAN AND MIKA". Printed as the first
+   *  half of the document's reference code, never on a line of its own. */
+  salesName: string | null;
+  /** The model half, e.g. "FUJI-E22". Joined to salesName for printing —
+   *  see composeReferenceCode. Old rows hold the whole string here. */
   referenceCode: string | null;
   deliveryDays: number | null;
   warrantyPartsMonths: number | null;
@@ -2003,7 +2008,9 @@ export interface PaymentTermInput {
  * null or ''.
  */
 export interface UpdateQuotationTermsPayload {
-  /** Their own offer reference, e.g. "Rodas FUJIHD-E02". */
+  /** The people on the offer, e.g. "KALKIDAN AND MIKA". */
+  salesName?: string;
+  /** The model half of the reference, e.g. "FUJI-E22". */
   referenceCode?: string;
   deliveryDays?: number;
   warrantyPartsMonths?: number;

@@ -1,5 +1,9 @@
 import type { TenantBranding } from '../document-pdf.service';
-import { monthsLabel, type DocumentLineData } from './commercial-document';
+import {
+  documentReferenceCode,
+  monthsLabel,
+  type DocumentLineData,
+} from './commercial-document';
 import {
   buildQuotationHtml,
   type QuotationTemplateData,
@@ -364,21 +368,19 @@ describe('the client-shaped commercial document', () => {
     expect(html).toContain('&lt;script&gt;');
   });
 
-  it('names the project and the salesperson in the parties block, never the customer', () => {
+  // "Prepared by" was never on the client's paper — we invented the label,
+  // and it printed whoever was logged in (a quote typed by the CEO said
+  // "Demo CEO"). Removed 2026-09-22; the salespeople are named by the
+  // reference code instead.
+  it('names the project in the parties block — never the customer, never a "Prepared by" line', () => {
     const html = buildQuotationHtml(
       { ...data, preparedByName: 'Abebe Kebede' },
       branding,
     );
     expect(html).toContain('Rodas Tower — Bole');
-    expect(html).toContain('Prepared by: Abebe Kebede');
+    expect(html).not.toContain('Prepared by');
+    expect(html).not.toContain('Abebe Kebede');
     expect(html).not.toContain('Rodas Real Estate PLC');
-
-    // No salesperson recorded: the line is dropped, not printed blank.
-    const anonymous = buildQuotationHtml(
-      { ...data, preparedByName: null },
-      branding,
-    );
-    expect(anonymous).not.toContain('Prepared by');
   });
 
   it('prints the single line a quotation with no line items implies', () => {
@@ -396,5 +398,32 @@ describe('monthsLabel', () => {
     expect(monthsLabel(18)).toBe('18 months');
     expect(monthsLabel(1)).toBe('1 month');
     expect(monthsLabel(0)).toBe('0 months');
+  });
+});
+
+describe('documentReferenceCode', () => {
+  it('joins the salespeople and the model code the way their own quotation writes it', () => {
+    expect(documentReferenceCode('KALKIDAN AND MIKA', 'FUJI-E22')).toBe(
+      'KALKIDAN AND MIKA FUJI-E22',
+    );
+  });
+
+  it('prints the sales name alone when there is no model code', () => {
+    expect(documentReferenceCode('KALKIDAN AND MIKA', null)).toBe(
+      'KALKIDAN AND MIKA',
+    );
+  });
+
+  it('prints the code alone on an old quotation that has no sales name', () => {
+    expect(documentReferenceCode(null, 'FUJI-E22')).toBe('FUJI-E22');
+    // Blank and whitespace are the same as absent — the row is a value, not
+    // a stray space.
+    expect(documentReferenceCode('  ', ' FUJI-E22 ')).toBe('FUJI-E22');
+  });
+
+  it('is null when neither is set, so the Reference code row is not printed', () => {
+    expect(documentReferenceCode(null, null)).toBeNull();
+    expect(documentReferenceCode(undefined, undefined)).toBeNull();
+    expect(documentReferenceCode('', '   ')).toBeNull();
   });
 });

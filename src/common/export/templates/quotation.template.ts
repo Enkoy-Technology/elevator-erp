@@ -1,5 +1,6 @@
 import type { TenantBranding } from '../document-pdf.service';
 import {
+  documentReferenceCode,
   PRODUCT_LABELS,
   renderCommercialBody,
   type CommercialTermsData,
@@ -42,7 +43,12 @@ export interface QuotationTemplateData
   projectName: string;
   /** The project's site address, printed under its name in the To block. */
   projectAddress?: string | null;
-  /** The salesperson who prepared it; the "Prepared by" lines are dropped when null. */
+  /**
+   * The user who created the quotation. Carried (the repository still joins
+   * it) but NOT printed since the client's 2026-09-22 decision: the document
+   * names its salespeople through `salesName` in the reference code, which
+   * is asked for, not inferred from whoever was logged in.
+   */
   preparedByName?: string | null;
   technicalSpec?: Record<string, unknown> | null;
   pricingBreakdown?: Record<string, string> | null;
@@ -153,20 +159,18 @@ export const buildQuotationHtml = (
     d.lines && d.lines.length > 0
       ? d.lines
       : [impliedLine(d.technicalSpec, exVatTotalEtb)];
+  const reference = documentReferenceCode(d.salesName, d.referenceCode);
 
   const bodyHtml = renderCommercialBody({
     branding,
     plate: [
       { label: 'Quote No.', value: d.quoteNumber },
-      ...(d.referenceCode
-        ? [{ label: 'Reference code', value: d.referenceCode }]
-        : []),
+      ...(reference ? [{ label: 'Reference code', value: reference }] : []),
       { label: 'Date', value: fmtDate(d.createdAt) },
     ],
     customerName: d.customerName,
     projectName: d.projectName,
     projectAddress: d.projectAddress,
-    preparedByName: d.preparedByName,
     lines,
     exVatTotalEtb,
     vatPercent: d.taxPercent ?? null,
@@ -182,11 +186,7 @@ export const buildQuotationHtml = (
   return renderLayout({
     branding,
     documentTitle: 'QUOTATION',
-    coverLines: [
-      'Project',
-      d.projectName,
-      ...(d.preparedByName ? ['Prepared by', d.preparedByName] : []),
-    ],
+    coverLines: ['Project', d.projectName],
     bodyHtml,
     footerNote: `This quotation is valid until ${fmtDate(d.validUntil)}. Prices in ETB.`,
   });

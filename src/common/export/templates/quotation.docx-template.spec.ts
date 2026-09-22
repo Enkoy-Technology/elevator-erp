@@ -58,11 +58,26 @@ describe('buildQuotationDocx', () => {
     expect(buildQuotationDocx(data, branding)).toBeInstanceOf(Document);
   });
 
-  it('names the project and the salesperson, never the customer', async () => {
+  it('names the project, never the customer and never a Prepared by line', async () => {
     const xml = await documentXml(buildQuotationDocx(data, branding));
     expect(xml).toContain('Bole Twin Towers — Lift A');
-    expect(xml).toContain('Prepared by: Abebe Kebede');
+    // Removed 2026-09-22: the label was never on the client's paper.
+    expect(xml).not.toContain('Prepared by');
+    expect(xml).not.toContain('Abebe Kebede');
     expect(xml).not.toContain('Acme Real Estate PLC');
+  });
+
+  it('plates the reference code the PDF prints, sales name and all', async () => {
+    const xml = await documentXml(
+      buildQuotationDocx(
+        { ...data, salesName: 'KALKIDAN AND MIKA', referenceCode: 'FUJI-E22' },
+        branding,
+      ),
+    );
+    expect(xml).toContain('KALKIDAN AND MIKA FUJI-E22');
+    expect(await documentXml(buildQuotationDocx(data, branding))).not.toContain(
+      'Reference code',
+    );
   });
 
   it('does not throw when branding is absent (falls back to the default accent colour)', () => {

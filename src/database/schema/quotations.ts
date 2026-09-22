@@ -112,6 +112,14 @@ export const quotations = pgTable(
     // ---------------------------------------------------------------------
     /** Their own offer reference, e.g. "Rodas FUJIHD-E02". */
     referenceCode: text('reference_code'),
+    /**
+     * The salespeople the offer is credited to, e.g. "KALKIDAN AND MIKA".
+     * Asked for on the quotation itself — it is NOT whoever happened to be
+     * logged in. Separate from `referenceCode` so old rows keep printing
+     * their code exactly as they do today; the document prints the two
+     * joined ("KALKIDAN AND MIKA FUJI-E22", see documentReferenceCode).
+     */
+    salesName: text('sales_name'),
     deliveryDays: integer('delivery_days'),
     /** Theirs: 60 months parts, 12 months free service. */
     warrantyPartsMonths: integer('warranty_parts_months'),

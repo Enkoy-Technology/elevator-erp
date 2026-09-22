@@ -40,7 +40,10 @@ export interface TechnicalProposalTemplateData {
   /** Still supplied by callers; no longer printed — the project names the party. */
   customerName: string;
   projectName: string;
-  /** The salesperson who prepared it; the "Prepared by" line is omitted when null. */
+  /**
+   * The user who created the quotation. Carried (the repository still joins
+   * it) but NOT printed since the client's 2026-09-22 decision.
+   */
   preparedByName?: string | null;
   technicalSpec?: Record<string, unknown> | null;
   calcInput?: Record<string, unknown> | null;
@@ -166,10 +169,7 @@ export const buildTechnicalProposalHtml = (
 
   ${renderParties(branding, {
     label: 'Prepared For',
-    lines: [
-      d.projectName,
-      ...(d.preparedByName ? [`Prepared by: ${d.preparedByName}`] : []),
-    ],
+    lines: [d.projectName],
   })}
 
   <h2>Equipment</h2>
@@ -183,11 +183,7 @@ export const buildTechnicalProposalHtml = (
   return renderLayout({
     branding,
     documentTitle: 'TECHNICAL PROPOSAL',
-    coverLines: [
-      'Project',
-      d.projectName,
-      ...(d.preparedByName ? ['Prepared by', d.preparedByName] : []),
-    ],
+    coverLines: ['Project', d.projectName],
     bodyHtml,
     footerNote: `Specification for quotation ${d.quoteNumber}, computed to EN 81-20/50. Dimensions are nominal and confirmed by site survey.`,
   });

@@ -40,17 +40,24 @@ describe('buildProformaDocx', () => {
     expect(buildProformaDocx(data, branding)).toBeInstanceOf(Document);
   });
 
-  it('names the project and the salesperson in the party block, never the customer', () => {
+  it('names the project in the party block — never the customer, never a Prepared by line', () => {
     const json = text(data);
     expect(json).toContain('Bole Twin Towers — Lift A');
-    expect(json).toContain('Prepared by: Abebe Kebede');
+    // Removed 2026-09-22: the label was never on the client's paper.
+    expect(json).not.toContain('Prepared by');
+    expect(json).not.toContain('Abebe Kebede');
     expect(json).not.toContain('Acme Real Estate PLC');
   });
 
-  it('omits the Prepared by line when nobody is recorded as the author', () => {
-    expect(text({ ...data, preparedByName: null })).not.toContain(
-      'Prepared by',
-    );
+  it('plates the reference code the PDF prints, sales name and all', () => {
+    const json = text({
+      ...data,
+      salesName: 'KALKIDAN AND MIKA',
+      referenceCode: 'FUJI-E22',
+    });
+    expect(json).toContain('KALKIDAN AND MIKA FUJI-E22');
+    // Nothing to print, no row: the plate stays four fields wide.
+    expect(text(data)).not.toContain('Reference code');
   });
 
   it('does not throw when branding is absent', () => {

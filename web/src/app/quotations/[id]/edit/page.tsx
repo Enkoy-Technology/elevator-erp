@@ -11,7 +11,6 @@ import {
   ApiError,
   getAccessToken,
   getCurrentRole,
-  getProfile,
   getQuotation,
   listQuotationLines,
   listQuotationPaymentTerms,
@@ -22,6 +21,7 @@ import {
   type UpdateQuotationTermsPayload,
   type UserRole,
 } from '@/lib/api';
+import { composeReferenceCode } from '@/lib/reference-code';
 import {
   formatEtb,
   formatNumber,
@@ -104,6 +104,7 @@ export default function EditQuotationPage() {
    *  applied, so editing one leaves the price box showing an old answer. */
   const [linesDirty, setLinesDirty] = useState(false);
   const [terms, setTerms] = useState<TermRow[]>([]);
+  const [salesName, setSalesName] = useState('');
   const [referenceCode, setReferenceCode] = useState('');
   const [deliveryDays, setDeliveryDays] = useState('');
   const [warrantyPartsMonths, setWarrantyPartsMonths] = useState('');
@@ -111,8 +112,6 @@ export default function EditQuotationPage() {
     useState('');
   const [validityDays, setValidityDays] = useState('');
   const [notes, setNotes] = useState('');
-  /** Whoever is writing the offer, for the reference-code suggestion only. */
-  const [preparedByName, setPreparedByName] = useState('');
   const [step, setStep] = useState('lifts');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -133,13 +132,10 @@ export default function EditQuotationPage() {
       try {
         // Independent reads — the page is not usable until all three land,
         // so waiting for them one after another just makes it slower.
-        const [quote, quoteLines, paymentTerms, profile] = await Promise.all([
+        const [quote, quoteLines, paymentTerms] = await Promise.all([
           getQuotation(id),
           listQuotationLines(id),
           listQuotationPaymentTerms(id),
-          // Only feeds the reference-code suggestion, so a failure here must
-          // not keep the offer from loading.
-          getProfile().catch(() => null),
         ]);
         setQuotation(quote);
         setLines(quoteLines);
@@ -148,13 +144,16 @@ export default function EditQuotationPage() {
             ? paymentTerms.map((t) => ({ label: t.label, percent: t.percent }))
             : STANDARD_TERMS.map((t) => ({ ...t })),
         );
+        // Deliberately not prefilled with whoever is signed in: that is the
+        // bug being fixed — the CEO opening a draft printed "Demo CEO". The
+        // offer states its salespeople, so the form asks for them.
+        setSalesName(quote.salesName ?? '');
         setReferenceCode(quote.referenceCode ?? '');
         setDeliveryDays(numText(quote.deliveryDays));
         setWarrantyPartsMonths(numText(quote.warrantyPartsMonths));
         setWarrantyFreeServiceMonths(numText(quote.warrantyFreeServiceMonths));
         setValidityDays(numText(quote.validityDays));
         setNotes(quote.notes ?? '');
-        setPreparedByName(profile?.fullName ?? '');
       } catch (err) {
         setLoadError(
           err instanceof ApiError
@@ -177,20 +176,14 @@ export default function EditQuotationPage() {
   // Each step's summary is what it currently holds, so the four of them read
   // together as a status line for the whole offer without opening anything.
   const unitCount = lines.reduce((sum, line) => sum + (line.quantity ?? 1), 0);
+  const printedReference = composeReferenceCode(salesName, referenceCode);
   const statedTerms = [
-    referenceCode.trim(),
+    printedReference,
     deliveryDays.trim(),
     validityDays.trim(),
     warrantyPartsMonths.trim(),
     warrantyFreeServiceMonths.trim(),
   ].filter((value) => value !== '').length;
-
-  // Their own convention: the salesperson's name, then the model. The name
-  // is whoever is signed in, not the quotation's creator — the detail
-  // endpoint does not carry it, and in practice the salesperson edits their
-  // own quote. Offered as a fill, never saved on its own; the model half is
-  // a guess either way.
-  const suggestedReference = `${preparedByName.toUpperCase()} FUJI-E`;
 
   const steps: Step[] = [
     {
@@ -252,6 +245,9 @@ export default function EditQuotationPage() {
           percent: t.percent.trim() === '' ? '0' : t.percent.trim(),
         })),
       };
+      if (salesName.trim() !== '') {
+        payload.salesName = salesName.trim();
+      }
       if (referenceCode.trim() !== '') {
         payload.referenceCode = referenceCode.trim();
       }
@@ -333,29 +329,39 @@ export default function EditQuotationPage() {
             description="Printed as prose on page 1. Leave anything you do not want stated blank."
           >
             <Field
-              label="Reference"
+              label="Sales name"
+              htmlFor="salesName"
+              wide
+              hint="The people on the offer, as the reference code prints them."
+            >
+              <input
+                id="salesName"
+                className={fieldClass}
+                disabled={!editable}
+                placeholder="KALKIDAN AND MIKA"
+                value={salesName}
+                onChange={(e) => setSalesName(e.target.value)}
+              />
+            </Field>
+            <Field
+              label="Reference code"
               htmlFor="referenceCode"
               wide
-              hint="Your own offer reference, e.g. Rodas FUJIHD-E02."
+              hint="The model code that follows the sales name, e.g. FUJI-E22."
             >
               <input
                 id="referenceCode"
                 className={fieldClass}
                 disabled={!editable}
+                placeholder="FUJI-E22"
                 value={referenceCode}
                 onChange={(e) => setReferenceCode(e.target.value)}
               />
-              {editable &&
-              preparedByName !== '' &&
-              referenceCode.trim() === '' ? (
-                <button
-                  type="button"
-                  onClick={() => setReferenceCode(suggestedReference)}
-                  className="mt-1 text-xs font-semibold text-navy-800 hover:underline"
-                >
-                  Use {suggestedReference}
-                </button>
-              ) : null}
+              <p className="mt-1 text-xs text-slate-500">
+                {printedReference === ''
+                  ? 'No reference code will be printed.'
+                  : `Prints as: ${printedReference}`}
+              </p>
             </Field>
             <Field label="Delivery (days)" htmlFor="deliveryDays">
               <NumberInput

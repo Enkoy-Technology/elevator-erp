@@ -50,6 +50,7 @@ describe('quotationDocumentData', () => {
       lines: [],
       paymentTerms: [],
       referenceCode: null,
+      salesName: null,
       validityDays: null,
       warrantyPartsMonths: null,
       warrantyFreeServiceMonths: null,
@@ -63,6 +64,7 @@ describe('quotationDocumentData', () => {
     const data = quotationDocumentData({
       ...row,
       referenceCode: 'Rodas FUJIHD-E02',
+      salesName: 'KALKIDAN AND MIKA',
       validityDays: 5,
       warrantyPartsMonths: 60,
       warrantyFreeServiceMonths: 12,
@@ -115,6 +117,8 @@ describe('quotationDocumentData', () => {
       },
     ]);
     expect(data.referenceCode).toBe('Rodas FUJIHD-E02');
+    // Kept separate here; the templates join the two for the printed row.
+    expect(data.salesName).toBe('KALKIDAN AND MIKA');
     expect(data.warrantyPartsMonths).toBe(60);
     expect(data).not.toHaveProperty('calculatedTotalEtb');
     expect(data).not.toHaveProperty('discountAmountEtb');

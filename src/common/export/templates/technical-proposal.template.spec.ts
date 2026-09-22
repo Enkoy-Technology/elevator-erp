@@ -77,22 +77,21 @@ const flat: TechnicalProposalTemplateData = {
 };
 
 describe('buildTechnicalProposalHtml', () => {
-  it('titles the document and plates the quotation, project, and salesperson — never the customer', () => {
+  it('titles the document and plates the quotation and project — never the customer', () => {
     const html = buildTechnicalProposalHtml(passenger, branding);
     expect(html).toContain('TECHNICAL PROPOSAL');
     expect(html).toContain('QTN-2026-ABCD1234');
     expect(html).toContain('Bole Twin Towers');
-    expect(html).toContain('Prepared by: Sara Tesfaye');
     expect(html).toContain('Enkoy Elevators PLC');
     expect(html).not.toContain('Acme Real Estate PLC');
   });
 
-  it('omits the Prepared by line when nobody is recorded', () => {
-    const html = buildTechnicalProposalHtml(
-      { ...passenger, preparedByName: null },
-      branding,
-    );
+  // Removed 2026-09-22: never on the client's paper, and it named whoever
+  // was logged in rather than the salespeople.
+  it('never prints a Prepared by line, even when the author is known', () => {
+    const html = buildTechnicalProposalHtml(passenger, branding);
     expect(html).not.toContain('Prepared by');
+    expect(html).not.toContain('Sara Tesfaye');
     expect(html).toContain('Bole Twin Towers');
   });
 

@@ -94,7 +94,10 @@ export interface QuotationDocumentRow {
   createdAt: Date;
   validUntil: Date | null;
   customerName: string | null;
-  /** Full name of the user who created (quotation) or issued (proforma) it. */
+  /**
+   * Full name of the user who created it. Joined and carried, but no
+   * document prints it since the client's 2026-09-22 decision.
+   */
   preparedByName: string | null;
   projectName: string | null;
   /**
@@ -129,6 +132,8 @@ export interface QuotationDocumentRow {
   paymentTerms?: readonly QuotationPaymentTermRow[];
   /** Their own offer reference, e.g. "Rodas FUJIHD-E02". */
   referenceCode?: string | null;
+  /** The salespeople the offer is credited to, e.g. "KALKIDAN AND MIKA". */
+  salesName?: string | null;
   validityDays?: number | null;
   warrantyPartsMonths?: number | null;
   warrantyFreeServiceMonths?: number | null;
@@ -175,6 +180,7 @@ export const quotationDocumentData = (
   lines: (q.lines ?? []).map(documentLine),
   paymentTerms: (q.paymentTerms ?? []).map(paymentTerm),
   referenceCode: q.referenceCode ?? null,
+  salesName: q.salesName ?? null,
   validityDays: q.validityDays ?? null,
   warrantyPartsMonths: q.warrantyPartsMonths ?? null,
   warrantyFreeServiceMonths: q.warrantyFreeServiceMonths ?? null,

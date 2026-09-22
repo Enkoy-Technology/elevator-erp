@@ -1,0 +1,1 @@
+ALTER TABLE "quotations" ADD COLUMN "sales_name" text;

@@ -1,5 +1,6 @@
 import type { TenantBranding } from '../document-pdf.service';
 import {
+  documentReferenceCode,
   renderCommercialBody,
   type CommercialTermsData,
   type DocumentAppendixContent,
@@ -48,7 +49,11 @@ export interface ProformaTemplateData
   projectName: string;
   /** The project's site address, printed under its name in the To block. */
   projectAddress?: string | null;
-  /** The salesperson named as the author; omitted from the page when null. */
+  /**
+   * The user who issued it. Carried (the repository still joins it) but NOT
+   * printed since the client's 2026-09-22 decision — the salespeople reach
+   * the page through the reference code snapshotted from the quotation.
+   */
   preparedByName?: string | null;
   technicalSpec?: Record<string, unknown> | null;
   subtotalEtb?: string | null;
@@ -81,20 +86,20 @@ export const buildProformaHtml = (
     d.lines && d.lines.length > 0
       ? d.lines
       : [impliedLine(d.technicalSpec, exVatTotalEtb)];
+  // Already joined when the proforma was issued (ProformasRepository.issue);
+  // the helper still runs so a hand-built or pre-join row prints the same.
+  const reference = documentReferenceCode(d.salesName, d.referenceCode);
 
   const bodyHtml = renderCommercialBody({
     branding,
     plate: [
       { label: 'Proforma No.', value: d.proformaNumber },
-      ...(d.referenceCode
-        ? [{ label: 'Reference code', value: d.referenceCode }]
-        : []),
+      ...(reference ? [{ label: 'Reference code', value: reference }] : []),
       { label: 'Date', value: fmtDate(d.issuedAt) },
     ],
     customerName: d.customerName,
     projectName: d.projectName,
     projectAddress: d.projectAddress,
-    preparedByName: d.preparedByName,
     lines,
     exVatTotalEtb,
     vatPercent: d.taxPercent ?? null,
@@ -110,11 +115,7 @@ export const buildProformaHtml = (
   return renderLayout({
     branding,
     documentTitle: 'PROFORMA INVOICE',
-    coverLines: [
-      'Project',
-      d.projectName,
-      ...(d.preparedByName ? ['Prepared by', d.preparedByName] : []),
-    ],
+    coverLines: ['Project', d.projectName],
     bodyHtml,
     footerNote: `This proforma invoice is valid until ${fmtDate(d.validUntil)}. Prices in ETB.`,
   });

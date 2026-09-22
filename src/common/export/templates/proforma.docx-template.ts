@@ -12,6 +12,7 @@ import {
   signatureTable,
   textBlock,
 } from './docx-layout';
+import { documentReferenceCode } from './commercial-document';
 import { formatEtb } from './money-format';
 import type { ProformaTemplateData } from './proforma.template';
 import { fmtDate, TECH_ROWS } from './quotation.template';
@@ -34,6 +35,8 @@ export const buildProformaDocx = (
   const d = data as ProformaTemplateData;
   const tech = d.technicalSpec ?? {};
   const primary = branding?.primaryColor ?? null;
+  // Snapshotted already joined at issue time; see buildProformaHtml.
+  const reference = documentReferenceCode(d.salesName, d.referenceCode);
 
   const techRows = TECH_ROWS.filter((r) => tech[r.key] != null).map((r) =>
     row(r.label, `${String(tech[r.key])}${r.unit ? ` ${r.unit}` : ''}`),
@@ -43,21 +46,16 @@ export const buildProformaDocx = (
     plateTable(
       [
         { label: 'Proforma No.', value: d.proformaNumber },
+        ...(reference ? [{ label: 'Reference code', value: reference }] : []),
         { label: 'Issued', value: fmtDate(d.issuedAt) },
         { label: 'Valid Until', value: fmtDate(d.validUntil) },
         { label: 'Status', value: d.status },
       ],
       primary,
     ),
-    // The project and the salesperson — not the customer (client decision,
-    // 2026-09-22; see ProformaTemplateData.customerName).
-    partiesTable(branding, {
-      label: 'Prepared For',
-      lines: [
-        d.projectName,
-        ...(d.preparedByName ? [`Prepared by: ${d.preparedByName}`] : []),
-      ],
-    }),
+    // The project — not the customer, and not whoever was logged in (client
+    // decision, 2026-09-22; see ProformaTemplateData.customerName).
+    partiesTable(branding, { label: 'Prepared For', lines: [d.projectName] }),
     heading('Technical Specification', primary),
     fullWidthTable(
       techRows.length ? techRows : [row('See attached specification', '—')],

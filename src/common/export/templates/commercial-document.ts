@@ -99,11 +99,31 @@ export interface PaymentTermData {
 export interface CommercialTermsData {
   /** Their own offer reference, e.g. "Rodas FUJIHD-E02". */
   referenceCode?: string | null;
+  /** The salespeople credited with the offer, e.g. "KALKIDAN AND MIKA".
+   *  Printed only as part of the reference code — see documentReferenceCode. */
+  salesName?: string | null;
   validityDays?: number | null;
   warrantyPartsMonths?: number | null;
   warrantyFreeServiceMonths?: number | null;
   deliveryDays?: number | null;
 }
+
+/**
+ * The one value the documents print as "Reference code": the salespeople and
+ * the client's own offer code, joined by a single space — their own
+ * quotation writes it "KALKIDAN AND MIKA FUJI-E22". Either half may be
+ * missing (a quotation written before `sales_name` existed has only the
+ * code), and with neither the row is not printed at all — hence null, not ''.
+ * Exported so the PDF, the docx and the proforma cannot drift apart.
+ */
+export const documentReferenceCode = (
+  salesName?: string | null,
+  referenceCode?: string | null,
+): string | null =>
+  [salesName, referenceCode]
+    .map((part) => part?.trim() ?? '')
+    .filter((part) => part !== '')
+    .join(' ') || null;
 
 export interface BoilerplateSectionData {
   title?: string | null;
@@ -135,8 +155,6 @@ export interface CommercialDocumentOptions extends DocumentAppendixContent {
   projectName: string;
   /** The project's site address, printed under its name; omitted when null. */
   projectAddress?: string | null;
-  /** Full name of the salesperson who prepared it; omitted from the page when null. */
-  preparedByName?: string | null;
   lines: readonly DocumentLineData[];
   /**
    * The three figures of the client's totals block. NOTHING about the
@@ -459,11 +477,7 @@ export const renderCommercialBody = (o: CommercialDocumentOptions): string => `
 
   ${renderParties(o.branding, {
     label: 'To',
-    lines: [
-      o.projectName,
-      ...(o.projectAddress ? [o.projectAddress] : []),
-      ...(o.preparedByName ? [`Prepared by: ${o.preparedByName}`] : []),
-    ],
+    lines: [o.projectName, ...(o.projectAddress ? [o.projectAddress] : [])],
   })}
 
   <h2>Offer</h2>

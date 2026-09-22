@@ -71,6 +71,7 @@ export type QuotationTermsUpdate = Partial<
   Pick<
     QuotationInsert,
     | 'referenceCode'
+    | 'salesName'
     | 'deliveryDays'
     | 'warrantyPartsMonths'
     | 'warrantyFreeServiceMonths'

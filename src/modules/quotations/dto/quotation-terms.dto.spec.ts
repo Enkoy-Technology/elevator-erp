@@ -25,6 +25,22 @@ describe('UpdateQuotationTermsDto', () => {
     );
   });
 
+  it('takes the salespeople the quotation asks for, and null to clear them', async () => {
+    await expect(
+      errorsFor({ salesName: 'KALKIDAN AND MIKA' }),
+    ).resolves.toEqual([]);
+    await expect(errorsFor({ salesName: null })).resolves.toEqual([]);
+  });
+
+  it('accepts a sales name of 120 characters and rejects 121', async () => {
+    await expect(errorsFor({ salesName: 'x'.repeat(120) })).resolves.toEqual(
+      [],
+    );
+    await expect(errorsFor({ salesName: 'x'.repeat(121) })).resolves.toEqual([
+      'salesName',
+    ]);
+  });
+
   it('takes the per-offer special notes that print on page 1', async () => {
     await expect(
       errorsFor({

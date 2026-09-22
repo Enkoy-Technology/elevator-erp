@@ -34,25 +34,34 @@ describe('buildProformaHtml', () => {
     preparedByName: 'Abebe Kebede',
   };
 
-  it('titles the document PROFORMA INVOICE and embeds the proforma number, project, salesperson, and totals', () => {
+  it('titles the document PROFORMA INVOICE and embeds the proforma number, project and totals', () => {
     const html = buildProformaHtml(data, branding);
     expect(html).toContain('PROFORMA INVOICE');
     expect(html).toContain('PF-FY2026-27-0001');
     expect(html).toContain('Bole Twin Towers');
-    expect(html).toContain('Prepared by');
-    expect(html).toContain('Abebe Kebede');
     expect(html).toContain('115,000.00 ETB');
   });
 
-  it('never prints the customer name — the project and the salesperson name the document', () => {
+  it('never prints the customer name — the project names the document', () => {
     const html = buildProformaHtml(data, branding);
     expect(html).not.toContain('Acme Real Estate PLC');
   });
 
-  it('omits the Prepared by line when nobody is recorded as the author', () => {
-    const html = buildProformaHtml({ ...data, preparedByName: null }, branding);
+  // Removed 2026-09-22: never on the client's paper, and it named whoever
+  // was logged in. The salespeople ride in the reference code instead.
+  it('never prints a Prepared by line, even when the author is known', () => {
+    const html = buildProformaHtml(data, branding);
     expect(html).not.toContain('Prepared by');
+    expect(html).not.toContain('Abebe Kebede');
     expect(html).toContain('Bole Twin Towers');
+  });
+
+  it('prints the sales name joined to the reference code when one was snapshotted', () => {
+    const html = buildProformaHtml(
+      { ...data, salesName: 'KALKIDAN AND MIKA', referenceCode: 'FUJI-E22' },
+      branding,
+    );
+    expect(html).toContain('KALKIDAN AND MIKA FUJI-E22');
   });
 
   it('renders the branding letterhead', () => {
@@ -90,9 +99,9 @@ describe('buildProformaHtml', () => {
     expect(html).not.toContain('Status');
   });
 
-  it('escapes HTML in the project and salesperson names', () => {
+  it('escapes HTML in the project name and the reference code', () => {
     const html = buildProformaHtml(
-      { ...data, projectName: '<b>x</b>', preparedByName: '<i>y</i>' },
+      { ...data, projectName: '<b>x</b>', salesName: '<i>y</i>' },
       branding,
     );
     expect(html).not.toContain('<b>x</b>');

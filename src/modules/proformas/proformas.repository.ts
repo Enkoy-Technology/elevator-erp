@@ -16,6 +16,7 @@ import {
 } from 'drizzle-orm';
 
 import { todayIso } from '../../common/business-time';
+import { documentReferenceCode } from '../../common/export/templates/commercial-document';
 import { WorkflowTransitionError } from '../../common/exceptions';
 import { computeFiscalYear } from '../../common/fiscal-year';
 import {
@@ -424,7 +425,13 @@ export class ProformasRepository {
           // (calculatedTotalEtb / discountAmountEtb / discountPercent) are
           // deliberately NOT copied — `proformas` has no columns for them
           // and this document goes to the customer.
-          referenceCode: quote.referenceCode,
+          // Joined here, once, at issue time: the proforma has no sales_name
+          // column of its own and its reference code IS the snapshot of what
+          // the document prints (see documentReferenceCode).
+          referenceCode: documentReferenceCode(
+            quote.salesName,
+            quote.referenceCode,
+          ),
           deliveryDays: quote.deliveryDays,
           warrantyPartsMonths: quote.warrantyPartsMonths,
           warrantyFreeServiceMonths: quote.warrantyFreeServiceMonths,

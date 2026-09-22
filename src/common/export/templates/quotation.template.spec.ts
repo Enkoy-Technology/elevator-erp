@@ -59,14 +59,16 @@ describe('buildQuotationHtml', () => {
     expect(html).not.toContain('Motor power');
   });
 
-  it('embeds key quote fields, the project, the salesperson, and totals — not the customer or the workflow status', () => {
+  it('embeds key quote fields, the project and totals — not the customer, the author or the workflow status', () => {
     const html = buildQuotationHtml(data, branding);
     expect(html).toContain('QTN-2026-ABCD1234');
     expect(html).not.toContain('Status');
     expect(html).not.toContain('APPROVED');
     expect(html).toContain('Bole Twin Towers');
-    expect(html).toContain('Prepared by');
-    expect(html).toContain('Abebe Kebede');
+    // Removed 2026-09-22: the label was never on the client's paper, and it
+    // named whoever was logged in rather than the salespeople.
+    expect(html).not.toContain('Prepared by');
+    expect(html).not.toContain('Abebe Kebede');
     expect(html).not.toContain('Acme Real Estate PLC');
     expect(html).toContain('143,750.00 ETB');
     expect(html).toContain('#123456'); // tenant primary colour drives the CSS
@@ -137,5 +139,24 @@ describe('buildQuotationHtml', () => {
     });
     expect(html).not.toContain('url(http://evil');
     expect(html).toContain('#1B2A4A'); // fell back to default
+  });
+
+  // The one place the salespeople are printed: their own quotation writes
+  // "Reference code: KALKIDAN AND MIKA FUJI-E22", names then model code.
+  it('prints the sales name joined to the reference code, in one row and nowhere else', () => {
+    const html = buildQuotationHtml(
+      { ...data, salesName: 'KALKIDAN AND MIKA', referenceCode: 'FUJI-E22' },
+      branding,
+    );
+    expect(html).toContain('Reference code');
+    expect(html).toContain('KALKIDAN AND MIKA FUJI-E22');
+    expect(html.match(/KALKIDAN AND MIKA/g)).toHaveLength(1);
+  });
+
+  it('still prints an old quotation\'s reference code alone, and no row at all without either', () => {
+    expect(
+      buildQuotationHtml({ ...data, referenceCode: 'FUJI-E22' }, branding),
+    ).toContain('FUJI-E22');
+    expect(buildQuotationHtml(data, branding)).not.toContain('Reference code');
   });
 });

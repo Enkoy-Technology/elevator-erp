@@ -57,6 +57,21 @@ export class UpdateQuotationTermsDto {
   @MaxLength(80)
   referenceCode?: string;
 
+  /**
+   * The salespeople this offer is credited to, e.g. 'KALKIDAN AND MIKA'.
+   * Asked for on the quotation — never inferred from who is logged in. It
+   * prints joined to `referenceCode` and nowhere else; null clears it.
+   */
+  @ApiPropertyOptional({
+    maxLength: 120,
+    nullable: true,
+    example: 'KALKIDAN AND MIKA',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  salesName?: string | null;
+
   @ApiPropertyOptional({ minimum: 0, maximum: 3650, example: 150 })
   @IsOptional()
   @IsInt()
