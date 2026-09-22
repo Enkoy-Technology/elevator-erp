@@ -1,6 +1,18 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -8,8 +20,19 @@ import {
 
 import { CurrentUser, Roles } from '../../common/decorators';
 import type { AuthenticatedUser } from '../../types/auth.types';
+import { ImportSiteSurveysResultDto } from './dto/import-site-surveys.dto';
 import { CreateSiteSurveyDto } from './dto/site-survey.dto';
+import { SiteSurveysImportService } from './site-surveys-import.service';
 import { SiteSurveysService } from './site-surveys.service';
+
+/**
+ * One site collection form is a few dozen rows; 2 MB is generous. multer
+ * enforces the cap before the body is buffered, so an oversized upload is
+ * rejected at the socket rather than parsed.
+ */
+const MAX_IMPORT_FILE_BYTES = 2 * 1024 * 1024;
+
+const IMPORT_EXTENSIONS = /\.(xlsx|csv)$/i;
 
 /**
  * The company's SITE COLLECTION FORM, captured in the ERP instead of sent to
@@ -28,7 +51,10 @@ import { SiteSurveysService } from './site-surveys.service';
   'SECRETARY',
 )
 export class SiteSurveysController {
-  constructor(private readonly siteSurveysService: SiteSurveysService) {}
+  constructor(
+    private readonly siteSurveysService: SiteSurveysService,
+    private readonly siteSurveysImportService: SiteSurveysImportService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -51,5 +77,60 @@ export class SiteSurveysController {
     @Body() dto: CreateSiteSurveyDto,
   ) {
     return this.siteSurveysService.create(user, dto);
+  }
+
+  @Post('import')
+  @UseInterceptors(
+    // No `storage` option: multer's default IS memory storage, so the upload
+    // never touches disk.
+    FileInterceptor('file', {
+      limits: { fileSize: MAX_IMPORT_FILE_BYTES, files: 1 },
+      fileFilter: (_req, file, cb) => {
+        cb(
+          IMPORT_EXTENSIONS.test(file.originalname)
+            ? null
+            : new BadRequestException(
+                `"${file.originalname}" is not a spreadsheet. Upload a .xlsx or .csv file.`,
+              ),
+          true,
+        );
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'The filled SITE COLLECTION FORM, .xlsx or .csv.',
+        },
+        commit: {
+          type: 'string',
+          description:
+            'Send "true" to actually save the surveys. Anything else (or absent) is a dry run that writes nothing.',
+        },
+      },
+    },
+  })
+  @ApiOperation({
+    summary:
+      'Import site surveys from the filled site collection form. Dry run by default — send commit=true to write.',
+  })
+  @ApiOkResponse({ type: ImportSiteSurveysResultDto })
+  import(
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body('commit') commit?: string,
+  ): Promise<ImportSiteSurveysResultDto> {
+    if (!file) {
+      throw new BadRequestException(
+        'No file uploaded. Attach the spreadsheet as the "file" field.',
+      );
+    }
+    return this.siteSurveysImportService.import(user, file, commit === 'true');
   }
 }

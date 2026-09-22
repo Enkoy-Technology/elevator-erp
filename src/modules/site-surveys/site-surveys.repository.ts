@@ -103,6 +103,28 @@ export class SiteSurveysRepository {
     });
   }
 
+  /**
+   * The rows of one uploaded sheet, in one transaction: a half-imported file
+   * would leave the salesperson guessing which rows to retype, so it all lands
+   * or none of it does. Returns how many rows were written.
+   */
+  async createMany(
+    tenantId: string,
+    surveyedByUserId: string,
+    dtos: readonly CreateSiteSurveyDto[],
+  ): Promise<number> {
+    if (dtos.length === 0) {
+      return 0;
+    }
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const rows = await tx
+        .insert(siteSurveys)
+        .values(dtos.map((dto) => toInsert(tenantId, surveyedByUserId, dto)))
+        .returning({ id: siteSurveys.id });
+      return rows.length;
+    });
+  }
+
   async create(
     tenantId: string,
     surveyedByUserId: string,
@@ -111,21 +133,7 @@ export class SiteSurveysRepository {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       const [row] = await tx
         .insert(siteSurveys)
-        .values({
-          tenantId,
-          surveyedByUserId,
-          surveyDate: dto.surveyDate ?? todayIso(),
-          projectName: dto.projectName,
-          address: dto.address,
-          contactName: dto.contactName,
-          contactPhone: dto.contactPhone,
-          shaftWidthCm: dto.shaftWidthCm,
-          shaftDepthCm: dto.shaftDepthCm,
-          floors: dto.floors,
-          overheadCm: dto.overheadCm,
-          machineRoom: dto.machineRoom,
-          units: dto.units,
-        })
+        .values(toInsert(tenantId, surveyedByUserId, dto))
         .returning();
       if (!row) {
         throw new Error('Failed to create site survey');
@@ -134,3 +142,24 @@ export class SiteSurveysRepository {
     });
   }
 }
+
+/** One sheet, column for column. Undated sheets are dated today. */
+const toInsert = (
+  tenantId: string,
+  surveyedByUserId: string,
+  dto: CreateSiteSurveyDto,
+): typeof siteSurveys.$inferInsert => ({
+  tenantId,
+  surveyedByUserId,
+  surveyDate: dto.surveyDate ?? todayIso(),
+  projectName: dto.projectName,
+  address: dto.address,
+  contactName: dto.contactName,
+  contactPhone: dto.contactPhone,
+  shaftWidthCm: dto.shaftWidthCm,
+  shaftDepthCm: dto.shaftDepthCm,
+  floors: dto.floors,
+  overheadCm: dto.overheadCm,
+  machineRoom: dto.machineRoom,
+  units: dto.units,
+});

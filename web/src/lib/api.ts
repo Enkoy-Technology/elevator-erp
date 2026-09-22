@@ -993,6 +993,54 @@ export const createSiteSurvey = (
     body: JSON.stringify(payload),
   });
 
+/** One row the server refused, named the way a person finds it in the sheet. */
+export interface SiteSurveyImportError {
+  /** The row number as Excel shows it, so a person can find and fix the row. */
+  row: number;
+  message: string;
+}
+
+export interface SiteSurveyImportResult {
+  dryRun: boolean;
+  /** Data rows read off the sheet, errors included. */
+  totalRows: number;
+  /** Rows actually written. Always 0 on a dry run. */
+  imported: number;
+  errors: SiteSurveyImportError[];
+}
+
+/**
+ * Upload the company's own SITE COLLECTION FORM. Default is a DRY RUN: the
+ * server reads and validates, writing nothing. `commit` writes.
+ *
+ * Multipart, so not apiFetch — same reason and same 401 retry as
+ * `importEmployees`.
+ */
+export const importSiteSurveys = async (
+  file: File,
+  commit = false,
+  retryOn401 = true,
+): Promise<SiteSurveyImportResult> => {
+  const body = new FormData();
+  body.append('file', file);
+  if (commit) {
+    body.append('commit', 'true');
+  }
+  const token = getAccessToken();
+  const response = await fetch(`${API_URL}/site-surveys/import`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body,
+  });
+  if (response.status === 401 && retryOn401 && (await refreshTokens())) {
+    return importSiteSurveys(file, commit, false);
+  }
+  if (!response.ok) {
+    throw new ApiError(await parseProblem(response));
+  }
+  return (await response.json()) as SiteSurveyImportResult;
+};
+
 export const NOTIFICATION_TYPES = [
   'GENERAL',
   'QUOTE',
