@@ -920,6 +920,78 @@ export const updateAsset = (
     body: JSON.stringify(payload),
   });
 
+/**
+ * One row of the company's own SITE COLLECTION FORM — the sheet a
+ * salesperson fills on site. Deliberately standalone: it links to no
+ * customer, project or quotation. Every column but the project name comes
+ * back null often, because the real sheets do.
+ */
+export interface SiteSurvey {
+  id: string;
+  tenantId: string;
+  surveyedByUserId: string | null;
+  /** The surveyor's full name, joined by the API; null when unknown. */
+  surveyedByName: string | null;
+  /** 'YYYY-MM-DD' in the business timezone. */
+  surveyDate: string;
+  projectName: string;
+  address: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+  /** Centimetres, as the sheets record them. Nothing converts them. */
+  shaftWidthCm: number | null;
+  shaftDepthCm: number | null;
+  /** Free text, exactly as written: 'B+G+11'. Never parsed. */
+  floors: string | null;
+  overheadCm: number | null;
+  /** The sheet's words: 'With MR', 'MRL'. */
+  machineRoom: string | null;
+  units: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SiteSurveyPayload {
+  projectName: string;
+  /** Defaults to today in the business timezone when omitted. */
+  surveyDate?: string;
+  address?: string;
+  contactName?: string;
+  contactPhone?: string;
+  shaftWidthCm?: number;
+  shaftDepthCm?: number;
+  floors?: string;
+  overheadCm?: number;
+  machineRoom?: string;
+  units?: number;
+}
+
+export const listSiteSurveys = (options?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<Paginated<SiteSurvey>> => {
+  const params = new URLSearchParams();
+  if (options?.page) {
+    params.set('page', String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set('pageSize', String(options.pageSize));
+  }
+  const query = params.toString();
+  return apiFetch<Paginated<SiteSurvey>>(
+    `/site-surveys${query ? `?${query}` : ''}`,
+  );
+};
+
+/** POST returns the stored row; surveyedByName is joined on the LIST only. */
+export const createSiteSurvey = (
+  payload: SiteSurveyPayload,
+): Promise<Omit<SiteSurvey, 'surveyedByName'>> =>
+  apiFetch<Omit<SiteSurvey, 'surveyedByName'>>('/site-surveys', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
 export const NOTIFICATION_TYPES = [
   'GENERAL',
   'QUOTE',

@@ -575,6 +575,13 @@
       "when": 1789742044130,
       "tag": "0081_loud_nuke",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1790089228496,
+      "tag": "0082_shocking_justice",
+      "breakpoints": true
     }
   ]
 }

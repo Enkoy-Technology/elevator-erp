@@ -29,6 +29,7 @@ import { QuotationsModule } from './modules/quotations/quotations.module';
 import { RatesModule } from './modules/rates/rates.module';
 import { RemindersModule } from './modules/reminders/reminders.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { SiteSurveysModule } from './modules/site-surveys/site-surveys.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     RemindersModule,
     RatesModule,
     SettingsModule,
+    SiteSurveysModule,
     DashboardModule,
   ],
   controllers: [AppController],

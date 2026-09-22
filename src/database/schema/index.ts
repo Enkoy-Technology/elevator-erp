@@ -3,6 +3,7 @@ export * from './tenants';
 export * from './users';
 export * from './customers';
 export * from './projects';
+export * from './site-surveys';
 export * from './assets';
 export * from './notifications';
 export * from './maintenance';

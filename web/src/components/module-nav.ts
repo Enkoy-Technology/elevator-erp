@@ -114,6 +114,17 @@ export const MODULES: ModuleNavItem[] = [
     roles: ['GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER', 'SECRETARY'],
   },
   {
+    nameKey: 'nav.surveys',
+    group: 'sales',
+    description: 'Site collection forms from the field',
+    phase: null,
+    href: '/surveys',
+    icon: 'M3 15l12-12 6 6-12 12H3v-6z M8 10l2 2 M11 7l2 2 M14 4l2 2',
+    // Mirrors SiteSurveysController's class-level @Roles(...); a SALESPERSON
+    // sees only their own rows, which the API scopes, not the sidebar.
+    roles: ['GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'OFFICE_MANAGER', 'SECRETARY'],
+  },
+  {
     nameKey: 'nav.invoices',
     group: 'finance',
     description: 'Issue → collect',
