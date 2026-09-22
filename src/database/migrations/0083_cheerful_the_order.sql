@@ -1,0 +1,1 @@
+ALTER TABLE "site_surveys" ADD COLUMN "collected_by_name" text;

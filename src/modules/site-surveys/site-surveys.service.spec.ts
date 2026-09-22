@@ -14,6 +14,7 @@ const survey = (over: Partial<SiteSurveyRecord> = {}): SiteSurveyRecord => ({
   tenantId: TENANT_ID,
   id: '33333333-3333-3333-3333-333333333333',
   surveyedByUserId: USER_ID,
+  collectedByName: null,
   surveyDate: '2026-09-22',
   projectName: 'Bole Plaza',
   address: null,

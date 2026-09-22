@@ -16,6 +16,35 @@ import { SiteSurveysRepository } from './site-surveys.repository';
 type Field = keyof CreateSiteSurveyDto;
 
 /**
+ * Who collected the sheet, from the line the client writes by hand directly
+ * above the header row. A sheet nobody has filled in still carries the blank
+ * template's own label there ("SITE COLLECTION FORM / DATE :"), so the label
+ * and any date beside it are stripped; whatever readable name is left is the
+ * collector, and an untouched template leaves nothing and reads as null.
+ */
+const readCollector = (row: { cells: string[] } | undefined): string | null => {
+  if (!row) {
+    return null;
+  }
+  const text = row.cells
+    .map((cell) => cell.trim())
+    .filter(Boolean)
+    // The client merges this line across the sheet (D3:P3), and ExcelJS hands
+    // back the value once per merged column — join the distinct cells or the
+    // name comes out repeated a dozen times.
+    .filter((cell, index, cells) => cells.indexOf(cell) === index)
+    .join(' ')
+    .replace(/site\s*collection\s*form/gi, '')
+    .replace(/date\s*[:.-]?\s*/gi, '')
+    .replace(/[\d/.-]+/g, '')
+    .replace(/[/|,;:]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  // A stray separator or a lone initial is noise, not a name.
+  return /\p{L}{2,}/u.test(text) ? text.slice(0, 200) : null;
+};
+
+/**
  * Header synonyms, keyed by the field they fill, compared after
  * `normalizeHeader` has stripped everything but letters and digits. The
  * client's own SITE COLLECTION FORM writes the shaft columns as a merged
@@ -172,8 +201,9 @@ export class SiteSurveysImportService {
   /**
    * Validate-and-report by default; `commit` must be explicitly true to write.
    * Every row is attributed to the uploading user and dated today, exactly as
-   * a typed submission is — the collector name and date scribbled at the top
-   * of the sheet are not read.
+   * a typed submission is, but the COLLECTOR is read off the sheet: the
+   * client writes the names by hand just above the header ("Betelhem tesfa
+   * and nafyad"), and they are often two people who have no account here.
    */
   async import(
     user: AuthenticatedUser,
@@ -193,6 +223,7 @@ export class SiteSurveysImportService {
       );
     }
 
+    const collectedByName = readCollector(sheetRows[headerIndex - 1]);
     const subRow = sheetRows[headerIndex + 1];
     const { columns, usedSubRow } = mapHeaders(
       headerRow.cells,
@@ -258,8 +289,9 @@ export class SiteSurveysImportService {
       user.tenantId,
       user.userId,
       payloads,
+      collectedByName,
     );
-    await this.notifyManagers(user, created, payloads);
+    await this.notifyManagers(user, created, payloads, collectedByName);
     return {
       dryRun: false,
       totalRows,
@@ -280,6 +312,7 @@ export class SiteSurveysImportService {
     user: AuthenticatedUser,
     created: number,
     payloads: readonly CreateSiteSurveyDto[],
+    collectedByName: string | null,
   ): Promise<void> {
     if (created === 0) {
       return;
@@ -292,10 +325,14 @@ export class SiteSurveysImportService {
         .slice(0, 3)
         .map((payload) => payload.projectName)
         .join(', ');
-      const body =
+      const sites =
         payloads.length > 3
           ? `${names} and ${payloads.length - 3} more`
           : names;
+      // The sheet says who collected it; the uploader may be someone else.
+      const body = collectedByName
+        ? `${sites} — collected by ${collectedByName}`
+        : sites;
       for (const userId of managerIds) {
         await this.notificationsRepository.create(user.tenantId, user.userId, {
           userId,

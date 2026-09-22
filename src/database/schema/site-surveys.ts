@@ -32,8 +32,15 @@ export const siteSurveys = pgTable(
     id: uuid('id')
       .notNull()
       .default(sql`gen_random_uuid()`),
-    /** Who collected it — the sheet writes the names by hand at the top. */
+    /** Who submitted it — the signed-in user, or whoever uploaded the sheet. */
     surveyedByUserId: uuid('surveyed_by_user_id'),
+    /**
+     * Who collected it as the SHEET says, written by hand above the header
+     * ("Betelhem tesfa and nafyad") — often two people, who need not be users
+     * at all. Null on a typed submission, where the signed-in user is the
+     * collector and their name is read off `surveyedByUserId` instead.
+     */
+    collectedByName: text('collected_by_name'),
     /** The sheet's DATE, in the business timezone; defaults to the day it is submitted. */
     surveyDate: text('survey_date').notNull(),
     projectName: text('project_name').notNull(),

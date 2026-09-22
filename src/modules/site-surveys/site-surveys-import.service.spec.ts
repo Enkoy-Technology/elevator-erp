@@ -14,7 +14,10 @@ const user: AuthenticatedUser = {
 };
 
 const repo = {
-  createMany: jest.fn<Promise<number>, [string, string, unknown[]]>(),
+  createMany: jest.fn<
+    Promise<number>,
+    [string, string, unknown[], (string | null)?]
+  >(),
   listManagerIds: jest.fn<Promise<string[]>, [string]>(),
 };
 
@@ -48,6 +51,35 @@ beforeEach(() => {
   notifications.create.mockResolvedValue({});
 });
 
+describe('who collected the sheet', () => {
+  it('takes the names the client writes above the header, not the signed-in user', async () => {
+    await run(fixture('site-form-filled.xlsx'), true);
+
+    const [, , , collectedByName] = repo.createMany.mock.calls[0] as [
+      string,
+      string,
+      unknown[],
+      string | null,
+    ];
+    expect(collectedByName).toBe('Betelhem tesfa and nafyad');
+  });
+
+  it('reads nothing from a template nobody has filled in', async () => {
+    await run(
+      csv('SITE COLLECTION FORM / DATE :\nPROJECT NAME\nBole Plaza\n'),
+      true,
+    );
+
+    const [, , , collectedByName] = repo.createMany.mock.calls[0] as [
+      string,
+      string,
+      unknown[],
+      string | null,
+    ];
+    expect(collectedByName).toBeNull();
+  });
+});
+
 describe('the manager is told once per upload', () => {
   it('sends one notification naming the sites, not one per row', async () => {
     await run(fixture('site-form-filled.xlsx'), true);
@@ -59,7 +91,9 @@ describe('the manager is told once per upload', () => {
       { title: string; body: string },
     ];
     expect(dto.title).toBe('2 site surveys imported');
-    expect(dto.body).toBe('Belachew, Getachew');
+    expect(dto.body).toBe(
+      'Belachew, Getachew — collected by Betelhem tesfa and nafyad',
+    );
   });
 
   it('says nothing on a dry run', async () => {

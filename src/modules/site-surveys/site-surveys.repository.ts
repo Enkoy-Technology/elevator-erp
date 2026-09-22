@@ -100,7 +100,11 @@ export class SiteSurveysRepository {
       const items = await tx
         .select({
           ...getTableColumns(siteSurveys),
-          surveyedByName: users.fullName,
+          // The sheet says who collected it; only a typed submission falls
+          // back to the account that made it.
+          surveyedByName: sql<
+            string | null
+          >`coalesce(${siteSurveys.collectedByName}, ${users.fullName})`,
         })
         .from(siteSurveys)
         .leftJoin(
@@ -135,7 +139,11 @@ export class SiteSurveysRepository {
       const rows = await tx
         .select({
           ...getTableColumns(siteSurveys),
-          surveyedByName: users.fullName,
+          // The sheet says who collected it; only a typed submission falls
+          // back to the account that made it.
+          surveyedByName: sql<
+            string | null
+          >`coalesce(${siteSurveys.collectedByName}, ${users.fullName})`,
         })
         .from(siteSurveys)
         .leftJoin(
@@ -196,6 +204,8 @@ export class SiteSurveysRepository {
     tenantId: string,
     surveyedByUserId: string,
     dtos: readonly CreateSiteSurveyDto[],
+    /** What the sheet wrote above its header; null when it said nothing. */
+    collectedByName: string | null = null,
   ): Promise<number> {
     if (dtos.length === 0) {
       return 0;
@@ -203,7 +213,12 @@ export class SiteSurveysRepository {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       const rows = await tx
         .insert(siteSurveys)
-        .values(dtos.map((dto) => toInsert(tenantId, surveyedByUserId, dto)))
+        .values(
+          dtos.map((dto) => ({
+            ...toInsert(tenantId, surveyedByUserId, dto),
+            collectedByName,
+          })),
+        )
         .returning({ id: siteSurveys.id });
       return rows.length;
     });
