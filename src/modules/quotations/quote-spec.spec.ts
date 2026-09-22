@@ -19,6 +19,14 @@ describe('describeFloorPlan', () => {
     });
   });
 
+  it("keeps a named floor above the numbered run — the 70 DEREJA building is B+G+8+T, not B+G+9", () => {
+    expect(describeFloorPlan('B,G,1,2,3,4,5,6,7,8,T', 1)).toMatchObject({
+      floors: 11,
+      displaySummary: 'B+G+8+T',
+      floorsStopsDoors: '11/11/11',
+    });
+  });
+
   it('counts a second entrance as a second door per stop', () => {
     expect(describeFloorPlan('G,1,2,3', 2)).toMatchObject({
       stops: 4,

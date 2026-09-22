@@ -32,15 +32,22 @@ export const parseFloorLabels = (floorLabels: string): string[] =>
  * The compressed print form: named floors verbatim, then a COUNT of the
  * numbered ones. ['B','G','M','1'..'10'] -> "B+G+M+10", which is what makes
  * "B+G+M+10" mean 13 floors rather than 4.
+ *
+ * Named floors AFTER the numbered run keep their names too: a terrace on top
+ * of B,G,1..8 is "B+G+8+T", not "B+G+9" — counting it as a storey is how the
+ * client's own 11-floor building printed as ten.
  */
 const compress = (labels: readonly string[]): string => {
   const firstNumbered = labels.findIndex(isNumericLabel);
   if (firstNumbered === -1) {
     return labels.join('+');
   }
-  const named = labels.slice(0, firstNumbered);
-  const numbered = labels.length - firstNumbered;
-  return [...named, String(numbered)].join('+');
+  const rest = labels.slice(firstNumbered);
+  return [
+    ...labels.slice(0, firstNumbered),
+    String(rest.filter(isNumericLabel).length),
+    ...rest.filter((label) => !isNumericLabel(label)),
+  ].join('+');
 };
 
 /**
