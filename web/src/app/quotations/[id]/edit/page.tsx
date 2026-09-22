@@ -11,6 +11,7 @@ import {
   ApiError,
   getAccessToken,
   getCurrentRole,
+  getProfile,
   getQuotation,
   listQuotationLines,
   listQuotationPaymentTerms,
@@ -57,16 +58,29 @@ interface TermRow {
 }
 
 /**
- * The schedule this client puts on every offer. Seeded visibly into an empty
- * editor rather than left blank: it is the same four milestones every time,
- * and the salesperson can see and change all four before saving.
+ * The schedule this client puts on every offer, in their own wording (the
+ * sentences printed on their 70 DEREJA quotation). Seeded visibly into an
+ * empty editor rather than left blank: it is the same four milestones every
+ * time, and the salesperson can see and change all four before saving.
  */
 const STANDARD_TERMS: TermRow[] = [
-  { label: 'Advance payment upon signing of the contract', percent: '50' },
-  { label: 'Payable upon submission of shipping documents', percent: '30' },
-  { label: 'Payable upon arrival of the material at site', percent: '10' },
   {
-    label: 'Payable upon completion of installation and handover',
+    label:
+      'Advance Payment – Payable upon signing of the contract to initiate manufacturing.',
+    percent: '50',
+  },
+  {
+    label: 'Against Documents – Payable upon submission of shipping documents.',
+    percent: '30',
+  },
+  {
+    label:
+      'Upon Delivery – Payable upon delivery of the equipment to the project site.',
+    percent: '10',
+  },
+  {
+    label:
+      'Final Payment – Payable after successful installation, testing, and commissioning of the system.',
     percent: '10',
   },
 ];
@@ -96,6 +110,9 @@ export default function EditQuotationPage() {
   const [warrantyFreeServiceMonths, setWarrantyFreeServiceMonths] =
     useState('');
   const [validityDays, setValidityDays] = useState('');
+  const [notes, setNotes] = useState('');
+  /** Whoever is writing the offer, for the reference-code suggestion only. */
+  const [preparedByName, setPreparedByName] = useState('');
   const [step, setStep] = useState('lifts');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -116,10 +133,13 @@ export default function EditQuotationPage() {
       try {
         // Independent reads — the page is not usable until all three land,
         // so waiting for them one after another just makes it slower.
-        const [quote, quoteLines, paymentTerms] = await Promise.all([
+        const [quote, quoteLines, paymentTerms, profile] = await Promise.all([
           getQuotation(id),
           listQuotationLines(id),
           listQuotationPaymentTerms(id),
+          // Only feeds the reference-code suggestion, so a failure here must
+          // not keep the offer from loading.
+          getProfile().catch(() => null),
         ]);
         setQuotation(quote);
         setLines(quoteLines);
@@ -133,6 +153,8 @@ export default function EditQuotationPage() {
         setWarrantyPartsMonths(numText(quote.warrantyPartsMonths));
         setWarrantyFreeServiceMonths(numText(quote.warrantyFreeServiceMonths));
         setValidityDays(numText(quote.validityDays));
+        setNotes(quote.notes ?? '');
+        setPreparedByName(profile?.fullName ?? '');
       } catch (err) {
         setLoadError(
           err instanceof ApiError
@@ -162,6 +184,13 @@ export default function EditQuotationPage() {
     warrantyPartsMonths.trim(),
     warrantyFreeServiceMonths.trim(),
   ].filter((value) => value !== '').length;
+
+  // Their own convention: the salesperson's name, then the model. The name
+  // is whoever is signed in, not the quotation's creator — the detail
+  // endpoint does not carry it, and in practice the salesperson edits their
+  // own quote. Offered as a fill, never saved on its own; the model half is
+  // a guess either way.
+  const suggestedReference = `${preparedByName.toUpperCase()} FUJI-E`;
 
   const steps: Step[] = [
     {
@@ -215,6 +244,9 @@ export default function EditQuotationPage() {
         warrantyPartsMonths: optionalNumber(warrantyPartsMonths),
         warrantyFreeServiceMonths: optionalNumber(warrantyFreeServiceMonths),
         validityDays: optionalNumber(validityDays),
+        // Sent even when empty: this form owns the field, so deleting the
+        // text here has to clear what page 1 prints.
+        notes: notes.trim(),
         paymentTerms: filledTerms.map((t): PaymentTermInput => ({
           label: t.label.trim(),
           percent: t.percent.trim() === '' ? '0' : t.percent.trim(),
@@ -313,6 +345,17 @@ export default function EditQuotationPage() {
                 value={referenceCode}
                 onChange={(e) => setReferenceCode(e.target.value)}
               />
+              {editable &&
+              preparedByName !== '' &&
+              referenceCode.trim() === '' ? (
+                <button
+                  type="button"
+                  onClick={() => setReferenceCode(suggestedReference)}
+                  className="mt-1 text-xs font-semibold text-navy-800 hover:underline"
+                >
+                  Use {suggestedReference}
+                </button>
+              ) : null}
             </Field>
             <Field label="Delivery (days)" htmlFor="deliveryDays">
               <NumberInput
@@ -354,6 +397,22 @@ export default function EditQuotationPage() {
                 placeholder="12"
                 value={warrantyFreeServiceMonths}
                 onValueChange={setWarrantyFreeServiceMonths}
+              />
+            </Field>
+            <Field
+              label="Special notes"
+              htmlFor="notes"
+              wide
+              hint="Printed on page 1: what this offer has beyond the standard options — an access card, music in the cabin, an LED display in the lobby."
+            >
+              <textarea
+                id="notes"
+                className={fieldClass}
+                rows={3}
+                maxLength={2000}
+                disabled={!editable}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
               />
             </Field>
           </FormSection>

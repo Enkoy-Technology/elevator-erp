@@ -8,7 +8,9 @@ import {
 
 /**
  * Shining Star's real pages 3-6, transcribed from the 8-page proforma they
- * sent, plus the 20-row component/brand table from page 5.
+ * sent, plus the 20-row component/brand table from page 5, plus the door
+ * types, the car-finishes list and the standard options from their later
+ * 70 DEREJA quotation.
  *
  * Two things on their document are deliberately NOT reproduced here, because
  * copying them would bake a contradiction into every future quote:
@@ -42,6 +44,16 @@ export const DOCUMENT_BOILERPLATE_SEEDS: readonly BoilerplateSeed[] = [
       '- Electrical safety',
       '- Electronic equipment for use in power facilities',
     ].join('\n'),
+  },
+  {
+    sectionKey: 'cabin_door_type',
+    title: 'Cabin Door Type',
+    body: 'Automatic center opening or left/right opening according to existing civil work',
+  },
+  {
+    sectionKey: 'landing_door_type',
+    title: 'Landing Door Type',
+    body: 'Automatic single door center opening or left/right opening according to existing civil work',
   },
   {
     sectionKey: 'cabin_finishing',
@@ -89,6 +101,41 @@ export const DOCUMENT_BOILERPLATE_SEEDS: readonly BoilerplateSeed[] = [
     title: 'Supply Includes',
     body: 'Manufacturer recommended spare parts for 3 years maintenance, replacement and wear/tear parts, maintenance tools, safety guards, operation manuals, spare part manuals, fully dimensioned mounting and erection drawings, and training for client professionals.',
   },
+  {
+    sectionKey: 'car_finishes',
+    // Their car-finishes box is a two-column table; the same words print as a
+    // 'Label: value' list, which the .prose block (pre-line) keeps line by
+    // line. 'Car bottom' drops their "same as cabin photo" — there is no
+    // image slot on the document to point at.
+    title: 'Car Finishes',
+    body: [
+      'Car wall: Hairline finish ST304 stainless steel, with center rear wall in mirror finish ST304 stainless steel.',
+      'Car ceiling: Standard decorative ceiling made of ST304 stainless steel with integrated LED lighting system.',
+      'Car bottom: PVC / marble.',
+      'Car door: Hairline finish ST304 stainless steel.',
+      'Handrail: One-side handrail made of high-quality ST304 stainless steel, Model No. FJ-FS04.',
+      'Landing Door: Hairline finish ST304 stainless steel for all landing entrances.',
+      'Jamb: Standard small jamb finished with ST304 stainless steel for all floors.',
+      'COP: Integrated COP, blue LCD display, 7 inches. Hairline finish ST304 stainless steel panel with Fuji advanced digital display technology, including floor position and travel direction indicators, car location display and travel direction arrow (↑↓) display (HD-C12).',
+      'HOP: Hairline finish ST304 stainless steel panel with Fuji advanced technology, illuminated buttons, and digital floor display. (wall-mounted)',
+    ].join('\n'),
+  },
+  {
+    sectionKey: 'options_functions',
+    // Only the seven items that are true of every lift they sell. Access
+    // Card, music in the cabin and the lobby LED display are per-quote and
+    // belong in that quotation's own notes.
+    title: 'Options / Functions / Special notes',
+    body: [
+      '- VVVF (Variable Voltage Variable Frequency)',
+      '- With ARD',
+      '- Accessibility EN 81-20 and EN 81-50',
+      '- Impact Resistance',
+      '- Forced Entry Prevention',
+      '- Alarm System',
+      '- Emergency Communication',
+    ].join('\n'),
+  },
 ];
 
 export interface ComponentSeed {
@@ -106,26 +153,74 @@ const JOINT_VENTURE = 'Zhejiang (Sino-Japan Joint Venture)';
  * the same thing on all 20 rows.
  */
 export const COMPONENT_SPECIFICATION_SEEDS: readonly ComponentSeed[] = [
-  { componentName: 'Traction machine (gearless motor)', brand: 'FUJI', remark: JOINT_VENTURE },
+  {
+    componentName: 'Traction machine (gearless motor)',
+    brand: 'FUJI',
+    remark: JOINT_VENTURE,
+  },
   { componentName: 'Encoder', brand: 'HEIDENHAIN', remark: 'Germany, ERN1387' },
   { componentName: 'Brake device', brand: 'FUJI', remark: JOINT_VENTURE },
-  { componentName: 'Microcomputer', brand: 'Monarch', remark: 'Monarch NICE3000' },
-  { componentName: 'VVVF Inverter', brand: 'Monarch', remark: 'Monarch NICE3000' },
+  {
+    componentName: 'Microcomputer',
+    brand: 'Monarch',
+    remark: 'Monarch NICE3000',
+  },
+  {
+    componentName: 'VVVF Inverter',
+    brand: 'Monarch',
+    remark: 'Monarch NICE3000',
+  },
   { componentName: 'Contactor', brand: 'FUJI', remark: 'Japan' },
   { componentName: 'Relay', brand: 'FUJI', remark: 'Japan' },
-  { componentName: 'Light curtain', brand: 'WECO', remark: 'Ningbo WECO Optoelectronic Co., Ltd.' },
-  { componentName: 'Landing Door Device', brand: 'FUJI', remark: JOINT_VENTURE },
+  {
+    componentName: 'Light curtain',
+    brand: 'WECO',
+    remark: 'Ningbo WECO Optoelectronic Co., Ltd.',
+  },
+  {
+    componentName: 'Landing Door Device',
+    brand: 'FUJI',
+    remark: JOINT_VENTURE,
+  },
   { componentName: 'Car Ceiling', brand: 'FUJI', remark: JOINT_VENTURE },
   { componentName: 'Door Machine', brand: 'FUJI', remark: JOINT_VENTURE },
-  { componentName: 'Operation Panel & Out Calling Board', brand: 'FUJI JAPAN', remark: JOINT_VENTURE },
-  { componentName: 'Sill of the Hall & Car Door', brand: 'FUJI JAPAN', remark: 'High Quality Flinty Cast Iron' },
-  { componentName: 'Ventilation in Car', brand: 'FUJI', remark: 'Low Noise Axial-Flow Fan' },
-  { componentName: 'Guide Rail of the Car', brand: 'HAOSHEN', remark: 'Zhejiang / HAOSHEN' },
-  { componentName: 'Traveling cable', brand: 'CHANGSHUN', remark: 'Shanghai / CHANGSHUN' },
-  { componentName: 'Steel Ropes for Traction Machine', brand: 'SAFTY', remark: 'Jiangsu / SAFTY' },
+  {
+    componentName: 'Operation Panel & Out Calling Board',
+    brand: 'FUJI JAPAN',
+    remark: JOINT_VENTURE,
+  },
+  {
+    componentName: 'Sill of the Hall & Car Door',
+    brand: 'FUJI JAPAN',
+    remark: 'High Quality Flinty Cast Iron',
+  },
+  {
+    componentName: 'Ventilation in Car',
+    brand: 'FUJI',
+    remark: 'Low Noise Axial-Flow Fan',
+  },
+  {
+    componentName: 'Guide Rail of the Car',
+    brand: 'HAOSHEN',
+    remark: 'Zhejiang / HAOSHEN',
+  },
+  {
+    componentName: 'Traveling cable',
+    brand: 'CHANGSHUN',
+    remark: 'Shanghai / CHANGSHUN',
+  },
+  {
+    componentName: 'Steel Ropes for Traction Machine',
+    brand: 'SAFTY',
+    remark: 'Jiangsu / SAFTY',
+  },
   { componentName: 'Safety gear', brand: 'FUJI', remark: JOINT_VENTURE },
   { componentName: 'Buffer', brand: 'FUJI', remark: JOINT_VENTURE },
-  { componentName: 'Overrunning Governor', brand: 'FUJI', remark: JOINT_VENTURE },
+  {
+    componentName: 'Overrunning Governor',
+    brand: 'FUJI',
+    remark: JOINT_VENTURE,
+  },
 ];
 
 export interface SeedDocumentContentResult {
@@ -180,7 +275,10 @@ export const seedDocumentContent = async (
         })),
       )
       .onConflictDoNothing({
-        target: [componentSpecifications.tenantId, componentSpecifications.sequence],
+        target: [
+          componentSpecifications.tenantId,
+          componentSpecifications.sequence,
+        ],
       })
       .returning({ id: componentSpecifications.id });
 

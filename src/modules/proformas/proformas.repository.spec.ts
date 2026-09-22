@@ -397,6 +397,8 @@ describe("ProformasRepository.findByIdForDocument — joined display names + the
       proformaNumber: 'PF-FY2026-27-0001',
       customerName: 'Acme',
       projectName: 'Bole Tower',
+      projectAddressLine1: null,
+      projectCity: 'Addis Ababa',
       technicalSpec: { capacityPersons: 13 },
       pricingBreakdown: { baseCost: '80000.00' },
     };
@@ -418,7 +420,9 @@ describe("ProformasRepository.findByIdForDocument — joined display names + the
 
     const result = await repo.findByIdForDocument(TENANT_ID, PROFORMA_ID);
 
-    expect(result).toEqual(joinedRow);
+    // Only the city is set here: the address prints as the one part it has,
+    // never as a stray separator.
+    expect(result).toEqual({ ...joinedRow, projectAddress: 'Addis Ababa' });
     // Three leftJoins: customers, users (the issuer's name), projects — each
     // with a real ON condition passed (not an implicit/missing join
     // predicate, which drizzle would otherwise happily accept as a cross

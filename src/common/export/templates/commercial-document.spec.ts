@@ -32,6 +32,7 @@ const line: DocumentLineData = {
   machineRoomLabel: 'WITH MR',
   floorDisplaySummary: 'B+G+M+10',
   floorsStopsDoors: '13/13/13',
+  entranceCount: 1,
   doorHeightMm: 2100,
   ropingRatio: '2:1',
   tractionMachineType: 'Gearless traction machine',
@@ -122,6 +123,23 @@ describe('the client-shaped commercial document', () => {
     expect(html).not.toContain('Margin');
   });
 
+  it('labels the plate, the To block and the totals as the client does — and never prints the workflow status', () => {
+    const html = buildQuotationHtml(data, branding);
+    expect(html).toContain('Reference code');
+    expect(html).toContain('Rodas FUJIHD-E02');
+    expect(html).toContain('Date');
+    expect(html).toContain('2026-08-20');
+    expect(html).toContain('Quote No.');
+    // DRAFT/APPROVED is the client's workflow, not the customer's business.
+    expect(html).not.toContain('APPROVED');
+    expect(html).not.toContain('Status');
+    expect(html).not.toContain('Prepared For');
+    expect(html).toContain('>To</div>');
+    expect(html).toContain('<td>Total</td>');
+    expect(html).toContain('VAT (15.00%)');
+    expect(html).toContain('<td>Grand Total</td>');
+  });
+
   it("uses the client's own line-table columns, with the currency named once in the header", () => {
     const html = buildQuotationHtml(data, branding);
     expect(html).toContain('No of Units');
@@ -129,6 +147,23 @@ describe('the client-shaped commercial document', () => {
     expect(html).toContain('Total price /Birr');
     // Cells under a "/Birr" header do not repeat the currency.
     expect(html).toContain('>6,813,043.48</td>');
+  });
+
+  it("prints the offer's own special notes under their own heading", () => {
+    // Their page 1 names what this lift has beyond the standard options.
+    const html = buildQuotationHtml(
+      {
+        ...data,
+        notes:
+          'Access Card\nMusic In The Cabin (Based On Client Preference)\nLED Display <in the lobby>',
+      },
+      branding,
+    );
+    expect(html).toContain('<h2>Special notes</h2>');
+    expect(html).toContain('Music In The Cabin (Based On Client Preference)');
+    expect(html).toContain('LED Display &lt;in the lobby&gt;');
+    // No notes, no heading.
+    expect(buildQuotationHtml(data, branding)).not.toContain('Special notes');
   });
 
   it('renders the 19-row specification table, numbered 1..n after absent rows are dropped', () => {
@@ -141,6 +176,7 @@ describe('the client-shaped commercial document', () => {
       'Speed',
       'Travel height (mm)',
       'Floors/stops/doors',
+      'Entrances',
       'Floor display',
       'Depth of Pit (mm)',
       'O/H height of overhead (mm)',
@@ -157,9 +193,48 @@ describe('the client-shaped commercial document', () => {
       expect(html).toContain(label);
     }
     expect(html).toContain('800 KG / 10 persons');
-    expect(html).toContain('1900 x 1750 mm');
+    expect(html).toContain('1 unit');
+    expect(html).toContain('39,000mm'); // metres in the snapshot, mm on the page
+    expect(html).toContain('1 entrance');
+    // Each number carries the axis letter that says which one it is.
+    expect(html).toContain('W1900 x D1750 mm');
+    expect(html).toContain('W1400 x D1350 x H2300 mm');
+    expect(html).toContain('W900 x H2100 mm');
     expect(html).toContain('Center opening');
+    expect(html).toContain('<span class="rowno">20</span>Control System');
+  });
+
+  it("prints the client's own nineteen rows when the line records no entrance count", () => {
+    const html = buildQuotationHtml(
+      {
+        ...data,
+        lines: [
+          {
+            ...line,
+            entranceCount: null,
+            technicalSpec: {
+              ...line.technicalSpec,
+              standardLift: '10-person lift, 1900 × 1750 mm standard shaft',
+            },
+          },
+        ],
+      },
+      branding,
+    );
+    expect(html).not.toContain('Entrances');
     expect(html).toContain('<span class="rowno">19</span>Control System');
+    // The calculator's "Standard lift" line restates Load and Shaft size; it
+    // is not one of the rows the client's sheet carries.
+    expect(html).not.toContain('Standard lift');
+  });
+
+  it('pluralises the ordering quantity and the entrance count', () => {
+    const html = buildQuotationHtml(
+      { ...data, lines: [{ ...line, quantity: 2, entranceCount: 2 }] },
+      branding,
+    );
+    expect(html).toContain('2 units');
+    expect(html).toContain('2 entrances');
   });
 
   it('drops a spec row whose value is absent instead of printing an empty cell', () => {
@@ -170,7 +245,7 @@ describe('the client-shaped commercial document', () => {
     expect(html).not.toContain('Control System');
     expect(html).not.toContain('Roping');
     // ...and the numbering closes up behind them.
-    expect(html).toContain('<span class="rowno">17</span>Traction Machine');
+    expect(html).toContain('<span class="rowno">18</span>Traction Machine');
   });
 
   it('drops a dimension row entirely when only part of the dimension is known', () => {
@@ -215,8 +290,13 @@ describe('the client-shaped commercial document', () => {
 
   it('states the commercial terms the client prints as prose, dropping the ones not set', () => {
     const html = buildQuotationHtml(data, branding);
-    expect(html).toContain('5 days');
-    expect(html).toContain('5 years'); // 60 months, as they state it
+    expect(html).toContain('5 days from the date of issue');
+    // 60 months, stated as they state it, with the date it runs from — the
+    // one extra fact the appendix's Warranty prose carries.
+    expect(html).toContain(
+      'Warranty of main parts (Motor, control system and mechanical parts)',
+    );
+    expect(html).toContain('5 years from commissioning date');
     expect(html).toContain('12 months'); // free manpower maintenance stays in months
     expect(html).toContain('150 working days');
 

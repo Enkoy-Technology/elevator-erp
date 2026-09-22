@@ -577,6 +577,22 @@ describe('QuotationsService', () => {
       });
     });
 
+    it('writes the special notes that print on page 1, empty to clear', async () => {
+      await service.updateTerms(user, draft.id, {
+        notes: 'Access Card, Music In The Cabin, LED Display in the lobby',
+      });
+      expect(repo.updateTerms).toHaveBeenCalledWith(user.tenantId, draft.id, {
+        notes: 'Access Card, Music In The Cabin, LED Display in the lobby',
+      });
+
+      await service.updateTerms(user, draft.id, { notes: '' });
+      expect(repo.updateTerms).toHaveBeenLastCalledWith(
+        user.tenantId,
+        draft.id,
+        { notes: '' },
+      );
+    });
+
     it('leaves an untouched schedule alone rather than clearing it', async () => {
       await service.updateTerms(user, draft.id, { deliveryDays: 120 });
       expect(repo.replacePaymentTerms).not.toHaveBeenCalled();
@@ -669,6 +685,24 @@ describe('QuotationsService', () => {
       expect(values.specSummary).toBe(
         '800KG -10persons / Speed 1.5m/s / B+G+M+10 / 13 floors/13 doors',
       );
+      expect(values.floorDisplaySummary).toBe('B+G+M+10');
+    });
+
+    it('takes an empty floor display as "print the compressed form again"', async () => {
+      repo.listLines.mockResolvedValue([
+        {
+          id: 'line-1',
+          quantity: 1,
+          calcInput: calcResultForLine.input,
+          floorLabels: 'B,G,M,1,2,3,4,5,6,7,8,9,10',
+          floorDisplaySummary: 'BF,GF,MF,1F,2F,3F,4F,5F,6F,7F,8F,9F,10F',
+        },
+      ]);
+      repo.updateLine.mockImplementation(async () => ({}));
+      await service.updateLine(user, draft.id, 'line-1', {
+        floorDisplaySummary: '',
+      });
+      const [, , , values] = repo.updateLine.mock.calls[0]!;
       expect(values.floorDisplaySummary).toBe('B+G+M+10');
     });
 

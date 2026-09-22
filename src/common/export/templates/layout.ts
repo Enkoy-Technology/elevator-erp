@@ -103,16 +103,22 @@ export interface PartyBlock {
 /**
  * The two unambiguous party blocks every commercial document needs: who
  * issued it (always the tenant) and who it is addressed to. Escaped here.
+ *
+ * The From block carries the tenant's phones under the address, the way the
+ * client's own quotation does — the same numbers the footer prints, from the
+ * one pair configured in Settings.
  */
 export const renderParties = (
   branding: TenantBranding | null,
   to: PartyBlock,
 ): string => {
+  const phones = (branding?.phones ?? []).filter(Boolean);
   const from: PartyBlock = {
     label: 'From',
     lines: [
       branding?.name ?? '',
       ...(branding?.address ? [branding.address] : []),
+      ...(phones.length ? [`Tel: ${phones.join(' / ')}`] : []),
     ],
   };
   const column = (party: PartyBlock): string => {

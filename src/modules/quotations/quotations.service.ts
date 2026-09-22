@@ -570,8 +570,11 @@ export class QuotationsService {
         }),
       machineRoomLabel: dto.machineRoomLabel ?? null,
       floorLabels: dto.floorLabels ?? null,
+      // `||`, not `??`: the editor sends an empty string to mean "go back to
+      // the compressed form", and a merged update would otherwise keep the
+      // wording typed last time forever.
       floorDisplaySummary:
-        dto.floorDisplaySummary ?? plan?.displaySummary ?? null,
+        dto.floorDisplaySummary || plan?.displaySummary || null,
       doorHeightMm: dto.doorHeightMm ?? null,
       ropingRatio: dto.ropingRatio ?? null,
       tractionMachineType: dto.tractionMachineType ?? null,

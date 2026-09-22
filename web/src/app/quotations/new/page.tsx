@@ -251,13 +251,21 @@ export default function NewQuotationPage() {
               />
             </label>
             <label className="block">
-              <span className={label}>Internal notes</span>
+              <span className={label}>
+                Special notes (printed on the quotation)
+              </span>
               <textarea
                 className={fieldClass}
                 rows={2}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
               />
+              <span className="mt-1 block text-xs text-slate-500">
+                What this lift has beyond the standard options, in the
+                customer&apos;s words: an access card, music in the cabin, an
+                LED display in the lobby. Editable later on the offer&apos;s
+                Terms step.
+              </span>
             </label>
 
             {error ? (

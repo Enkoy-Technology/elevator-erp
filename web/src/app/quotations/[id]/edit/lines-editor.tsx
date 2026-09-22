@@ -60,6 +60,7 @@ interface LineDraft {
   quantity: string;
   machineRoomLabel: string;
   floorLabels: string;
+  floorDisplaySummary: string;
   doorHeightMm: string;
   ropingRatio: string;
   tractionMachineType: string;
@@ -93,6 +94,7 @@ export const NEW_LINE: LineDraft = {
   quantity: '1',
   machineRoomLabel: 'MRL',
   floorLabels: '',
+  floorDisplaySummary: '',
   doorHeightMm: '2100',
   ropingRatio: '2:1',
   tractionMachineType: 'Gearless',
@@ -126,6 +128,7 @@ const toDraft = (line: QuotationLine): LineDraft => {
     quantity: str(line.quantity, '1'),
     machineRoomLabel: str(line.machineRoomLabel),
     floorLabels: str(line.floorLabels),
+    floorDisplaySummary: str(line.floorDisplaySummary),
     doorHeightMm: str(line.doorHeightMm),
     ropingRatio: str(line.ropingRatio),
     tractionMachineType: str(line.tractionMachineType),
@@ -183,6 +186,9 @@ const toPayload = (
     // sending both invites the two to disagree.
     ...(floorLabels ? { floorLabels } : { stops: num(draft.stops, 2) }),
     machineRoomLabel: text(draft.machineRoomLabel),
+    // Sent even when empty, unlike its neighbours: an empty value is a
+    // meaningful instruction here — print the compressed form again.
+    floorDisplaySummary: draft.floorDisplaySummary.trim(),
     doorHeightMm: draft.doorHeightMm.trim()
       ? num(draft.doorHeightMm, 2100)
       : undefined,
@@ -699,6 +705,27 @@ export const LinesEditor = ({
                         Change one only when this lift differs.
                       </p>
                       <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                        <Field
+                          label="Floor display"
+                          htmlFor={`floordisplay-${line.id}`}
+                          hint="Leave blank to print the compressed form."
+                        >
+                          <input
+                            id={`floordisplay-${line.id}`}
+                            className={fieldClass}
+                            disabled={!editable}
+                            maxLength={60}
+                            placeholder="B+G+8+T"
+                            value={draft.floorDisplaySummary}
+                            onChange={(e) =>
+                              setField(
+                                line,
+                                'floorDisplaySummary',
+                                e.target.value,
+                              )
+                            }
+                          />
+                        </Field>
                         <Field
                           label="Entrances per stop"
                           htmlFor={`entrances-${line.id}`}

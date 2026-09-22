@@ -64,7 +64,9 @@ export interface PaymentTermInput {
   triggerEvent?: string | null;
 }
 
-/** The commercial prose columns, patched field-by-field. */
+/** The commercial prose columns, patched field-by-field. `notes` is here
+ *  because it prints on page 1 under "Special notes" — it is one of the
+ *  terms, not a private memo. */
 export type QuotationTermsUpdate = Partial<
   Pick<
     QuotationInsert,
@@ -73,6 +75,7 @@ export type QuotationTermsUpdate = Partial<
     | 'warrantyPartsMonths'
     | 'warrantyFreeServiceMonths'
     | 'validityDays'
+    | 'notes'
   >
 >;
 
@@ -166,12 +169,12 @@ export class QuotationsRepository {
   }
 
   /**
-   * Same row as findById, plus the customer/project display names the
-   * document templates need (QuotationRecord only has customerId/projectId
-   * — see quotation-document.mapper.ts). Joined here rather than fetched via
-   * ProjectsService/CustomersService: one query, and it keeps the document
-   * endpoint from adding a new cross-module service dependency for two
-   * display strings.
+   * Same row as findById, plus the customer/project display names and the
+   * project's site address the document templates need (QuotationRecord only
+   * has customerId/projectId — see quotation-document.mapper.ts). Joined here
+   * rather than fetched via ProjectsService/CustomersService: one query, and
+   * it keeps the document endpoint from adding a new cross-module service
+   * dependency for a few display strings.
    */
   async findByIdForDocument(
     tenantId: string,
@@ -183,6 +186,8 @@ export class QuotationsRepository {
           ...getTableColumns(quotations),
           customerName: customers.name,
           projectName: projects.name,
+          projectAddressLine1: projects.siteAddressLine1,
+          projectCity: projects.siteCity,
           // The salesperson the document names as its author.
           preparedByName: users.fullName,
         })
@@ -210,7 +215,21 @@ export class QuotationsRepository {
         )
         .where(and(eq(quotations.id, id), isNull(quotations.deletedAt)))
         .limit(1);
-      return rows[0] ?? null;
+      const row = rows[0];
+      if (!row) {
+        return null;
+      }
+      // The site address the client's own quotation prints under the project
+      // name ("Addis Ababa -Ethiopia"). Composed here so both documents print
+      // the same one line; null when the project has neither part, and the To
+      // block then simply omits it.
+      return {
+        ...row,
+        projectAddress:
+          [row.projectAddressLine1, row.projectCity]
+            .filter(Boolean)
+            .join(', ') || null,
+      };
     });
   }
 

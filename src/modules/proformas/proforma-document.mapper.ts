@@ -54,6 +54,8 @@ export interface ProformaDocumentRow {
   /** Full name of the user who created (quotation) or issued (proforma) it. */
   preparedByName: string | null;
   projectName: string | null;
+  /** The project's site address, one line — see ProformasRepository.findByIdForDocument. */
+  projectAddress?: string | null;
   technicalSpec: unknown;
   subtotalEtb: string;
   vatEtb: string;
@@ -83,6 +85,7 @@ const documentLine = (line: ProformaLineRow): DocumentLineData => {
     floorDisplaySummary:
       line.floorDisplaySummary ?? plan?.displaySummary ?? null,
     floorsStopsDoors: plan?.floorsStopsDoors ?? null,
+    entranceCount: line.entranceCount,
     doorHeightMm: line.doorHeightMm,
     ropingRatio: line.ropingRatio,
     tractionMachineType: line.tractionMachineType,
@@ -111,6 +114,7 @@ export const proformaDocumentData = (
   customerName: p.customerName ?? '',
   preparedByName: p.preparedByName,
   projectName: p.projectName ?? '',
+  projectAddress: p.projectAddress ?? null,
   technicalSpec: p.technicalSpec as Record<string, unknown> | null,
   subtotalEtb: p.subtotalEtb,
   taxPercent: vatPercentLabel(p.subtotalEtb, p.vatEtb),

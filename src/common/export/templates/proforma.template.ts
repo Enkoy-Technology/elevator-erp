@@ -35,6 +35,7 @@ export { formatEtb, fmtDate, TECH_ROWS };
 export interface ProformaTemplateData
   extends CommercialTermsData, DocumentAppendixContent {
   proformaNumber: string;
+  /** The workflow state. Stored and exported, never printed on the PDF. */
   status: string;
   issuedAt?: Date | string | null;
   validUntil?: Date | string | null;
@@ -45,6 +46,8 @@ export interface ProformaTemplateData
    */
   customerName: string;
   projectName: string;
+  /** The project's site address, printed under its name in the To block. */
+  projectAddress?: string | null;
   /** The salesperson named as the author; omitted from the page when null. */
   preparedByName?: string | null;
   technicalSpec?: Record<string, unknown> | null;
@@ -83,12 +86,14 @@ export const buildProformaHtml = (
     branding,
     plate: [
       { label: 'Proforma No.', value: d.proformaNumber },
-      ...(d.referenceCode ? [{ label: 'Ref.', value: d.referenceCode }] : []),
-      { label: 'Issued', value: fmtDate(d.issuedAt) },
-      { label: 'Status', value: d.status },
+      ...(d.referenceCode
+        ? [{ label: 'Reference code', value: d.referenceCode }]
+        : []),
+      { label: 'Date', value: fmtDate(d.issuedAt) },
     ],
     customerName: d.customerName,
     projectName: d.projectName,
+    projectAddress: d.projectAddress,
     preparedByName: d.preparedByName,
     lines,
     exVatTotalEtb,

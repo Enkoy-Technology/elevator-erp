@@ -84,13 +84,15 @@ describe('QuotationsRepository.updateStatus — compare-and-swap', () => {
   });
 });
 
-describe('QuotationsRepository.findByIdForDocument — joined customer/project names', () => {
-  it('joins customers and projects and returns the joined row', async () => {
+describe('QuotationsRepository.findByIdForDocument — joined customer/project names and site address', () => {
+  it('joins customers and projects and returns the joined row, with the site address composed into one line', async () => {
     const joinedRow = {
       id: QUOTE_ID,
       quoteNumber: 'QTN-2026-ABCD1234',
       customerName: 'Acme',
       projectName: 'Bole Tower',
+      projectAddressLine1: 'Bole Road',
+      projectCity: 'Addis Ababa',
     };
     const leftJoins: Array<{ table: unknown; condition: unknown }> = [];
     const chain: Record<string, jest.Mock> = {};
@@ -110,7 +112,10 @@ describe('QuotationsRepository.findByIdForDocument — joined customer/project n
 
     const result = await repo.findByIdForDocument(TENANT_ID, QUOTE_ID);
 
-    expect(result).toEqual(joinedRow);
+    expect(result).toEqual({
+      ...joinedRow,
+      projectAddress: 'Bole Road, Addis Ababa',
+    });
     // Three leftJoins: customers, users (the salesperson's name), then
     // projects — each with a real ON condition passed (not a bare table
     // with an implicit/missing join predicate, which drizzle would
@@ -119,6 +124,28 @@ describe('QuotationsRepository.findByIdForDocument — joined customer/project n
     for (const { condition } of leftJoins) {
       expect(condition).toBeDefined();
     }
+  });
+
+  it('leaves the address null when the project has neither address line nor city, so the To block omits the line', async () => {
+    const chain: Record<string, jest.Mock> = {};
+    chain.from = jest.fn(() => chain);
+    chain.leftJoin = jest.fn(() => chain);
+    chain.where = jest.fn(() => chain);
+    chain.limit = jest.fn(() =>
+      Promise.resolve([
+        { id: QUOTE_ID, projectAddressLine1: null, projectCity: null },
+      ]),
+    );
+    const select = jest.fn(() => chain);
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select }),
+    );
+    const repo = new QuotationsRepository({ withTenant } as never);
+
+    const result = await repo.findByIdForDocument(TENANT_ID, QUOTE_ID);
+
+    expect(result?.projectAddress).toBeNull();
   });
 
   it('returns null when no matching row exists', async () => {

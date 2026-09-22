@@ -33,12 +33,15 @@ export const fmtDate = (d: Date | string | null | undefined): string => {
 export interface QuotationTemplateData
   extends CommercialTermsData, DocumentAppendixContent {
   quoteNumber: string;
+  /** The workflow state. Stored and exported, never printed on the PDF. */
   status: string;
   createdAt?: Date | string | null;
   validUntil?: Date | string | null;
   /** Not printed since 2026-09-22 (see CommercialDocumentOptions). */
   customerName: string;
   projectName: string;
+  /** The project's site address, printed under its name in the To block. */
+  projectAddress?: string | null;
   /** The salesperson who prepared it; the "Prepared by" lines are dropped when null. */
   preparedByName?: string | null;
   technicalSpec?: Record<string, unknown> | null;
@@ -155,12 +158,14 @@ export const buildQuotationHtml = (
     branding,
     plate: [
       { label: 'Quote No.', value: d.quoteNumber },
-      ...(d.referenceCode ? [{ label: 'Ref.', value: d.referenceCode }] : []),
-      { label: 'Issued', value: fmtDate(d.createdAt) },
-      { label: 'Status', value: d.status },
+      ...(d.referenceCode
+        ? [{ label: 'Reference code', value: d.referenceCode }]
+        : []),
+      { label: 'Date', value: fmtDate(d.createdAt) },
     ],
     customerName: d.customerName,
     projectName: d.projectName,
+    projectAddress: d.projectAddress,
     preparedByName: d.preparedByName,
     lines,
     exVatTotalEtb,

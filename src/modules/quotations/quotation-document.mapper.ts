@@ -63,6 +63,7 @@ const documentLine = (line: QuotationLineRow): DocumentLineData => {
     floorDisplaySummary:
       line.floorDisplaySummary ?? plan?.displaySummary ?? null,
     floorsStopsDoors: plan?.floorsStopsDoors ?? null,
+    entranceCount: line.entranceCount,
     doorHeightMm: line.doorHeightMm,
     ropingRatio: line.ropingRatio,
     tractionMachineType: line.tractionMachineType,
@@ -96,6 +97,12 @@ export interface QuotationDocumentRow {
   /** Full name of the user who created (quotation) or issued (proforma) it. */
   preparedByName: string | null;
   projectName: string | null;
+  /**
+   * The project's site address, one line — composed by
+   * QuotationsRepository.findByIdForDocument from siteAddressLine1/siteCity.
+   * Optional so the existing document fixtures still satisfy this shape.
+   */
+  projectAddress?: string | null;
   technicalSpec: unknown;
   /**
    * The stored calc inputs. Optional only so the existing document fixtures
@@ -154,6 +161,7 @@ export const quotationDocumentData = (
   validUntil: q.validUntil,
   customerName: q.customerName ?? '',
   projectName: q.projectName ?? '',
+  projectAddress: q.projectAddress ?? null,
   preparedByName: q.preparedByName,
   technicalSpec: q.technicalSpec as Record<string, unknown> | null,
   pricingBreakdown: q.pricingBreakdown as Record<string, string> | null,

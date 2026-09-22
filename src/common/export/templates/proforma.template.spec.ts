@@ -69,12 +69,25 @@ describe('buildProformaHtml', () => {
 
   it('shows the taxable base, VAT and grand total — no margin row, no cost itemization', () => {
     const html = buildProformaHtml(data, branding);
-    expect(html).toContain('Total price');
+    expect(html).toContain('<td>Total</td>');
     expect(html).toContain('100,000.00 ETB');
     expect(html).toContain('VAT (15.00%)');
-    expect(html).toContain('Grand total');
+    expect(html).toContain('<td>Grand Total</td>');
     expect(html).not.toContain('Margin');
     expect(html).not.toContain('Base equipment');
+  });
+
+  it('labels the plate as the client does, and never prints the workflow status', () => {
+    const html = buildProformaHtml(
+      { ...data, referenceCode: 'Rodas FUJIHD-E02' },
+      branding,
+    );
+    expect(html).toContain('Proforma No.');
+    expect(html).toContain('Reference code');
+    expect(html).toContain('Date');
+    expect(html).toContain('2026-08-01');
+    expect(html).not.toContain('ISSUED');
+    expect(html).not.toContain('Status');
   });
 
   it('escapes HTML in the project and salesperson names', () => {

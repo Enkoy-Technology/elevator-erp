@@ -1834,6 +1834,9 @@ export interface UpdateQuotationTermsPayload {
   warrantyPartsMonths?: number;
   warrantyFreeServiceMonths?: number;
   validityDays?: number;
+  /** Printed on page 1 under "Special notes" — the access card, the music in
+   *  the cabin, the LED display in the lobby. */
+  notes?: string;
   /**
    * Replaces the WHOLE schedule when present; `[]` clears it. The percentages
    * must total exactly 100 or the API 400s. Omit the key to leave the

@@ -33,6 +33,8 @@ describe('quotationDocumentData', () => {
       customerName: 'Acme Real Estate PLC',
       preparedByName: 'Abebe Kebede',
       projectName: 'Bole Twin Towers — Lift A',
+      // Composed by the repository; null on a project with no site address.
+      projectAddress: null,
       technicalSpec: { capacityPersons: 13 },
       pricingBreakdown: { baseCost: '80000.00' },
       subtotalEtb: '100000.00',
@@ -103,6 +105,8 @@ describe('quotationDocumentData', () => {
     expect(data.lines?.[0]?.floorsStopsDoors).toBe('13/13/13');
     // Not stored on the line, so it falls back to the derivation.
     expect(data.lines?.[0]?.floorDisplaySummary).toBe('B+G+M+10');
+    // Carried through for the spec sheet's Entrances row.
+    expect(data.lines?.[0]?.entranceCount).toBe(1);
     expect(data.paymentTerms).toEqual([
       {
         percent: '50.00',
@@ -115,6 +119,43 @@ describe('quotationDocumentData', () => {
     expect(data).not.toHaveProperty('calculatedTotalEtb');
     expect(data).not.toHaveProperty('discountAmountEtb');
     expect(data).not.toHaveProperty('discountPercent');
+  });
+
+  it('passes a line with no entrance count through as null, so the row is dropped', () => {
+    const data = quotationDocumentData({
+      ...row,
+      lines: [
+        {
+          sequence: 1,
+          productType: 'PASSENGER',
+          specSummary: null,
+          quantity: 1,
+          unitPriceEtb: '1.00',
+          lineTotalEtb: '1.00',
+          machineRoomLabel: null,
+          floorLabels: null,
+          floorDisplaySummary: null,
+          doorHeightMm: null,
+          ropingRatio: null,
+          tractionMachineType: null,
+          controlSystem: null,
+          powerSupply: null,
+          lightSupply: null,
+          entranceCount: null,
+          calcInput: null,
+          technicalSpec: null,
+        },
+      ],
+    });
+    expect(data.lines?.[0]?.entranceCount).toBeNull();
+  });
+
+  it("prints the project's site address under its name in the To block", () => {
+    const data = quotationDocumentData({
+      ...row,
+      projectAddress: 'Bole Road, Addis Ababa',
+    });
+    expect(data.projectAddress).toBe('Bole Road, Addis Ababa');
   });
 
   it('passes the tenant appendix content straight through to the template', () => {

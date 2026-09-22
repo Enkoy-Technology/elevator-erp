@@ -168,7 +168,9 @@ export class ProformasRepository {
   }
 
   /**
-   * Same row as findById, plus the customer/project display names — the
+   * Same row as findById, plus the customer/project display names and the
+   * project's site address (printed in the To block, same as the quotation's)
+   * — the
    * technicalSpec/pricingBreakdown line data comes straight off this row's
    * own columns (a snapshot copied at issue time, see issue() below), NOT a
    * join back to the live quotation: that quotation can keep changing
@@ -186,6 +188,8 @@ export class ProformasRepository {
           ...getTableColumns(proformas),
           customerName: customers.name,
           projectName: projects.name,
+          projectAddressLine1: projects.siteAddressLine1,
+          projectCity: projects.siteCity,
           // The salesperson the document names as its author.
           preparedByName: users.fullName,
         })
@@ -213,7 +217,19 @@ export class ProformasRepository {
         )
         .where(eq(proformas.id, id))
         .limit(1);
-      return rows[0] ?? null;
+      const row = rows[0];
+      if (!row) {
+        return null;
+      }
+      // Same one line as the quotation's To block — see
+      // QuotationsRepository.findByIdForDocument.
+      return {
+        ...row,
+        projectAddress:
+          [row.projectAddressLine1, row.projectCity]
+            .filter(Boolean)
+            .join(', ') || null,
+      };
     });
   }
 

@@ -14,9 +14,9 @@ import { formatAmount, formatEtb, formatQuantity } from './money-format';
  * Their document is one shape used twice — the quotation and the proforma
  * differ only in the heading and the leading reference field — so it is
  * built once here and both templates hand it their own plate. Page 1 is the
- * commercial offer (line-item table + totals + terms), page 2 is the 19-row
- * specification table (one per line), pages 3+ are the tenant's boilerplate
- * prose and the component/brand table.
+ * commercial offer (line-item table + totals + terms), page 2 is the
+ * specification table (one per line, their nineteen rows plus Entrances),
+ * pages 3+ are the tenant's boilerplate prose and the component/brand table.
  *
  * Pure: every function in this file takes data and returns a string. Nothing
  * here queries — the appendix content arrives already loaded (see
@@ -74,6 +74,8 @@ export interface DocumentLineData {
   floorDisplaySummary?: string | null;
   /** "13/13/13" — derived by the mapper, never re-derived here. */
   floorsStopsDoors?: string | null;
+  /** Entrances served, as the client's appendix states it. */
+  entranceCount?: number | null;
   doorHeightMm?: number | null;
   ropingRatio?: string | null;
   tractionMachineType?: string | null;
@@ -131,6 +133,8 @@ export interface CommercialDocumentOptions extends DocumentAppendixContent {
    */
   customerName: string;
   projectName: string;
+  /** The project's site address, printed under its name; omitted when null. */
+  projectAddress?: string | null;
   /** Full name of the salesperson who prepared it; omitted from the page when null. */
   preparedByName?: string | null;
   lines: readonly DocumentLineData[];
@@ -146,6 +150,8 @@ export interface CommercialDocumentOptions extends DocumentAppendixContent {
   grandTotalEtb?: string | null;
   paymentTerms?: readonly PaymentTermData[];
   terms?: CommercialTermsData;
+  /** Printed under a "Special notes" heading: what this offer has beyond the
+   *  standard options. A customer-facing line, not a private memo. */
   notes?: string | null;
 }
 
@@ -169,11 +175,18 @@ const productLabel = (value: unknown): string | null => {
   return raw === null ? null : (PRODUCT_LABELS[raw] ?? raw);
 };
 
-/** "1600 x 1400 mm", or null the moment any dimension is missing. */
-const dims = (parts: readonly unknown[]): string | null => {
+/**
+ * "W1600 x D1400 mm", the way the client writes a dimension: each number
+ * carries the axis letter that says which one it is. Null the moment any
+ * dimension is missing — a half-known size is not printed at all.
+ */
+const dims = (
+  axes: readonly string[],
+  parts: readonly unknown[],
+): string | null => {
   const present = parts.map(text);
   return present.every((part): part is string => part !== null)
-    ? `${present.join(' x ')} mm`
+    ? `${present.map((part, i) => `${axes[i] ?? ''}${part}`).join(' x ')} mm`
     : null;
 };
 
@@ -222,9 +235,9 @@ const renderTotals = (o: CommercialDocumentOptions): string => `
   <div class="sum-block">
   <table class="totals">
     <tbody>
-      <tr><td>Total price</td><td class="num">${formatEtb(o.exVatTotalEtb)}</td></tr>
+      <tr><td>Total</td><td class="num">${formatEtb(o.exVatTotalEtb)}</td></tr>
       <tr><td>VAT${o.vatPercent ? ` (${esc(o.vatPercent)}%)` : ''}</td><td class="num">${formatEtb(o.vatEtb)}</td></tr>
-      <tr class="grand"><td>Grand total</td><td class="num">${formatEtb(o.grandTotalEtb)}</td></tr>
+      <tr class="grand"><td>Grand Total</td><td class="num">${formatEtb(o.grandTotalEtb)}</td></tr>
     </tbody>
   </table>
   </div>`;
@@ -258,13 +271,16 @@ const renderCommercialTerms = (
       'Offer validity',
       terms.validityDays == null
         ? null
-        : `${terms.validityDays} ${terms.validityDays === 1 ? 'day' : 'days'}`,
+        : `${terms.validityDays} ${terms.validityDays === 1 ? 'day' : 'days'} from the date of issue`,
     ],
+    // The label names the parts the warranty covers and the value names the
+    // date it runs from, so the appendix's Warranty prose is not restated
+    // here as a second, driftable copy of the same promise.
     [
-      'Warranty of main parts',
+      'Warranty of main parts (Motor, control system and mechanical parts)',
       terms.warrantyPartsMonths == null
         ? null
-        : monthsLabel(terms.warrantyPartsMonths),
+        : `${monthsLabel(terms.warrantyPartsMonths)} from commissioning date`,
     ],
     [
       'Free manpower maintenance',
@@ -290,9 +306,12 @@ const renderCommercialTerms = (
 };
 
 /**
- * Their page 2. Nineteen rows, in their order, each dropped when the value
- * is absent — the numbering is applied AFTER that filter so it always reads
- * 1..n with no holes.
+ * Their page 2, in their order and their wording. Their own sheet lists
+ * nineteen rows; Entrances is the twentieth, printed only when the line
+ * records one (it is a fact of this lift, so it belongs here rather than in
+ * the tenant-wide appendix). Every row is dropped when its value is absent,
+ * and the numbering is applied AFTER that filter so it always reads 1..n
+ * with no holes.
  */
 const renderSpecTable = (line: DocumentLineData): string => {
   const calc = line.calcInput ?? {};
@@ -303,7 +322,12 @@ const renderSpecTable = (line: DocumentLineData): string => {
 
   const rows: ReadonlyArray<readonly [string, string | null]> = [
     ['Elevator Type', productLabel(line.productType ?? tech.productType)],
-    ['Ordering quantity', text(line.quantity)],
+    [
+      'Ordering quantity',
+      line.quantity == null
+        ? null
+        : `${line.quantity} ${line.quantity === 1 ? 'unit' : 'units'}`,
+    ],
     [
       'With or without machine room',
       line.machineRoomLabel ??
@@ -322,19 +346,35 @@ const renderSpecTable = (line: DocumentLineData): string => {
     // snapshot drops the row instead of printing "NaN".
     [
       'Travel height (mm)',
-      typeof travelHeightM === 'number' ? String(travelHeightM * 1000) : null,
+      typeof travelHeightM === 'number'
+        ? `${(travelHeightM * 1000).toLocaleString('en-US')}mm`
+        : null,
     ],
     ['Floors/stops/doors', text(line.floorsStopsDoors)],
+    [
+      'Entrances',
+      line.entranceCount == null
+        ? null
+        : `${line.entranceCount} ${line.entranceCount === 1 ? 'entrance' : 'entrances'}`,
+    ],
     ['Floor display', text(line.floorDisplaySummary)],
     ['Depth of Pit (mm)', text(tech.pitDepthMm)],
     ['O/H height of overhead (mm)', text(tech.overheadClearanceMm)],
-    ['Shaft size (W x D)', dims([tech.shaftWidthMm, tech.shaftDepthMm])],
-    ['Standard lift', text(tech.standardLift)],
+    [
+      'Shaft size (W x D)',
+      dims(['W', 'D'], [tech.shaftWidthMm, tech.shaftDepthMm]),
+    ],
     [
       'Car size (W x D x H)',
-      dims([tech.carWidthMm, tech.carDepthMm, tech.carHeightMm]),
+      dims(
+        ['W', 'D', 'H'],
+        [tech.carWidthMm, tech.carDepthMm, tech.carHeightMm],
+      ),
     ],
-    ['Door size (W x H)', dims([calc.doorWidthMm, line.doorHeightMm])],
+    [
+      'Door size (W x H)',
+      dims(['W', 'H'], [calc.doorWidthMm, line.doorHeightMm]),
+    ],
     ['Car opening type', DOOR_TYPE_LABELS[String(calc.doorType)] ?? null],
     ['Power supply', text(line.powerSupply)],
     ['Light supply', text(line.lightSupply)],
@@ -418,9 +458,10 @@ export const renderCommercialBody = (o: CommercialDocumentOptions): string => `
   ${renderReferencePlate(o.plate)}
 
   ${renderParties(o.branding, {
-    label: 'Prepared For',
+    label: 'To',
     lines: [
       o.projectName,
+      ...(o.projectAddress ? [o.projectAddress] : []),
       ...(o.preparedByName ? [`Prepared by: ${o.preparedByName}`] : []),
     ],
   })}
@@ -432,7 +473,7 @@ export const renderCommercialBody = (o: CommercialDocumentOptions): string => `
   ${renderPaymentTerms(o.paymentTerms ?? [])}
   ${renderCommercialTerms(o.terms)}
 
-  ${o.notes ? `<div class="notes">${esc(o.notes)}</div>` : ''}
+  ${o.notes ? `<h2>Special notes</h2><div class="notes">${esc(o.notes)}</div>` : ''}
 
   ${renderSignatureBlock(o.branding)}
 

@@ -59,9 +59,11 @@ describe('buildQuotationHtml', () => {
     expect(html).not.toContain('Motor power');
   });
 
-  it('embeds key quote fields, the project, the salesperson, and totals — not the customer', () => {
+  it('embeds key quote fields, the project, the salesperson, and totals — not the customer or the workflow status', () => {
     const html = buildQuotationHtml(data, branding);
     expect(html).toContain('QTN-2026-ABCD1234');
+    expect(html).not.toContain('Status');
+    expect(html).not.toContain('APPROVED');
     expect(html).toContain('Bole Twin Towers');
     expect(html).toContain('Prepared by');
     expect(html).toContain('Abebe Kebede');
@@ -78,6 +80,17 @@ describe('buildQuotationHtml', () => {
     expect(html).not.toContain('Lifting Ethiopia');
     expect(html).toContain('Bole Road, Addis Ababa');
     expect(html).toContain('Tel: +251 11 123 4567/+251 91 234 5678');
+  });
+
+  it('prints the tenant phones in the From party block, and nothing when there are none', () => {
+    // The client's own quotation carries the company numbers under the From
+    // address, not only in the footer band.
+    expect(buildQuotationHtml(data, branding)).toContain(
+      '<div class="party-line">Tel: +251 11 123 4567 / +251 91 234 5678</div>',
+    );
+    expect(buildQuotationHtml(data, { ...branding, phones: [] })).not.toContain(
+      'Tel:',
+    );
   });
 
   it('escapes HTML in tenant/project/quotation-data strings to prevent injection', () => {

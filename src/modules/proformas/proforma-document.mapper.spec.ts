@@ -28,6 +28,8 @@ describe('proformaDocumentData', () => {
       customerName: 'Acme Real Estate PLC',
       preparedByName: 'Abebe Kebede',
       projectName: 'Bole Twin Towers — Lift A',
+      // Composed by the repository; null on a project with no site address.
+      projectAddress: null,
       technicalSpec: { capacityPersons: 13 },
       subtotalEtb: '100000.00',
       taxPercent: '15.00',
@@ -97,6 +99,17 @@ describe('proformaDocumentData', () => {
     // 13 stops, one entrance, so their own "13/13/13".
     expect(line?.floorDisplaySummary).toBe('B+G+M+10');
     expect(line?.floorsStopsDoors).toBe('13/13/13');
+    // Carried through for the spec sheet's Entrances row — the proforma is
+    // the approved quotation, so it prints the same rows.
+    expect(line?.entranceCount).toBe(1);
+  });
+
+  it("prints the project's site address under its name, same as the quotation", () => {
+    const data = proformaDocumentData({
+      ...row,
+      projectAddress: 'Bole Road, Addis Ababa',
+    });
+    expect(data.projectAddress).toBe('Bole Road, Addis Ababa');
   });
 
   it('passes the tenant appendix through when the caller loaded it', () => {

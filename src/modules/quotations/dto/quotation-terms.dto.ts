@@ -27,7 +27,10 @@ export class PaymentTermDto {
   @MaxLength(300)
   label!: string;
 
-  @ApiProperty({ example: '50.00', description: 'Percent of the quoted price.' })
+  @ApiProperty({
+    example: '50.00',
+    description: 'Percent of the quoted price.',
+  })
   @Matches(MONEY_RE, {
     message: 'percent must be a number with up to 2 decimal places',
   })
@@ -46,10 +49,12 @@ export class PaymentTermDto {
  * must not blank the warranty someone else set.
  */
 export class UpdateQuotationTermsDto {
-  @ApiPropertyOptional({ maxLength: 60, example: 'Rodas FUJIHD-E02' })
+  /** Free text: a salesperson's name (or two) plus the model, e.g.
+   *  'KALKIDAN AND MIKA FUJI-E22' — hence 80 rather than 60. */
+  @ApiPropertyOptional({ maxLength: 80, example: 'Rodas FUJIHD-E02' })
   @IsOptional()
   @IsString()
-  @MaxLength(60)
+  @MaxLength(80)
   referenceCode?: string;
 
   @ApiPropertyOptional({ minimum: 0, maximum: 3650, example: 150 })
@@ -79,6 +84,17 @@ export class UpdateQuotationTermsDto {
   @Min(0)
   @Max(3650)
   validityDays?: number;
+
+  /**
+   * What this offer has beyond the standard options — an access card, music
+   * in the cabin, an LED display in the lobby. PRINTED on page 1 under
+   * "Special notes", so it is the customer's wording, not a private memo.
+   */
+  @ApiPropertyOptional({ maxLength: 2000 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  notes?: string;
 
   /**
    * Replaces the whole schedule when present. An empty array clears it; the
