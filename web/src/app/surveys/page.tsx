@@ -4,17 +4,22 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ColumnDef } from '@tanstack/react-table';
 
+import { Check, Eye, Pencil, Trash2, X } from 'lucide-react';
+
 import { btnPrimary, btnSecondary } from '@/components/form-styles';
 import { DataTable } from '@/components/data-table';
-import { ListToolbar } from '@/components/list-toolbar';
+import { ListToolbar, RowAction, SearchField } from '@/components/list-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
 import { formatDate } from '@/lib/datetime';
 import {
   ApiError,
+  deleteSiteSurvey,
   getAccessToken,
+  getProfile,
   importSiteSurveys,
   listSiteSurveys,
+  type AuthProfile,
   type SiteSurvey,
   type SiteSurveyImportResult,
 } from '@/lib/api';
@@ -34,6 +39,16 @@ const importable = (result: SiteSurveyImportResult): number =>
  *  slips a square west of Addis. */
 const surveyDay = (iso: string): string => formatDate(`${iso}T00:00:00`);
 
+/**
+ * Who may correct or delete a sheet: a salesperson only their own, everyone
+ * else on this screen any of them — the same rule the API enforces. The list
+ * is already scoped server-side, so this only keeps the buttons honest; it is
+ * not the defence.
+ */
+const canActOn = (survey: SiteSurvey, me: AuthProfile | null): boolean =>
+  me !== null &&
+  (me.role !== 'SALESPERSON' || survey.surveyedByUserId === me.userId);
+
 export default function SurveysPage() {
   const router = useRouter();
   const [surveys, setSurveys] = useState<SiteSurvey[]>([]);
@@ -41,6 +56,12 @@ export default function SurveysPage() {
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [me, setMe] = useState<AuthProfile | null>(null);
+  /** The row whose Delete is armed. Confirm swaps the icons in place. */
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const filePicker = useRef<HTMLInputElement>(null);
@@ -50,23 +71,31 @@ export default function SurveysPage() {
   const [importError, setImportError] = useState<string | null>(null);
   const [imported, setImported] = useState<number | null>(null);
 
-  const refresh = useCallback(async (nextPage: number, size: number) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await listSiteSurveys({ page: nextPage, pageSize: size });
-      setSurveys(result.items);
-      setPage(result.page);
-      setTotal(result.total);
-      setTotalPages(result.totalPages);
-    } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : 'Failed to load site surveys',
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const refresh = useCallback(
+    async (nextPage: number, size: number, q: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await listSiteSurveys({
+          search: q || undefined,
+          page: nextPage,
+          pageSize: size,
+        });
+        setSurveys(result.items);
+        setPage(result.page);
+        setTotal(result.total);
+        setTotalPages(result.totalPages);
+        setConfirmingId(null);
+      } catch (err) {
+        setError(
+          err instanceof ApiError ? err.message : 'Failed to load site surveys',
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   const closeImport = () => {
     setSheet(null);
@@ -88,7 +117,7 @@ export default function SurveysPage() {
       setImported(result.imported);
       // `refresh` writes the page number back from the response, so the list
       // is on page 1 where the new rows are.
-      await refresh(1, pageSize);
+      await refresh(1, pageSize, search);
     } catch (err) {
       // A failed commit keeps the preview on screen: the sheet was read fine,
       // and the salesperson needs the button to try again.
@@ -103,19 +132,54 @@ export default function SurveysPage() {
     }
   };
 
+  // Only feeds the per-row Edit/Delete buttons; the API decides for real.
+  // Once, on mount — who you are does not change when you turn the page.
+  useEffect(() => {
+    void getProfile()
+      .then(setMe)
+      .catch(() => undefined);
+  }, []);
+
   useEffect(() => {
     if (!getAccessToken()) {
       router.replace('/login');
       return;
     }
-    void refresh(page, pageSize);
-  }, [router, refresh, page, pageSize]);
+    void refresh(page, pageSize, search);
+  }, [router, refresh, page, pageSize, search]);
+
+  const onSearch = (term: string) => {
+    setPage(1);
+    setSearch(term.trim());
+  };
+
+  const onDelete = async (survey: SiteSurvey) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteSiteSurvey(survey.id);
+      setConfirmingId(null);
+      await refresh(page, pageSize, search);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : `Could not delete the survey for ${survey.projectName}`,
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
 
   // The client's own sheet, column for column.
   const columns: ColumnDef<SiteSurvey, unknown>[] = [
     {
       id: 'date',
+      // Sorting is client-side over the loaded page (see DataTable), so only
+      // the columns where reordering one page actually helps opt in.
+      accessorFn: (survey) => survey.surveyDate,
       header: 'Date',
+      enableSorting: true,
       cell: ({ row }) => (
         <span className="whitespace-nowrap">
           {surveyDay(row.original.surveyDate)}
@@ -169,7 +233,9 @@ export default function SurveysPage() {
     },
     {
       id: 'floors',
+      accessorFn: (survey) => survey.floors ?? '',
       header: 'Floors',
+      enableSorting: true,
       cell: ({ row }) => dash(row.original.floors),
     },
     {
@@ -184,13 +250,70 @@ export default function SurveysPage() {
     },
     {
       id: 'units',
+      accessorFn: (survey) => survey.units ?? 0,
       header: 'Units',
+      enableSorting: true,
       cell: ({ row }) => dash(row.original.units),
     },
     {
       id: 'surveyedBy',
+      accessorFn: (survey) => survey.surveyedByName ?? '',
       header: 'Collected by',
+      enableSorting: true,
       cell: ({ row }) => dash(row.original.surveyedByName),
+    },
+    {
+      id: 'actions',
+      header: '',
+      meta: { align: 'right' },
+      cell: ({ row }) => {
+        const survey = row.original;
+        const label = survey.projectName;
+        return (
+          <div className="flex items-center justify-end gap-0.5">
+            {confirmingId === survey.id ? (
+              <>
+                <RowAction
+                  icon={Check}
+                  tone="danger"
+                  disabled={busy}
+                  label={`Confirm deleting the survey for ${label}`}
+                  onClick={() => void onDelete(survey)}
+                />
+                <RowAction
+                  icon={X}
+                  disabled={busy}
+                  label={`Keep the survey for ${label}`}
+                  onClick={() => setConfirmingId(null)}
+                />
+              </>
+            ) : (
+              <>
+                <RowAction
+                  icon={Eye}
+                  label={`View the survey for ${label}`}
+                  onClick={() => router.push(`/surveys/${survey.id}`)}
+                />
+                {canActOn(survey, me) ? (
+                  <>
+                    <RowAction
+                      icon={Pencil}
+                      label={`Edit the survey for ${label}`}
+                      onClick={() => router.push(`/surveys/${survey.id}/edit`)}
+                    />
+                    <RowAction
+                      icon={Trash2}
+                      tone="danger"
+                      label={`Delete the survey for ${label}`}
+                      onClick={() => setConfirmingId(survey.id)}
+                    />
+                  </>
+                ) : null}
+              </>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -212,6 +335,14 @@ export default function SurveysPage() {
           ) : null}
 
           <ListToolbar
+            search={
+              <SearchField
+                value={searchInput}
+                onChange={setSearchInput}
+                onSubmit={onSearch}
+                placeholder="Search project, contact, address…"
+              />
+            }
             actions={
               <>
                 <button
@@ -335,12 +466,19 @@ export default function SurveysPage() {
               },
             }}
             empty={
-              <>
-                Nothing collected yet. This is where the site collection form
-                lands for the manager to read. Fill one in with New site survey,
-                or use Import Excel to upload the sheet you already filled on
-                site.
-              </>
+              search ? (
+                <>
+                  No site survey matches “{search}”. Clear the search to see
+                  them all.
+                </>
+              ) : (
+                <>
+                  Nothing collected yet. This is where the site collection form
+                  lands for the manager to read. Fill one in with New site
+                  survey, or use Import Excel to upload the sheet you already
+                  filled on site.
+                </>
+              )
             }
           />
         </main>

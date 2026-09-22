@@ -2,7 +2,12 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   UploadedFile,
@@ -21,7 +26,10 @@ import {
 import { CurrentUser, Roles } from '../../common/decorators';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { ImportSiteSurveysResultDto } from './dto/import-site-surveys.dto';
-import { CreateSiteSurveyDto } from './dto/site-survey.dto';
+import {
+  CreateSiteSurveyDto,
+  UpdateSiteSurveyDto,
+} from './dto/site-survey.dto';
 import { SiteSurveysImportService } from './site-surveys-import.service';
 import { SiteSurveysService } from './site-surveys.service';
 
@@ -64,10 +72,11 @@ export class SiteSurveysController {
   @ApiOkResponse({ description: 'Paginated site survey list' })
   list(
     @CurrentUser() user: AuthenticatedUser,
+    @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ) {
-    return this.siteSurveysService.list(user, { page, pageSize });
+    return this.siteSurveysService.list(user, { search, page, pageSize });
   }
 
   @Post()
@@ -132,5 +141,42 @@ export class SiteSurveysController {
       );
     }
     return this.siteSurveysImportService.import(user, file, commit === 'true');
+  }
+
+  @Get(':id')
+  @ApiOperation({
+    summary: "Get one site survey. 404 for a salesperson asking for another's.",
+  })
+  get(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.siteSurveysService.getById(user, id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({
+    summary:
+      'Correct a site survey. A salesperson may change only their own sheet.',
+  })
+  update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateSiteSurveyDto,
+  ) {
+    return this.siteSurveysService.update(user, id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @ApiOperation({
+    summary:
+      'Delete a site survey. A salesperson may delete only their own sheet.',
+  })
+  async remove(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    await this.siteSurveysService.delete(user, id);
   }
 }

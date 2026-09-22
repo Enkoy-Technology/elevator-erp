@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import {
   IsDateString,
   IsInt,
@@ -100,3 +100,19 @@ export class CreateSiteSurveyDto {
   @Max(100)
   units?: number;
 }
+
+/**
+ * Every field optional: the salesperson corrects one measurement at a time.
+ * An absent key leaves the column alone; an explicit null clears a nullable
+ * one (`@IsOptional()` lets null through untouched).
+ */
+export class UpdateSiteSurveyDto extends PartialType(CreateSiteSurveyDto) {}
+
+/**
+ * What a PATCH body can actually carry: `@IsOptional()` lets an explicit null
+ * through untouched, and null is how the UI clears a nullable column, so the
+ * type says so even though PartialType's own shape stops at `| undefined`.
+ */
+export type SiteSurveyPatch = {
+  [K in keyof UpdateSiteSurveyDto]?: UpdateSiteSurveyDto[K] | null;
+};

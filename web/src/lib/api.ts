@@ -952,26 +952,41 @@ export interface SiteSurvey {
   updatedAt: string;
 }
 
-export interface SiteSurveyPayload {
-  projectName: string;
-  /** Defaults to today in the business timezone when omitted. */
+/**
+ * PATCH body. Every key optional — an absent key leaves the column alone,
+ * an explicit null clears it, which is how a wrong phone number typed on
+ * site gets removed rather than replaced with an empty string.
+ */
+export interface SiteSurveyUpdate {
+  projectName?: string;
   surveyDate?: string;
-  address?: string;
-  contactName?: string;
-  contactPhone?: string;
-  shaftWidthCm?: number;
-  shaftDepthCm?: number;
-  floors?: string;
-  overheadCm?: number;
-  machineRoom?: string;
-  units?: number;
+  address?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  shaftWidthCm?: number | null;
+  shaftDepthCm?: number | null;
+  floors?: string | null;
+  overheadCm?: number | null;
+  machineRoom?: string | null;
+  units?: number | null;
 }
 
+/**
+ * POST body: the same fields, with the project name required. `surveyDate`
+ * defaults to today in the business timezone when omitted.
+ */
+export type SiteSurveyPayload = SiteSurveyUpdate & { projectName: string };
+
 export const listSiteSurveys = (options?: {
+  /** Matches project name, contact name, phone or address, case-insensitively. */
+  search?: string;
   page?: number;
   pageSize?: number;
 }): Promise<Paginated<SiteSurvey>> => {
   const params = new URLSearchParams();
+  if (options?.search) {
+    params.set('search', options.search);
+  }
   if (options?.page) {
     params.set('page', String(options.page));
   }
@@ -992,6 +1007,25 @@ export const createSiteSurvey = (
     method: 'POST',
     body: JSON.stringify(payload),
   });
+
+/** One sheet plus who collected it. 404 when a salesperson asks for
+ *  someone else's — the API never confirms another's sheet exists. */
+export const getSiteSurvey = (id: string): Promise<SiteSurvey> =>
+  apiFetch<SiteSurvey>(`/site-surveys/${id}`);
+
+/** PATCH returns the stored row; surveyedByName is joined on GET/LIST only. */
+export const updateSiteSurvey = (
+  id: string,
+  payload: SiteSurveyUpdate,
+): Promise<Omit<SiteSurvey, 'surveyedByName'>> =>
+  apiFetch<Omit<SiteSurvey, 'surveyedByName'>>(`/site-surveys/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+
+/** Hard delete — the sheet is standalone, nothing references it. */
+export const deleteSiteSurvey = (id: string): Promise<void> =>
+  apiFetch<void>(`/site-surveys/${id}`, { method: 'DELETE' });
 
 /** One row the server refused, named the way a person finds it in the sheet. */
 export interface SiteSurveyImportError {

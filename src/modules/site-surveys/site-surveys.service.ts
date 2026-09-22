@@ -1,8 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 
 import { NotificationsRepository } from '../notifications/notifications.repository';
 import type { AuthenticatedUser } from '../../types/auth.types';
-import type { CreateSiteSurveyDto } from './dto/site-survey.dto';
+import type {
+  CreateSiteSurveyDto,
+  SiteSurveyPatch,
+} from './dto/site-survey.dto';
 import {
   SiteSurveysRepository,
   type SiteSurveyRecord,
@@ -17,15 +20,41 @@ export class SiteSurveysService {
     private readonly notificationsRepository: NotificationsRepository,
   ) {}
 
-  list(user: AuthenticatedUser, options: { page?: string; pageSize?: string }) {
+  list(
+    user: AuthenticatedUser,
+    options: { search?: string; page?: string; pageSize?: string },
+  ) {
     return this.surveysRepository.list(user.tenantId, {
-      // A salesperson sees only their own sheets — enough to confirm the
-      // submission arrived, which is what stops them going back to Telegram.
-      // Everyone else on this controller is a manager and sees all of them.
-      surveyedByUserId: user.role === 'SALESPERSON' ? user.userId : undefined,
+      surveyedByUserId: scopeFor(user),
+      search: options.search,
       page: options.page,
       pageSize: options.pageSize,
     });
+  }
+
+  async getById(user: AuthenticatedUser, id: string) {
+    const survey = await this.surveysRepository.findById(
+      user.tenantId,
+      id,
+      scopeFor(user),
+    );
+    if (!survey) {
+      throw new NotFoundException('Site survey not found');
+    }
+    return survey;
+  }
+
+  update(user: AuthenticatedUser, id: string, dto: SiteSurveyPatch) {
+    return this.surveysRepository.update(
+      user.tenantId,
+      id,
+      dto,
+      scopeFor(user),
+    );
+  }
+
+  delete(user: AuthenticatedUser, id: string) {
+    return this.surveysRepository.delete(user.tenantId, id, scopeFor(user));
   }
 
   async create(
@@ -82,3 +111,12 @@ const summarize = (survey: SiteSurveyRecord): string =>
   ]
     .filter(Boolean)
     .join(', ') || `Collected ${survey.surveyDate}`;
+
+/**
+ * A salesperson sees, edits and deletes only the sheets they submitted —
+ * enough to confirm the submission arrived and fix a typo, which is what
+ * stops them going back to Telegram. Everyone else on this controller is a
+ * manager and acts on all of them. Undefined means unscoped.
+ */
+const scopeFor = (user: AuthenticatedUser): string | undefined =>
+  user.role === 'SALESPERSON' ? user.userId : undefined;

@@ -1,3 +1,5 @@
+import { NotFoundException } from '@nestjs/common';
+
 import type {
   SiteSurveyRecord,
   SiteSurveysRepository,
@@ -33,6 +35,9 @@ describe('SiteSurveysService', () => {
     list: jest.fn(),
     create: jest.fn(),
     listManagerIds: jest.fn(),
+    findById: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
   };
   const notifications = { create: jest.fn() };
   const service = new SiteSurveysService(
@@ -82,6 +87,7 @@ describe('SiteSurveysService', () => {
     );
     expect(surveys.list).toHaveBeenCalledWith(TENANT_ID, {
       surveyedByUserId: USER_ID,
+      search: undefined,
       page: '2',
       pageSize: undefined,
     });
@@ -93,6 +99,7 @@ describe('SiteSurveysService', () => {
       await service.list({ userId: USER_ID, tenantId: TENANT_ID, role }, {});
       expect(surveys.list).toHaveBeenCalledWith(TENANT_ID, {
         surveyedByUserId: undefined,
+        search: undefined,
         page: undefined,
         pageSize: undefined,
       });
@@ -109,4 +116,77 @@ describe('SiteSurveysService', () => {
     });
     expect(created.projectName).toBe('Bole Plaza');
   });
+
+  it('passes the search term through to the repository', async () => {
+    await service.list(
+      { userId: USER_ID, tenantId: TENANT_ID, role: 'SALES_MANAGER' },
+      { search: 'bole' },
+    );
+    expect(surveys.list).toHaveBeenCalledWith(
+      TENANT_ID,
+      expect.objectContaining({ search: 'bole' }),
+    );
+  });
+
+  it('scopes a salesperson when they read, edit or delete one sheet', async () => {
+    const salesperson = {
+      userId: USER_ID,
+      tenantId: TENANT_ID,
+      role: 'SALESPERSON' as const,
+    };
+    surveys.findById.mockResolvedValue({
+      ...survey(),
+      surveyedByName: 'Abebe',
+    });
+
+    await service.getById(salesperson, 'survey-1');
+    await service.update(salesperson, 'survey-1', { floors: 'B+G+12' });
+    await service.delete(salesperson, 'survey-1');
+
+    expect(surveys.findById).toHaveBeenCalledWith(
+      TENANT_ID,
+      'survey-1',
+      USER_ID,
+    );
+    expect(surveys.update).toHaveBeenCalledWith(
+      TENANT_ID,
+      'survey-1',
+      { floors: 'B+G+12' },
+      USER_ID,
+    );
+    expect(surveys.delete).toHaveBeenCalledWith(TENANT_ID, 'survey-1', USER_ID);
+  });
+
+  it("is a 404, not a 403, when a salesperson asks for another's sheet", async () => {
+    surveys.findById.mockResolvedValue(null);
+
+    await expect(
+      service.getById(
+        { userId: USER_ID, tenantId: TENANT_ID, role: 'SALESPERSON' },
+        'someone-elses',
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it.each(['SALES_MANAGER', 'GENERAL_MANAGER', 'SECRETARY'] as const)(
+    'lets %s edit and delete any sheet',
+    async (role) => {
+      const manager = { userId: USER_ID, tenantId: TENANT_ID, role };
+
+      await service.update(manager, 'survey-1', { units: 2 });
+      await service.delete(manager, 'survey-1');
+
+      expect(surveys.update).toHaveBeenCalledWith(
+        TENANT_ID,
+        'survey-1',
+        { units: 2 },
+        undefined,
+      );
+      expect(surveys.delete).toHaveBeenCalledWith(
+        TENANT_ID,
+        'survey-1',
+        undefined,
+      );
+    },
+  );
 });
