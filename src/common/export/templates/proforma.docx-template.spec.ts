@@ -27,10 +27,30 @@ describe('buildProformaDocx', () => {
     technicalSpec: { capacityPersons: 13, motorPowerKw: '11.00' },
     projectName: 'Bole Twin Towers — Lift A',
     customerName: 'Acme Real Estate PLC',
+    preparedByName: 'Abebe Kebede',
   };
+
+  // The unpacked Document serialises its text runs verbatim, so a substring
+  // check on the JSON is enough to see what the party block prints — no zip
+  // reader needed.
+  const text = (d: ProformaTemplateData): string =>
+    JSON.stringify(buildProformaDocx(d, branding));
 
   it('returns a docx Document instance', () => {
     expect(buildProformaDocx(data, branding)).toBeInstanceOf(Document);
+  });
+
+  it('names the project and the salesperson in the party block, never the customer', () => {
+    const json = text(data);
+    expect(json).toContain('Bole Twin Towers — Lift A');
+    expect(json).toContain('Prepared by: Abebe Kebede');
+    expect(json).not.toContain('Acme Real Estate PLC');
+  });
+
+  it('omits the Prepared by line when nobody is recorded as the author', () => {
+    expect(text({ ...data, preparedByName: null })).not.toContain(
+      'Prepared by',
+    );
   });
 
   it('does not throw when branding is absent', () => {

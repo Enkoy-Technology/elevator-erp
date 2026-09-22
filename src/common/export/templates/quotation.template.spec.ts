@@ -34,6 +34,7 @@ describe('buildQuotationHtml', () => {
     pricingBreakdown: { baseCost: '80000.00', installationCost: '20000.00' },
     projectName: 'Bole Twin Towers — Lift A',
     customerName: 'Acme Real Estate PLC',
+    preparedByName: 'Abebe Kebede',
   };
 
   // The product type is the only technical row an escalator or platform-lift
@@ -58,11 +59,13 @@ describe('buildQuotationHtml', () => {
     expect(html).not.toContain('Motor power');
   });
 
-  it('embeds key quote fields, names, and totals', () => {
+  it('embeds key quote fields, the project, the salesperson, and totals — not the customer', () => {
     const html = buildQuotationHtml(data, branding);
     expect(html).toContain('QTN-2026-ABCD1234');
-    expect(html).toContain('Acme Real Estate PLC');
     expect(html).toContain('Bole Twin Towers');
+    expect(html).toContain('Prepared by');
+    expect(html).toContain('Abebe Kebede');
+    expect(html).not.toContain('Acme Real Estate PLC');
     expect(html).toContain('143,750.00 ETB');
     expect(html).toContain('#123456'); // tenant primary colour drives the CSS
   });
@@ -77,9 +80,9 @@ describe('buildQuotationHtml', () => {
     expect(html).toContain('Tel: +251 11 123 4567/+251 91 234 5678');
   });
 
-  it('escapes HTML in tenant/customer/quotation-data strings to prevent injection', () => {
+  it('escapes HTML in tenant/project/quotation-data strings to prevent injection', () => {
     const html = buildQuotationHtml(
-      { ...data, customerName: '<b>x</b>' },
+      { ...data, projectName: '<b>x</b>' },
       branding,
     );
     expect(html).not.toContain('<b>x</b>');

@@ -9,7 +9,8 @@ import {
 import { fmtDate, TECH_ROWS } from './quotation.template';
 
 /** Registry key for this builder; already a member of DocumentTemplate. */
-export const WARRANTY_CERTIFICATE_TEMPLATE: DocumentTemplate = 'warranty-certificate';
+export const WARRANTY_CERTIFICATE_TEMPLATE: DocumentTemplate =
+  'warranty-certificate';
 
 /**
  * Which contract date the warranty clock actually started on. It is printed
@@ -30,7 +31,9 @@ export interface WarrantyWindow {
 
 /** Last day of the month `date` currently sits in. */
 const daysInMonth = (date: Date): number =>
-  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+  new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
+  ).getUTCDate();
 
 /**
  * `iso` + `months`, clamped to the last valid day of the target month —
@@ -71,7 +74,9 @@ export const warrantyWindow = (contract: {
   // Handover first: cover starts when the customer actually got the
   // equipment. Signing is the fallback for a contract closed without a
   // recorded handover, and the certificate says so in as many words.
-  const basis: WarrantyStartBasis = contract.handedOverAt ? 'HANDOVER' : 'SIGNING';
+  const basis: WarrantyStartBasis = contract.handedOverAt
+    ? 'HANDOVER'
+    : 'SIGNING';
   const startsOn = contract.handedOverAt ?? contract.signedAt;
   if (!startsOn) {
     return null;
@@ -91,7 +96,9 @@ export const warrantyWindow = (contract: {
  */
 export interface WarrantyCertificateTemplateData {
   contractNumber: string;
+  /** Still supplied by callers; no longer printed — the project name names the party. */
   customerName: string;
+  /** On the contract family the project name IS the client company (2026-09-22). */
   projectName: string;
   /** The linked proforma's snapshot — the equipment this warranty covers. */
   technicalSpec?: Record<string, unknown> | null;
@@ -137,7 +144,7 @@ export const buildWarrantyCertificateHtml = (
 
   ${renderParties(branding, {
     label: 'Issued To',
-    lines: [d.customerName, `Project: ${d.projectName}`],
+    lines: [d.projectName],
   })}
 
   <h2>Equipment Covered</h2>

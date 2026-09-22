@@ -13,7 +13,11 @@ import {
   textBlock,
 } from './docx-layout';
 import { formatEtb, netOfTaxEtb } from './money-format';
-import { fmtDate, TECH_ROWS, type QuotationTemplateData } from './quotation.template';
+import {
+  fmtDate,
+  TECH_ROWS,
+  type QuotationTemplateData,
+} from './quotation.template';
 
 export { formatEtb };
 
@@ -33,7 +37,10 @@ export { formatEtb };
  * remote logo, so there is one code path instead of a conditional one. The
  * same reasoning covers `branding.stampUrl` on the signature block.
  */
-export const buildQuotationDocx = (data: object, branding: TenantBranding | null): Document => {
+export const buildQuotationDocx = (
+  data: object,
+  branding: TenantBranding | null,
+): Document => {
   const d = data as QuotationTemplateData;
   const tech = d.technicalSpec ?? {};
   const primary = branding?.primaryColor ?? null;
@@ -67,7 +74,10 @@ export const buildQuotationDocx = (data: object, branding: TenantBranding | null
     ),
     partiesTable(branding, {
       label: 'Prepared For',
-      lines: [d.customerName, `Project: ${d.projectName}`],
+      lines: [
+        d.projectName,
+        ...(d.preparedByName ? [`Prepared by: ${d.preparedByName}`] : []),
+      ],
     }),
     heading('Equipment', primary),
     // docx's Table rejects a zero-row table (unlike an empty HTML <table>,
@@ -77,7 +87,9 @@ export const buildQuotationDocx = (data: object, branding: TenantBranding | null
       lineRows.length ? lineRows : [row('See attached specification', '—')],
     ),
     heading('Technical Specification', primary),
-    fullWidthTable(techRows.length ? techRows : [row('See attached specification', '—')]),
+    fullWidthTable(
+      techRows.length ? techRows : [row('See attached specification', '—')],
+    ),
     heading('Totals', primary),
     // NEVER the margin. This file used to print `Margin (25.00%)` and the
     // pre-margin subtotal, so a salesperson who downloaded .docx instead of
@@ -85,7 +97,10 @@ export const buildQuotationDocx = (data: object, branding: TenantBranding | null
     // document mappers exist to prevent. The ex-VAT figure is derived the
     // same way the PDF derives it, from the total and the tax.
     fullWidthTable([
-      row('Total price', formatEtb(netOfTaxEtb(d.totalPriceEtb, d.taxAmountEtb))),
+      row(
+        'Total price',
+        formatEtb(netOfTaxEtb(d.totalPriceEtb, d.taxAmountEtb)),
+      ),
       row(`VAT (${d.taxPercent ?? '0'}%)`, formatEtb(d.taxAmountEtb)),
       grandRow('Grand total', formatEtb(d.totalPriceEtb)),
     ]),

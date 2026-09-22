@@ -27,7 +27,10 @@ export { formatEtb };
  * itemization, see ProformaTemplateData's own doc comment) differ.
  * Logo/stamp-omission reasoning is the same as buildQuotationDocx's.
  */
-export const buildProformaDocx = (data: object, branding: TenantBranding | null): Document => {
+export const buildProformaDocx = (
+  data: object,
+  branding: TenantBranding | null,
+): Document => {
   const d = data as ProformaTemplateData;
   const tech = d.technicalSpec ?? {};
   const primary = branding?.primaryColor ?? null;
@@ -46,12 +49,19 @@ export const buildProformaDocx = (data: object, branding: TenantBranding | null)
       ],
       primary,
     ),
+    // The project and the salesperson — not the customer (client decision,
+    // 2026-09-22; see ProformaTemplateData.customerName).
     partiesTable(branding, {
       label: 'Prepared For',
-      lines: [d.customerName, `Project: ${d.projectName}`],
+      lines: [
+        d.projectName,
+        ...(d.preparedByName ? [`Prepared by: ${d.preparedByName}`] : []),
+      ],
     }),
     heading('Technical Specification', primary),
-    fullWidthTable(techRows.length ? techRows : [row('See attached specification', '—')]),
+    fullWidthTable(
+      techRows.length ? techRows : [row('See attached specification', '—')],
+    ),
     heading('Pricing', primary),
     fullWidthTable([
       row('Supply and installation', formatEtb(d.subtotalEtb)),

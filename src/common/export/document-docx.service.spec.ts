@@ -22,7 +22,11 @@ const CENTRAL_DIRECTORY_SIGNATURE = 0x02014b50;
 
 const extractZipEntry = (buf: Buffer, entryName: string): Buffer => {
   let eocdOffset = -1;
-  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65_557); i--) {
+  for (
+    let i = buf.length - 22;
+    i >= Math.max(0, buf.length - 22 - 65_557);
+    i--
+  ) {
     if (buf.readUInt32LE(i) === EOCD_SIGNATURE) {
       eocdOffset = i;
       break;
@@ -50,11 +54,14 @@ const extractZipEntry = (buf: Buffer, entryName: string): Buffer => {
     if (name === entryName) {
       const localNameLength = buf.readUInt16LE(localHeaderOffset + 26);
       const localExtraLength = buf.readUInt16LE(localHeaderOffset + 28);
-      const dataStart = localHeaderOffset + 30 + localNameLength + localExtraLength;
+      const dataStart =
+        localHeaderOffset + 30 + localNameLength + localExtraLength;
       const compressed = buf.subarray(dataStart, dataStart + compressedSize);
       // 0 = stored (no compression), 8 = deflate — the only two methods a
       // ZIP writer like docx's realistically emits.
-      return compressionMethod === 0 ? Buffer.from(compressed) : zlib.inflateRawSync(compressed);
+      return compressionMethod === 0
+        ? Buffer.from(compressed)
+        : zlib.inflateRawSync(compressed);
     }
     offset += 46 + nameLength + extraLength + commentLength;
   }
@@ -85,8 +92,10 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
     notes: 'Includes 12-month warranty',
     technicalSpec: { capacityPersons: 13, motorPowerKw: '11.00' },
     pricingBreakdown: { baseCost: '80000.00', installationCost: '20000.00' },
-    projectName: 'Bole Twin Towers — Lift A',
-    customerName: 'ኤሌቬተር ማንሻ',
+    // The project is the party the document names now; Ethiopic here proves
+    // the DOCX carries it intact. The customer name is no longer printed.
+    projectName: 'ኤሌቬተር ማንሻ — Lift A',
+    customerName: 'Acme Real Estate PLC',
   };
 
   it('throws TemplateNotImplementedError for a template with no registered builder yet', async () => {
@@ -102,9 +111,9 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
 
   it('names the rejected template in the error message', async () => {
     const service = new DocumentDocxService();
-    await expect(service.renderDocumentDocx('contract', {}, branding)).rejects.toThrow(
-      /contract/,
-    );
+    await expect(
+      service.renderDocumentDocx('contract', {}, branding),
+    ).rejects.toThrow(/contract/);
   });
 
   it('renders a quotation as a real docx (PK zip) Buffer', async () => {
@@ -119,7 +128,9 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
     expect(buf.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
     expect(buf.length).toBeGreaterThan(1024);
 
-    const documentXml = extractZipEntry(buf, 'word/document.xml').toString('utf8');
+    const documentXml = extractZipEntry(buf, 'word/document.xml').toString(
+      'utf8',
+    );
     // The Amharic customer name and the total money string both made it
     // into the actual OOXML document part, not just the in-memory Document
     // object Packer.toBuffer() consumed. Grouped with a thousands separator
@@ -127,6 +138,7 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
     // money-format.ts's formatEtb with the PDF renderer, so the two
     // document formats show identical figures for the same quote.
     expect(documentXml).toContain('ኤሌቬተር ማንሻ');
+    expect(documentXml).not.toContain('Acme Real Estate PLC');
     expect(documentXml).toContain('143,750.00 ETB');
   });
 
@@ -134,7 +146,12 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
     const service = new DocumentDocxService();
     const buf = await service.renderDocumentDocx(
       'proforma',
-      { proformaNumber: 'PF-FY2026-27-0001', status: 'ISSUED', customerName: 'Test', projectName: 'Test' },
+      {
+        proformaNumber: 'PF-FY2026-27-0001',
+        status: 'ISSUED',
+        customerName: 'Test',
+        projectName: 'Test',
+      },
       branding,
     );
     expect(Buffer.isBuffer(buf)).toBe(true);

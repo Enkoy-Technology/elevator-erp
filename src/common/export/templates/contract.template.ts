@@ -63,6 +63,11 @@ export interface ContractTemplateData {
   issuedAt?: Date | string | null;
   /** Null while DRAFT — the whole point of the draft/signed split. */
   signedAt?: Date | string | null;
+  /**
+   * Kept for callers; NOT printed. On a contract the project name IS the
+   * client company (client decision 2026-09-22), so every party line,
+   * signature caption and cover line prints `projectName` instead.
+   */
   customerName: string;
   customer?: ContractPartyDetails | null;
   projectName: string;
@@ -207,12 +212,12 @@ export const buildContractHtml = (
   ])}
 
   <table class="parties"><tbody><tr>
-    ${party('The Client', d.customerName, d.customer)}
+    ${party('The Client', d.projectName, d.customer)}
     ${party('The Supplier', supplier, supplierDetails)}
   </tr></tbody></table>
 
   <div class="notes">
-    This Contract Agreement is made between ${esc(d.customerName)} (the
+    This Contract Agreement is made between ${esc(d.projectName)} (the
     "Client") and ${esc(supplier)} (the "Supplier") for the supply,
     installation, testing and commissioning of the equipment described
     below at ${esc(d.projectName)}${
@@ -350,7 +355,7 @@ ${
     : ''
 }
   ${renderSignaturePair(
-    { caption: 'For the Client', lines: [d.customerName] },
+    { caption: 'For the Client', lines: [d.projectName] },
     { caption: 'For the Supplier', lines: [branding?.name] },
   )}
   ${renderSignaturePair({ caption: 'Witness 1' }, { caption: 'Witness 2' })}`;
@@ -358,7 +363,7 @@ ${
   return renderLayout({
     branding,
     documentTitle: isDraft ? 'CONTRACT DRAFT' : 'CONTRACT',
-    coverLines: ['Between', d.customerName, 'and', supplier],
+    coverLines: ['Between', d.projectName, 'and', supplier],
     bodyHtml,
     footerNote: isDraft
       ? 'DRAFT for review — not binding until signed by both parties. Amounts in ETB.'

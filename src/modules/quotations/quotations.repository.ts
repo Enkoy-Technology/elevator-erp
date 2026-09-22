@@ -30,6 +30,7 @@ import {
   quotations,
   tenants,
   type QuoteStatus,
+  users,
 } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import { autoAdvanceProject } from '../projects/project-auto-advance';
@@ -182,6 +183,8 @@ export class QuotationsRepository {
           ...getTableColumns(quotations),
           customerName: customers.name,
           projectName: projects.name,
+          // The salesperson the document names as its author.
+          preparedByName: users.fullName,
         })
         .from(quotations)
         .leftJoin(
@@ -189,6 +192,13 @@ export class QuotationsRepository {
           and(
             eq(quotations.tenantId, customers.tenantId),
             eq(quotations.customerId, customers.id),
+          ),
+        )
+        .leftJoin(
+          users,
+          and(
+            eq(quotations.tenantId, users.tenantId),
+            eq(quotations.createdByUserId, users.id),
           ),
         )
         .leftJoin(

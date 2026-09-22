@@ -1,5 +1,8 @@
 import type { TenantBranding } from '../document-pdf.service';
-import { buildContractHtml, type ContractTemplateData } from './contract.template';
+import {
+  buildContractHtml,
+  type ContractTemplateData,
+} from './contract.template';
 
 const branding: TenantBranding = {
   name: 'Shining Star Electromechanical Works',
@@ -17,7 +20,11 @@ const draft: ContractTemplateData = {
   issuedAt: '2026-08-01',
   signedAt: null,
   customerName: 'Acme Real Estate PLC',
-  customer: { address: 'Lemi Kura, Addis Ababa', phone: '+251933030116', tin: '0067673517' },
+  customer: {
+    address: 'Lemi Kura, Addis Ababa',
+    phone: '+251933030116',
+    tin: '0067673517',
+  },
   projectName: 'Bole Twin Towers',
   contractValueEtb: '4500000.00',
   equipment: [
@@ -32,7 +39,11 @@ const draft: ContractTemplateData = {
     },
   ],
   instalments: [
-    { label: 'Advance on signing', amountEtb: '3600000.00', dueDate: '2026-08-14' },
+    {
+      label: 'Advance on signing',
+      amountEtb: '3600000.00',
+      dueDate: '2026-08-14',
+    },
     { label: 'On commissioning', amountEtb: '900000.00', dueDate: null },
   ],
   scopeOfWork: 'Brand: FUJI. Automatic Rescue Device included.',
@@ -71,20 +82,24 @@ describe('buildContractHtml', () => {
     expect(html).not.toContain('not binding');
   });
 
-  it('prints both parties with address, phone and TIN', () => {
+  it('prints the project as the client party, with address, phone and TIN', () => {
     const html = buildContractHtml(signed, branding);
     expect(html).toContain('Shining Star Electromechanical Works');
     expect(html).toContain('TIN: 0071116691');
-    expect(html).toContain('Acme Real Estate PLC');
+    expect(html).toContain('<div class="party-name">Bole Twin Towers</div>');
+    expect(html).toContain('made between Bole Twin Towers (the');
     expect(html).toContain('TIN: 0067673517');
     expect(html).toContain('Tel: +251933030116');
-    expect(html).toContain('Bole Twin Towers');
+    // The project name IS the client company; the customer name is never printed.
+    expect(html).not.toContain('Acme Real Estate PLC');
   });
 
   it('prints the equipment from the proforma lines and the scope text', () => {
     const html = buildContractHtml(signed, branding);
     expect(html).toContain('630KG - 8 persons / Speed 1.0m/s / G+7');
-    expect(html).toContain('WITH MR / Gearless / Simplex / 380V AC 50HZ 3-phase');
+    expect(html).toContain(
+      'WITH MR / Gearless / Simplex / 380V AC 50HZ 3-phase',
+    );
     expect(html).toContain('Automatic Rescue Device included.');
   });
 
@@ -136,7 +151,9 @@ describe('buildContractHtml', () => {
       branding,
     );
     expect(html).toContain('As specified in the attached proforma.');
-    expect(html).toContain('Payment falls due as stated in the attached proforma.');
+    expect(html).toContain(
+      'Payment falls due as stated in the attached proforma.',
+    );
     expect(html).toContain('Warranty: as stated in the attached proforma');
     expect(html).toContain('the competent court');
     expect(html).not.toContain('guarantee cheque');
@@ -156,7 +173,7 @@ describe('buildContractHtml', () => {
     const html = buildContractHtml(
       {
         ...signed,
-        customerName: '<img src=x onerror=alert(1)>',
+        projectName: '<img src=x onerror=alert(1)>',
         disputeForum: '<script>x</script>',
       },
       branding,
@@ -173,7 +190,11 @@ describe('contract instalment table — Due column', () => {
       {
         ...signed,
         instalments: [
-          { label: 'Advance on signing', amountEtb: '3600000.00', dueDate: null },
+          {
+            label: 'Advance on signing',
+            amountEtb: '3600000.00',
+            dueDate: null,
+          },
           { label: 'On commissioning', amountEtb: '900000.00', dueDate: null },
         ],
       },

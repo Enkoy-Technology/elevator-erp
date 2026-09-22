@@ -1,5 +1,8 @@
 import type { TenantBranding } from '../document-pdf.service';
-import { buildProformaHtml, type ProformaTemplateData } from './proforma.template';
+import {
+  buildProformaHtml,
+  type ProformaTemplateData,
+} from './proforma.template';
 
 // formatEtb() itself is covered in money-format.spec.ts — see
 // quotation.template.spec.ts's own note. This file only needs to prove
@@ -28,15 +31,28 @@ describe('buildProformaHtml', () => {
     technicalSpec: { capacityPersons: 13, motorPowerKw: '11.00' },
     projectName: 'Bole Twin Towers — Lift A',
     customerName: 'Acme Real Estate PLC',
+    preparedByName: 'Abebe Kebede',
   };
 
-  it('titles the document PROFORMA INVOICE and embeds the proforma number, names, and totals', () => {
+  it('titles the document PROFORMA INVOICE and embeds the proforma number, project, salesperson, and totals', () => {
     const html = buildProformaHtml(data, branding);
     expect(html).toContain('PROFORMA INVOICE');
     expect(html).toContain('PF-FY2026-27-0001');
-    expect(html).toContain('Acme Real Estate PLC');
     expect(html).toContain('Bole Twin Towers');
+    expect(html).toContain('Prepared by');
+    expect(html).toContain('Abebe Kebede');
     expect(html).toContain('115,000.00 ETB');
+  });
+
+  it('never prints the customer name — the project and the salesperson name the document', () => {
+    const html = buildProformaHtml(data, branding);
+    expect(html).not.toContain('Acme Real Estate PLC');
+  });
+
+  it('omits the Prepared by line when nobody is recorded as the author', () => {
+    const html = buildProformaHtml({ ...data, preparedByName: null }, branding);
+    expect(html).not.toContain('Prepared by');
+    expect(html).toContain('Bole Twin Towers');
   });
 
   it('renders the branding letterhead', () => {
@@ -61,10 +77,15 @@ describe('buildProformaHtml', () => {
     expect(html).not.toContain('Base equipment');
   });
 
-  it('escapes HTML in the customer name', () => {
-    const html = buildProformaHtml({ ...data, customerName: '<b>x</b>' }, branding);
+  it('escapes HTML in the project and salesperson names', () => {
+    const html = buildProformaHtml(
+      { ...data, projectName: '<b>x</b>', preparedByName: '<i>y</i>' },
+      branding,
+    );
     expect(html).not.toContain('<b>x</b>');
+    expect(html).not.toContain('<i>y</i>');
     expect(html).toContain('&lt;b&gt;x&lt;/b&gt;');
+    expect(html).toContain('&lt;i&gt;y&lt;/i&gt;');
   });
 
   it('falls back to the default primary colour when branding is absent', () => {

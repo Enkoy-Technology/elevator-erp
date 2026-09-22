@@ -57,8 +57,10 @@ describe('DocumentPdfService PDF smoke test (real Chromium)', () => {
     const data: QuotationTemplateData = {
       quoteNumber: 'QTN-2026-SMOKE',
       status: 'DRAFT',
-      customerName: 'ኤሌቬተር ማንሻ', // "elevator lift" in Amharic — the PDF smoke payload
-      projectName: 'Smoke Test Tower',
+      // The quotation names the project, not the customer, so the Ethiopic
+      // rides on the project name here ("elevator lift" in Amharic).
+      customerName: 'Smoke Customer PLC',
+      projectName: 'ኤሌቬተር ማንሻ — Smoke Test Tower',
       totalPriceEtb: '143750.00',
       subtotalEtb: '100000.00',
       marginPercent: '25.00',
@@ -100,8 +102,9 @@ describe('DocumentPdfService PDF smoke test (real Chromium)', () => {
       status: 'APPROVED',
       createdAt: new Date('2026-08-01T00:00:00.000Z'),
       validUntil: new Date('2026-09-30T00:00:00.000Z'),
-      customerName: 'ኤሌቬተር ማንሻ',
-      projectName: 'Smoke Test Tower',
+      customerName: 'Smoke Customer PLC',
+      preparedByName: 'Abebe Kebede',
+      projectName: 'ኤሌቬተር ማንሻ — Smoke Test Tower',
       technicalSpec: null,
       pricingBreakdown: null,
       subtotalEtb: '100000.00',
@@ -267,6 +270,7 @@ describe('DocumentPdfService PDF smoke test (real Chromium)', () => {
       createdAt: new Date('2026-08-20T00:00:00.000Z'),
       validUntil: new Date('2026-08-25T00:00:00.000Z'),
       customerName: 'Rodas Real Estate PLC',
+      preparedByName: 'Abebe Kebede',
       projectName: 'Rodas Tower — Bole',
       technicalSpec: line.technicalSpec,
       pricingBreakdown: null,

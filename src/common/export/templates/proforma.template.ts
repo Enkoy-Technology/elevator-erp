@@ -38,8 +38,15 @@ export interface ProformaTemplateData
   status: string;
   issuedAt?: Date | string | null;
   validUntil?: Date | string | null;
+  /**
+   * Not printed since the client's 2026-09-22 decision: the document names
+   * the project and the salesperson who prepared it, not the customer. Kept
+   * because callers still pass it.
+   */
   customerName: string;
   projectName: string;
+  /** The salesperson named as the author; omitted from the page when null. */
+  preparedByName?: string | null;
   technicalSpec?: Record<string, unknown> | null;
   subtotalEtb?: string | null;
   taxPercent?: string | null;
@@ -82,6 +89,7 @@ export const buildProformaHtml = (
     ],
     customerName: d.customerName,
     projectName: d.projectName,
+    preparedByName: d.preparedByName,
     lines,
     exVatTotalEtb,
     vatPercent: d.taxPercent ?? null,
@@ -97,7 +105,11 @@ export const buildProformaHtml = (
   return renderLayout({
     branding,
     documentTitle: 'PROFORMA INVOICE',
-    coverLines: ['Prepared for', d.customerName, 'Project', d.projectName],
+    coverLines: [
+      'Project',
+      d.projectName,
+      ...(d.preparedByName ? ['Prepared by', d.preparedByName] : []),
+    ],
     bodyHtml,
     footerNote: `This proforma invoice is valid until ${fmtDate(d.validUntil)}. Prices in ETB.`,
   });

@@ -14,7 +14,8 @@ import { fmtDate } from './quotation.template';
  * leftover from the parked installation module, which this document is not
  * part of: it certifies that a CONTRACT was completed and handed over.
  */
-export const COMPLETION_CERTIFICATE_TEMPLATE: DocumentTemplate = 'completion-certificate';
+export const COMPLETION_CERTIFICATE_TEMPLATE: DocumentTemplate =
+  'completion-certificate';
 
 /**
  * Shape `DocumentPdfService.renderDocumentPdf('completion-certificate',
@@ -26,7 +27,9 @@ export const COMPLETION_CERTIFICATE_TEMPLATE: DocumentTemplate = 'completion-cer
  */
 export interface CompletionCertificateTemplateData {
   contractNumber: string;
+  /** On the contract family the project name IS the client company (2026-09-22). */
   projectName: string;
+  /** Still supplied by callers; no longer printed — the project name names the party. */
   customerName: string;
   /** What the company contracted to deliver, copied off the contract. */
   scopeOfWork?: string | null;
@@ -67,13 +70,13 @@ export const buildCompletionCertificateHtml = (
 
   ${renderParties(branding, {
     label: 'Issued To',
-    lines: [d.customerName, `Project: ${d.projectName}`],
+    lines: [d.projectName],
   })}
 
   <div class="notes">
     This certifies that the works described below, under contract
     ${esc(d.contractNumber)}, were completed and handed over to
-    ${esc(d.customerName)} on ${esc(d.handedOverAt)}, and were accepted on the
+    ${esc(d.projectName)} on ${esc(d.handedOverAt)}, and were accepted on the
     customer's behalf by ${esc(d.handedOverToName)}.
   </div>
 
@@ -84,7 +87,7 @@ export const buildCompletionCertificateHtml = (
     { caption: 'For the contractor', lines: [branding?.name] },
     {
       caption: 'For the customer',
-      lines: [`${d.handedOverToName}, ${d.customerName}`],
+      lines: [`${d.handedOverToName}, ${d.projectName}`],
     },
   )}`;
 

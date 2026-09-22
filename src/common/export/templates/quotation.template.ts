@@ -36,8 +36,11 @@ export interface QuotationTemplateData
   status: string;
   createdAt?: Date | string | null;
   validUntil?: Date | string | null;
+  /** Not printed since 2026-09-22 (see CommercialDocumentOptions). */
   customerName: string;
   projectName: string;
+  /** The salesperson who prepared it; the "Prepared by" lines are dropped when null. */
+  preparedByName?: string | null;
   technicalSpec?: Record<string, unknown> | null;
   pricingBreakdown?: Record<string, string> | null;
   subtotalEtb?: string | null;
@@ -158,6 +161,7 @@ export const buildQuotationHtml = (
     ],
     customerName: d.customerName,
     projectName: d.projectName,
+    preparedByName: d.preparedByName,
     lines,
     exVatTotalEtb,
     vatPercent: d.taxPercent ?? null,
@@ -173,7 +177,11 @@ export const buildQuotationHtml = (
   return renderLayout({
     branding,
     documentTitle: 'QUOTATION',
-    coverLines: ['Prepared for', d.customerName, 'Project', d.projectName],
+    coverLines: [
+      'Project',
+      d.projectName,
+      ...(d.preparedByName ? ['Prepared by', d.preparedByName] : []),
+    ],
     bodyHtml,
     footerNote: `This quotation is valid until ${fmtDate(d.validUntil)}. Prices in ETB.`,
   });

@@ -111,10 +111,11 @@ describe('QuotationsRepository.findByIdForDocument — joined customer/project n
     const result = await repo.findByIdForDocument(TENANT_ID, QUOTE_ID);
 
     expect(result).toEqual(joinedRow);
-    // Two leftJoins: customers, then projects — each with a real ON
-    // condition passed (not a bare table with an implicit/missing join
-    // predicate, which drizzle would otherwise happily accept as a cross join).
-    expect(leftJoins).toHaveLength(2);
+    // Three leftJoins: customers, users (the salesperson's name), then
+    // projects — each with a real ON condition passed (not a bare table
+    // with an implicit/missing join predicate, which drizzle would
+    // otherwise happily accept as a cross join).
+    expect(leftJoins).toHaveLength(3);
     for (const { condition } of leftJoins) {
       expect(condition).toBeDefined();
     }
@@ -258,7 +259,8 @@ describe('QuotationsRepository.listLines — the pre-lines backward-compatibilit
   const repoFor = (tx: unknown) =>
     new QuotationsRepository({
       withTenant: jest.fn(
-        async (_tenantId: string, fn: (t: unknown) => Promise<unknown>) => fn(tx),
+        async (_tenantId: string, fn: (t: unknown) => Promise<unknown>) =>
+          fn(tx),
       ),
     } as never);
 
@@ -299,7 +301,10 @@ describe('QuotationsRepository.listLines — the pre-lines backward-compatibilit
   });
 
   it('returns the real rows untouched once a quotation has them', async () => {
-    const persisted = [{ id: 'L1', sequence: 1 }, { id: 'L2', sequence: 2 }];
+    const persisted = [
+      { id: 'L1', sequence: 1 },
+      { id: 'L2', sequence: 2 },
+    ];
     await expect(
       repoFor(makeTx([legacy], persisted)).listLines(TENANT_ID, QUOTE_ID),
     ).resolves.toEqual(persisted);
@@ -384,7 +389,8 @@ describe('QuotationsRepository.addLine — materializing a pre-lines quotation',
     };
     const repo = new QuotationsRepository({
       withTenant: jest.fn(
-        async (_tenantId: string, fn: (t: unknown) => Promise<unknown>) => fn(tx),
+        async (_tenantId: string, fn: (t: unknown) => Promise<unknown>) =>
+          fn(tx),
       ),
     } as never);
 

@@ -10,6 +10,7 @@ const row: QuotationDocumentRow = {
   createdAt: new Date('2026-07-22T00:00:00.000Z'),
   validUntil: new Date('2026-09-30T00:00:00.000Z'),
   customerName: 'Acme Real Estate PLC',
+  preparedByName: 'Abebe Kebede',
   projectName: 'Bole Twin Towers — Lift A',
   technicalSpec: { capacityPersons: 13 },
   pricingBreakdown: { baseCost: '80000.00' },
@@ -30,6 +31,7 @@ describe('quotationDocumentData', () => {
       createdAt: row.createdAt,
       validUntil: row.validUntil,
       customerName: 'Acme Real Estate PLC',
+      preparedByName: 'Abebe Kebede',
       projectName: 'Bole Twin Towers — Lift A',
       technicalSpec: { capacityPersons: 13 },
       pricingBreakdown: { baseCost: '80000.00' },
@@ -70,7 +72,8 @@ describe('quotationDocumentData', () => {
         {
           sequence: 1,
           productType: 'PASSENGER',
-          specSummary: '800KG -10persons / Speed 1.5m/s / B+G+M+10 / 13 floors/13 doors',
+          specSummary:
+            '800KG -10persons / Speed 1.5m/s / B+G+M+10 / 13 floors/13 doors',
           quantity: 1,
           unitPriceEtb: '6813043.48',
           lineTotalEtb: '6813043.48',
@@ -89,7 +92,11 @@ describe('quotationDocumentData', () => {
         },
       ],
       paymentTerms: [
-        { percent: '50.00', label: 'Payable upon signing', triggerEvent: 'SIGNING' },
+        {
+          percent: '50.00',
+          label: 'Payable upon signing',
+          triggerEvent: 'SIGNING',
+        },
       ],
     });
 
@@ -97,7 +104,11 @@ describe('quotationDocumentData', () => {
     // Not stored on the line, so it falls back to the derivation.
     expect(data.lines?.[0]?.floorDisplaySummary).toBe('B+G+M+10');
     expect(data.paymentTerms).toEqual([
-      { percent: '50.00', label: 'Payable upon signing', triggerEvent: 'SIGNING' },
+      {
+        percent: '50.00',
+        label: 'Payable upon signing',
+        triggerEvent: 'SIGNING',
+      },
     ]);
     expect(data.referenceCode).toBe('Rodas FUJIHD-E02');
     expect(data.warrantyPartsMonths).toBe(60);
@@ -108,8 +119,17 @@ describe('quotationDocumentData', () => {
 
   it('passes the tenant appendix content straight through to the template', () => {
     const data = quotationDocumentData(row, {
-      boilerplate: [{ title: 'Scope of supply', body: 'One passenger elevator.' }],
-      components: [{ sequence: 1, componentName: 'Traction machine', brand: 'Montanari', remark: 'Italy' }],
+      boilerplate: [
+        { title: 'Scope of supply', body: 'One passenger elevator.' },
+      ],
+      components: [
+        {
+          sequence: 1,
+          componentName: 'Traction machine',
+          brand: 'Montanari',
+          remark: 'Italy',
+        },
+      ],
     });
     expect(data.boilerplate).toHaveLength(1);
     expect(data.components?.[0]?.brand).toBe('Montanari');
@@ -123,7 +143,11 @@ describe('quotationDocumentData', () => {
   });
 
   it('falls back to an empty string when the customer/project join found no name', () => {
-    const data = quotationDocumentData({ ...row, customerName: null, projectName: null });
+    const data = quotationDocumentData({
+      ...row,
+      customerName: null,
+      projectName: null,
+    });
     expect(data.customerName).toBe('');
     expect(data.projectName).toBe('');
   });
@@ -131,7 +155,12 @@ describe('quotationDocumentData', () => {
 
 describe('QUOTATION_DOCUMENT_COLUMNS', () => {
   it('marks every money column with format: "money" and every date column with format: "date"', () => {
-    const money = ['subtotalEtb', 'marginAmountEtb', 'taxAmountEtb', 'totalPriceEtb'];
+    const money = [
+      'subtotalEtb',
+      'marginAmountEtb',
+      'taxAmountEtb',
+      'totalPriceEtb',
+    ];
     const dates = ['createdAt', 'validUntil'];
     for (const col of QUOTATION_DOCUMENT_COLUMNS) {
       if (money.includes(col.key)) {

@@ -10,6 +10,7 @@ const row: ProformaDocumentRow = {
   issuedAt: new Date('2026-08-01T00:00:00.000Z'),
   validUntil: '2026-09-30',
   customerName: 'Acme Real Estate PLC',
+  preparedByName: 'Abebe Kebede',
   projectName: 'Bole Twin Towers — Lift A',
   technicalSpec: { capacityPersons: 13 },
   subtotalEtb: '100000.00',
@@ -25,6 +26,7 @@ describe('proformaDocumentData', () => {
       issuedAt: row.issuedAt,
       validUntil: '2026-09-30',
       customerName: 'Acme Real Estate PLC',
+      preparedByName: 'Abebe Kebede',
       projectName: 'Bole Twin Towers — Lift A',
       technicalSpec: { capacityPersons: 13 },
       subtotalEtb: '100000.00',
@@ -101,7 +103,12 @@ describe('proformaDocumentData', () => {
     const data = proformaDocumentData(row, {
       boilerplate: [{ title: 'Standards', body: 'EN 81-20 / EN 81-50' }],
       components: [
-        { sequence: 1, componentName: 'Traction machine', brand: 'FUJI', remark: null },
+        {
+          sequence: 1,
+          componentName: 'Traction machine',
+          brand: 'FUJI',
+          remark: null,
+        },
       ],
     });
     expect(data.boilerplate).toHaveLength(1);
@@ -115,7 +122,11 @@ describe('proformaDocumentData', () => {
   });
 
   it('falls back to an empty string when the customer/project join found no name', () => {
-    const data = proformaDocumentData({ ...row, customerName: null, projectName: null });
+    const data = proformaDocumentData({
+      ...row,
+      customerName: null,
+      projectName: null,
+    });
     expect(data.customerName).toBe('');
     expect(data.projectName).toBe('');
   });

@@ -1,6 +1,9 @@
 import type { TenantBranding } from '../document-pdf.service';
 import { monthsLabel, type DocumentLineData } from './commercial-document';
-import { buildQuotationHtml, type QuotationTemplateData } from './quotation.template';
+import {
+  buildQuotationHtml,
+  type QuotationTemplateData,
+} from './quotation.template';
 
 /**
  * The client's real proforma, as a test. Their document prices BACKWARD from
@@ -21,7 +24,8 @@ const branding: TenantBranding = {
 const line: DocumentLineData = {
   sequence: 1,
   productType: 'PASSENGER',
-  specSummary: '800KG -10persons / Speed 1.5m/s / B+G+M+10 / 13 floors/13 doors',
+  specSummary:
+    '800KG -10persons / Speed 1.5m/s / B+G+M+10 / 13 floors/13 doors',
   quantity: 1,
   unitPriceEtb: '6813043.48',
   lineTotalEtb: '6813043.48',
@@ -75,8 +79,16 @@ const data: QuotationTemplateData = {
   deliveryDays: 150,
   lines: [line],
   paymentTerms: [
-    { percent: '50.00', label: 'Payable upon signing', triggerEvent: 'SIGNING' },
-    { percent: '30.00', label: 'Payable on shipping documents', triggerEvent: null },
+    {
+      percent: '50.00',
+      label: 'Payable upon signing',
+      triggerEvent: 'SIGNING',
+    },
+    {
+      percent: '30.00',
+      label: 'Payable on shipping documents',
+      triggerEvent: null,
+    },
   ],
   technicalSpec: line.technicalSpec,
 };
@@ -165,7 +177,12 @@ describe('the client-shaped commercial document', () => {
     const html = buildQuotationHtml(
       {
         ...data,
-        lines: [{ ...line, technicalSpec: { ...line.technicalSpec, shaftDepthMm: null } }],
+        lines: [
+          {
+            ...line,
+            technicalSpec: { ...line.technicalSpec, shaftDepthMm: null },
+          },
+        ],
       },
       branding,
     );
@@ -176,7 +193,10 @@ describe('the client-shaped commercial document', () => {
     const html = buildQuotationHtml(
       {
         ...data,
-        lines: [line, { ...line, sequence: 2, productType: 'CAR_PLATFORM_LIFT' }],
+        lines: [
+          line,
+          { ...line, sequence: 2, productType: 'CAR_PLATFORM_LIFT' },
+        ],
       },
       branding,
     );
@@ -201,7 +221,13 @@ describe('the client-shaped commercial document', () => {
     expect(html).toContain('150 working days');
 
     const bare = buildQuotationHtml(
-      { ...data, validityDays: null, warrantyPartsMonths: null, warrantyFreeServiceMonths: null, deliveryDays: null },
+      {
+        ...data,
+        validityDays: null,
+        warrantyPartsMonths: null,
+        warrantyFreeServiceMonths: null,
+        deliveryDays: null,
+      },
       branding,
     );
     expect(bare).not.toContain('Offer validity');
@@ -217,13 +243,22 @@ describe('the client-shaped commercial document', () => {
           { title: 'Exclusions', body: 'Civil work.' },
         ],
         components: [
-          { sequence: 1, componentName: 'Traction machine', brand: 'Montanari', remark: 'Italy' },
+          {
+            sequence: 1,
+            componentName: 'Traction machine',
+            brand: 'Montanari',
+            remark: 'Italy',
+          },
         ],
       },
       branding,
     );
-    expect(html.indexOf('Scope of supply')).toBeLessThan(html.indexOf('Exclusions'));
-    expect(html.indexOf('Exclusions')).toBeLessThan(html.indexOf('Component Specification'));
+    expect(html.indexOf('Scope of supply')).toBeLessThan(
+      html.indexOf('Exclusions'),
+    );
+    expect(html.indexOf('Exclusions')).toBeLessThan(
+      html.indexOf('Component Specification'),
+    );
     expect(html).toContain('Montanari');
   });
 
@@ -232,7 +267,14 @@ describe('the client-shaped commercial document', () => {
       {
         ...data,
         boilerplate: [{ title: '<script>x</script>', body: '<b>bold</b>' }],
-        components: [{ sequence: 1, componentName: '<img src=x>', brand: null, remark: null }],
+        components: [
+          {
+            sequence: 1,
+            componentName: '<img src=x>',
+            brand: null,
+            remark: null,
+          },
+        ],
       },
       branding,
     );
@@ -242,13 +284,29 @@ describe('the client-shaped commercial document', () => {
     expect(html).toContain('&lt;script&gt;');
   });
 
+  it('names the project and the salesperson in the parties block, never the customer', () => {
+    const html = buildQuotationHtml(
+      { ...data, preparedByName: 'Abebe Kebede' },
+      branding,
+    );
+    expect(html).toContain('Rodas Tower — Bole');
+    expect(html).toContain('Prepared by: Abebe Kebede');
+    expect(html).not.toContain('Rodas Real Estate PLC');
+
+    // No salesperson recorded: the line is dropped, not printed blank.
+    const anonymous = buildQuotationHtml(
+      { ...data, preparedByName: null },
+      branding,
+    );
+    expect(anonymous).not.toContain('Prepared by');
+  });
+
   it('prints the single line a quotation with no line items implies', () => {
     const html = buildQuotationHtml({ ...data, lines: [] }, branding);
     expect(html).toContain('No of Units');
     expect(html).toContain('>6,813,043.48</td>'); // the unit price IS the ex-VAT total
     expect(html).toContain('Passenger elevator');
   });
-
 });
 
 describe('monthsLabel', () => {

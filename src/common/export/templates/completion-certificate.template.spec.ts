@@ -17,23 +17,33 @@ const data: CompletionCertificateTemplateData = {
   contractNumber: 'CNT-FY2026-27-0001',
   projectName: 'Bole Twin Towers',
   customerName: 'Acme Real Estate PLC',
-  scopeOfWork: 'Supply and installation of one 8-person passenger elevator.\nSix stops.',
+  scopeOfWork:
+    'Supply and installation of one 8-person passenger elevator.\nSix stops.',
   handedOverAt: '2026-08-14',
   handedOverToName: 'Abebe Kebede',
   handoverNotes: 'Keys and logbook handed to building management.',
 };
 
 describe('buildCompletionCertificateHtml', () => {
-  it('prints the contract and project reference, the customer, the handover and who accepted it', () => {
+  it('prints the contract and project reference, the handover and who accepted it', () => {
     const html = buildCompletionCertificateHtml(data, branding);
     expect(html).toContain('COMPLETION CERTIFICATE');
     expect(html).toContain('CNT-FY2026-27-0001');
     expect(html).toContain('Bole Twin Towers');
-    expect(html).toContain('Acme Real Estate PLC');
     expect(html).toContain('2026-08-14');
     expect(html).toContain('Abebe Kebede');
     expect(html).toContain('Six stops.');
     expect(html).toContain('Keys and logbook handed to building management.');
+  });
+
+  // On the contract family the project name IS the client company
+  // (2026-09-22): it names the party in the clause and under the signature
+  // line, and the customer name is not printed anywhere.
+  it('names the project as the party and never prints the customer name', () => {
+    const html = buildCompletionCertificateHtml(data, branding);
+    expect(html).toContain('handed over to\n    Bole Twin Towers on');
+    expect(html).toContain('Abebe Kebede, Bole Twin Towers');
+    expect(html).not.toContain('Acme Real Estate PLC');
   });
 
   it('prints a two-party signature block for wet signing', () => {

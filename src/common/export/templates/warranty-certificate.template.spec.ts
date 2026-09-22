@@ -22,21 +22,36 @@ describe('warrantyWindow', () => {
         handedOverAt: '2026-08-14',
         signedAt: '2025-03-01',
       }),
-    ).toEqual({ basis: 'HANDOVER', startsOn: '2026-08-14', expiresOn: '2027-08-14' });
+    ).toEqual({
+      basis: 'HANDOVER',
+      startsOn: '2026-08-14',
+      expiresOn: '2027-08-14',
+    });
   });
 
   it('falls back to the signed date when a contract closed with no handover', () => {
     expect(
-      warrantyWindow({ warrantyMonths: 6, handedOverAt: null, signedAt: '2026-01-31' }),
-    ).toEqual({ basis: 'SIGNING', startsOn: '2026-01-31', expiresOn: '2026-07-31' });
+      warrantyWindow({
+        warrantyMonths: 6,
+        handedOverAt: null,
+        signedAt: '2026-01-31',
+      }),
+    ).toEqual({
+      basis: 'SIGNING',
+      startsOn: '2026-01-31',
+      expiresOn: '2026-07-31',
+    });
   });
 
   // The whole reason this isn't a bare setUTCMonth: overflowing into the
   // next month hands the customer days of cover nobody agreed to.
   it('clamps to the last valid day instead of overflowing a short month', () => {
     expect(
-      warrantyWindow({ warrantyMonths: 1, handedOverAt: '2026-01-31', signedAt: null })
-        ?.expiresOn,
+      warrantyWindow({
+        warrantyMonths: 1,
+        handedOverAt: '2026-01-31',
+        signedAt: null,
+      })?.expiresOn,
     ).toBe('2026-02-28');
   });
 
@@ -52,7 +67,11 @@ describe('warrantyWindow', () => {
 
   it('returns null when there is neither a handover nor a signing date to run from', () => {
     expect(
-      warrantyWindow({ warrantyMonths: 12, handedOverAt: null, signedAt: null }),
+      warrantyWindow({
+        warrantyMonths: 12,
+        handedOverAt: null,
+        signedAt: null,
+      }),
     ).toBeNull();
   });
 });
@@ -62,20 +81,36 @@ describe('buildWarrantyCertificateHtml', () => {
     contractNumber: 'CNT-FY2026-27-0001',
     customerName: 'Acme Real Estate PLC',
     projectName: 'Bole Twin Towers',
-    technicalSpec: { productType: 'PASSENGER', capacityPersons: 8, motorPowerKw: 7.5 },
+    technicalSpec: {
+      productType: 'PASSENGER',
+      capacityPersons: 8,
+      motorPowerKw: 7.5,
+    },
     warrantyMonths: 24,
-    warranty: { basis: 'HANDOVER', startsOn: '2026-08-14', expiresOn: '2028-08-14' },
+    warranty: {
+      basis: 'HANDOVER',
+      startsOn: '2026-08-14',
+      expiresOn: '2028-08-14',
+    },
   };
 
   it('prints the reference plate, the equipment and both computed dates', () => {
     const html = buildWarrantyCertificateHtml(data, branding);
     expect(html).toContain('WARRANTY CERTIFICATE');
     expect(html).toContain('CNT-FY2026-27-0001');
-    expect(html).toContain('Acme Real Estate PLC');
+    expect(html).toContain('Bole Twin Towers');
     expect(html).toContain('24 months');
     expect(html).toContain('2026-08-14');
     expect(html).toContain('2028-08-14');
     expect(html).toContain('Passenger elevator');
+  });
+
+  // On the contract family the project name IS the client company
+  // (2026-09-22), so the customer name is not printed anywhere.
+  it('issues to the project, never the customer name', () => {
+    const html = buildWarrantyCertificateHtml(data, branding);
+    expect(html).toContain('Issued To');
+    expect(html).not.toContain('Acme Real Estate PLC');
   });
 
   it('states which date the period ran from', () => {
@@ -92,7 +127,7 @@ describe('buildWarrantyCertificateHtml', () => {
 
   it('escapes customer-controlled text', () => {
     const html = buildWarrantyCertificateHtml(
-      { ...data, customerName: '<script>alert(1)</script>' },
+      { ...data, projectName: '<script>alert(1)</script>' },
       branding,
     );
     expect(html).not.toContain('<script>alert(1)</script>');

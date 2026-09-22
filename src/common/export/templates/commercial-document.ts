@@ -125,8 +125,14 @@ export interface CommercialDocumentOptions extends DocumentAppendixContent {
   branding: TenantBranding | null;
   /** The identity plate — the two documents label their number differently. */
   plate: readonly ReferenceField[];
+  /**
+   * Not printed since 2026-09-22: the document names the project and the
+   * salesperson, not the customer. Kept so callers still type-check.
+   */
   customerName: string;
   projectName: string;
+  /** Full name of the salesperson who prepared it; omitted from the page when null. */
+  preparedByName?: string | null;
   lines: readonly DocumentLineData[];
   /**
    * The three figures of the client's totals block. NOTHING about the
@@ -413,7 +419,10 @@ export const renderCommercialBody = (o: CommercialDocumentOptions): string => `
 
   ${renderParties(o.branding, {
     label: 'Prepared For',
-    lines: [o.customerName, `Project: ${o.projectName}`],
+    lines: [
+      o.projectName,
+      ...(o.preparedByName ? [`Prepared by: ${o.preparedByName}`] : []),
+    ],
   })}
 
   <h2>Offer</h2>

@@ -32,6 +32,8 @@ export interface PaymentScheduleTemplateData {
   /** Signature date once signed, issue date while still a draft. */
   contractDate?: Date | string | null;
   status: string;
+  /** Still supplied by callers; not printed — on contract documents the
+   *  project name IS the client company (client decision, 2026-09-22). */
   customerName: string;
   projectName: string;
   contractValueEtb?: string | null;
@@ -79,7 +81,7 @@ export const buildPaymentScheduleHtml = (
 
   ${renderParties(branding, {
     label: 'Payable By',
-    lines: [d.customerName, `Project: ${d.projectName}`],
+    lines: [d.projectName],
   })}
 
   <h2>Instalments</h2>
@@ -101,13 +103,13 @@ export const buildPaymentScheduleHtml = (
 
   ${renderSignaturePair(
     { caption: 'For the contractor', lines: [branding?.name] },
-    { caption: 'For the customer', lines: [d.customerName] },
+    { caption: 'For the customer', lines: [d.projectName] },
   )}`;
 
   return renderLayout({
     branding,
     documentTitle: 'PAYMENT SCHEDULE',
-    coverLines: ['For', d.customerName, 'Project', d.projectName],
+    coverLines: ['For', d.projectName],
     bodyHtml,
     footerNote: `This payment schedule forms part of contract ${d.contractNumber}. Amounts in ETB.`,
   });

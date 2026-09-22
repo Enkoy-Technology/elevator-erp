@@ -23,9 +23,24 @@ describe('buildPaymentScheduleHtml', () => {
     contractValueEtb: '1000000.00',
     scheduledTotalEtb: '1000000.00',
     instalments: [
-      { sequence: 1, label: 'Advance on signing', dueDate: '2026-09-05', amountEtb: '200000.00' },
-      { sequence: 2, label: 'On delivery to site', dueDate: '2026-11-30', amountEtb: '700000.00' },
-      { sequence: 3, label: 'Retention, on handover', dueDate: null, amountEtb: '100000.00' },
+      {
+        sequence: 1,
+        label: 'Advance on signing',
+        dueDate: '2026-09-05',
+        amountEtb: '200000.00',
+      },
+      {
+        sequence: 2,
+        label: 'On delivery to site',
+        dueDate: '2026-11-30',
+        amountEtb: '700000.00',
+      },
+      {
+        sequence: 3,
+        label: 'Retention, on handover',
+        dueDate: null,
+        amountEtb: '100000.00',
+      },
     ],
   };
 
@@ -35,11 +50,13 @@ describe('buildPaymentScheduleHtml', () => {
     expect(html).toContain('Shining Star Electromechanical Works');
   });
 
-  it('references the contract and the customer', () => {
+  it('references the contract and names the project as the paying party', () => {
     const html = buildPaymentScheduleHtml(data, branding);
     expect(html).toContain('CNT-FY2026-27-0001');
-    expect(html).toContain('Acme Real Estate PLC');
     expect(html).toContain('Bole Tower');
+    // On contract documents the project name is the client company; the
+    // separate customer name is no longer printed anywhere.
+    expect(html).not.toContain('Acme Real Estate PLC');
   });
 
   it('numbers each instalment and prints its label, due date and amount', () => {
@@ -76,16 +93,26 @@ describe('buildPaymentScheduleHtml', () => {
   });
 
   it('renders a placeholder when no instalments have been agreed', () => {
-    const html = buildPaymentScheduleHtml({ ...data, instalments: [] }, branding);
+    const html = buildPaymentScheduleHtml(
+      { ...data, instalments: [] },
+      branding,
+    );
     expect(html).toContain('No instalments have been agreed');
   });
 
-  it('escapes HTML in the customer name and instalment labels', () => {
+  it('escapes HTML in the project name and instalment labels', () => {
     const html = buildPaymentScheduleHtml(
       {
         ...data,
-        customerName: '<script>x</script>',
-        instalments: [{ sequence: 1, label: '<b>y</b>', dueDate: null, amountEtb: '1000000.00' }],
+        projectName: '<script>x</script>',
+        instalments: [
+          {
+            sequence: 1,
+            label: '<b>y</b>',
+            dueDate: null,
+            amountEtb: '1000000.00',
+          },
+        ],
       },
       branding,
     );

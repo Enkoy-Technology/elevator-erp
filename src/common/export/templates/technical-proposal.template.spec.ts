@@ -19,6 +19,7 @@ const passenger: TechnicalProposalTemplateData = {
   createdAt: new Date('2026-08-01T00:00:00.000Z'),
   customerName: 'Acme Real Estate PLC',
   projectName: 'Bole Twin Towers — Lift A',
+  preparedByName: 'Sara Tesfaye',
   calcInput: {
     productType: 'PASSENGER',
     capacityKg: 1000,
@@ -76,13 +77,23 @@ const flat: TechnicalProposalTemplateData = {
 };
 
 describe('buildTechnicalProposalHtml', () => {
-  it('titles the document and plates the quotation, project, and customer', () => {
+  it('titles the document and plates the quotation, project, and salesperson — never the customer', () => {
     const html = buildTechnicalProposalHtml(passenger, branding);
     expect(html).toContain('TECHNICAL PROPOSAL');
     expect(html).toContain('QTN-2026-ABCD1234');
     expect(html).toContain('Bole Twin Towers');
-    expect(html).toContain('Acme Real Estate PLC');
+    expect(html).toContain('Prepared by: Sara Tesfaye');
     expect(html).toContain('Enkoy Elevators PLC');
+    expect(html).not.toContain('Acme Real Estate PLC');
+  });
+
+  it('omits the Prepared by line when nobody is recorded', () => {
+    const html = buildTechnicalProposalHtml(
+      { ...passenger, preparedByName: null },
+      branding,
+    );
+    expect(html).not.toContain('Prepared by');
+    expect(html).toContain('Bole Twin Towers');
   });
 
   it('prints the four specs the quotation PDF omits', () => {
@@ -129,8 +140,11 @@ describe('buildTechnicalProposalHtml', () => {
     expect(html).not.toContain('Guide rail');
   });
 
-  it('escapes HTML in the customer name', () => {
-    const html = buildTechnicalProposalHtml({ ...passenger, customerName: '<b>x</b>' }, branding);
+  it('escapes HTML in the project name', () => {
+    const html = buildTechnicalProposalHtml(
+      { ...passenger, projectName: '<b>x</b>' },
+      branding,
+    );
     expect(html).not.toContain('<b>x</b>');
     expect(html).toContain('&lt;b&gt;x&lt;/b&gt;');
   });

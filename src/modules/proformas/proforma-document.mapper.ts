@@ -12,8 +12,8 @@ import { describeFloorPlan } from '../../common/floor-plan';
  * The fields proformaDocumentData/PROFORMA_DOCUMENT_COLUMNS actually read —
  * narrower than ProformaRecord (which ProformasRepository.
  * findByIdForDocument's joined row structurally satisfies, plus
- * customerName/projectName). Kept narrow so this type doubles as the
- * minimal fixture shape a test needs.
+ * customerName/preparedByName/projectName). Kept narrow so this type
+ * doubles as the minimal fixture shape a test needs.
  *
  * No marginPercent/marginAmountEtb/taxPercent here: the customer-facing
  * document does not disclose the client's markup (decision (a)) and the VAT
@@ -51,6 +51,8 @@ export interface ProformaDocumentRow {
   issuedAt: Date;
   validUntil: string | null;
   customerName: string | null;
+  /** Full name of the user who created (quotation) or issued (proforma) it. */
+  preparedByName: string | null;
   projectName: string | null;
   technicalSpec: unknown;
   subtotalEtb: string;
@@ -78,7 +80,8 @@ const documentLine = (line: ProformaLineRow): DocumentLineData => {
     unitPriceEtb: line.unitPriceEtb,
     lineTotalEtb: line.lineTotalEtb,
     machineRoomLabel: line.machineRoomLabel,
-    floorDisplaySummary: line.floorDisplaySummary ?? plan?.displaySummary ?? null,
+    floorDisplaySummary:
+      line.floorDisplaySummary ?? plan?.displaySummary ?? null,
     floorsStopsDoors: plan?.floorsStopsDoors ?? null,
     doorHeightMm: line.doorHeightMm,
     ropingRatio: line.ropingRatio,
@@ -106,6 +109,7 @@ export const proformaDocumentData = (
   issuedAt: p.issuedAt,
   validUntil: p.validUntil,
   customerName: p.customerName ?? '',
+  preparedByName: p.preparedByName,
   projectName: p.projectName ?? '',
   technicalSpec: p.technicalSpec as Record<string, unknown> | null,
   subtotalEtb: p.subtotalEtb,

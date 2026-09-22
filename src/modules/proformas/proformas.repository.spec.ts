@@ -419,13 +419,14 @@ describe("ProformasRepository.findByIdForDocument — joined display names + the
     const result = await repo.findByIdForDocument(TENANT_ID, PROFORMA_ID);
 
     expect(result).toEqual(joinedRow);
-    // Two leftJoins: customers, projects — each with a real ON condition
-    // passed (not an implicit/missing join predicate, which drizzle would
-    // otherwise happily accept as a cross join). No quotations join: that
+    // Three leftJoins: customers, users (the issuer's name), projects — each
+    // with a real ON condition passed (not an implicit/missing join
+    // predicate, which drizzle would otherwise happily accept as a cross
+    // join). No quotations join: that
     // table can keep changing after conversion, so technicalSpec/
     // pricingBreakdown come from the proforma's own snapshot columns
     // instead (getTableColumns(proformas), see issue()'s doc comment).
-    expect(leftJoins).toHaveLength(2);
+    expect(leftJoins).toHaveLength(3);
     for (const { condition } of leftJoins) {
       expect(condition).toBeDefined();
     }

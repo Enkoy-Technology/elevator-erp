@@ -36,6 +36,7 @@ import {
   tenants,
   type ProformaPaymentTerm,
   type ProformaStatus,
+  users,
 } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import { autoAdvanceProject } from '../projects/project-auto-advance';
@@ -185,6 +186,8 @@ export class ProformasRepository {
           ...getTableColumns(proformas),
           customerName: customers.name,
           projectName: projects.name,
+          // The salesperson the document names as its author.
+          preparedByName: users.fullName,
         })
         .from(proformas)
         .leftJoin(
@@ -192,6 +195,13 @@ export class ProformasRepository {
           and(
             eq(proformas.tenantId, customers.tenantId),
             eq(proformas.customerId, customers.id),
+          ),
+        )
+        .leftJoin(
+          users,
+          and(
+            eq(proformas.tenantId, users.tenantId),
+            eq(proformas.issuedByUserId, users.id),
           ),
         )
         .leftJoin(

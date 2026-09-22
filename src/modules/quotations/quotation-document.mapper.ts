@@ -60,7 +60,8 @@ const documentLine = (line: QuotationLineRow): DocumentLineData => {
     unitPriceEtb: line.unitPriceEtb,
     lineTotalEtb: line.lineTotalEtb,
     machineRoomLabel: line.machineRoomLabel,
-    floorDisplaySummary: line.floorDisplaySummary ?? plan?.displaySummary ?? null,
+    floorDisplaySummary:
+      line.floorDisplaySummary ?? plan?.displaySummary ?? null,
     floorsStopsDoors: plan?.floorsStopsDoors ?? null,
     doorHeightMm: line.doorHeightMm,
     ropingRatio: line.ropingRatio,
@@ -92,6 +93,8 @@ export interface QuotationDocumentRow {
   createdAt: Date;
   validUntil: Date | null;
   customerName: string | null;
+  /** Full name of the user who created (quotation) or issued (proforma) it. */
+  preparedByName: string | null;
   projectName: string | null;
   technicalSpec: unknown;
   /**
@@ -151,6 +154,7 @@ export const quotationDocumentData = (
   validUntil: q.validUntil,
   customerName: q.customerName ?? '',
   projectName: q.projectName ?? '',
+  preparedByName: q.preparedByName,
   technicalSpec: q.technicalSpec as Record<string, unknown> | null,
   pricingBreakdown: q.pricingBreakdown as Record<string, string> | null,
   subtotalEtb: q.subtotalEtb,
@@ -190,6 +194,7 @@ export const technicalProposalData = (
   createdAt: q.createdAt,
   customerName: q.customerName ?? '',
   projectName: q.projectName ?? '',
+  preparedByName: q.preparedByName,
   technicalSpec: q.technicalSpec as Record<string, unknown> | null,
   calcInput: (q.calcInput ?? null) as Record<string, unknown> | null,
 });

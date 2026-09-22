@@ -1,8 +1,29 @@
-import { Document } from 'docx';
+import { Document, Packer } from 'docx';
+import zlib from 'node:zlib';
 
 import type { TenantBranding } from '../document-pdf.service';
 import { buildQuotationDocx } from './quotation.docx-template';
 import type { QuotationTemplateData } from './quotation.template';
+
+/**
+ * The body XML out of the packed docx. `docx` writes each entry's real size
+ * in its local header (no data descriptor), so the entry can be read straight
+ * off the first occurrence of its name — the same zlib trick
+ * document-docx.service.spec.ts uses, without the central-directory walk.
+ */
+const documentXml = async (doc: Document): Promise<string> => {
+  const buf = await Packer.toBuffer(doc);
+  const name = 'word/document.xml';
+  const header = buf.indexOf(name) - 30;
+  if (buf.readUInt32LE(header) !== 0x04034b50) {
+    throw new Error('zip local header not found for word/document.xml');
+  }
+  const size = buf.readUInt32LE(header + 18);
+  const start = header + 30 + name.length + buf.readUInt16LE(header + 28);
+  return zlib
+    .inflateRawSync(buf.subarray(start, start + size))
+    .toString('utf8');
+};
 
 describe('buildQuotationDocx', () => {
   const branding: TenantBranding = {
@@ -30,10 +51,18 @@ describe('buildQuotationDocx', () => {
     pricingBreakdown: { baseCost: '80000.00', installationCost: '20000.00' },
     projectName: 'Bole Twin Towers — Lift A',
     customerName: 'Acme Real Estate PLC',
+    preparedByName: 'Abebe Kebede',
   };
 
   it('returns a docx Document instance', () => {
     expect(buildQuotationDocx(data, branding)).toBeInstanceOf(Document);
+  });
+
+  it('names the project and the salesperson, never the customer', async () => {
+    const xml = await documentXml(buildQuotationDocx(data, branding));
+    expect(xml).toContain('Bole Twin Towers — Lift A');
+    expect(xml).toContain('Prepared by: Abebe Kebede');
+    expect(xml).not.toContain('Acme Real Estate PLC');
   });
 
   it('does not throw when branding is absent (falls back to the default accent colour)', () => {
