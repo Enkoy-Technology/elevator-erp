@@ -8,6 +8,7 @@ import { Check, Eye, Pencil, Trash2, X } from 'lucide-react';
 
 import { btnPrimary, btnSecondary } from '@/components/form-styles';
 import { DataTable } from '@/components/data-table';
+import { Dialog } from '@/components/dialog';
 import { ListToolbar, RowAction, SearchField } from '@/components/list-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
@@ -397,56 +398,134 @@ export default function SurveysPage() {
             </p>
           ) : null}
 
-          {sheet && (preview || importBusy) ? (
-            <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
-              <p className="text-sm font-medium text-slate-900">{sheet.name}</p>
-              {preview ? (
-                <>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {preview.totalRows} row
-                    {preview.totalRows === 1 ? '' : 's'} read,{' '}
-                    {importable(preview)} will be imported,{' '}
-                    {preview.errors.length} skipped.
-                  </p>
-                  {preview.errors.length > 0 ? (
-                    <ul className="mt-2 space-y-1 text-sm text-red-700">
-                      {preview.errors.map((refused) => (
-                        <li key={refused.row}>
-                          Row {refused.row}: {refused.message}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                    <button
-                      type="button"
-                      onClick={() => void runImport(sheet, true)}
-                      disabled={importBusy || importable(preview) === 0}
-                      className={`${btnPrimary} w-full sm:w-auto`}
-                    >
-                      {importBusy
-                        ? 'Importing…'
-                        : `Import ${importable(preview)} survey${
-                            importable(preview) === 1 ? '' : 's'
-                          }`}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={closeImport}
-                      disabled={importBusy}
-                      className={`${btnSecondary} w-full sm:w-auto`}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <p className="mt-1 text-sm text-slate-500">
-                  Reading the sheet…
+          <Dialog
+            open={sheet !== null && (preview !== null || importBusy)}
+            wide
+            title="Import site surveys"
+            description={
+              sheet
+                ? `${sheet.name} — nothing is saved until you press Import.`
+                : undefined
+            }
+            onClose={closeImport}
+            footer={
+              preview ? (
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={closeImport}
+                    disabled={importBusy}
+                    className={`${btnSecondary} w-full sm:w-auto`}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => sheet && void runImport(sheet, true)}
+                    disabled={importBusy || importable(preview) === 0}
+                    className={`${btnPrimary} w-full sm:w-auto`}
+                  >
+                    {importBusy
+                      ? 'Importing…'
+                      : `Import ${importable(preview)} survey${
+                          importable(preview) === 1 ? '' : 's'
+                        }`}
+                  </button>
+                </div>
+              ) : null
+            }
+          >
+            {preview ? (
+              <>
+                <p className="text-sm text-slate-600">
+                  {preview.totalRows} row{preview.totalRows === 1 ? '' : 's'}{' '}
+                  read, {importable(preview)} will be imported,{' '}
+                  {preview.errors.length} skipped.
+                  {preview.collectedByName
+                    ? ` Collected by ${preview.collectedByName}.`
+                    : ''}
                 </p>
-              )}
-            </div>
-          ) : null}
+
+                {preview.rows.length > 0 ? (
+                  <div className="mt-3 max-h-[50vh] overflow-auto rounded-lg border border-slate-200">
+                    <table className="w-full min-w-[46rem] text-left text-sm">
+                      <thead className="sticky top-0 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th className="px-3 py-2 font-semibold">Row</th>
+                          <th className="px-3 py-2 font-semibold">Project</th>
+                          <th className="px-3 py-2 font-semibold">Address</th>
+                          <th className="px-3 py-2 font-semibold">Contact</th>
+                          <th className="px-3 py-2 font-semibold">
+                            Shaft W × D
+                          </th>
+                          <th className="px-3 py-2 font-semibold">Floors</th>
+                          <th className="px-3 py-2 font-semibold">OH</th>
+                          <th className="px-3 py-2 font-semibold">
+                            Machine room
+                          </th>
+                          <th className="px-3 py-2 font-semibold">Units</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {preview.rows.map((row) => (
+                          <tr key={row.rowNumber}>
+                            <td className="px-3 py-2 tabular-nums text-slate-400">
+                              {row.rowNumber}
+                            </td>
+                            <td className="px-3 py-2 font-medium text-slate-900">
+                              {row.projectName}
+                            </td>
+                            <td className="px-3 py-2 text-slate-600">
+                              {dash(row.address ?? null)}
+                            </td>
+                            <td className="px-3 py-2 text-slate-600">
+                              {dash(row.contactName ?? null)}
+                              {row.contactPhone ? (
+                                <span className="block text-xs text-slate-400">
+                                  {row.contactPhone}
+                                </span>
+                              ) : null}
+                            </td>
+                            <td className="px-3 py-2 tabular-nums text-slate-600">
+                              {row.shaftWidthCm || row.shaftDepthCm
+                                ? `${dash(row.shaftWidthCm ?? null)} × ${dash(
+                                    row.shaftDepthCm ?? null,
+                                  )}`
+                                : '—'}
+                            </td>
+                            <td className="px-3 py-2 text-slate-600">
+                              {dash(row.floors ?? null)}
+                            </td>
+                            <td className="px-3 py-2 tabular-nums text-slate-600">
+                              {dash(row.overheadCm ?? null)}
+                            </td>
+                            <td className="px-3 py-2 text-slate-600">
+                              {dash(row.machineRoom ?? null)}
+                            </td>
+                            <td className="px-3 py-2 tabular-nums text-slate-600">
+                              {dash(row.units ?? null)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
+
+                {preview.errors.length > 0 ? (
+                  <ul className="mt-3 space-y-1 text-sm text-red-700">
+                    {preview.errors.map((refused) => (
+                      <li key={refused.row}>
+                        Row {refused.row}: {refused.message}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">Reading the sheet…</p>
+            )}
+          </Dialog>
 
           <DataTable
             caption="Site surveys"

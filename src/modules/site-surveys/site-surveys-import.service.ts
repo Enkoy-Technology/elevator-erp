@@ -277,6 +277,7 @@ export class SiteSurveysImportService {
     if (!commit) {
       return {
         dryRun: true,
+        collectedByName,
         totalRows,
         imported: 0,
         skipped: errors.length,
@@ -294,6 +295,7 @@ export class SiteSurveysImportService {
     await this.notifyManagers(user, created, payloads, collectedByName);
     return {
       dryRun: false,
+      collectedByName,
       totalRows,
       imported: created,
       skipped: errors.length,

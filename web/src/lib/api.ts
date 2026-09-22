@@ -1034,13 +1034,33 @@ export interface SiteSurveyImportError {
   message: string;
 }
 
+/** One row of the sheet as the importer read it, shown before anything is saved. */
+export interface SiteSurveyImportRow {
+  /** The row number as Excel shows it, so a person can find it on the sheet. */
+  rowNumber: number;
+  projectName: string;
+  address?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  shaftWidthCm?: number | null;
+  shaftDepthCm?: number | null;
+  floors?: string | null;
+  overheadCm?: number | null;
+  machineRoom?: string | null;
+  units?: number | null;
+}
+
 export interface SiteSurveyImportResult {
   dryRun: boolean;
+  /** Who the sheet says collected it, from the line above its header. */
+  collectedByName: string | null;
   /** Data rows read off the sheet, errors included. */
   totalRows: number;
   /** Rows actually written. Always 0 on a dry run. */
   imported: number;
   errors: SiteSurveyImportError[];
+  /** What will be created — exactly what the dialog shows before importing. */
+  rows: SiteSurveyImportRow[];
 }
 
 /**

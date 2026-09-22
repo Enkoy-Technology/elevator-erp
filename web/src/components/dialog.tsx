@@ -14,6 +14,12 @@ interface DialogProps {
   children: ReactNode;
   /** Actions, right-aligned: Cancel and the one thing the dialog asks about. */
   footer?: ReactNode;
+  /**
+   * Room for content that is a table rather than a sentence — an import
+   * preview, say. The default stays narrow: a question is easier to answer
+   * when it does not sprawl.
+   */
+  wide?: boolean;
 }
 
 /**
@@ -28,6 +34,7 @@ export const Dialog = ({
   onClose,
   children,
   footer,
+  wide = false,
 }: DialogProps) => {
   useEffect(() => {
     if (!open) {
@@ -64,7 +71,7 @@ export const Dialog = ({
       role="presentation"
     >
       <div
-        className="w-full max-w-md rounded-xl bg-white shadow-2xl shadow-slate-900/20"
+        className={`w-full ${wide ? 'max-w-4xl' : 'max-w-md'} rounded-xl bg-white shadow-2xl shadow-slate-900/20`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="dialog-title"

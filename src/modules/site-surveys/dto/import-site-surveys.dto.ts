@@ -69,6 +69,15 @@ export class ImportSiteSurveysResultDto {
   })
   skipped!: number;
 
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'Betelhem tesfa and nafyad',
+    description:
+      'Who the sheet says collected it, from the line above its header. Null when the sheet does not say.',
+  })
+  collectedByName!: string | null;
+
   @ApiProperty({ type: [ImportSiteSurveyErrorDto] })
   errors!: ImportSiteSurveyErrorDto[];
 
