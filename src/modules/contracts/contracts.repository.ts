@@ -14,6 +14,10 @@ import { todayIso } from '../../common/business-time';
 import { WorkflowTransitionError } from '../../common/exceptions';
 import { computeFiscalYear } from '../../common/fiscal-year';
 import {
+  DEFAULT_DELAY_PENALTY_PERCENT_PER_DAY,
+  DEFAULT_WARRANTY_MONTHS,
+} from '../../common/contract-defaults';
+import {
   normalizePageQuery,
   toPaginatedResult,
   type PaginatedResult,
@@ -296,9 +300,11 @@ export class ContractsRepository {
           // The deal's own terms, so the draft prints what was offered rather
           // than "as stated in the attached proforma". Still editable while
           // DRAFT, like every other clause.
-          warrantyMonths: proforma.warrantyPartsMonths,
+          warrantyMonths:
+            proforma.warrantyPartsMonths ?? DEFAULT_WARRANTY_MONTHS,
           freeMaintenanceMonths: proforma.warrantyFreeServiceMonths,
           deliveryWorkingDays: proforma.deliveryDays,
+          delayPenaltyPercentPerDay: DEFAULT_DELAY_PENALTY_PERCENT_PER_DAY,
           issuedByUserId: userId,
           status: 'DRAFT',
         })

@@ -9,6 +9,7 @@ import { canTransitionProjectStatus } from './project-status';
 import {
   ProjectsRepository,
   type ProjectExportRow,
+  type ProjectListRow,
   type ProjectInsert,
   type ProjectRecord,
 } from './projects.repository';
@@ -26,7 +27,7 @@ export class ProjectsService {
       page?: string;
       pageSize?: string;
     },
-  ): Promise<PaginatedResult<ProjectRecord>> {
+  ): Promise<PaginatedResult<ProjectListRow>> {
     return this.projectsRepository.list(user.tenantId, options);
   }
 

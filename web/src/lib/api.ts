@@ -618,6 +618,20 @@ export interface Project {
   createdAt: string;
   updatedAt: string;
   statusChangedAt: string;
+  /**
+   * List rows only: signing date + the contract's delivery working days,
+   * and the working days (Mon–Fri) left to it (negative once passed). Null
+   * until a contract with a delivery period is signed, and again after
+   * handover or once the project is completed or cancelled.
+   */
+  deliveryDueDate?: string | null;
+  deliveryDaysLeft?: number | null;
+  /**
+   * The delay penalty run up so far: the contract's percent of its total
+   * (0.002% unless it states its own) for every calendar day past the due
+   * date. Null unless the delivery is overdue.
+   */
+  deliveryPenaltyEtb?: string | null;
 }
 
 export interface CreateProjectPayload {
@@ -1262,6 +1276,44 @@ export interface Technician {
 /** Active technical staff, for the assignment pickers. Open to every maintenance role. */
 export const listTechnicians = (): Promise<Technician[]> =>
   apiFetch<Technician[]>('/maintenance/technicians');
+
+export type ReminderTestOutcome =
+  | 'WOULD_SEND'
+  | 'SENT'
+  | 'NO_TECHNICIAN'
+  | 'NO_PHONE'
+  | 'NO_CONSENT'
+  | 'INVALID_PHONE'
+  | 'FAILED';
+
+export interface ReminderTestResult {
+  /** The date the test pretended it was. */
+  asOf: string;
+  windowDays: number;
+  /** False for a preview: nothing was queued. */
+  sent: boolean;
+  reminders: {
+    contractId: string;
+    assetName: string;
+    customerName: string;
+    nextServiceAt: string;
+    technicianName: string | null;
+    sms: ReminderTestOutcome;
+  }[];
+}
+
+/**
+ * Run the maintenance reminder as if today were `asOf`. `send` false is a
+ * preview; true sends a marked test to each assigned technician.
+ */
+export const simulateMaintenanceReminders = (
+  asOf: string,
+  send: boolean,
+): Promise<ReminderTestResult> =>
+  apiFetch<ReminderTestResult>('/maintenance/reminders/simulate', {
+    method: 'POST',
+    body: JSON.stringify({ asOf, send }),
+  });
 
 export const getMaintenanceContract = (
   id: string,

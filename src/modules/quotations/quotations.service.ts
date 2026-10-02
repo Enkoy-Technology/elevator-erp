@@ -12,6 +12,7 @@ import {
   WorkflowTransitionError,
 } from '../../common/exceptions';
 import type { PaginatedResult } from '../../common/pagination';
+import { DEFAULT_WARRANTY_MONTHS } from '../../common/contract-defaults';
 import type { QuoteStatus } from '../../database/schema';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { D, money } from '../elevator-calc/calc-math';
@@ -136,6 +137,7 @@ export class QuotationsService {
       customerId: project.customerId,
       quoteNumber: buildQuoteNumber(id),
       status: 'DRAFT',
+      warrantyPartsMonths: DEFAULT_WARRANTY_MONTHS,
       version: 1,
       calcInput: resolvedInput,
       technicalSpec: result.technical,

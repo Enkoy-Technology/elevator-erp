@@ -73,6 +73,9 @@ const CSV_HEADERS = [
   'City',
   'Stage',
   'Value (ETB)',
+  'Delivery due',
+  'Working days left',
+  'Delay penalty (ETB)',
 ] as const;
 
 export default function ProjectsPage() {
@@ -219,6 +222,9 @@ export default function ProjectsPage() {
           project.siteCity ?? '',
           STATUS_LABEL[project.status],
           project.contractAmountEtb ?? project.quotedAmountEtb ?? '',
+          project.deliveryDueDate ?? '',
+          project.deliveryDaysLeft ?? '',
+          project.deliveryPenaltyEtb ?? '',
         ]),
       ]),
     );
@@ -271,6 +277,44 @@ export default function ProjectsPage() {
         const amount =
           row.original.contractAmountEtb ?? row.original.quotedAmountEtb;
         return amount ? formatEtb(amount) : '\u2014';
+      },
+    },
+    {
+      id: 'delivery',
+      header: 'Delivery',
+      accessorFn: (project) => project.deliveryDaysLeft ?? undefined,
+      enableSorting: true,
+      // Most urgent first on the first click; blanks always at the bottom.
+      sortDescFirst: false,
+      sortUndefined: 'last',
+      cell: ({ row }) => {
+        const days = row.original.deliveryDaysLeft;
+        if (days === null || days === undefined) {
+          return '\u2014';
+        }
+        const plural = `working ${Math.abs(days) === 1 ? 'day' : 'days'}`;
+        return (
+          <span
+            className="inline-flex flex-col items-start gap-1"
+            title={`Due ${row.original.deliveryDueDate ?? ''}`}
+          >
+            <StatusPill
+              label={
+                days > 0
+                  ? `${days} ${plural} left`
+                  : days === 0
+                    ? 'Due today'
+                    : `${-days} ${plural} overdue`
+              }
+              tone={days < 0 ? 'danger' : days <= 14 ? 'warn' : 'neutral'}
+            />
+            {row.original.deliveryPenaltyEtb ? (
+              <span className="whitespace-nowrap text-xs text-red-700">
+                Penalty {formatEtb(row.original.deliveryPenaltyEtb)}
+              </span>
+            ) : null}
+          </span>
+        );
       },
     },
     updatedColumn<Project>((row) => row.updatedAt),
