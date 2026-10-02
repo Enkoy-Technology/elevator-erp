@@ -31,6 +31,7 @@ export interface DueMaintenanceReminder {
    * `contract.technicianId` being truthy.
    */
   technicianId: string | null;
+  technicianName: string | null;
   technicianPhone: string | null;
   technicianSmsConsentAt: Date | null;
   technicianSmsConsentRevokedAt: Date | null;
@@ -83,10 +84,13 @@ export class MaintenanceReminderRepository {
    * Active, non-deleted contracts whose nextServiceAt falls within the
    * tenant's reminder window — today through today+windowDays INCLUSIVE
    * (task-2 brief §2.2's boundary test: exactly windowDays out is included,
-   * windowDays+1 is not).
+   * windowDays+1 is not). `today` is only ever passed by the reminder test
+   * (see MaintenanceReminderService.simulate), to ask "what would go out
+   * if it were this date?".
    */
   async listDueContracts(
     tenantId: string,
+    today: string = todayIso(),
   ): Promise<{ windowDays: number; contracts: DueMaintenanceReminder[] }> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       const [tenant] = await tx
@@ -96,7 +100,7 @@ export class MaintenanceReminderRepository {
         .limit(1);
       const windowDays = tenant?.windowDays ?? 3;
 
-      const { from, to } = reminderWindowBounds(todayIso(), windowDays);
+      const { from, to } = reminderWindowBounds(today, windowDays);
 
       const rows = await tx
         .select({
@@ -118,6 +122,7 @@ export class MaintenanceReminderRepository {
           customerPhone: customers.phone,
           customerSmsConsentAt: customers.smsConsentAt,
           customerSmsConsentRevokedAt: customers.smsConsentRevokedAt,
+          technicianName: users.fullName,
           technicianPhone: users.phone,
           technicianSmsConsentAt: users.smsConsentAt,
           technicianSmsConsentRevokedAt: users.smsConsentRevokedAt,
@@ -170,6 +175,7 @@ export class MaintenanceReminderRepository {
         customerSmsConsentAt: row.customerSmsConsentAt,
         customerSmsConsentRevokedAt: row.customerSmsConsentRevokedAt,
         technicianId: row.technicianId,
+        technicianName: row.technicianName,
         technicianPhone: row.technicianPhone,
         technicianSmsConsentAt: row.technicianSmsConsentAt,
         technicianSmsConsentRevokedAt: row.technicianSmsConsentRevokedAt,

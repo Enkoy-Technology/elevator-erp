@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
+  IsDateString,
   IsEnum,
   IsInt,
   IsOptional,
@@ -294,4 +295,26 @@ export class UpdateBreakdownDto {
   @IsString()
   @MaxLength(2000)
   description?: string | null;
+}
+
+/** The reminder test: pretend it is `asOf` and see (or send) what goes out. */
+export class SimulateRemindersDto {
+  @ApiProperty({
+    example: '2026-11-01',
+    description: 'The date to pretend it is, YYYY-MM-DD',
+  })
+  // This century only: a far-future year overflows the window arithmetic.
+  @Matches(/^20\d{2}-\d{2}-\d{2}$/)
+  // strict: a real calendar date, so 2026-02-30 is a 400 and not a crash.
+  @IsDateString({ strict: true })
+  asOf!: string;
+
+  @ApiPropertyOptional({
+    default: false,
+    description:
+      'false previews who would be reminded; true sends a marked test message to each assigned technician',
+  })
+  @IsOptional()
+  @IsBoolean()
+  send?: boolean;
 }

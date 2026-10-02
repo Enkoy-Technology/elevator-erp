@@ -22,6 +22,7 @@ const contract = (
   customerSmsConsentAt: new Date('2026-01-01T00:00:00Z'),
   customerSmsConsentRevokedAt: null,
   technicianId: 'tech-1',
+  technicianName: 'Abebe Technician',
   technicianPhone: '+251949922604',
   technicianSmsConsentAt: new Date('2026-01-01T00:00:00Z'),
   technicianSmsConsentRevokedAt: null,
@@ -379,5 +380,51 @@ describe('MaintenanceReminderService — SMS/in-app independence (task-2 §2.4)'
     await expect(service.runDailyReminders()).resolves.toBeUndefined();
 
     expect(outboxService.enqueue).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('MaintenanceReminderService.simulate — the reminder test', () => {
+  it('previews as of the given date and queues nothing', async () => {
+    const { service, remindersRepository, outboxService, notificationsRepository } =
+      build([contract(), contract({ contractId: 'contract-2', technicianSmsConsentAt: null })]);
+
+    const result = await service.simulate(TENANT_ID, 'manager-1', '2026-08-09', false);
+
+    expect(remindersRepository.listDueContracts).toHaveBeenCalledWith(TENANT_ID, '2026-08-09');
+    expect(result.reminders.map((r) => r.sms)).toEqual(['WOULD_SEND', 'NO_CONSENT']);
+    expect(outboxService.enqueue).not.toHaveBeenCalled();
+    expect(notificationsRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('sends a marked test to the technician only, on a key the real reminder does not use', async () => {
+    const { service, remindersRepository, outboxService, notificationsRepository } =
+      build([contract()]);
+
+    const result = await service.simulate(TENANT_ID, 'manager-1', '2026-08-09', true);
+
+    expect(result.reminders[0]?.sms).toBe('SENT');
+    expect(outboxService.enqueue).toHaveBeenCalledTimes(1);
+    const [sms] = outboxService.enqueue.mock.calls[0] as unknown as [
+      { body: string; dedupeKey: string; createdByUserId: string },
+    ];
+    expect(sms.createdByUserId).toBe('manager-1');
+    expect(sms.body).toContain('TEST');
+    expect(sms.dedupeKey).toMatch(/^maint-test:contract-1:2026-08-11:\d+$/);
+    expect(smsCallsFor(outboxService, ':customer')).toHaveLength(0);
+    expect(notificationsRepository.create).toHaveBeenCalledTimes(1);
+    // The last-run counters on Settings belong to the real sweep.
+    expect(remindersRepository.recordRunResult).not.toHaveBeenCalled();
+  });
+
+  it('says why nothing can go: no technician, no phone', async () => {
+    const { service, outboxService } = build([
+      contract({ technicianId: null, technicianName: null }),
+      contract({ contractId: 'contract-2', technicianPhone: null }),
+    ]);
+
+    const result = await service.simulate(TENANT_ID, 'manager-1', '2026-08-09', true);
+
+    expect(result.reminders.map((r) => r.sms)).toEqual(['NO_TECHNICIAN', 'NO_PHONE']);
+    expect(outboxService.enqueue).not.toHaveBeenCalled();
   });
 });

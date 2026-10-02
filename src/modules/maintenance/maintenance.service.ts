@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common';
 
 import type { MaintenanceAgreementTemplateData } from '../../common/export/templates/maintenance-agreement.template';
 import type { MaintenanceReportTemplateData } from '../../common/export/templates/maintenance-report.template';
-import { MaintenanceReminderService } from '../reminders/maintenance-reminders.service';
+import {
+  MaintenanceReminderService,
+  type ReminderTestResult,
+} from '../reminders/maintenance-reminders.service';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type {
   BreakdownStatus,
@@ -209,6 +212,20 @@ export class MaintenanceService {
     );
     await this.notifyIfAssigned(user.tenantId, breakdown);
     return breakdown;
+  }
+
+  /** The reminder test on the Maintenance page — see MaintenanceReminderService.simulate. */
+  simulateReminders(
+    user: AuthenticatedUser,
+    asOf: string,
+    send: boolean,
+  ): Promise<ReminderTestResult> {
+    return this.maintenanceReminderService.simulate(
+      user.tenantId,
+      user.userId,
+      asOf,
+      send,
+    );
   }
 
   /**

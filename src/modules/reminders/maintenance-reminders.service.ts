@@ -28,6 +28,36 @@ const errorMessage = (err: unknown): string =>
 type EnqueueOutcome = 'SENT' | 'NO_CONSENT' | 'INVALID_PHONE' | 'FAILED';
 
 /**
+ * What the reminder test found for one contract's assigned technician.
+ * WOULD_SEND is the preview's answer; the others are why nothing went (or
+ * would go), in the words the Maintenance page shows.
+ */
+export type ReminderTestOutcome =
+  | 'WOULD_SEND'
+  | 'SENT'
+  | 'NO_TECHNICIAN'
+  | 'NO_PHONE'
+  | 'NO_CONSENT'
+  | 'INVALID_PHONE'
+  | 'FAILED';
+
+export interface ReminderTestResult {
+  /** The date the test pretended it was. */
+  asOf: string;
+  windowDays: number;
+  /** False for a preview: nothing was queued. */
+  sent: boolean;
+  reminders: {
+    contractId: string;
+    assetName: string;
+    customerName: string;
+    nextServiceAt: string;
+    technicianName: string | null;
+    sms: ReminderTestOutcome;
+  }[];
+}
+
+/**
  * Task-2 brief §2.2: the daily per-tenant maintenance-contract reminder cron,
  * plus the immediate (not cron) breakdown-assignment notification called by
  * MaintenanceService right after a breakdown gets an assignedUserId. Both
@@ -187,6 +217,85 @@ export class MaintenanceReminderService implements OnApplicationBootstrap {
         `${invalidPhoneSkipped} skipped for invalid phone ` +
         `(window ${windowDays}d, ${contracts.length} contracts due)`,
     );
+  }
+
+  /**
+   * The reminder test on the Maintenance page: run the daily sweep as if
+   * today were `asOf`, for the assigned technician only — a customer must
+   * never get a message about a visit nobody has scheduled. With `send`
+   * false it is a preview and queues nothing.
+   *
+   * A sent test goes down the real path (outbox, consent gate, provider),
+   * which is the point, but is kept apart from the real reminder: the body
+   * says it is a test, and the dedupe key and link path are its own, so it
+   * can be repeated and can never swallow the reminder that is really due
+   * on that date. It does not touch the last-run counters either.
+   * ponytail: repeatable by design, so the only brake on a manager
+   * re-sending is the route's own @Throttle (per IP, per instance); bucket
+   * the dedupe key by time if that ever proves too loose.
+   */
+  async simulate(
+    tenantId: string,
+    requestedByUserId: string,
+    asOf: string,
+    send: boolean,
+  ): Promise<ReminderTestResult> {
+    const { windowDays, contracts } =
+      await this.remindersRepository.listDueContracts(tenantId, asOf);
+    const run = Date.now();
+    const reminders: ReminderTestResult['reminders'] = [];
+
+    for (const contract of contracts) {
+      const consentAt = effectiveConsentAt({
+        smsConsentAt: contract.technicianSmsConsentAt,
+        smsConsentRevokedAt: contract.technicianSmsConsentRevokedAt,
+      });
+      let sms: ReminderTestOutcome;
+      if (!contract.technicianId) {
+        sms = 'NO_TECHNICIAN';
+      } else if (!contract.technicianPhone) {
+        sms = 'NO_PHONE';
+      } else if (!send) {
+        sms = consentAt ? 'WOULD_SEND' : 'NO_CONSENT';
+      } else {
+        sms = await this.enqueueSafely({
+          tenantId,
+          channel: 'SMS',
+          recipient: contract.technicianPhone,
+          body: `ሙከራ (TEST)፦ ${technicianSmsBody(contract)}`,
+          dedupeKey: `maint-test:${contract.contractId}:${contract.nextServiceAt}:${run}`,
+          subjectKind: 'MAINTENANCE_CONTRACT',
+          subjectId: contract.contractId,
+          // So the message log says who texted the technicians.
+          createdByUserId: requestedByUserId,
+          consentAt,
+        });
+      }
+
+      if (send && contract.technicianId) {
+        await this.notifySafely(tenantId, contract.technicianId, {
+          type: 'MAINTENANCE',
+          title: `Test: maintenance due ${contract.nextServiceAt}`,
+          body: `This is a test of the reminder. ${technicianBody(contract)}`,
+          linkPath: `/maintenance?contract=${contract.contractId}&due=${contract.nextServiceAt}&test=${run}`,
+        });
+      }
+
+      reminders.push({
+        contractId: contract.contractId,
+        assetName: contract.assetName,
+        customerName: contract.customerName,
+        nextServiceAt: contract.nextServiceAt,
+        technicianName: contract.technicianName,
+        sms,
+      });
+    }
+
+    this.logger.log(
+      `Maintenance reminder test by user ${requestedByUserId} for tenant ${tenantId} as of ${asOf}: ` +
+        `${reminders.length} contracts due, ${send ? 'sent' : 'preview only'}`,
+    );
+    return { asOf, windowDays, sent: send, reminders };
   }
 
   /**

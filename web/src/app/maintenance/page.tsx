@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react';
 
-import { btnPrimary } from '@/components/form-styles';
+import { btnPrimary, btnSecondary } from '@/components/form-styles';
 import { DataTable } from '@/components/data-table';
 import {
   FilterNotice,
@@ -45,6 +45,7 @@ import {
   optional,
 } from '@/lib/api';
 import { csvRows, saveCsv } from '@/app/employees/csv';
+import { ReminderTestDialog } from './reminder-test-dialog';
 
 const todayIso = (): string => new Date().toISOString().slice(0, 10);
 
@@ -107,6 +108,7 @@ export default function MaintenancePage() {
   const router = useRouter();
   const { confirm, confirmDialog } = useConfirm();
   const [tab, setTab] = useState<'contracts' | 'breakdowns'>('contracts');
+  const [reminderTestOpen, setReminderTestOpen] = useState(false);
   const [contracts, setContracts] = useState<MaintenanceContract[]>([]);
   const [breakdowns, setBreakdowns] = useState<Breakdown[]>([]);
   const [assetMap, setAssetMap] = useState<Record<string, string>>({});
@@ -560,6 +562,11 @@ export default function MaintenancePage() {
     <div className="flex min-h-screen">
       <Sidebar />
       {confirmDialog}
+      {/* Mounted only while open, so a reopened dialog never offers to
+          send against this morning's preview. */}
+      {reminderTestOpen ? (
+        <ReminderTestDialog onClose={() => setReminderTestOpen(false)} />
+      ) : null}
       <div className="flex min-w-0 flex-1 flex-col">
         <PageHeader
           eyebrow="Operations"
@@ -567,9 +574,21 @@ export default function MaintenancePage() {
           description="Service contracts and the breakdowns they generate. Logging a visit rolls the contract to its next service date."
           actions={
             tab === 'contracts' ? (
-              <Link href="/maintenance/contracts/new" className={btnPrimary}>
-                New contract
-              </Link>
+              <>
+                {/* Mirrors @Roles on POST /maintenance/reminders/simulate. */}
+                {allows(role, ['TECHNICAL_MANAGER']) ? (
+                  <button
+                    type="button"
+                    className={btnSecondary}
+                    onClick={() => setReminderTestOpen(true)}
+                  >
+                    Test reminders
+                  </button>
+                ) : null}
+                <Link href="/maintenance/contracts/new" className={btnPrimary}>
+                  New contract
+                </Link>
+              </>
             ) : (
               <Link href="/maintenance/breakdowns/new" className={btnPrimary}>
                 Open breakdown

@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -16,6 +17,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { isUUID } from 'class-validator';
 import type { Response } from 'express';
 
@@ -40,6 +42,7 @@ import {
   CreateMaintenanceContractDto,
   LogServiceVisitDto,
   MAINTENANCE_CONTRACT_STATUSES,
+  SimulateRemindersDto,
   UpdateBreakdownDto,
   UpdateMaintenanceContractDto,
   type BreakdownStatus,
@@ -177,6 +180,30 @@ export class MaintenanceController {
   @ApiOperation({ summary: 'Active technical staff who can be assigned a contract or a breakdown' })
   technicians(@CurrentUser() user: AuthenticatedUser) {
     return this.maintenanceService.listTechnicians(user);
+  }
+
+  @Post('reminders/simulate')
+  @HttpCode(200)
+  // Managers only, and tightly limited: with send=true this texts real
+  // technicians, once per due contract, every time it is called.
+  @Roles('GENERAL_MANAGER', 'TECHNICAL_MANAGER')
+  @Throttle({
+    burst: { ttl: 60_000, limit: 10 },
+    sustained: { ttl: 900_000, limit: 40 },
+  })
+  @ApiOperation({
+    summary:
+      'Test the maintenance reminders as of a given date: preview who would be reminded, or send a marked test to each assigned technician',
+  })
+  simulateReminders(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: SimulateRemindersDto,
+  ) {
+    return this.maintenanceService.simulateReminders(
+      user,
+      dto.asOf,
+      dto.send === true,
+    );
   }
 
   @Get('contracts/:id')
