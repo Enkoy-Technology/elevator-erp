@@ -9,6 +9,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 
 import { btnGhost, btnPrimary, btnSecondary } from '@/components/form-styles';
 import { DataTable } from '@/components/data-table';
+import { DeliveryCell } from '@/components/delivery-cell';
 import {
   FilterNotice,
   FilterSelect,
@@ -287,35 +288,7 @@ export default function ProjectsPage() {
       // Most urgent first on the first click; blanks always at the bottom.
       sortDescFirst: false,
       sortUndefined: 'last',
-      cell: ({ row }) => {
-        const days = row.original.deliveryDaysLeft;
-        if (days === null || days === undefined) {
-          return '\u2014';
-        }
-        const plural = `working ${Math.abs(days) === 1 ? 'day' : 'days'}`;
-        return (
-          <span
-            className="inline-flex flex-col items-start gap-1"
-            title={`Due ${row.original.deliveryDueDate ?? ''}`}
-          >
-            <StatusPill
-              label={
-                days > 0
-                  ? `${days} ${plural} left`
-                  : days === 0
-                    ? 'Due today'
-                    : `${-days} ${plural} overdue`
-              }
-              tone={days < 0 ? 'danger' : days <= 14 ? 'warn' : 'neutral'}
-            />
-            {row.original.deliveryPenaltyEtb ? (
-              <span className="whitespace-nowrap text-xs text-red-700">
-                Penalty {formatEtb(row.original.deliveryPenaltyEtb)}
-              </span>
-            ) : null}
-          </span>
-        );
-      },
+      cell: ({ row }) => <DeliveryCell project={row.original} />,
     },
     updatedColumn<Project>((row) => row.updatedAt),
     {

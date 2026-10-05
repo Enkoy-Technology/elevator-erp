@@ -461,7 +461,8 @@ describe('CustomersRepository.streamAll — orderBy tiebreaker', () => {
 // ---------------------------------------------------------------------------
 
 /**
- * The exact order `overview()` issues its 12 queries in. The fake `select`
+ * The exact order `overview()` issues its 13 queries in ('deliveries' is
+ * the signed contracts behind the projects' delivery countdown). The fake `select`
  * hands back one chain per call, so this list IS the wiring — if a query is
  * added, moved or removed, these tests fail loudly rather than silently
  * feeding the wrong rows into the wrong section.
@@ -469,6 +470,7 @@ describe('CustomersRepository.streamAll — orderBy tiebreaker', () => {
 const OVERVIEW_QUERIES = [
   'customer',
   'projects',
+  'deliveries',
   'quotations',
   'proformas',
   'contracts',
@@ -499,7 +501,12 @@ const makeAwaitableChain = (rows: unknown[]) => {
 };
 
 const overviewRepo = (results: Partial<Record<OverviewQuery, unknown[]>> = {}) => {
-  const chains = OVERVIEW_QUERIES.map((key) => {
+  // The deliveries query is only issued for projects still awaiting
+  // delivery; with none on the page it is skipped, not run empty.
+  const queries = OVERVIEW_QUERIES.filter(
+    (key) => key !== 'deliveries' || (results.projects ?? []).length > 0,
+  );
+  const chains = queries.map((key) => {
     const fallback =
       key === 'customer'
         ? [{ id: CUSTOMER_ID }]
@@ -515,7 +522,7 @@ const overviewRepo = (results: Partial<Record<OverviewQuery, unknown[]>> = {}) =
       fn({ select }),
   );
   const repo = new CustomersRepository({ withTenant } as never);
-  const chainFor = (key: OverviewQuery) => chains[OVERVIEW_QUERIES.indexOf(key)]!;
+  const chainFor = (key: OverviewQuery) => chains[queries.indexOf(key)]!;
   return { repo, select, chainFor };
 };
 
@@ -563,11 +570,15 @@ describe('CustomersRepository.overview — sections', () => {
       productType: 'PASSENGER',
       quotedAmountEtb: null,
       contractValueEtb: '1000.00',
+      // No signed contract with a delivery period in the fake: no countdown.
+      deliveryDueDate: null,
+      deliveryDaysLeft: null,
+      deliveryPenaltyEtb: null,
     });
     expect(result.projects!.recent[0]).not.toHaveProperty('overallTotal');
   });
 
-  it('issues a fixed 12 queries no matter how many related rows exist — never one per row', async () => {
+  it('issues a fixed 13 queries no matter how many related rows exist — never one per row', async () => {
     const { repo, select } = overviewRepo({
       projects: [1, 2, 3, 4, 5].map((n) => projectRow(n, '4000')),
       quotations: [1, 2, 3, 4, 5].map((n) => ({ id: `q-${n}`, overallTotal: '900' })),
@@ -577,7 +588,7 @@ describe('CustomersRepository.overview — sections', () => {
     await repo.overview(TENANT_ID, CUSTOMER_ID, [...OVERVIEW_SECTIONS]);
 
     expect(select).toHaveBeenCalledTimes(OVERVIEW_QUERIES.length);
-    expect(OVERVIEW_QUERIES.length).toBe(12);
+    expect(OVERVIEW_QUERIES.length).toBe(13);
   });
 
   it('404s for a customer that does not exist or is soft-deleted, before running any section query', async () => {

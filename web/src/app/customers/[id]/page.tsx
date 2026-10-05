@@ -17,6 +17,7 @@ import {
   promptForDealValue,
 } from '@/app/projects/deal-value';
 import { DataTable } from '@/components/data-table';
+import { DeliveryCell } from '@/components/delivery-cell';
 import { btnGhost, btnSecondary } from '@/components/form-styles';
 import { StatusPill } from '@/components/list-toolbar';
 import { PageHeader } from '@/components/page-header';
@@ -511,6 +512,11 @@ export default function CustomerDetailPage() {
           : '—',
     },
     { id: 'city', header: 'City', cell: ({ row }) => dash(row.original.city) },
+    {
+      id: 'delivery',
+      header: 'Delivery',
+      cell: ({ row }) => <DeliveryCell project={row.original} />,
+    },
     {
       id: 'value',
       header: 'Contract value',

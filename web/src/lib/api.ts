@@ -510,6 +510,10 @@ export interface CustomerOverviewProject {
   quotedAmountEtb: string | null;
   /** projects.contractAmountEtb. */
   contractValueEtb: string | null;
+  /** The promised delivery, as on the pipeline — see Project. */
+  deliveryDueDate: string | null;
+  deliveryDaysLeft: number | null;
+  deliveryPenaltyEtb: string | null;
 }
 
 export interface CustomerOverviewQuotation {

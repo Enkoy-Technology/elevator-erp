@@ -1,3 +1,4 @@
+import type { DeliveryCountdown } from '../../common/delivery-countdown';
 import type { UserRole } from '../../types/auth.types';
 import type {
   assets,
@@ -162,6 +163,10 @@ export interface CustomerOverviewProject {
   quotedAmountEtb: ProjectRow['quotedAmountEtb'];
   /** `projects.contractAmountEtb`. */
   contractValueEtb: ProjectRow['contractAmountEtb'];
+  /** The promised delivery and its countdown — see common/delivery-countdown.ts. */
+  deliveryDueDate: DeliveryCountdown['deliveryDueDate'];
+  deliveryDaysLeft: DeliveryCountdown['deliveryDaysLeft'];
+  deliveryPenaltyEtb: DeliveryCountdown['deliveryPenaltyEtb'];
 }
 
 type QuotationRow = typeof quotations.$inferSelect;

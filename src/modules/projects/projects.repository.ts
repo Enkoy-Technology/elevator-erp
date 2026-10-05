@@ -6,20 +6,14 @@ import {
   desc,
   eq,
   getTableColumns,
-  inArray,
-  isNotNull,
   isNull,
   sql,
 } from 'drizzle-orm';
-import Decimal from 'decimal.js';
 
 import {
-  addWorkingDaysIso,
-  daysBetweenIso,
-  todayIso,
-  workingDaysBetweenIso,
-} from '../../common/business-time';
-import { DEFAULT_DELAY_PENALTY_PERCENT_PER_DAY } from '../../common/contract-defaults';
+  withDeliveryCountdown,
+  type DeliveryCountdown,
+} from '../../common/delivery-countdown';
 import { WorkflowTransitionError } from '../../common/exceptions';
 import {
   normalizePageQuery,
@@ -27,96 +21,15 @@ import {
   type PaginatedResult,
 } from '../../common/pagination';
 import { normalizeEthiopic } from '../../common/text/ethiopic-normalize';
-import {
-  contracts,
-  customers,
-  projects,
-  type ProjectStatus,
-} from '../../database/schema';
+import { customers, projects, type ProjectStatus } from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
 import type { CreateProjectDto } from './dto/create-project.dto';
 
 export type ProjectRecord = typeof projects.$inferSelect;
 export type ProjectInsert = typeof projects.$inferInsert;
 
-/**
- * A list row: the project, plus the delivery the customer was promised.
- * All three are null until a contract with a delivery period is signed,
- * and again once it is handed over (the contract is then COMPLETED) or the
- * project leaves CONTRACT/EXECUTION.
- */
-export type ProjectListRow = ProjectRecord & {
-  /** Signing date + the contract's delivery working days, ISO 'YYYY-MM-DD'. */
-  deliveryDueDate: string | null;
-  /** Working days (Mon–Fri) from today to that date; negative once it has passed. */
-  deliveryDaysLeft: number | null;
-  /** The delay penalty run up so far, ETB; null unless the delivery is overdue. */
-  deliveryPenaltyEtb: string | null;
-};
-
-/** The stages a delivery is still owed in; a cancelled or completed project has no countdown. */
-const DELIVERY_PENDING: readonly ProjectStatus[] = ['CONTRACT', 'EXECUTION'];
-
-/** What the countdown reads off one signed contract. */
-export interface SignedDelivery {
-  signedAt: string;
-  deliveryDays: number;
-  contractValueEtb: string;
-  /** Null: the contract states none, so the company default applies. */
-  penaltyPercentPerDay: string | null;
-  penaltyCapPercent: string | null;
-}
-
-/**
- * The countdown the list shows: the contract's delivery period — working
- * days, as its Article 3.2 states it — counted from the day it was signed.
- * With more than one signed contract on a project, the earliest promise is
- * the one that binds.
- *
- * Once that date has passed, Article 7.1 runs: the penalty percent of the
- * contract price for EACH day of delay — every calendar day, weekends
- * included — up to the contract's cap when it states one.
- */
-export const deliveryCountdown = (
-  signed: readonly SignedDelivery[],
-  today: string,
-): Pick<
-  ProjectListRow,
-  'deliveryDueDate' | 'deliveryDaysLeft' | 'deliveryPenaltyEtb'
-> => {
-  const first = signed
-    .map((contract) => ({
-      contract,
-      due: addWorkingDaysIso(contract.signedAt, contract.deliveryDays),
-    }))
-    .sort((a, b) => a.due.localeCompare(b.due))[0];
-  if (!first) {
-    return {
-      deliveryDueDate: null,
-      deliveryDaysLeft: null,
-      deliveryPenaltyEtb: null,
-    };
-  }
-  const { contract, due } = first;
-  const daysLate = daysBetweenIso(due, today);
-  const value = new Decimal(contract.contractValueEtb);
-  const uncapped = value
-    .mul(contract.penaltyPercentPerDay ?? DEFAULT_DELAY_PENALTY_PERCENT_PER_DAY)
-    .div(100)
-    .mul(daysLate);
-  const penalty =
-    contract.penaltyCapPercent === null
-      ? uncapped
-      : Decimal.min(uncapped, value.mul(contract.penaltyCapPercent).div(100));
-  return {
-    deliveryDueDate: due,
-    deliveryDaysLeft: workingDaysBetweenIso(today, due),
-    deliveryPenaltyEtb:
-      daysLate > 0
-        ? penalty.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2)
-        : null,
-  };
-};
+/** A list row: the project, plus the delivery the customer was promised. */
+export type ProjectListRow = ProjectRecord & DeliveryCountdown;
 
 /** Same shape `list()`/`streamAll()` build the `q` filter with, mirroring
  * CustomersRepository.list()'s coalesce(nameNormalized, lower(name)) pattern
@@ -183,47 +96,7 @@ export class ProjectsRepository {
         .orderBy(desc(projects.createdAt))
         .limit(pageSize)
         .offset(offset);
-      // One query for the page's signed contracts, not a join: a project
-      // may carry several contracts and must still be one row.
-      // ponytail: contracts has no (tenant_id, project_id) index, so this
-      // scans the tenant's contracts; add the index when a tenant holds
-      // thousands of them.
-      const pendingIds = items
-        .filter((project) => DELIVERY_PENDING.includes(project.status))
-        .map((project) => project.id);
-      const signed =
-        pendingIds.length === 0
-          ? []
-          : await tx
-              .select({
-                projectId: contracts.projectId,
-                signedAt: contracts.signedAt,
-                deliveryDays: contracts.deliveryWorkingDays,
-                contractValueEtb: contracts.contractValueEtb,
-                penaltyPercentPerDay: contracts.delayPenaltyPercentPerDay,
-                penaltyCapPercent: contracts.delayPenaltyCapPercent,
-              })
-              .from(contracts)
-              .where(
-                and(
-                  inArray(contracts.projectId, pendingIds),
-                  eq(contracts.status, 'SIGNED'),
-                  isNotNull(contracts.signedAt),
-                  isNotNull(contracts.deliveryWorkingDays),
-                ),
-              );
-      const today = todayIso();
-      const rows = items.map((project) => ({
-        ...project,
-        ...deliveryCountdown(
-          signed.flatMap((c) =>
-            c.projectId === project.id && c.signedAt && c.deliveryDays !== null
-              ? [{ ...c, signedAt: c.signedAt, deliveryDays: c.deliveryDays }]
-              : [],
-          ),
-          today,
-        ),
-      }));
+      const rows = await withDeliveryCountdown(tx, items);
       return toPaginatedResult(rows, total, page, pageSize);
     });
   }

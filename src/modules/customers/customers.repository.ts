@@ -9,6 +9,7 @@ import {
   toPaginatedResult,
   type PaginatedResult,
 } from '../../common/pagination';
+import { withDeliveryCountdown } from '../../common/delivery-countdown';
 import { normalizeEthiopic } from '../../common/text/ethiopic-normalize';
 import {
   assets,
@@ -572,7 +573,8 @@ export class CustomersRepository {
           and(eq(projects.customerId, customerId), isNull(projects.deletedAt)),
         )
         .orderBy(desc(projects.createdAt), asc(projects.id))
-        .limit(OVERVIEW_RECENT_LIMIT),
+        .limit(OVERVIEW_RECENT_LIMIT)
+        .then((rows) => withDeliveryCountdown(tx, rows)),
       );
 
       const quotationRows = await load('quotations', () =>
