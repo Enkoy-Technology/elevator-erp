@@ -12,6 +12,10 @@ import {
 
 import { todayIso } from '../../common/business-time';
 import { WorkflowTransitionError } from '../../common/exceptions';
+import {
+  contractDeliveryCountdown,
+  type DeliveryCountdown,
+} from '../../common/delivery-countdown';
 import { computeFiscalYear } from '../../common/fiscal-year';
 import {
   DEFAULT_DELAY_PENALTY_PERCENT_PER_DAY,
@@ -41,11 +45,12 @@ import { instalmentsFromPercents } from './instalment-schedule';
 
 export type ContractRecord = typeof contracts.$inferSelect;
 
-/** A contract plus the party display names the list and document need. */
-export type ContractListRow = ContractRecord & {
-  customerName: string | null;
-  projectName: string | null;
-};
+/** A contract plus the party display names the list and document need, and its delivery countdown. */
+export type ContractListRow = ContractRecord &
+  DeliveryCountdown & {
+    customerName: string | null;
+    projectName: string | null;
+  };
 
 /** The customer's details as the contract's parties clause prints them. */
 export interface ContractCustomerDetails {
@@ -123,7 +128,7 @@ export class ContractsRepository {
         .limit(pageSize)
         .offset(offset);
       return toPaginatedResult(
-        items,
+        items.map((row) => ({ ...row, ...contractDeliveryCountdown(row) })),
         Number(totalRow?.value ?? 0),
         page,
         pageSize,
@@ -156,7 +161,7 @@ export class ContractsRepository {
           .offset(offset),
       );
       for (const row of batch) {
-        yield row;
+        yield { ...row, ...contractDeliveryCountdown(row) };
       }
       if (batch.length < BATCH_SIZE) {
         return;
@@ -185,7 +190,7 @@ export class ContractsRepository {
       const [row] = await this.selectWithNames(tx)
         .where(eq(contracts.id, id))
         .limit(1);
-      return row ?? null;
+      return row ? { ...row, ...contractDeliveryCountdown(row) } : null;
     });
   }
 

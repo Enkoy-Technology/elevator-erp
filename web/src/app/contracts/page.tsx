@@ -9,6 +9,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { Ban, ListOrdered, PackageCheck, Pencil } from 'lucide-react';
 
 import { DataTable } from '@/components/data-table';
+import { DeliveryCell } from '@/components/delivery-cell';
 import { btnGhost, btnPrimary, btnSecondary } from '@/components/form-styles';
 import {
   FilterNotice,
@@ -440,6 +441,11 @@ export default function ContractsPage() {
       id: 'signed',
       header: 'Signed',
       cell: ({ row }) => row.original.signedAt?.slice(0, 10) ?? '—',
+    },
+    {
+      id: 'delivery',
+      header: 'Delivery',
+      cell: ({ row }) => <DeliveryCell project={row.original} />,
     },
     {
       id: 'status',

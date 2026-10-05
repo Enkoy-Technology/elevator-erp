@@ -17,14 +17,14 @@ import { DEFAULT_DELAY_PENALTY_PERCENT_PER_DAY } from './contract-defaults';
  * and again once it is handed over (the contract is then COMPLETED) or the
  * project leaves CONTRACT/EXECUTION.
  */
-export interface DeliveryCountdown {
+export type DeliveryCountdown = {
   /** Signing date + the contract's delivery working days, ISO 'YYYY-MM-DD'. */
   deliveryDueDate: string | null;
   /** Working days (Mon–Fri) from today to that date; negative once it has passed. */
   deliveryDaysLeft: number | null;
   /** The delay penalty run up so far, ETB; null unless the delivery is overdue. */
   deliveryPenaltyEtb: string | null;
-}
+};
 
 const NONE: DeliveryCountdown = {
   deliveryDueDate: null,
@@ -88,6 +88,39 @@ export const deliveryCountdown = (
         : null,
   };
 };
+
+/**
+ * The countdown of one contract on its own: only a SIGNED one with a
+ * signing date and a delivery period has one. (A COMPLETED contract has
+ * been handed over; a DRAFT has not started the clock.)
+ */
+export const contractDeliveryCountdown = (
+  contract: {
+    status: string;
+    signedAt: string | null;
+    deliveryWorkingDays: number | null;
+    contractValueEtb: string;
+    delayPenaltyPercentPerDay: string | null;
+    delayPenaltyCapPercent: string | null;
+  },
+  today: string = todayIso(),
+): DeliveryCountdown =>
+  contract.status === 'SIGNED' &&
+  contract.signedAt !== null &&
+  contract.deliveryWorkingDays !== null
+    ? deliveryCountdown(
+        [
+          {
+            signedAt: contract.signedAt,
+            deliveryDays: contract.deliveryWorkingDays,
+            contractValueEtb: contract.contractValueEtb,
+            penaltyPercentPerDay: contract.delayPenaltyPercentPerDay,
+            penaltyCapPercent: contract.delayPenaltyCapPercent,
+          },
+        ],
+        today,
+      )
+    : NONE;
 
 /**
  * Attach the countdown to a page of project rows, inside the caller's

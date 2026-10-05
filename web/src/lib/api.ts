@@ -2780,6 +2780,10 @@ export const retryOutboxMessage = (id: string): Promise<OutboundMessage> =>
 export type ContractStatus = 'DRAFT' | 'SIGNED' | 'COMPLETED' | 'CANCELLED';
 
 export interface Contract {
+  /** List/detail rows only: the promised delivery, as on the pipeline — see Project. */
+  deliveryDueDate?: string | null;
+  deliveryDaysLeft?: number | null;
+  deliveryPenaltyEtb?: string | null;
   id: string;
   proformaId: string;
   projectId: string;

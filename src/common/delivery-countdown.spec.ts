@@ -1,4 +1,8 @@
-import { deliveryCountdown, type SignedDelivery } from './delivery-countdown';
+import {
+  contractDeliveryCountdown,
+  deliveryCountdown,
+  type SignedDelivery,
+} from './delivery-countdown';
 describe('deliveryCountdown', () => {
   const signed = (
     overrides: Partial<SignedDelivery> = {},
@@ -71,5 +75,31 @@ describe('deliveryCountdown', () => {
       deliveryDaysLeft: null,
       deliveryPenaltyEtb: null,
     });
+  });
+});
+
+describe('contractDeliveryCountdown', () => {
+  const contract = {
+    status: 'SIGNED',
+    signedAt: '2026-09-24',
+    deliveryWorkingDays: 90,
+    contractValueEtb: '7000000.00',
+    delayPenaltyPercentPerDay: null,
+    delayPenaltyCapPercent: null,
+  };
+
+  it('counts down a signed contract with a delivery period', () => {
+    expect(contractDeliveryCountdown(contract, '2026-10-02')).toEqual({
+      deliveryDueDate: '2027-01-28',
+      deliveryDaysLeft: 84,
+      deliveryPenaltyEtb: null,
+    });
+  });
+
+  it('is blank for a draft, a handed-over contract, or one without a period', () => {
+    const blank = { deliveryDueDate: null, deliveryDaysLeft: null, deliveryPenaltyEtb: null };
+    expect(contractDeliveryCountdown({ ...contract, status: 'DRAFT', signedAt: null }, '2026-10-02')).toEqual(blank);
+    expect(contractDeliveryCountdown({ ...contract, status: 'COMPLETED' }, '2026-10-02')).toEqual(blank);
+    expect(contractDeliveryCountdown({ ...contract, deliveryWorkingDays: null }, '2026-10-02')).toEqual(blank);
   });
 });
