@@ -44,15 +44,15 @@ export const SurveyForm = ({ survey }: { survey: SiteSurvey | null }) => {
   const [address, setAddress] = useState(survey?.address ?? '');
   const [contactName, setContactName] = useState(survey?.contactName ?? '');
   const [contactPhone, setContactPhone] = useState(survey?.contactPhone ?? '');
-  const [shaftWidthCm, setShaftWidthCm] = useState(
-    digits(survey?.shaftWidthCm ?? null),
+  const [shaftWidthMm, setShaftWidthCm] = useState(
+    digits(survey?.shaftWidthMm ?? null),
   );
-  const [shaftDepthCm, setShaftDepthCm] = useState(
-    digits(survey?.shaftDepthCm ?? null),
+  const [shaftDepthMm, setShaftDepthCm] = useState(
+    digits(survey?.shaftDepthMm ?? null),
   );
   const [floors, setFloors] = useState(survey?.floors ?? '');
-  const [overheadCm, setOverheadCm] = useState(
-    digits(survey?.overheadCm ?? null),
+  const [overheadMm, setOverheadCm] = useState(
+    digits(survey?.overheadMm ?? null),
   );
   const [machineRoom, setMachineRoom] = useState(survey?.machineRoom ?? '');
   const [units, setUnits] = useState(digits(survey?.units ?? null));
@@ -69,10 +69,10 @@ export const SurveyForm = ({ survey }: { survey: SiteSurvey | null }) => {
       address: text(address),
       contactName: text(contactName),
       contactPhone: text(contactPhone),
-      shaftWidthCm: count(shaftWidthCm),
-      shaftDepthCm: count(shaftDepthCm),
+      shaftWidthMm: count(shaftWidthMm),
+      shaftDepthMm: count(shaftDepthMm),
       floors: text(floors),
-      overheadCm: count(overheadCm),
+      overheadMm: count(overheadMm),
       machineRoom: text(machineRoom),
       units: count(units),
     };
@@ -166,18 +166,18 @@ export const SurveyForm = ({ survey }: { survey: SiteSurvey | null }) => {
       </FormSection>
 
       <FormSection title="Measurements">
-        <Field label="Shaft width (cm)" htmlFor="shaftWidthCm">
+        <Field label="Shaft width (mm)" htmlFor="shaftWidthMm">
           <NumberInput
-            id="shaftWidthCm"
-            value={shaftWidthCm}
+            id="shaftWidthMm"
+            value={shaftWidthMm}
             onValueChange={setShaftWidthCm}
           />
         </Field>
 
-        <Field label="Shaft depth (cm)" htmlFor="shaftDepthCm">
+        <Field label="Shaft depth (mm)" htmlFor="shaftDepthMm">
           <NumberInput
-            id="shaftDepthCm"
-            value={shaftDepthCm}
+            id="shaftDepthMm"
+            value={shaftDepthMm}
             onValueChange={setShaftDepthCm}
           />
         </Field>
@@ -193,10 +193,10 @@ export const SurveyForm = ({ survey }: { survey: SiteSurvey | null }) => {
           />
         </Field>
 
-        <Field label="OH (cm)" htmlFor="overheadCm">
+        <Field label="OH (mm)" htmlFor="overheadMm">
           <NumberInput
-            id="overheadCm"
-            value={overheadCm}
+            id="overheadMm"
+            value={overheadMm}
             onValueChange={setOverheadCm}
           />
         </Field>

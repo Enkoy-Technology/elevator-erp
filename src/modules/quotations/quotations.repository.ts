@@ -736,14 +736,17 @@ const resyncHeaderFromLines = async (
     .where(eq(quotations.id, quotation.id));
 };
 
+/** The statuses an offer can still be built in: a draft, and one waiting for the manager — who may well fix a line before approving it (client, 2026-10-06). */
+const EDITABLE_STATUSES: readonly string[] = ['DRAFT', 'PENDING_APPROVAL'];
+
 const requireDraft = async (
   tx: TenantTransaction,
   quotationId: string,
 ): Promise<QuotationRecord> => {
   const row = await requireQuotation(tx, quotationId);
-  if (row.status !== 'DRAFT') {
+  if (!EDITABLE_STATUSES.includes(row.status)) {
     throw new WorkflowTransitionError(
-      `Quotation is ${row.status} — its line items and terms are fixed once it leaves DRAFT. Create a new revision instead.`,
+      `Quotation is ${row.status} — its line items and terms are fixed once it is approved. Create a new revision instead.`,
     );
   }
   return row;

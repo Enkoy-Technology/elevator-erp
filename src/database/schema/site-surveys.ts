@@ -48,15 +48,16 @@ export const siteSurveys = pgTable(
     contactName: text('contact_name'),
     contactPhone: text('contact_phone'),
     /**
-     * Shaft width and depth in CENTIMETRES, as the client's own sheets record
-     * them ("200 x 180"). Stored as measured; nothing converts them.
+     * Shaft width and depth in MILLIMETRES, as every other measurement in
+     * the system (client, 2026-10-06). The paper form records centimetres
+     * ("200 x 180"); the import converts those, see site-surveys-import.
      */
-    shaftWidthCm: integer('shaft_width_cm'),
-    shaftDepthCm: integer('shaft_depth_cm'),
+    shaftWidthMm: integer('shaft_width_mm'),
+    shaftDepthMm: integer('shaft_depth_mm'),
     /** Free text, exactly as written: "B+G+11". Never parsed. */
     floors: text('floors'),
-    /** Overhead, centimetres. The sheet's "OH" column. */
-    overheadCm: integer('overhead_cm'),
+    /** Overhead, millimetres. The sheet's "OH" column. */
+    overheadMm: integer('overhead_mm'),
     /** The sheet's words: "With MR", "MRL". Free text, not an enum. */
     machineRoom: text('machine_room'),
     units: integer('units'),

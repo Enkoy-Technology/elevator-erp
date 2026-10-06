@@ -41,7 +41,7 @@ describe('CreateSiteSurveyDto', () => {
       await check({ projectName: 'Bole Plaza', surveyDate: '2026-02-30' }),
     ).not.toHaveLength(0);
     expect(
-      await check({ projectName: 'Bole Plaza', shaftWidthCm: 1.5 }),
+      await check({ projectName: 'Bole Plaza', shaftWidthMm: 1.5 }),
     ).not.toHaveLength(0);
   });
 
@@ -54,7 +54,7 @@ describe('CreateSiteSurveyDto', () => {
         projectName: 'Bole Plaza',
         address: null,
         contactPhone: null,
-        shaftWidthCm: null,
+        shaftWidthMm: null,
         floors: null,
         units: null,
       }),

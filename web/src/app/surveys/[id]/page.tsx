@@ -197,10 +197,10 @@ export default function SiteSurveyPage() {
                 '—'
               )}
             </Row>
-            <Row label="Shaft width (cm)">{dash(survey.shaftWidthCm)}</Row>
-            <Row label="Shaft depth (cm)">{dash(survey.shaftDepthCm)}</Row>
+            <Row label="Shaft width (mm)">{dash(survey.shaftWidthMm)}</Row>
+            <Row label="Shaft depth (mm)">{dash(survey.shaftDepthMm)}</Row>
             <Row label="Floors">{dash(survey.floors)}</Row>
-            <Row label="OH (cm)">{dash(survey.overheadCm)}</Row>
+            <Row label="OH (mm)">{dash(survey.overheadMm)}</Row>
             <Row label="Machine room">{dash(survey.machineRoom)}</Row>
             <Row label="Units">{dash(survey.units)}</Row>
             <Row label="Collected by">{dash(survey.surveyedByName)}</Row>

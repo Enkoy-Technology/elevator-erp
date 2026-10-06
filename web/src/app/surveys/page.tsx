@@ -224,12 +224,12 @@ export default function SurveysPage() {
     },
     {
       id: 'shaft',
-      header: 'Shaft W × D (cm)',
+      header: 'Shaft W × D (mm)',
       cell: ({ row }) => {
-        const { shaftWidthCm, shaftDepthCm } = row.original;
-        return shaftWidthCm === null && shaftDepthCm === null
+        const { shaftWidthMm, shaftDepthMm } = row.original;
+        return shaftWidthMm === null && shaftDepthMm === null
           ? '—'
-          : `${dash(shaftWidthCm)} × ${dash(shaftDepthCm)}`;
+          : `${dash(shaftWidthMm)} × ${dash(shaftDepthMm)}`;
       },
     },
     {
@@ -242,7 +242,7 @@ export default function SurveysPage() {
     {
       id: 'overhead',
       header: 'OH',
-      cell: ({ row }) => dash(row.original.overheadCm),
+      cell: ({ row }) => dash(row.original.overheadMm),
     },
     {
       id: 'machineRoom',
@@ -487,9 +487,9 @@ export default function SurveysPage() {
                               ) : null}
                             </td>
                             <td className="px-3 py-2 tabular-nums text-slate-600">
-                              {row.shaftWidthCm || row.shaftDepthCm
-                                ? `${dash(row.shaftWidthCm ?? null)} × ${dash(
-                                    row.shaftDepthCm ?? null,
+                              {row.shaftWidthMm || row.shaftDepthMm
+                                ? `${dash(row.shaftWidthMm ?? null)} × ${dash(
+                                    row.shaftDepthMm ?? null,
                                   )}`
                                 : '—'}
                             </td>
@@ -497,7 +497,7 @@ export default function SurveysPage() {
                               {dash(row.floors ?? null)}
                             </td>
                             <td className="px-3 py-2 tabular-nums text-slate-600">
-                              {dash(row.overheadCm ?? null)}
+                              {dash(row.overheadMm ?? null)}
                             </td>
                             <td className="px-3 py-2 text-slate-600">
                               {dash(row.machineRoom ?? null)}

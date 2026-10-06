@@ -21,17 +21,17 @@ export class ImportSiteSurveyRowDto {
   @ApiPropertyOptional({ type: String, nullable: true })
   contactPhone?: string | null;
 
-  @ApiPropertyOptional({ type: Number, nullable: true, example: 200 })
-  shaftWidthCm?: number | null;
+  @ApiPropertyOptional({ type: Number, nullable: true, example: 2000 })
+  shaftWidthMm?: number | null;
 
-  @ApiPropertyOptional({ type: Number, nullable: true, example: 180 })
-  shaftDepthCm?: number | null;
+  @ApiPropertyOptional({ type: Number, nullable: true, example: 1800 })
+  shaftDepthMm?: number | null;
 
   @ApiPropertyOptional({ type: String, nullable: true, example: 'B+G+11' })
   floors?: string | null;
 
   @ApiPropertyOptional({ type: Number, nullable: true })
-  overheadCm?: number | null;
+  overheadMm?: number | null;
 
   @ApiPropertyOptional({ type: String, nullable: true, example: 'With MR' })
   machineRoom?: string | null;

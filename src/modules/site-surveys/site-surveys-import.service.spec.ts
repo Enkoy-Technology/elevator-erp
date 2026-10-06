@@ -126,10 +126,11 @@ describe('SiteSurveysImportService — the real SITE COLLECTION FORM', () => {
         address: null,
         contactName: 'Belachew',
         contactPhone: null,
-        shaftWidthCm: 200,
-        shaftDepthCm: 180,
+        // The sheet says 200 x 180 (centimetres); kept in millimetres.
+        shaftWidthMm: 2000,
+        shaftDepthMm: 1800,
         floors: 'B+G+11',
-        overheadCm: null,
+        overheadMm: null,
         machineRoom: 'With MR',
         units: null,
       },
@@ -139,10 +140,10 @@ describe('SiteSurveysImportService — the real SITE COLLECTION FORM', () => {
         address: null,
         contactName: 'Getachew',
         contactPhone: null,
-        shaftWidthCm: 180,
-        shaftDepthCm: 240,
+        shaftWidthMm: 1800,
+        shaftDepthMm: 2400,
         floors: 'B+G+16',
-        overheadCm: null,
+        overheadMm: null,
         machineRoom: 'With MR',
         units: null,
       },
@@ -199,12 +200,13 @@ describe('SiteSurveysImportService — bad input', () => {
     expect(result.rows[0]).toMatchObject({
       rowNumber: 3,
       projectName: 'Bole Plaza',
-      shaftWidthCm: 200,
-      shaftDepthCm: 1850,
+      // 200 is centimetres on the paper form; 1850 is already millimetres.
+      shaftWidthMm: 2000,
+      shaftDepthMm: 1850,
       units: 2,
     });
     expect(result.errors).toEqual([
-      { row: 4, message: 'shaft width cm: "wide" is not a number.' },
+      { row: 4, message: 'shaft width mm: "wide" is not a number.' },
     ]);
     expect(result.totalRows).toBe(2);
     expect(result.skipped).toBe(1);
@@ -236,7 +238,7 @@ describe('SiteSurveysImportService — bad input', () => {
     );
 
     expect(result.errors.map((e) => e.message)).toEqual([
-      'shaft width cm must not be greater than 2000',
+      'shaft width mm must not be greater than 20000',
       'contact phone must be a recognisable Ethiopian phone number (e.g. 0911234567 or +251911234567)',
       'PROJECT NAME is required.',
     ]);
@@ -247,7 +249,7 @@ describe('SiteSurveysImportService — bad input', () => {
 
     expect(result.rows).toEqual([]);
     expect(result.errors).toEqual([
-      { row: 3, message: 'shaft width cm: "1e3" is not a number.' },
+      { row: 3, message: 'shaft width mm: "1e3" is not a number.' },
     ]);
   });
 

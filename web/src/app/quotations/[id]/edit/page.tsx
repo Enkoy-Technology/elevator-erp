@@ -172,7 +172,10 @@ export default function EditQuotationPage() {
     })();
   }, [router, id]);
 
-  const editable = quotation?.status === 'DRAFT' && canWrite(getCurrentRole());
+  const editable =
+    (quotation?.status === 'DRAFT' ||
+      quotation?.status === 'PENDING_APPROVAL') &&
+    canWrite(getCurrentRole());
 
   const filledTerms = terms.filter((t) => t.label.trim() !== '');
   const termsTotal = sumEtb(
@@ -294,7 +297,7 @@ export default function EditQuotationPage() {
       description={
         editable
           ? 'Add the lifts, agree the price, state the terms. Lifts and the price save as you go; this form saves the terms.'
-          : 'This quotation has left DRAFT — it is shown here as it was offered and can no longer be changed.'
+          : 'This quotation has been approved — it is shown here as it was offered and can no longer be changed.'
       }
       backHref="/quotations"
       backLabel="Quotations"

@@ -599,8 +599,10 @@ export default function QuotationsPage() {
     return (
       <div className="flex items-center justify-end gap-1.5">
         {/* A quotation is built on its own screen — lifts, negotiated price
-            and terms — and only a DRAFT can still be built. */}
-        {canMutate && quote.status === 'DRAFT' ? (
+            and terms — until it is approved: the manager may fix a line
+            before approving. */}
+        {canMutate &&
+        (quote.status === 'DRAFT' || quote.status === 'PENDING_APPROVAL') ? (
           <RowAction
             icon={Pencil}
             disabled={busy}

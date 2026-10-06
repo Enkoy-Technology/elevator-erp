@@ -100,8 +100,8 @@ export class SiteSurveysService {
  */
 const summarize = (survey: SiteSurveyRecord): string =>
   [
-    survey.shaftWidthCm && survey.shaftDepthCm
-      ? `Shaft ${survey.shaftWidthCm} x ${survey.shaftDepthCm} cm`
+    survey.shaftWidthMm && survey.shaftDepthMm
+      ? `Shaft ${survey.shaftWidthMm} x ${survey.shaftDepthMm} mm`
       : null,
     survey.floors,
     survey.machineRoom,

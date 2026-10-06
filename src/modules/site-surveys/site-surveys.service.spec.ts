@@ -20,10 +20,10 @@ const survey = (over: Partial<SiteSurveyRecord> = {}): SiteSurveyRecord => ({
   address: null,
   contactName: null,
   contactPhone: null,
-  shaftWidthCm: 200,
-  shaftDepthCm: 180,
+  shaftWidthMm: 200,
+  shaftDepthMm: 180,
   floors: 'B+G+11',
-  overheadCm: null,
+  overheadMm: null,
   machineRoom: 'With MR',
   units: 1,
   createdAt: new Date(),
@@ -67,7 +67,7 @@ describe('SiteSurveysService', () => {
     ];
     expect(dto.title).toBe('New site survey: Bole Plaza');
     expect(dto.linkPath).toBe('/surveys');
-    expect(dto.body).toContain('Shaft 200 x 180 cm');
+    expect(dto.body).toContain('Shaft 200 x 180 mm');
   });
 
   it('keeps the sheet when the managers cannot be told', async () => {

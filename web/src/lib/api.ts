@@ -27,6 +27,8 @@ export interface ProblemDetails {
   status: number;
   detail: string;
   instance: string;
+  /** A 400 from validation lists what was wrong, field by field. */
+  errors?: string[];
 }
 
 /** Advisory look-alike hit from POST /customers/check-duplicate. */
@@ -39,7 +41,13 @@ export interface SimilarCustomer {
 
 export class ApiError extends Error {
   constructor(readonly problem: ProblemDetails) {
-    super(problem.detail || problem.title);
+    // "Request validation failed" on its own sends nobody to the right
+    // field; the API says which, so say it too.
+    super(
+      problem.errors?.length
+        ? `${problem.detail || problem.title}: ${problem.errors.join('; ')}`
+        : problem.detail || problem.title,
+    );
     this.name = 'ApiError';
   }
 }
@@ -958,11 +966,11 @@ export interface SiteSurvey {
   contactName: string | null;
   contactPhone: string | null;
   /** Centimetres, as the sheets record them. Nothing converts them. */
-  shaftWidthCm: number | null;
-  shaftDepthCm: number | null;
+  shaftWidthMm: number | null;
+  shaftDepthMm: number | null;
   /** Free text, exactly as written: 'B+G+11'. Never parsed. */
   floors: string | null;
-  overheadCm: number | null;
+  overheadMm: number | null;
   /** The sheet's words: 'With MR', 'MRL'. */
   machineRoom: string | null;
   units: number | null;
@@ -981,10 +989,10 @@ export interface SiteSurveyUpdate {
   address?: string | null;
   contactName?: string | null;
   contactPhone?: string | null;
-  shaftWidthCm?: number | null;
-  shaftDepthCm?: number | null;
+  shaftWidthMm?: number | null;
+  shaftDepthMm?: number | null;
   floors?: string | null;
-  overheadCm?: number | null;
+  overheadMm?: number | null;
   machineRoom?: string | null;
   units?: number | null;
 }
@@ -1060,10 +1068,10 @@ export interface SiteSurveyImportRow {
   address?: string | null;
   contactName?: string | null;
   contactPhone?: string | null;
-  shaftWidthCm?: number | null;
-  shaftDepthCm?: number | null;
+  shaftWidthMm?: number | null;
+  shaftDepthMm?: number | null;
   floors?: string | null;
-  overheadCm?: number | null;
+  overheadMm?: number | null;
   machineRoom?: string | null;
   units?: number | null;
 }

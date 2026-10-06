@@ -58,19 +58,19 @@ export class CreateSiteSurveyDto {
   @Validate(IsEthiopianPhoneConstraint)
   contactPhone?: string;
 
-  @ApiPropertyOptional({ example: 200, description: 'Centimetres' })
+  @ApiPropertyOptional({ example: 2000, description: 'Millimetres' })
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(2000)
-  shaftWidthCm?: number;
+  @Max(20000)
+  shaftWidthMm?: number;
 
-  @ApiPropertyOptional({ example: 180, description: 'Centimetres' })
+  @ApiPropertyOptional({ example: 1800, description: 'Millimetres' })
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(2000)
-  shaftDepthCm?: number;
+  @Max(20000)
+  shaftDepthMm?: number;
 
   /** Free text, exactly as written on the sheet. Never parsed. */
   @ApiPropertyOptional({ example: 'B+G+11' })
@@ -79,12 +79,12 @@ export class CreateSiteSurveyDto {
   @MaxLength(100)
   floors?: string;
 
-  @ApiPropertyOptional({ example: 420, description: 'Overhead, centimetres' })
+  @ApiPropertyOptional({ example: 4200, description: 'Overhead, millimetres' })
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(2000)
-  overheadCm?: number;
+  @Max(20000)
+  overheadMm?: number;
 
   /** The sheet's own words: 'With MR', 'MRL'. Free text, not an enum. */
   @ApiPropertyOptional({ example: 'With MR' })

@@ -255,10 +255,10 @@ const toInsert = (
   address: dto.address,
   contactName: dto.contactName,
   contactPhone: dto.contactPhone,
-  shaftWidthCm: dto.shaftWidthCm,
-  shaftDepthCm: dto.shaftDepthCm,
+  shaftWidthMm: dto.shaftWidthMm,
+  shaftDepthMm: dto.shaftDepthMm,
   floors: dto.floors,
-  overheadCm: dto.overheadCm,
+  overheadMm: dto.overheadMm,
   machineRoom: dto.machineRoom,
   units: dto.units,
 });

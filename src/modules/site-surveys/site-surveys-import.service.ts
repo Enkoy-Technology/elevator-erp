@@ -64,20 +64,36 @@ const HEADER_SYNONYMS: Record<
     'phone',
     'tel',
   ],
-  shaftWidthCm: ['shaftdatawidth', 'shaftwidth', 'width'],
-  shaftDepthCm: ['shaftdatadepth', 'shaftdepth', 'depth'],
+  shaftWidthMm: ['shaftdatawidth', 'shaftwidth', 'width'],
+  shaftDepthMm: ['shaftdatadepth', 'shaftdepth', 'depth'],
   floors: ['floors', 'floor'],
-  overheadCm: ['oh', 'overhead'],
+  overheadMm: ['oh', 'overhead'],
   machineRoom: ['machineroom', 'machineroomtype', 'mr'],
   units: ['units', 'unit', 'noofunits', 'quantity'],
 };
 
 const NUMBER_FIELDS = [
-  'shaftWidthCm',
-  'shaftDepthCm',
-  'overheadCm',
+  'shaftWidthMm',
+  'shaftDepthMm',
+  'overheadMm',
   'units',
 ] as const;
+
+/**
+ * The paper SITE COLLECTION FORM is filled in centimetres ("200 x 180");
+ * the system keeps millimetres. A figure under 1,000 can only be
+ * centimetres (no shaft is under a metre), so it is converted; a figure of
+ * 1,000 or more is already millimetres and kept.
+ * ponytail: a threshold, not a unit column; add a "units" cell to the
+ * sheet if a surveyor ever writes a 10 m overhead in centimetres.
+ */
+const MEASUREMENT_FIELDS: readonly string[] = [
+  'shaftWidthMm',
+  'shaftDepthMm',
+  'overheadMm',
+];
+const toMillimetres = (value: number): number =>
+  value < 1000 ? value * 10 : value;
 
 type MappedField = keyof typeof HEADER_SYNONYMS;
 
@@ -86,7 +102,7 @@ const FIELDS = Object.keys(HEADER_SYNONYMS) as MappedField[];
 const normalizeHeader = (raw: string): string =>
   raw.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-/** `shaftWidthCm` -> "shaft width cm", so an error names the sheet's column. */
+/** `shaftWidthMm` -> "shaft width mm", so an error names the sheet's column. */
 const humanLabel = (field: string): string =>
   field.replace(/([A-Z])/g, ' $1').toLowerCase();
 
@@ -171,7 +187,7 @@ export const parseSheetNumber = (raw: string): number | null | undefined => {
 
 /**
  * Flattens class-validator output into one sentence a salesperson can act on.
- * class-validator names the DTO property — "shaftWidthCm must not be greater
+ * class-validator names the DTO property — "shaftWidthMm must not be greater
  * than 2000" — which is not a column anyone can find on the sheet, and the
  * phone constraint names nothing at all. Both get the human column label.
  */
@@ -401,7 +417,10 @@ export class SiteSurveysImportService {
             message: `${humanLabel(field)}: "${text}" is not a number.`,
           };
         }
-        payload[field] = value;
+        payload[field] =
+          value !== undefined && MEASUREMENT_FIELDS.includes(field)
+            ? toMillimetres(value)
+            : value;
       } else {
         payload[field] = text;
       }
@@ -427,10 +446,10 @@ const toRowDto = (
   address: dto.address ?? null,
   contactName: dto.contactName ?? null,
   contactPhone: dto.contactPhone ?? null,
-  shaftWidthCm: dto.shaftWidthCm ?? null,
-  shaftDepthCm: dto.shaftDepthCm ?? null,
+  shaftWidthMm: dto.shaftWidthMm ?? null,
+  shaftDepthMm: dto.shaftDepthMm ?? null,
   floors: dto.floors ?? null,
-  overheadCm: dto.overheadCm ?? null,
+  overheadMm: dto.overheadMm ?? null,
   machineRoom: dto.machineRoom ?? null,
   units: dto.units ?? null,
 });
