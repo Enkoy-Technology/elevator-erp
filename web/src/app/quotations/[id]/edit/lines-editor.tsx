@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import {
   STANDARD_LIFT_PRODUCTS,
   startingCapacityKg,
+  startingSpeedAndDoor,
   usesRise,
 } from '@/app/calculator/lift-calculator';
 import { Field } from '@/components/form-page';
@@ -468,6 +469,12 @@ export const LinesEditor = ({
                               Number(next.capacityKg) || 0,
                             ),
                           );
+                          const specs = startingSpeedAndDoor(e.target.value, {
+                            speedMs: Number(next.speedMs) || 1,
+                            doorWidthMm: Number(next.doorWidthMm) || 900,
+                          });
+                          next.speedMs = String(specs.speedMs);
+                          next.doorWidthMm = String(specs.doorWidthMm);
                           setDrafts((prev) => ({ ...prev, [line.id]: next }));
                         }}
                       >

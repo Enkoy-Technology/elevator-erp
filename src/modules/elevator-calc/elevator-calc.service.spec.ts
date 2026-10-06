@@ -20,6 +20,10 @@ const productTypes = {
   })),
 } as unknown as ProductTypesRepository;
 
+/** A car product rides slowly through a wide door; the passenger fixture's figures are refused for it. */
+const forProduct = (productType: string): Partial<CalcInput> =>
+  productType.startsWith('CAR_') ? { speedMs: 0.25, doorWidthMm: 2500 } : {};
+
 /** §4.1 technical fixture; pricing comes from the §4.2 product price list. */
 const WORKED_EXAMPLE: CalcInput = {
   productType: 'PASSENGER',
@@ -242,6 +246,7 @@ describe('ElevatorCalcService', () => {
         return (
           await calc({
             ...WORKED_EXAMPLE,
+            ...forProduct(productType),
             productType,
             stops: row.refStops,
             capacityKg: row.minCapacityKg!,
@@ -256,6 +261,28 @@ describe('ElevatorCalcService', () => {
       expect(await cheapest('CAR_PLATFORM_LIFT')).toBe('5400000.00');
       // 5,200,000 + (3,500 − 2,000) × 400
       expect(await cheapest('CAR_STACKING_LIFT')).toBe('5800000.00');
+    });
+
+    it('holds a car lift to 0.25 m/s and a 2,500 mm door (car lift, platform, stacking)', async () => {
+      const car = (extra: Partial<CalcRequest>) =>
+        calc({
+          ...WORKED_EXAMPLE,
+          productType: 'CAR_LIFT',
+          capacityKg: 3500,
+          stops: 2,
+          speedMs: 0.25,
+          doorWidthMm: 2500,
+          ...extra,
+        });
+      await expect(car({})).resolves.toBeDefined();
+      await expect(car({ speedMs: 0.3 })).rejects.toThrow(/0\.25 m\/s or less/);
+      await expect(car({ doorWidthMm: 2400 })).rejects.toThrow(/at least 2,500 mm/);
+      await expect(
+        car({ productType: 'CAR_STACKING_LIFT', speedMs: 1 }),
+      ).rejects.toThrow(/0\.25 m\/s or less/);
+      await expect(
+        car({ productType: 'CAR_PLATFORM_LIFT', doorWidthMm: 900 }),
+      ).rejects.toThrow(/at least 2,500 mm/);
     });
 
     it('refuses a product that is not in the list', async () => {
@@ -274,6 +301,7 @@ describe('ElevatorCalcService', () => {
         (
           await calc({
             ...WORKED_EXAMPLE,
+            ...forProduct(productType),
             productType,
             capacityKg,
             stops,
@@ -383,6 +411,7 @@ describe('ElevatorCalcService', () => {
       async (productType) => {
         const result = await calc({
           ...WORKED_EXAMPLE,
+          ...forProduct(productType),
           productType,
           // A car platform is sold from 3,500 kg; the fixture's 1,000 kg is a passenger figure.
           capacityKg: 3500,

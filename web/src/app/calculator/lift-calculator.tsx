@@ -71,6 +71,42 @@ export const isStandardLift = (productType: string): boolean =>
  * is below it (a car lift is sold from 3,500 kg — better to open on that
  * than to type 1,000 and be told no), otherwise what was there.
  */
+/** Mirrors the API's car-lifts.ts: a vehicle rides slowly through a wide door. */
+export const CAR_LIFT_PRODUCTS: readonly string[] = [
+  'CAR_LIFT',
+  'CAR_PLATFORM_LIFT',
+  'CAR_STACKING_LIFT',
+];
+export const CAR_LIFT_MAX_SPEED_MS = 0.25;
+export const CAR_LIFT_MIN_DOOR_WIDTH_MM = 2500;
+
+/**
+ * The speed and door to start a product at. Switching to a car product
+ * brings both inside its limits; switching away from one restores the
+ * passenger defaults a car lift's figures would be absurd for.
+ */
+export const startingSpeedAndDoor = (
+  productType: string,
+  current: { speedMs: number; doorWidthMm: number },
+): { speedMs: number; doorWidthMm: number } => {
+  if (CAR_LIFT_PRODUCTS.includes(productType)) {
+    return {
+      speedMs: Math.min(current.speedMs, CAR_LIFT_MAX_SPEED_MS),
+      doorWidthMm: Math.max(current.doorWidthMm, CAR_LIFT_MIN_DOOR_WIDTH_MM),
+    };
+  }
+  return {
+    speedMs:
+      current.speedMs <= CAR_LIFT_MAX_SPEED_MS
+        ? WORKED_EXAMPLE.speedMs
+        : current.speedMs,
+    doorWidthMm:
+      current.doorWidthMm >= CAR_LIFT_MIN_DOOR_WIDTH_MM
+        ? WORKED_EXAMPLE.doorWidthMm
+        : current.doorWidthMm,
+  };
+};
+
 export const startingCapacityKg = (
   products: readonly ProductTypeRow[],
   productType: string,
@@ -188,6 +224,7 @@ export const LiftInputs = ({
                 e.target.value,
                 prev.capacityKg,
               ),
+              ...startingSpeedAndDoor(e.target.value, prev),
             }))
           }
         >

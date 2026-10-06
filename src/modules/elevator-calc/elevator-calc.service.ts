@@ -18,6 +18,11 @@ import {
   selectGuideRail,
 } from './calc-math';
 import {
+  CAR_LIFT_MAX_SPEED_MS,
+  CAR_LIFT_MIN_DOOR_WIDTH_MM,
+  isCarProduct,
+} from './car-lifts';
+import {
   PASSENGER_CAR_HEIGHT_MM,
   selectPassengerLift,
   speedForFloors,
@@ -80,6 +85,18 @@ export class ElevatorCalcService {
       throw new BadRequestException(
         `${product.name} is sold from ${product.minCapacityKg.toLocaleString('en-US')} kg — ${input.capacityKg.toLocaleString('en-US')} kg is below the minimum.`,
       );
+    }
+    if (isCarProduct(product.code)) {
+      if (input.speedMs > CAR_LIFT_MAX_SPEED_MS) {
+        throw new BadRequestException(
+          `${product.name} runs at ${CAR_LIFT_MAX_SPEED_MS} m/s or less — ${input.speedMs} m/s is too fast for a vehicle.`,
+        );
+      }
+      if (input.doorWidthMm < CAR_LIFT_MIN_DOOR_WIDTH_MM) {
+        throw new BadRequestException(
+          `${product.name} needs a door of at least ${CAR_LIFT_MIN_DOOR_WIDTH_MM.toLocaleString('en-US')} mm for a vehicle — ${input.doorWidthMm.toLocaleString('en-US')} mm is too narrow.`,
+        );
+      }
     }
 
     let priced: ReturnType<typeof computeProductPrice>;
