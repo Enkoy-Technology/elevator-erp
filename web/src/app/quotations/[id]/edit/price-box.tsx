@@ -128,7 +128,10 @@ export const PriceBox = ({
   const onGrandTotalChange = (value: string) => {
     setGrandTotal(value);
     if (isMoney(value)) {
-      setDiscount(discountPercentEtb(calcVat.grossEtb, value));
+      const percent = discountPercentEtb(calcVat.grossEtb, value);
+      // A price above the calculator is a premium, which the field cannot
+      // hold (no minus sign); the applied row below still names it.
+      setDiscount(percent.startsWith('-') ? '' : percent);
     }
   };
   const applied = negotiated ? quotation.totalPriceEtb : null;
