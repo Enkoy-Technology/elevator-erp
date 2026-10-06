@@ -17,11 +17,7 @@ import {
   qty2,
   selectGuideRail,
 } from './calc-math';
-import {
-  CAR_LIFT_MAX_SPEED_MS,
-  CAR_LIFT_MIN_DOOR_WIDTH_MM,
-  isCarProduct,
-} from './car-lifts';
+import { VEHICLE_SPECS, VEHICLE_SPEC_NOTE } from './vehicle-specs';
 import {
   PASSENGER_CAR_HEIGHT_MM,
   selectPassengerLift,
@@ -86,15 +82,20 @@ export class ElevatorCalcService {
         `${product.name} is sold from ${product.minCapacityKg.toLocaleString('en-US')} kg — ${input.capacityKg.toLocaleString('en-US')} kg is below the minimum.`,
       );
     }
-    if (isCarProduct(product.code)) {
-      if (input.speedMs > CAR_LIFT_MAX_SPEED_MS) {
+    const vehicle = VEHICLE_SPECS[product.code];
+    if (vehicle) {
+      if (input.speedMs < vehicle.speed.min || input.speedMs > vehicle.speed.max) {
         throw new BadRequestException(
-          `${product.name} runs at ${CAR_LIFT_MAX_SPEED_MS} m/s or less — ${input.speedMs} m/s is too fast for a vehicle.`,
+          `${product.name} is specified at ${vehicle.speed.min}–${vehicle.speed.max} m/s — ${input.speedMs} m/s is outside the company's standard.`,
         );
       }
-      if (input.doorWidthMm < CAR_LIFT_MIN_DOOR_WIDTH_MM) {
+      if (
+        vehicle.door &&
+        (input.doorWidthMm < vehicle.door.min ||
+          input.doorWidthMm > vehicle.door.max)
+      ) {
         throw new BadRequestException(
-          `${product.name} needs a door of at least ${CAR_LIFT_MIN_DOOR_WIDTH_MM.toLocaleString('en-US')} mm for a vehicle — ${input.doorWidthMm.toLocaleString('en-US')} mm is too narrow.`,
+          `${product.name} is specified with a ${vehicle.door.min.toLocaleString('en-US')}–${vehicle.door.max.toLocaleString('en-US')} mm door opening — ${input.doorWidthMm.toLocaleString('en-US')} mm is outside the company's standard.`,
         );
       }
     }
@@ -284,6 +285,22 @@ const resolve = (
     marginPercent: request.marginPercent,
     taxPercent: request.taxPercent,
   };
+  const vehicle = VEHICLE_SPECS[input.productType];
+  if (vehicle) {
+    // The company's standard specification, not EN 81 geometry: a vehicle
+    // lift has a platform and a clear shaft, and the document gives both.
+    notes.push(VEHICLE_SPEC_NOTE);
+    const technical: TechnicalSpecs = {
+      ...EMPTY_GEOMETRY,
+      productType: input.productType,
+      carWidthMm: vehicle.platformMm?.width ?? null,
+      carDepthMm: vehicle.platformMm?.depth ?? null,
+      shaftWidthMm: vehicle.clearShaftMm?.width ?? null,
+      shaftDepthMm: vehicle.clearShaftMm?.depth ?? null,
+      specSheet: [...vehicle.sheet],
+    };
+    return { input, technical, notes };
+  }
   const technical: TechnicalSpecs = {
     productType: input.productType,
     ...(liftGeometry ? computeLiftGeometry(input) : EMPTY_GEOMETRY),

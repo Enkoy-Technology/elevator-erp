@@ -20,9 +20,16 @@ const productTypes = {
   })),
 } as unknown as ProductTypesRepository;
 
-/** A car product rides slowly through a wide door; the passenger fixture's figures are refused for it. */
+/** The vehicle products and the escalator carry the company's standard speed and door; the passenger fixture's figures are refused for them. */
 const forProduct = (productType: string): Partial<CalcInput> =>
-  productType.startsWith('CAR_') ? { speedMs: 0.25, doorWidthMm: 2500 } : {};
+  (
+    {
+      CAR_LIFT: { speedMs: 0.5, doorWidthMm: 2600 },
+      CAR_PLATFORM_LIFT: { speedMs: 0.3, doorWidthMm: 2600 },
+      CAR_STACKING_LIFT: { speedMs: 0.15 },
+      ESCALATOR: { speedMs: 0.5 },
+    } as Record<string, Partial<CalcInput>>
+  )[productType] ?? {};
 
 /** §4.1 technical fixture; pricing comes from the §4.2 product price list. */
 const WORKED_EXAMPLE: CalcInput = {
@@ -152,6 +159,7 @@ describe('ElevatorCalcService', () => {
       const result = await calc({
         ...WORKED_EXAMPLE,
         productType: 'ESCALATOR',
+        ...forProduct('ESCALATOR'),
         stops: 2,
         travelHeightM: 10,
         marginPercent: 0,
@@ -263,26 +271,51 @@ describe('ElevatorCalcService', () => {
       expect(await cheapest('CAR_STACKING_LIFT')).toBe('5800000.00');
     });
 
-    it('holds a car lift to 0.25 m/s and a 2,500 mm door (car lift, platform, stacking)', async () => {
+    it("holds the vehicle products to the company's standard speed and door (specification, 2026-10-06)", async () => {
       const car = (extra: Partial<CalcRequest>) =>
         calc({
           ...WORKED_EXAMPLE,
           productType: 'CAR_LIFT',
           capacityKg: 3500,
           stops: 2,
-          speedMs: 0.25,
-          doorWidthMm: 2500,
+          speedMs: 0.5,
+          doorWidthMm: 2600,
           ...extra,
         });
       await expect(car({})).resolves.toBeDefined();
-      await expect(car({ speedMs: 0.3 })).rejects.toThrow(/0\.25 m\/s or less/);
-      await expect(car({ doorWidthMm: 2400 })).rejects.toThrow(/at least 2,500 mm/);
+      await expect(car({ speedMs: 0.3 })).resolves.toBeDefined();
+      await expect(car({ speedMs: 0.25 })).rejects.toThrow(/0\.3–0\.5 m\/s/);
+      await expect(car({ speedMs: 1 })).rejects.toThrow(/0\.3–0\.5 m\/s/);
+      await expect(car({ doorWidthMm: 2500 })).rejects.toThrow(/2,600–2,800 mm/);
       await expect(
-        car({ productType: 'CAR_STACKING_LIFT', speedMs: 1 }),
-      ).rejects.toThrow(/0\.25 m\/s or less/);
+        car({ productType: 'CAR_STACKING_LIFT', speedMs: 0.5 }),
+      ).rejects.toThrow(/0\.08–0\.15 m\/s/);
       await expect(
-        car({ productType: 'CAR_PLATFORM_LIFT', doorWidthMm: 900 }),
-      ).rejects.toThrow(/at least 2,500 mm/);
+        car({ productType: 'CAR_PLATFORM_LIFT', speedMs: 0.3, doorWidthMm: 2400 }),
+      ).resolves.toBeDefined();
+      await expect(
+        car({ productType: 'CAR_PLATFORM_LIFT', speedMs: 0.3, doorWidthMm: 900 }),
+      ).rejects.toThrow(/2,400–2,800 mm/);
+    });
+
+    it("prints the company's specification sheet for a vehicle product, with its platform and clear shaft", async () => {
+      const result = await calc({
+        ...WORKED_EXAMPLE,
+        ...forProduct('CAR_LIFT'),
+        productType: 'CAR_LIFT',
+        capacityKg: 3500,
+        stops: 2,
+      });
+      expect(result.technical.carWidthMm).toBe(2800);
+      expect(result.technical.carDepthMm).toBe(5600);
+      expect(result.technical.shaftWidthMm).toBe(3400);
+      expect(result.technical.shaftDepthMm).toBe(6500);
+      expect(result.technical.specSheet?.[0]).toEqual({
+        label: 'Type',
+        value: 'Heavy-duty vehicle/car lift',
+      });
+      expect(result.technical.counterweightMassKg).toBeNull();
+      expect(result.notes.at(-1)).toMatch(/shop drawing/);
     });
 
     it('refuses a product that is not in the list', async () => {
@@ -327,6 +360,7 @@ describe('ElevatorCalcService', () => {
       const result = await calc({
         ...WORKED_EXAMPLE,
         productType: 'ESCALATOR',
+        ...forProduct('ESCALATOR'),
         travelHeightM: 10,
         marginPercent: 0,
         taxPercent: 0,
@@ -407,7 +441,7 @@ describe('ElevatorCalcService', () => {
     // drop absent keys — so emitting nulls here is what keeps a lift's
     // specification off an escalator quotation.
     it.each(['CAR_PLATFORM_LIFT', 'ESCALATOR'] as const)(
-      'emits no lift geometry for %s, only the product type',
+      'emits no EN 81 machine geometry for %s — the specification sheet instead',
       async (productType) => {
         const result = await calc({
           ...WORKED_EXAMPLE,
@@ -418,8 +452,19 @@ describe('ElevatorCalcService', () => {
         });
 
         expect(result.technical.productType).toBe(productType);
-        const { productType: _omitted, ...geometry } = result.technical;
-        expect(Object.values(geometry).every((v) => v === null)).toBe(true);
+        expect(result.technical.specSheet?.length).toBeGreaterThan(5);
+        for (const key of [
+          'capacityPersons',
+          'carHeightMm',
+          'pitDepthMm',
+          'overheadClearanceMm',
+          'counterweightMassKg',
+          'motorPowerKw',
+          'guideRailSpec',
+          'machineRoomWidthMm',
+        ] as const) {
+          expect(result.technical[key]).toBeNull();
+        }
         // Pricing is unaffected: flat, and still computed.
         expect(result.pricing.totalBeforeMargin).not.toBe('0.00');
       },

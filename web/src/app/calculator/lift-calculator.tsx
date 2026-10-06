@@ -71,39 +71,43 @@ export const isStandardLift = (productType: string): boolean =>
  * is below it (a car lift is sold from 3,500 kg — better to open on that
  * than to type 1,000 and be told no), otherwise what was there.
  */
-/** Mirrors the API's car-lifts.ts: a vehicle rides slowly through a wide door. */
-export const CAR_LIFT_PRODUCTS: readonly string[] = [
-  'CAR_LIFT',
-  'CAR_PLATFORM_LIFT',
-  'CAR_STACKING_LIFT',
-];
-export const CAR_LIFT_MAX_SPEED_MS = 0.25;
-export const CAR_LIFT_MIN_DOOR_WIDTH_MM = 2500;
+/**
+ * Mirrors the API's vehicle-specs.ts: the speed and door the company's
+ * standard specification (2026-10-06) gives each vehicle product and the
+ * escalator, which the form starts at when one is chosen.
+ */
+export const VEHICLE_STANDARD: Readonly<
+  Record<string, { speedMs: number; doorWidthMm?: number }>
+> = {
+  CAR_LIFT: { speedMs: 0.5, doorWidthMm: 2600 },
+  CAR_PLATFORM_LIFT: { speedMs: 0.3, doorWidthMm: 2600 },
+  CAR_STACKING_LIFT: { speedMs: 0.15 },
+  ESCALATOR: { speedMs: 0.5 },
+};
 
 /**
- * The speed and door to start a product at. Switching to a car product
- * brings both inside its limits; switching away from one restores the
- * passenger defaults a car lift's figures would be absurd for.
+ * The speed and door to start a product at: the company's standard for a
+ * vehicle product or escalator, the passenger defaults when coming back
+ * from one (a vehicle's figures would be absurd on a passenger lift).
  */
 export const startingSpeedAndDoor = (
   productType: string,
   current: { speedMs: number; doorWidthMm: number },
 ): { speedMs: number; doorWidthMm: number } => {
-  if (CAR_LIFT_PRODUCTS.includes(productType)) {
+  const standard = VEHICLE_STANDARD[productType];
+  if (standard) {
     return {
-      speedMs: Math.min(current.speedMs, CAR_LIFT_MAX_SPEED_MS),
-      doorWidthMm: Math.max(current.doorWidthMm, CAR_LIFT_MIN_DOOR_WIDTH_MM),
+      speedMs: standard.speedMs,
+      doorWidthMm: standard.doorWidthMm ?? current.doorWidthMm,
     };
   }
+  const fromVehicle = Object.values(VEHICLE_STANDARD).some(
+    (s) => s.speedMs === current.speedMs,
+  );
   return {
-    speedMs:
-      current.speedMs <= CAR_LIFT_MAX_SPEED_MS
-        ? WORKED_EXAMPLE.speedMs
-        : current.speedMs,
+    speedMs: fromVehicle ? WORKED_EXAMPLE.speedMs : current.speedMs,
     doorWidthMm:
-      current.doorWidthMm >= CAR_LIFT_MIN_DOOR_WIDTH_MM
-        ? WORKED_EXAMPLE.doorWidthMm
-        : current.doorWidthMm,
+      current.doorWidthMm >= 2400 ? WORKED_EXAMPLE.doorWidthMm : current.doorWidthMm,
   };
 };
 
@@ -383,6 +387,38 @@ export const LiftResult = ({
               <div key={k}>
                 <dt className="text-xs text-slate-500">{k}</dt>
                 <dd className="font-medium text-slate-900">{v}</dd>
+              </div>
+            ))}
+          </dl>
+          {result.notes.length > 0 ? (
+            <ul className="mt-4 space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              {result.notes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      ) : result.technical.specSheet ? (
+        <>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
+            {(
+              [
+                ['Rated load (kg)', formatNumber(result.input.capacityKg)],
+                ['Speed (m/s)', String(result.input.speedMs)],
+                ['Stops', formatNumber(result.input.stops)],
+              ] as const
+            ).map(([k, v]) => (
+              <div key={k}>
+                <dt className="text-xs text-slate-500">{k}</dt>
+                <dd className="font-medium text-slate-900">{v}</dd>
+              </div>
+            ))}
+          </dl>
+          <dl className="mt-4 divide-y divide-slate-100 text-sm">
+            {result.technical.specSheet.map((row) => (
+              <div key={row.label} className="grid gap-1 py-2 sm:grid-cols-[14rem_1fr]">
+                <dt className="text-xs text-slate-500 sm:pt-0.5">{row.label}</dt>
+                <dd className="text-slate-900">{row.value}</dd>
               </div>
             ))}
           </dl>

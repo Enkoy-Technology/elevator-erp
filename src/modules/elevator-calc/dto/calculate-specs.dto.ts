@@ -87,11 +87,11 @@ export class CalculateSpecsDto {
   @Max(200)
   travelHeightM?: number;
 
-  // Down to 0.1: a car lift runs at 0.25 m/s or less (car-lifts.ts).
-  @ApiPropertyOptional({ minimum: 0.1, maximum: 10, example: 1.6 })
+  // Down to 0.05: a car stacking lift runs at 0.08–0.15 m/s (vehicle-specs.ts).
+  @ApiPropertyOptional({ minimum: 0.05, maximum: 10, example: 1.6 })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0.1)
+  @Min(0.05)
   @Max(10)
   speedMs?: number;
 
@@ -109,7 +109,7 @@ export class CalculateSpecsDto {
   @IsEnum(DOOR_TYPES)
   doorType?: DoorType;
 
-  // Up to 4,000: a car lift's door is 2,500 mm or more (car-lifts.ts).
+  // Up to 4,000: a car lift's door opening is 2,600–2,800 mm (vehicle-specs.ts).
   @ApiPropertyOptional({ minimum: 700, maximum: 4000, example: 900 })
   @IsOptional()
   @IsInt()
