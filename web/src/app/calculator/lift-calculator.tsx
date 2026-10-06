@@ -60,6 +60,7 @@ export const STANDARD_LIFT_PRODUCTS: readonly string[] = [
   'HOSPITAL',
   'PANORAMIC',
   'HOME',
+  'CARGO',
 ];
 export const isStandardLift = (productType: string): boolean =>
   STANDARD_LIFT_PRODUCTS.includes(productType);
