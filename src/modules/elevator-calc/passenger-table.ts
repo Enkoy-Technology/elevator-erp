@@ -105,39 +105,22 @@ export interface PassengerSelection {
 }
 
 /**
- * The lift for a shaft. An exact standard shaft names its row; otherwise the
- * largest lift whose shaft fits inside the one entered (most persons, then
- * the one that uses the shaft best). Null when nothing fits.
+ * The lift for a shaft. An exact standard shaft names its row; otherwise
+ * the row whose shaft is NEAREST the one entered, by millimetres of width
+ * and depth together, whether a little smaller or a little bigger — an
+ * 1800 × 1800 shaft is the 8-person's 1835 × 1750, not the 6-person's
+ * 1550 × 1600 that merely fits inside it (client, 2026-10-06). Equally
+ * near, the bigger lift.
  */
 export const selectPassengerLift = (
   shaftWidthMm: number,
   shaftDepthMm: number,
-): PassengerSelection | null => {
-  const exact = PASSENGER_LIFTS.find(
-    (lift) =>
-      lift.shaftWidthMm === shaftWidthMm && lift.shaftDepthMm === shaftDepthMm,
-  );
-  if (exact) {
-    return { lift: exact, exact: true };
-  }
-  const fitting = PASSENGER_LIFTS.filter(
-    (lift) =>
-      lift.shaftWidthMm <= shaftWidthMm && lift.shaftDepthMm <= shaftDepthMm,
-  ).sort(
-    (a, b) =>
-      b.persons - a.persons ||
-      b.shaftWidthMm * b.shaftDepthMm - a.shaftWidthMm * a.shaftDepthMm,
-  );
-  const best = fitting[0];
-  return best ? { lift: best, exact: false } : null;
+): PassengerSelection => {
+  const distance = (lift: PassengerLift): number =>
+    Math.abs(lift.shaftWidthMm - shaftWidthMm) +
+    Math.abs(lift.shaftDepthMm - shaftDepthMm);
+  const nearest = [...PASSENGER_LIFTS].sort(
+    (a, b) => distance(a) - distance(b) || b.persons - a.persons,
+  )[0]!;
+  return { lift: nearest, exact: distance(nearest) === 0 };
 };
-
-/** The smallest standard shaft, for the "nothing fits" message. */
-export const SMALLEST_PASSENGER_SHAFT = PASSENGER_LIFTS.reduce((min, lift) =>
-  lift.shaftWidthMm * lift.shaftDepthMm < min.shaftWidthMm * min.shaftDepthMm
-    ? lift
-    : min,
-);
-
-export const doorLabel = (lift: PassengerLift): string =>
-  `${lift.door} ${lift.doorWidthMm} × ${PASSENGER_DOOR_HEIGHT_MM}`;

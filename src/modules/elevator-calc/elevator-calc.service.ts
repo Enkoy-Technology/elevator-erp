@@ -19,7 +19,6 @@ import {
 } from './calc-math';
 import {
   PASSENGER_CAR_HEIGHT_MM,
-  SMALLEST_PASSENGER_SHAFT,
   selectPassengerLift,
   speedForFloors,
   usesPassengerTable,
@@ -193,16 +192,10 @@ const resolve = (
     const shaftWidthMm = request.shaftWidthMm!;
     const shaftDepthMm = request.shaftDepthMm!;
     const floors = request.floors!;
-    const selection = selectPassengerLift(shaftWidthMm, shaftDepthMm);
-    if (!selection) {
-      throw new BadRequestException(
-        `No standard passenger lift fits a ${shaftWidthMm} × ${shaftDepthMm} mm shaft; the smallest is ${SMALLEST_PASSENGER_SHAFT.shaftWidthMm} × ${SMALLEST_PASSENGER_SHAFT.shaftDepthMm} mm.`,
-      );
-    }
-    const { lift, exact } = selection;
+    const { lift, exact } = selectPassengerLift(shaftWidthMm, shaftDepthMm);
     if (!exact) {
       notes.push(
-        `${shaftWidthMm} × ${shaftDepthMm} mm is not a standard shaft; the largest lift that fits is the ${lift.persons}-person (${lift.shaftWidthMm} × ${lift.shaftDepthMm} mm shaft).`,
+        `${shaftWidthMm} × ${shaftDepthMm} mm is not a standard shaft; the nearest is the ${lift.persons}-person (${lift.shaftWidthMm} × ${lift.shaftDepthMm} mm shaft).`,
       );
     }
     const bandSpeed = speedForFloors(floors);

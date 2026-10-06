@@ -469,7 +469,14 @@ describe('ElevatorCalcService', () => {
       expect(result.notes[0]).toMatch(/maximum is 1.75/);
     });
 
-    it('picks the largest lift that fits a non-standard shaft and says so', async () => {
+    it('picks the nearest standard shaft, a little bigger or smaller, and says so', async () => {
+      // 1800 × 1800 is 85 mm off the 8-person's 1835 × 1750 and 450 mm off
+      // the 6-person's 1550 × 1600 that would fit inside it.
+      const near = await standard({ shaftWidthMm: 1800, shaftDepthMm: 1800 });
+      expect(near.technical.capacityPersons).toBe(8);
+      expect(near.input.capacityKg).toBe(630);
+      expect(near.notes[0]).toMatch(/nearest is the 8-person/);
+
       const result = await standard({ shaftWidthMm: 2000, shaftDepthMm: 1800 });
       expect(result.technical.capacityPersons).toBe(10);
       expect(result.notes[0]).toMatch(/not a standard shaft/);
@@ -481,10 +488,12 @@ describe('ElevatorCalcService', () => {
       );
     });
 
-    it('tells the salesperson when nothing fits', async () => {
-      await expect(
-        standard({ shaftWidthMm: 1200, shaftDepthMm: 1200 }),
-      ).rejects.toThrow(/No standard passenger lift fits/);
+    it('names the smallest lift for a shaft smaller than any standard one, with the note', async () => {
+      const result = await standard({ shaftWidthMm: 1200, shaftDepthMm: 1200 });
+      expect(result.technical.standardLift).toBe(
+        '5-person lift, 1650 × 1450 mm standard shaft',
+      );
+      expect(result.notes[0]).toMatch(/not a standard shaft/);
     });
 
     it('still wants every figure for a product outside the table', async () => {
