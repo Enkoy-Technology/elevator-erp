@@ -115,6 +115,10 @@ export const PriceBox = ({
   // Blur and the button can both fire for one gesture (clicking the button
   // blurs the field first), and each would POST a price.
   const inFlight = useRef(false);
+  // What is in the price field right now, so a reply that lands after the
+  // salesperson has moved on to the discount box does not overwrite it.
+  const latest = useRef(grandTotal);
+  latest.current = grandTotal;
 
   const calcSubtotal = calculatorSubtotalEtb(lines);
   const calcVat = withVatEtb(calcSubtotal, quotation.taxPercent);
@@ -165,9 +169,12 @@ export const PriceBox = ({
       const saved = await priceQuotation(quotationId, value);
       onQuotationChange(saved);
       // Normalised ('7835000' -> '7835000.00'), which is also what makes
-      // the "not applied yet" comparison below settle.
-      setGrandTotal(saved.totalPriceEtb);
-      setDiscount(saved.discountPercent ?? '');
+      // the "not applied yet" comparison below settle — unless the fields
+      // have moved on since, in which case what is typed stands.
+      if (latest.current === value) {
+        setGrandTotal(saved.totalPriceEtb);
+        setDiscount(saved.discountPercent ?? '');
+      }
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : 'Failed to apply that price',
@@ -283,7 +290,6 @@ export const PriceBox = ({
               </label>
               <NumberInput
                 id="discountPercent"
-                disabled={applying}
                 value={discount}
                 onValueChange={onDiscountChange}
                 onBlur={() => void apply()}
@@ -301,7 +307,6 @@ export const PriceBox = ({
               </label>
               <NumberInput
                 id="grandTotal"
-                disabled={applying}
                 value={grandTotal}
                 onValueChange={onGrandTotalChange}
                 onBlur={() => void apply()}
