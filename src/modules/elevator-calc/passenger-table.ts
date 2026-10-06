@@ -105,22 +105,32 @@ export interface PassengerSelection {
 }
 
 /**
- * The lift for a shaft. An exact standard shaft names its row; otherwise
- * the row whose shaft is NEAREST the one entered, by millimetres of width
- * and depth together, whether a little smaller or a little bigger — an
- * 1800 × 1800 shaft is the 8-person's 1835 × 1750, not the 6-person's
- * 1550 × 1600 that merely fits inside it (client, 2026-10-06). Equally
- * near, the bigger lift.
+ * The lift for a shaft. An exact standard shaft names its row; any other
+ * shaft rounds UP: the smallest standard lift whose shaft (by area) is at
+ * least as large as the one entered — an 1800 × 1800 shaft is bigger than
+ * the 8-person's 1835 × 1750, so it is the 10-person, 800 kg, never the
+ * 6-person that merely fits inside it (client, 2026-10-06). A shaft
+ * bigger than every standard one takes the largest lift.
  */
 export const selectPassengerLift = (
   shaftWidthMm: number,
   shaftDepthMm: number,
 ): PassengerSelection => {
-  const distance = (lift: PassengerLift): number =>
-    Math.abs(lift.shaftWidthMm - shaftWidthMm) +
-    Math.abs(lift.shaftDepthMm - shaftDepthMm);
-  const nearest = [...PASSENGER_LIFTS].sort(
-    (a, b) => distance(a) - distance(b) || b.persons - a.persons,
-  )[0]!;
-  return { lift: nearest, exact: distance(nearest) === 0 };
+  const exact = PASSENGER_LIFTS.find(
+    (lift) =>
+      lift.shaftWidthMm === shaftWidthMm && lift.shaftDepthMm === shaftDepthMm,
+  );
+  if (exact) {
+    return { lift: exact, exact: true };
+  }
+  const area = shaftWidthMm * shaftDepthMm;
+  const byArea = [...PASSENGER_LIFTS].sort(
+    (a, b) =>
+      a.shaftWidthMm * a.shaftDepthMm - b.shaftWidthMm * b.shaftDepthMm ||
+      b.persons - a.persons,
+  );
+  const lift =
+    byArea.find((row) => row.shaftWidthMm * row.shaftDepthMm >= area) ??
+    byArea[byArea.length - 1]!;
+  return { lift, exact: false };
 };

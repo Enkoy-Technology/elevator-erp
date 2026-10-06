@@ -195,7 +195,7 @@ const resolve = (
     const { lift, exact } = selectPassengerLift(shaftWidthMm, shaftDepthMm);
     if (!exact) {
       notes.push(
-        `${shaftWidthMm} × ${shaftDepthMm} mm is not a standard shaft; the nearest is the ${lift.persons}-person (${lift.shaftWidthMm} × ${lift.shaftDepthMm} mm shaft).`,
+        `${shaftWidthMm} × ${shaftDepthMm} mm is not a standard shaft; the next standard size is the ${lift.persons}-person (${lift.shaftWidthMm} × ${lift.shaftDepthMm} mm shaft).`,
       );
     }
     const bandSpeed = speedForFloors(floors);

@@ -469,23 +469,30 @@ describe('ElevatorCalcService', () => {
       expect(result.notes[0]).toMatch(/maximum is 1.75/);
     });
 
-    it('picks the nearest standard shaft, a little bigger or smaller, and says so', async () => {
-      // 1800 × 1800 is 85 mm off the 8-person's 1835 × 1750 and 450 mm off
-      // the 6-person's 1550 × 1600 that would fit inside it.
-      const near = await standard({ shaftWidthMm: 1800, shaftDepthMm: 1800 });
-      expect(near.technical.capacityPersons).toBe(8);
-      expect(near.input.capacityKg).toBe(630);
-      expect(near.notes[0]).toMatch(/nearest is the 8-person/);
+    it('rounds a non-standard shaft UP to the next standard lift and says so', async () => {
+      // 1800 × 1800 (3.24 m²) is just over the 8-person's 1835 × 1750
+      // (3.21 m²), so it is the 10-person, 800 kg — never the 6-person that
+      // would fit inside it.
+      const up = await standard({ shaftWidthMm: 1800, shaftDepthMm: 1800 });
+      expect(up.technical.capacityPersons).toBe(10);
+      expect(up.input.capacityKg).toBe(800);
+      expect(up.notes[0]).toMatch(/next standard size is the 10-person/);
 
+      // 2000 × 1800 (3.6 m²) is over the 10-person's 1980 × 1750 (3.47 m²).
       const result = await standard({ shaftWidthMm: 2000, shaftDepthMm: 1800 });
-      expect(result.technical.capacityPersons).toBe(10);
+      expect(result.technical.capacityPersons).toBe(13);
       expect(result.notes[0]).toMatch(/not a standard shaft/);
       // The spec sheet says the building's shaft, and names the row beside it.
       expect(result.technical.shaftWidthMm).toBe(2000);
       expect(result.technical.shaftDepthMm).toBe(1800);
       expect(result.technical.standardLift).toBe(
-        '10-person lift, 1980 × 1750 mm standard shaft',
+        '13-person lift, 2200 × 1750 mm standard shaft',
       );
+    });
+
+    it('takes the largest lift for a shaft bigger than every standard one', async () => {
+      const result = await standard({ shaftWidthMm: 3000, shaftDepthMm: 3000 });
+      expect(result.technical.capacityPersons).toBe(21);
     });
 
     it('names the smallest lift for a shaft smaller than any standard one, with the note', async () => {
