@@ -93,12 +93,14 @@ export class CreateSiteSurveyDto {
   @MaxLength(60)
   machineRoom?: string;
 
-  @ApiPropertyOptional({ example: 1 })
+  @ApiPropertyOptional({
+    example: '2',
+    description: 'A number or a word, as written on the form',
+  })
   @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  units?: number;
+  @IsString()
+  @MaxLength(60)
+  units?: string;
 }
 
 /**

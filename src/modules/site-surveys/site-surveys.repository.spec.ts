@@ -131,7 +131,7 @@ describe('SiteSurveysRepository.update', () => {
     await new SiteSurveysRepository({ withTenant } as never).update(
       TENANT_ID,
       'survey-1',
-      { projectName: null, surveyDate: null, units: 2 },
+      { projectName: null, surveyDate: null, units: '2' },
     );
 
     const values = chain.set.mock.calls[0]?.[0] as Record<string, unknown>;

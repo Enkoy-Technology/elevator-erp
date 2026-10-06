@@ -251,7 +251,7 @@ export default function SurveysPage() {
     },
     {
       id: 'units',
-      accessorFn: (survey) => survey.units ?? 0,
+      accessorFn: (survey) => survey.units ?? '',
       header: 'Units',
       enableSorting: true,
       cell: ({ row }) => dash(row.original.units),

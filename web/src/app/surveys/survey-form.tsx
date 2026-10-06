@@ -55,7 +55,7 @@ export const SurveyForm = ({ survey }: { survey: SiteSurvey | null }) => {
     digits(survey?.overheadMm ?? null),
   );
   const [machineRoom, setMachineRoom] = useState(survey?.machineRoom ?? '');
-  const [units, setUnits] = useState(digits(survey?.units ?? null));
+  const [units, setUnits] = useState(survey?.units ?? '');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -74,7 +74,7 @@ export const SurveyForm = ({ survey }: { survey: SiteSurvey | null }) => {
       floors: text(floors),
       overheadMm: count(overheadMm),
       machineRoom: text(machineRoom),
-      units: count(units),
+      units: units.trim() === '' ? null : units.trim(),
     };
     try {
       if (editId) {
@@ -221,8 +221,17 @@ export const SurveyForm = ({ survey }: { survey: SiteSurvey | null }) => {
           </select>
         </Field>
 
-        <Field label="Units" htmlFor="units">
-          <NumberInput id="units" value={units} onValueChange={setUnits} />
+        <Field
+          label="Units"
+          htmlFor="units"
+          hint="A number or a word, as written on the form."
+        >
+          <input
+            id="units"
+            className={fieldClass}
+            value={units}
+            onChange={(e) => setUnits(e.target.value)}
+          />
         </Field>
       </FormSection>
     </FormPage>

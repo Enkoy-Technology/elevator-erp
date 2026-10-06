@@ -60,7 +60,8 @@ export const siteSurveys = pgTable(
     overheadMm: integer('overhead_mm'),
     /** The sheet's words: "With MR", "MRL". Free text, not an enum. */
     machineRoom: text('machine_room'),
-    units: integer('units'),
+    /** As written on the form: "2", or a word. Never parsed. */
+    units: text('units'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

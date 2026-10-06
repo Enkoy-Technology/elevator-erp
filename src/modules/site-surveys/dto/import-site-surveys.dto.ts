@@ -36,8 +36,8 @@ export class ImportSiteSurveyRowDto {
   @ApiPropertyOptional({ type: String, nullable: true, example: 'With MR' })
   machineRoom?: string | null;
 
-  @ApiPropertyOptional({ type: Number, nullable: true })
-  units?: number | null;
+  @ApiPropertyOptional({ type: String, nullable: true, example: '2' })
+  units?: string | null;
 }
 
 export class ImportSiteSurveyErrorDto {

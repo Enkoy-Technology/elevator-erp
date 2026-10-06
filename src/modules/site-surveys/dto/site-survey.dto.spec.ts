@@ -75,7 +75,7 @@ describe('UpdateSiteSurveyDto', () => {
     const failed = await checkPatch({
       projectName: '',
       contactPhone: '12345',
-      units: 1.5,
+      units: 'x'.repeat(61),
     });
     expect(failed.map((error) => error.property).sort()).toEqual([
       'contactPhone',

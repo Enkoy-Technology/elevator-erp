@@ -6,6 +6,7 @@ import { readSpreadsheet, type SheetRow } from '../../common/spreadsheet';
 import { NotificationsRepository } from '../notifications/notifications.repository';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { CreateSiteSurveyDto } from './dto/site-survey.dto';
+import { projectKey } from './site-surveys.repository';
 import type {
   ImportSiteSurveyErrorDto,
   ImportSiteSurveyRowDto,
@@ -72,12 +73,7 @@ const HEADER_SYNONYMS: Record<
   units: ['units', 'unit', 'noofunits', 'quantity'],
 };
 
-const NUMBER_FIELDS = [
-  'shaftWidthMm',
-  'shaftDepthMm',
-  'overheadMm',
-  'units',
-] as const;
+const NUMBER_FIELDS = ['shaftWidthMm', 'shaftDepthMm', 'overheadMm'] as const;
 
 /**
  * The paper SITE COLLECTION FORM is filled in centimetres ("200 x 180");
@@ -252,6 +248,11 @@ export class SiteSurveysImportService {
     const rows: ImportSiteSurveyRowDto[] = [];
     const errors: ImportSiteSurveyErrorDto[] = [];
     const payloads: CreateSiteSurveyDto[] = [];
+    // A site is registered once: a row naming a project already on file,
+    // or named twice on the sheet, is reported and skipped, not written.
+    const registered = await this.surveysRepository.registeredProjects(
+      user.tenantId,
+    );
 
     for (const sheetRow of sheetRows) {
       if (sheetRow.rowNumber < firstDataRowNumber) {
@@ -285,6 +286,16 @@ export class SiteSurveysImportService {
         errors.push({ row: sheetRow.rowNumber, message: parsed.message });
         continue;
       }
+      const key = projectKey(parsed.dto.projectName);
+      const existing = registered.get(key);
+      if (existing !== undefined) {
+        errors.push({
+          row: sheetRow.rowNumber,
+          message: `"${parsed.dto.projectName}" is already registered (survey dated ${existing}).`,
+        });
+        continue;
+      }
+      registered.set(key, 'this sheet');
       rows.push({ rowNumber: sheetRow.rowNumber, ...toRowDto(parsed.dto) });
       payloads.push(parsed.dto);
     }

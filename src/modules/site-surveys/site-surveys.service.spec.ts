@@ -25,7 +25,7 @@ const survey = (over: Partial<SiteSurveyRecord> = {}): SiteSurveyRecord => ({
   floors: 'B+G+11',
   overheadMm: null,
   machineRoom: 'With MR',
-  units: 1,
+  units: '1',
   createdAt: new Date(),
   updatedAt: new Date(),
   ...over,
@@ -174,13 +174,13 @@ describe('SiteSurveysService', () => {
     async (role) => {
       const manager = { userId: USER_ID, tenantId: TENANT_ID, role };
 
-      await service.update(manager, 'survey-1', { units: 2 });
+      await service.update(manager, 'survey-1', { units: '2' });
       await service.delete(manager, 'survey-1');
 
       expect(surveys.update).toHaveBeenCalledWith(
         TENANT_ID,
         'survey-1',
-        { units: 2 },
+        { units: '2' },
         undefined,
       );
       expect(surveys.delete).toHaveBeenCalledWith(

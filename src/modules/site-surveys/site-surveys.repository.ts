@@ -1,16 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  getTableColumns,
-  inArray,
-  isNull,
-  sql,
-  type SQL,
-} from 'drizzle-orm';
+import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, ne, sql, type SQL } from 'drizzle-orm';
 
 import { todayIso } from '../../common/business-time';
 import {
@@ -19,6 +8,8 @@ import {
   type PaginatedResult,
 } from '../../common/pagination';
 import { siteSurveys, users } from '../../database/schema';
+import { SiteSurveyDuplicateError } from '../../common/exceptions';
+import type { TenantTransaction } from '../../database/database.types';
 import { TenantDbService } from '../../database/tenant-db.service';
 import type {
   CreateSiteSurveyDto,
@@ -166,6 +157,9 @@ export class SiteSurveysRepository {
     surveyedByUserId?: string,
   ): Promise<SiteSurveyRecord> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
+      if (typeof dto.projectName === 'string') {
+        await refuseDuplicate(tx, dto.projectName, id);
+      }
       const [row] = await tx
         .update(siteSurveys)
         .set({ ...toUpdate(dto), updatedAt: new Date() })
@@ -200,6 +194,26 @@ export class SiteSurveysRepository {
    * would leave the salesperson guessing which rows to retype, so it all lands
    * or none of it does. Returns how many rows were written.
    */
+  /**
+   * Every registered project name, normalised, with the date of its survey —
+   * what the import checks each row against. One query per upload.
+   * ponytail: loads the tenant's whole list; page it if a tenant ever holds
+   * tens of thousands of surveys.
+   */
+  async registeredProjects(tenantId: string): Promise<Map<string, string>> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      const rows = await tx
+        .select({
+          projectName: siteSurveys.projectName,
+          surveyDate: siteSurveys.surveyDate,
+        })
+        .from(siteSurveys);
+      return new Map(
+        rows.map((row) => [projectKey(row.projectName), row.surveyDate]),
+      );
+    });
+  }
+
   async createMany(
     tenantId: string,
     surveyedByUserId: string,
@@ -211,6 +225,9 @@ export class SiteSurveysRepository {
       return 0;
     }
     return this.tenantDb.withTenant(tenantId, async (tx) => {
+      for (const dto of dtos) {
+        await refuseDuplicate(tx, dto.projectName);
+      }
       const rows = await tx
         .insert(siteSurveys)
         .values(
@@ -230,6 +247,7 @@ export class SiteSurveysRepository {
     dto: CreateSiteSurveyDto,
   ): Promise<SiteSurveyRecord> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
+      await refuseDuplicate(tx, dto.projectName);
       const [row] = await tx
         .insert(siteSurveys)
         .values(toInsert(tenantId, surveyedByUserId, dto))
@@ -241,6 +259,35 @@ export class SiteSurveysRepository {
     });
   }
 }
+
+/** "Bole  Plaza " and "bole plaza" are one project. */
+export const projectKey = (projectName: string): string =>
+  projectName.trim().replace(/\s+/g, ' ').toLowerCase();
+
+/**
+ * A site is registered once (client, 2026-10-06): a second survey under a
+ * project name already on file is refused, naming the one to update.
+ * `exceptId` lets an edit keep its own name.
+ */
+const refuseDuplicate = async (
+  tx: TenantTransaction,
+  projectName: string,
+  exceptId?: string,
+): Promise<void> => {
+  const [existing] = await tx
+    .select({ id: siteSurveys.id, surveyDate: siteSurveys.surveyDate })
+    .from(siteSurveys)
+    .where(
+      and(
+        sql`lower(regexp_replace(trim(${siteSurveys.projectName}), '\\s+', ' ', 'g')) = ${projectKey(projectName)}`,
+        ...(exceptId ? [ne(siteSurveys.id, exceptId)] : []),
+      ),
+    )
+    .limit(1);
+  if (existing) {
+    throw new SiteSurveyDuplicateError(projectName.trim(), existing.surveyDate);
+  }
+};
 
 /** One sheet, column for column. Undated sheets are dated today. */
 const toInsert = (

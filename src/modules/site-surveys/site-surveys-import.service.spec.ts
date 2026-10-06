@@ -19,6 +19,7 @@ const repo = {
     [string, string, unknown[], (string | null)?]
   >(),
   listManagerIds: jest.fn<Promise<string[]>, [string]>(),
+  registeredProjects: jest.fn<Promise<Map<string, string>>, [string]>(),
 };
 
 const notifications = { create: jest.fn() };
@@ -48,6 +49,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   repo.createMany.mockImplementation(async (_t, _u, rows) => rows.length);
   repo.listManagerIds.mockResolvedValue(['gm-1']);
+  repo.registeredProjects.mockResolvedValue(new Map());
   notifications.create.mockResolvedValue({});
 });
 
@@ -203,7 +205,7 @@ describe('SiteSurveysImportService — bad input', () => {
       // 200 is centimetres on the paper form; 1850 is already millimetres.
       shaftWidthMm: 2000,
       shaftDepthMm: 1850,
-      units: 2,
+      units: '2',
     });
     expect(result.errors).toEqual([
       { row: 4, message: 'shaft width mm: "wide" is not a number.' },
@@ -275,8 +277,28 @@ describe('SiteSurveysImportService — bad input', () => {
       address: 'Bole',
       floors: 'B+G+11',
       machineRoom: 'With MR',
-      units: 2,
+      units: '2',
     });
+  });
+
+  it('reports a project already registered, or named twice on the sheet, and skips it', async () => {
+    repo.registeredProjects.mockResolvedValue(
+      new Map([['bole plaza', '2026-09-20']]),
+    );
+    const result = await run(
+      csv(
+        header +
+          'Bole Plaza,,,,,,,,,\n' +
+          'Kazanchis,,,,,,,,,\n' +
+          ' kazanchis ,,,,,,,,,\n',
+      ),
+    );
+
+    expect(result.rows.map((r) => r.projectName)).toEqual(['Kazanchis']);
+    expect(result.errors).toEqual([
+      { row: 3, message: '"Bole Plaza" is already registered (survey dated 2026-09-20).' },
+      { row: 5, message: '"kazanchis" is already registered (survey dated this sheet).' },
+    ]);
   });
 
   it('skips blank spacer rows without counting them', async () => {

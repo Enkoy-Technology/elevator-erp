@@ -106,7 +106,9 @@ const summarize = (survey: SiteSurveyRecord): string =>
     survey.floors,
     survey.machineRoom,
     survey.units
-      ? `${survey.units} unit${survey.units === 1 ? '' : 's'}`
+      ? /^\d+$/.test(survey.units)
+        ? `${survey.units} unit${survey.units === '1' ? '' : 's'}`
+        : survey.units
       : null,
   ]
     .filter(Boolean)

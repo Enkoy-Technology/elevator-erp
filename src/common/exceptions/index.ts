@@ -8,6 +8,7 @@ export { InvalidRateTransitionError } from './invalid-rate-transition.error';
 export { LastAdminError } from './last-admin.error';
 export { RateNotFoundError } from './rate-not-found.error';
 export { RateVersionConflictError } from './rate-version-conflict.error';
+export { SiteSurveyDuplicateError } from './site-survey-duplicate.error';
 export { SmsConsentRequiredError } from './sms-consent-required.error';
 export { TemplateNotImplementedError } from './template-not-implemented.error';
 export { TenantIsolationError } from './tenant-isolation.error';

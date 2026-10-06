@@ -973,7 +973,7 @@ export interface SiteSurvey {
   overheadMm: number | null;
   /** The sheet's words: 'With MR', 'MRL'. */
   machineRoom: string | null;
-  units: number | null;
+  units: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -994,7 +994,7 @@ export interface SiteSurveyUpdate {
   floors?: string | null;
   overheadMm?: number | null;
   machineRoom?: string | null;
-  units?: number | null;
+  units?: string | null;
 }
 
 /**
@@ -1073,7 +1073,7 @@ export interface SiteSurveyImportRow {
   floors?: string | null;
   overheadMm?: number | null;
   machineRoom?: string | null;
-  units?: number | null;
+  units?: string | null;
 }
 
 export interface SiteSurveyImportResult {
