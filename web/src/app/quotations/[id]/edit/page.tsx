@@ -88,6 +88,14 @@ const STANDARD_TERMS: TermRow[] = [
 const numText = (value: number | null): string =>
   value === null ? '' : String(value);
 
+/** Months stored, years shown: 12 -> '1', 18 -> '1.5', 5 -> '0.42'. */
+const yearsText = (months: number | null): string =>
+  months === null ? '' : String(Math.round((months / 12) * 100) / 100);
+
+/** Years typed, months stored: '1' -> 12, '1.5' -> 18. */
+const monthsFromYears = (years: string): number | undefined =>
+  years.trim() === '' ? undefined : Math.round(Number(years) * 12);
+
 /** '' means "not stated" — omit the key so a PATCH never blanks a term
  *  somebody else set. */
 const optionalNumber = (value: string): number | undefined =>
@@ -107,7 +115,7 @@ export default function EditQuotationPage() {
   const [salesName, setSalesName] = useState('');
   const [referenceCode, setReferenceCode] = useState('');
   const [deliveryDays, setDeliveryDays] = useState('');
-  const [warrantyPartsMonths, setWarrantyPartsMonths] = useState('');
+  const [warrantyPartsYears, setWarrantyPartsYears] = useState('');
   const [warrantyFreeServiceMonths, setWarrantyFreeServiceMonths] =
     useState('');
   const [validityDays, setValidityDays] = useState('');
@@ -150,7 +158,7 @@ export default function EditQuotationPage() {
         setSalesName(quote.salesName ?? '');
         setReferenceCode(quote.referenceCode ?? '');
         setDeliveryDays(numText(quote.deliveryDays));
-        setWarrantyPartsMonths(numText(quote.warrantyPartsMonths));
+        setWarrantyPartsYears(yearsText(quote.warrantyPartsMonths));
         setWarrantyFreeServiceMonths(numText(quote.warrantyFreeServiceMonths));
         setValidityDays(numText(quote.validityDays));
         setNotes(quote.notes ?? '');
@@ -181,7 +189,7 @@ export default function EditQuotationPage() {
     printedReference,
     deliveryDays.trim(),
     validityDays.trim(),
-    warrantyPartsMonths.trim(),
+    warrantyPartsYears.trim(),
     warrantyFreeServiceMonths.trim(),
   ].filter((value) => value !== '').length;
 
@@ -234,7 +242,7 @@ export default function EditQuotationPage() {
     try {
       const payload: UpdateQuotationTermsPayload = {
         deliveryDays: optionalNumber(deliveryDays),
-        warrantyPartsMonths: optionalNumber(warrantyPartsMonths),
+        warrantyPartsMonths: monthsFromYears(warrantyPartsYears),
         warrantyFreeServiceMonths: optionalNumber(warrantyFreeServiceMonths),
         validityDays: optionalNumber(validityDays),
         // Sent even when empty: this form owns the field, so deleting the
@@ -382,15 +390,16 @@ export default function EditQuotationPage() {
               />
             </Field>
             <Field
-              label="Parts warranty (months)"
-              htmlFor="warrantyPartsMonths"
+              label="Parts warranty (years)"
+              htmlFor="warrantyPartsYears"
+              hint="Prints as years on the offer; 1.5 is eighteen months."
             >
               <NumberInput
-                id="warrantyPartsMonths"
+                id="warrantyPartsYears"
                 disabled={!editable}
-                placeholder="12"
-                value={warrantyPartsMonths}
-                onValueChange={setWarrantyPartsMonths}
+                placeholder="1"
+                value={warrantyPartsYears}
+                onValueChange={setWarrantyPartsYears}
               />
             </Field>
             <Field

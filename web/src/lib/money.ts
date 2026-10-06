@@ -134,3 +134,28 @@ export const splitGrossEtb = (
   const net = divHalfUp(gross * 10000n, 10000n + toBasisPoints(percent));
   return { netEtb: fromCents(net), taxEtb: fromCents(gross - net) };
 };
+
+/** `grossEtb` less `percent` of itself, rounded HALF_UP to the cent — the price a discount agrees. */
+export const discountedEtb = (grossEtb: string, percent: string): string => {
+  const gross = toCents(grossEtb);
+  return fromCents(
+    gross - divHalfUp(gross * toBasisPoints(percent), 10000n),
+  );
+};
+
+/** The discount `quotedEtb` represents off `grossEtb`, as a percent to 2dp; '0.00' when there is nothing to be a percent of. Negative for a premium. */
+export const discountPercentEtb = (
+  grossEtb: string,
+  quotedEtb: string,
+): string => {
+  const gross = toCents(grossEtb);
+  if (gross === 0n) {
+    return '0.00';
+  }
+  // (gross - quoted) / gross x 100, kept in basis points until the end.
+  // divHalfUp rounds a non-negative numerator; a premium is rounded on its
+  // size and the sign put back, so -9999.5 bp reads -100.00, not -99.99.
+  const diff = gross - toCents(quotedEtb);
+  const bp = divHalfUp((diff < 0n ? -diff : diff) * 10000n, gross);
+  return fromCents(diff < 0n ? -bp : bp);
+};

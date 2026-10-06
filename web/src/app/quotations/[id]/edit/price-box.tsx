@@ -10,7 +10,14 @@ import {
   type Quotation,
   type QuotationLine,
 } from '@/lib/api';
-import { formatEtb, lineTotalEtb, sumEtb, withVatEtb } from '@/lib/money';
+import {
+  discountedEtb,
+  discountPercentEtb,
+  formatEtb,
+  lineTotalEtb,
+  sumEtb,
+  withVatEtb,
+} from '@/lib/money';
 
 import { NumberInput } from '../../number-input';
 
@@ -94,6 +101,14 @@ export const PriceBox = ({
   const [grandTotal, setGrandTotal] = useState(
     negotiated ? quotation.totalPriceEtb : '',
   );
+  // The discount is how the client thinks about the price ("give them 8%"),
+  // so it is typed here and the price follows; typing the price instead
+  // shows the discount it amounts to. Only the price is sent to the server.
+  const [discount, setDiscount] = useState(
+    negotiated && quotation.discountPercent !== null
+      ? quotation.discountPercent
+      : '',
+  );
   const [applying, setApplying] = useState(false);
   const [switchingVat, setSwitchingVat] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +118,19 @@ export const PriceBox = ({
 
   const calcSubtotal = calculatorSubtotalEtb(lines);
   const calcVat = withVatEtb(calcSubtotal, quotation.taxPercent);
+  const isMoney = (value: string): boolean => /^\d+(\.\d{1,2})?$/.test(value);
+  const onDiscountChange = (value: string) => {
+    setDiscount(value);
+    if (isMoney(value)) {
+      setGrandTotal(discountedEtb(calcVat.grossEtb, value));
+    }
+  };
+  const onGrandTotalChange = (value: string) => {
+    setGrandTotal(value);
+    if (isMoney(value)) {
+      setDiscount(discountPercentEtb(calcVat.grossEtb, value));
+    }
+  };
   const applied = negotiated ? quotation.totalPriceEtb : null;
   const pending = grandTotal.trim() !== '' && grandTotal !== applied;
 
@@ -136,6 +164,7 @@ export const PriceBox = ({
       // Normalised ('7835000' -> '7835000.00'), which is also what makes
       // the "not applied yet" comparison below settle.
       setGrandTotal(saved.totalPriceEtb);
+      setDiscount(saved.discountPercent ?? '');
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : 'Failed to apply that price',
@@ -241,25 +270,47 @@ export const PriceBox = ({
           <summary className="cursor-pointer text-sm font-medium text-slate-700">
             {negotiated ? 'Change the agreed price' : 'Agree a different price'}
           </summary>
-          <label
-            htmlFor="grandTotal"
-            className="mb-1 mt-3 block text-xs font-semibold text-slate-600"
-          >
-            What the customer pays{quotation.vatApplies ? ', incl. VAT' : ''}{' '}
-            (ETB)
-          </label>
-          <NumberInput
-            id="grandTotal"
-            disabled={applying}
-            value={grandTotal}
-            onValueChange={setGrandTotal}
-            onBlur={() => void apply()}
-            placeholder="7,835,000"
-            className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-3 font-display text-2xl font-bold outline-none transition focus:border-gold-500 focus:ring-2 focus:ring-gold-500/25"
-          />
+          <div className="mt-3 grid gap-4 sm:grid-cols-[10rem_1fr]">
+            <div>
+              <label
+                htmlFor="discountPercent"
+                className="mb-1 block text-xs font-semibold text-slate-600"
+              >
+                Discount (%)
+              </label>
+              <NumberInput
+                id="discountPercent"
+                disabled={applying}
+                value={discount}
+                onValueChange={onDiscountChange}
+                onBlur={() => void apply()}
+                placeholder="8"
+                className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-3 font-display text-2xl font-bold outline-none transition focus:border-gold-500 focus:ring-2 focus:ring-gold-500/25"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="grandTotal"
+                className="mb-1 block text-xs font-semibold text-slate-600"
+              >
+                What the customer pays
+                {quotation.vatApplies ? ', incl. VAT' : ''} (ETB)
+              </label>
+              <NumberInput
+                id="grandTotal"
+                disabled={applying}
+                value={grandTotal}
+                onValueChange={onGrandTotalChange}
+                onBlur={() => void apply()}
+                placeholder="7,835,000"
+                className="w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-3 font-display text-2xl font-bold outline-none transition focus:border-gold-500 focus:ring-2 focus:ring-gold-500/25"
+              />
+            </div>
+          </div>
           <p className="mt-1 text-xs text-slate-500">
-            The round figure you agreed. The net and the VAT are worked back
-            from it — type it and tab out.
+            Type the discount off the calculator and the price follows, or
+            type the round figure you agreed and see the discount it is. The
+            net and the VAT are worked back from the price — tab out to apply.
             {applying ? ' Applying…' : null}
             {!applying && pending ? ' Not applied yet.' : null}
           </p>
