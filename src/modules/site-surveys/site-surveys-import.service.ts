@@ -250,8 +250,10 @@ export class SiteSurveysImportService {
     const payloads: CreateSiteSurveyDto[] = [];
     // A site is registered once: a row naming a project already on file,
     // or named twice on the sheet, is reported and skipped, not written.
-    const registered = await this.surveysRepository.registeredProjects(
-      user.tenantId,
+    // Copied: the sheet's own names are added as it is read, and the dry
+    // run and the commit each start from what is on file.
+    const registered = new Map(
+      await this.surveysRepository.registeredProjects(user.tenantId),
     );
 
     for (const sheetRow of sheetRows) {
