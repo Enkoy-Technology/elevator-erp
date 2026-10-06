@@ -54,8 +54,15 @@ type NumberKey =
   | 'speedMs'
   | 'doorWidthMm';
 
+/** The products the company's shaft table describes: the passenger lift and its finishes. Mirrors the API's PASSENGER_CLASS_PRODUCTS. */
+export const STANDARD_LIFT_PRODUCTS: readonly string[] = [
+  'PASSENGER',
+  'HOSPITAL',
+  'PANORAMIC',
+  'HOME',
+];
 export const isStandardLift = (productType: string): boolean =>
-  productType === 'PASSENGER';
+  STANDARD_LIFT_PRODUCTS.includes(productType);
 
 /** The request the API wants: shaft and floors for a standard lift, everything for the rest. */
 /**

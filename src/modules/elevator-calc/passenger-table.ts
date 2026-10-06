@@ -8,6 +8,23 @@
  * then width × height.
  */
 export const PASSENGER_CAR_HEIGHT_MM = 2400;
+
+/**
+ * The products the table describes: the passenger lift and its finishes.
+ * Hospital, panoramic and home elevators are the same machines in another
+ * dress and carry the passenger prices, so a shaft and the floors name
+ * them too (client, 2026-10-06). Goods and car lifts start above the
+ * table's largest machine and have no shaft table yet, so they stay on
+ * their figures.
+ */
+export const PASSENGER_CLASS_PRODUCTS: readonly string[] = [
+  'PASSENGER',
+  'HOSPITAL',
+  'PANORAMIC',
+  'HOME',
+];
+export const usesPassengerTable = (productType: string): boolean =>
+  PASSENGER_CLASS_PRODUCTS.includes(productType);
 export const PASSENGER_DOOR_HEIGHT_MM = 2100;
 
 export type PassengerDoor = 'CO' | '2S';

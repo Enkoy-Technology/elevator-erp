@@ -22,6 +22,7 @@ import {
   SMALLEST_PASSENGER_SHAFT,
   selectPassengerLift,
   speedForFloors,
+  usesPassengerTable,
 } from './passenger-table';
 import { ProductTypesRepository } from './product-types.repository';
 import type {
@@ -167,8 +168,8 @@ export class ElevatorCalcService {
 }
 
 /**
- * Complete the request. Standard-lift mode (a PASSENGER request carrying a
- * shaft and floors) reads the company's table: the shaft picks the lift,
+ * Complete the request. Standard-lift mode (a passenger-class request
+ * carrying a shaft and floors) reads the company's table: the shaft picks the lift,
  * the floors give stops, travel (3.0 m a floor) and the speed band, capped
  * at what that lift allows. The technical block is then exactly what the
  * table says — car, door, shaft, persons — and nothing else. Classic mode
@@ -183,7 +184,7 @@ const resolve = (
   const buildingUsage = request.buildingUsage ?? 'COMMERCIAL';
 
   const standard =
-    request.productType === 'PASSENGER' &&
+    usesPassengerTable(request.productType) &&
     request.shaftWidthMm !== undefined &&
     request.shaftDepthMm !== undefined &&
     request.floors !== undefined;
@@ -250,7 +251,7 @@ const resolve = (
   ).filter((key) => request[key] === undefined);
   if (missing.length > 0) {
     throw new BadRequestException(
-      request.productType === 'PASSENGER'
+      usesPassengerTable(request.productType)
         ? 'Give the shaft (shaftWidthMm, shaftDepthMm) and floors, or every figure: ' +
             missing.join(', ')
         : `Missing ${missing.join(', ')}`,

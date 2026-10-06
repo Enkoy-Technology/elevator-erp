@@ -3,7 +3,11 @@
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { startingCapacityKg, usesRise } from '@/app/calculator/lift-calculator';
+import {
+  STANDARD_LIFT_PRODUCTS,
+  startingCapacityKg,
+  usesRise,
+} from '@/app/calculator/lift-calculator';
 import { Field } from '@/components/form-page';
 import {
   btnGhost,
@@ -150,9 +154,9 @@ const num = (value: string, fallback: number): number => {
 const text = (value: string): string | undefined =>
   value.trim() === '' ? undefined : value.trim();
 
-/** A passenger lift is described by its shaft; the standard table fills in the rest. */
+/** A passenger-class lift is described by its shaft; the standard table fills in the rest. */
 const isStandardLift = (draft: LineDraft): boolean =>
-  draft.productType === 'PASSENGER';
+  STANDARD_LIFT_PRODUCTS.includes(draft.productType);
 
 const toPayload = (
   draft: LineDraft,

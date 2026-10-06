@@ -416,6 +416,15 @@ describe('ElevatorCalcService', () => {
         ...extra,
       });
 
+    it('names a hospital, panoramic or home lift from the shaft too — the same machines, another finish', async () => {
+      for (const productType of ['HOSPITAL', 'PANORAMIC', 'HOME']) {
+        const result = await standard({ productType });
+        expect(result.technical.standardLift).toContain('8-person lift');
+        expect(result.input.capacityKg).toBe(630);
+        expect(result.technical.productType).toBe(productType);
+      }
+    });
+
     it("reads the lift off the company's table from an exact shaft", async () => {
       const result = await standard({});
       expect(result.technical.capacityPersons).toBe(8);
