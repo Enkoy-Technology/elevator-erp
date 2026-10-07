@@ -141,7 +141,13 @@ export const buildTechnicalProposalHtml = (
 ): string => {
   const d = data as TechnicalProposalTemplateData;
   const tech = d.technicalSpec ?? {};
-  const input = d.calcInput ?? {};
+  const stored = d.calcInput ?? {};
+  // A door width of 0 is a product with no door (escalator, car stacking
+  // lift): neither door row prints.
+  const input =
+    stored.doorWidthMm === 0
+      ? { ...stored, doorType: undefined, doorWidthMm: undefined }
+      : stored;
 
   const product = tech.productType ?? input.productType;
   // Anything that is not a stored enum string (missing, or a malformed jsonb

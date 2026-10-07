@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import {
   STANDARD_LIFT_PRODUCTS,
   VEHICLE_STANDARD,
+  hasDoor,
   startingCapacityKg,
   startingSpeedAndDoor,
   usesRise,
@@ -194,8 +195,9 @@ const toPayload = (
             ? { travelHeightM: num(draft.travelHeightM, 1) }
             : {}),
           speedMs: num(draft.speedMs, 1),
-          doorType: draft.doorType,
-          doorWidthMm: num(draft.doorWidthMm, 900),
+          ...(hasDoor(draft.productType)
+            ? { doorType: draft.doorType, doorWidthMm: num(draft.doorWidthMm, 900) }
+            : {}),
         }),
     machineRoomType: draft.machineRoomType,
     buildingUsage: draft.buildingUsage,
@@ -704,7 +706,7 @@ export const LinesEditor = ({
                       </select>
                     </Field>
 
-                    {isStandardLift(draft) ? null : (
+                    {isStandardLift(draft) || !hasDoor(draft.productType) ? null : (
                       <Field label="Door type" htmlFor={`doortype-${line.id}`}>
                         <select
                           id={`doortype-${line.id}`}
@@ -746,7 +748,7 @@ export const LinesEditor = ({
                       </select>
                     </Field>
 
-                    {isStandardLift(draft) ? null : (
+                    {isStandardLift(draft) || !hasDoor(draft.productType) ? null : (
                       <Field label="Door width (mm)" htmlFor={`dw-${line.id}`}>
                         <NumberInput
                           id={`dw-${line.id}`}

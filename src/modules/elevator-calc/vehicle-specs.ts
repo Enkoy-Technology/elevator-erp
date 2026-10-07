@@ -59,3 +59,9 @@ export const VEHICLE_SPECS: Readonly<Record<string, VehicleSpec>> = {
 export const isVehicleProduct = (productType: string): boolean =>
   productType in VEHICLE_SPECS;
 
+/** An escalator and a car stacking lift have no door to specify (client, 2026-10-07). */
+export const hasDoor = (productType: string): boolean => {
+  const vehicle = VEHICLE_SPECS[productType];
+  return vehicle === undefined || vehicle.door !== undefined;
+};
+

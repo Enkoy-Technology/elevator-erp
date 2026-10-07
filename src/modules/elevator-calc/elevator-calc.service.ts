@@ -17,7 +17,7 @@ import {
   qty2,
   selectGuideRail,
 } from './calc-math';
-import { VEHICLE_SPECS } from './vehicle-specs';
+import { hasDoor, VEHICLE_SPECS } from './vehicle-specs';
 import {
   PASSENGER_CAR_HEIGHT_MM,
   selectPassengerLift,
@@ -258,12 +258,10 @@ const resolve = (
   }
 
   const vehicle = VEHICLE_SPECS[request.productType];
-  const required: (keyof CalcRequest)[] = [
-    'stops',
-    'speedMs',
-    'doorType',
-    'doorWidthMm',
-  ];
+  const required: (keyof CalcRequest)[] = ['stops', 'speedMs'];
+  if (hasDoor(request.productType)) {
+    required.push('doorType', 'doorWidthMm');
+  }
   if (!vehicle || vehicle.ratedLoad) {
     required.push('capacityKg');
   }
@@ -309,8 +307,10 @@ const resolve = (
       Number((request.stops! * FLOOR_HEIGHT_M).toFixed(2)),
     speedMs: request.speedMs!,
     machineRoomType,
-    doorType: request.doorType!,
-    doorWidthMm: request.doorWidthMm!,
+    // A doorless product (escalator, car stacking lift) carries 0 here, and
+    // every renderer leaves the door out on 0.
+    doorType: request.doorType ?? 'CENTER_OPEN',
+    doorWidthMm: hasDoor(request.productType) ? request.doorWidthMm! : 0,
     buildingUsage,
     marginPercent: request.marginPercent,
     taxPercent: request.taxPercent,

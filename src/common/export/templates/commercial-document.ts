@@ -389,11 +389,16 @@ const renderSpecTable = (line: DocumentLineData): string => {
         [tech.carWidthMm, tech.carDepthMm, tech.carHeightMm],
       ),
     ],
+    // A door width of 0 is a product with no door (escalator, car stacking
+    // lift): neither row prints.
     [
       'Door size (W x H)',
-      dims(['W', 'H'], [calc.doorWidthMm, line.doorHeightMm]),
+      calc.doorWidthMm ? dims(['W', 'H'], [calc.doorWidthMm, line.doorHeightMm]) : null,
     ],
-    ['Car opening type', DOOR_TYPE_LABELS[String(calc.doorType)] ?? null],
+    [
+      'Car opening type',
+      calc.doorWidthMm ? (DOOR_TYPE_LABELS[String(calc.doorType)] ?? null) : null,
+    ],
     ['Power supply', text(line.powerSupply)],
     ['Light supply', text(line.lightSupply)],
     ['Roping', text(line.ropingRatio)],

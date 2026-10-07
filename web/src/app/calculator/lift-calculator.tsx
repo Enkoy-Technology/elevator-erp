@@ -98,6 +98,11 @@ export const VEHICLE_STANDARD: Readonly<
 };
 export const isVehicleProduct = (productType: string): boolean =>
   productType in VEHICLE_STANDARD;
+/** An escalator and a car stacking lift have no door. */
+export const hasDoor = (productType: string): boolean => {
+  const standard = VEHICLE_STANDARD[productType];
+  return standard === undefined || standard.doorWidthMm !== undefined;
+};
 
 /**
  * The speed and door to start a product at: the company's standard for a
@@ -186,8 +191,7 @@ export const toRequest = (
         // Travel is 3.5 m × stops on the API; only a rise-priced product sends it.
         ...(usesRise(products, form.productType) ? { travelHeightM } : {}),
         speedMs,
-        doorType,
-        doorWidthMm,
+        ...(hasDoor(form.productType) ? { doorType, doorWidthMm } : {}),
       };
 };
 
@@ -316,7 +320,9 @@ export const LiftInputs = ({
               ? numberField('travelHeightM', 'Rise (m)')
               : null}
             {numberField('speedMs', 'Speed (m/s)')}
-            {numberField('doorWidthMm', 'Door width (mm)')}
+            {hasDoor(form.productType)
+              ? numberField('doorWidthMm', 'Door width (mm)')
+              : null}
           </>
         )}
       </div>
@@ -338,7 +344,7 @@ export const LiftInputs = ({
         </select>
       </label>
 
-      {standard ? null : (
+      {standard || !hasDoor(form.productType) ? null : (
         <label className="block">
           <span className={label}>Door type</span>
           <select
@@ -470,9 +476,9 @@ export const LiftResult = ({
                     ] as const,
                   ]
                 : []),
-              ...(result.technical.productType === 'ESCALATOR'
-                ? []
-                : [['Door (mm)', doorLabel(result.input)] as const]),
+              ...(hasDoor(result.technical.productType)
+                ? [['Door (mm)', doorLabel(result.input)] as const]
+                : []),
               [
                 result.technical.shaftDepthMm === null
                   ? 'Opening width (mm)'

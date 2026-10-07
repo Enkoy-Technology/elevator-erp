@@ -334,6 +334,17 @@ describe('ElevatorCalcService', () => {
       expect(result.input.capacityKg).toBe(0);
       expect(result.technical.shaftWidthMm).toBe(1700);
       expect(result.technical.shaftDepthMm).toBeNull();
+      // No door either: none asked for, 0 carried so nothing prints.
+      const noDoor = await calc({
+        productType: 'ESCALATOR',
+        stops: 10,
+        travelHeightM: 10,
+        speedMs: 0.5,
+        shaftWidthMm: 1700,
+        marginPercent: 0,
+        taxPercent: 0,
+      });
+      expect(noDoor.input.doorWidthMm).toBe(0);
       await expect(
         calc({ ...WORKED_EXAMPLE, productType: 'ESCALATOR', speedMs: 0.5, shaftWidthMm: 1500 }),
       ).rejects.toThrow(/at least 1,600 mm wide/);
