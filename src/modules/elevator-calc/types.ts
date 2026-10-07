@@ -101,12 +101,6 @@ export interface TechnicalSpecs {
   machineRoomWidthMm: number | null;
   machineRoomDepthMm: number | null;
   machineRoomHeightMm: number | null;
-  /**
-   * For the vehicle products and the escalator: the company's standard
-   * specification, line for line (vehicle-specs.ts), printed instead of
-   * EN 81 geometry. Absent on lifts and on older snapshots.
-   */
-  specSheet?: { label: string; value: string }[];
 }
 
 /** Money fields serialized to 2-decimal strings (ETB). */

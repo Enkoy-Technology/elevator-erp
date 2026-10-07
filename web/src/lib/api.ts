@@ -329,8 +329,6 @@ export interface CalcResult {
   // lift geometry — §4.1 is EN 81 lift geometry and an escalator has none of it.
   technical: {
     productType: ProductType;
-    /** The company's standard specification sheet for a vehicle product or escalator; absent on lifts. */
-    specSheet?: { label: string; value: string }[];
     capacityPersons: number | null;
     carWidthMm: number | null;
     carDepthMm: number | null;

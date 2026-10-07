@@ -155,20 +155,7 @@ export const buildTechnicalProposalHtml = (
   // A flat-priced product (escalator, car platform lift) has EVERY geometry
   // field null by definition — see TechnicalSpecs. Say so in one line instead
   // of printing a table with nothing but a header in it.
-  const sheet = Array.isArray(tech.specSheet)
-    ? (tech.specSheet as { label: unknown; value: unknown }[])
-        .filter((r) => typeof r.label === 'string' && typeof r.value === 'string')
-        .map(
-          (r) =>
-            `<tr><td>${esc(r.label as string)}</td><td class="num">${esc(r.value as string)}</td></tr>`,
-        )
-        .join('')
-    : '';
-  // The vehicle products and the escalator print the company's standard
-  // specification, line for line, in place of EN 81 geometry.
-  const geometryHtml = sheet
-    ? specTable(sheet)
-    : geometryRows
+  const geometryHtml = geometryRows
     ? specTable(geometryRows)
     : `<div class="notes">This product is quoted as a flat-priced ${esc(productLabel.toLowerCase())} and carries no EN 81 lift geometry: there is no car, shaft, counterweight or guide rail to specify. Site dimensions are confirmed by survey before manufacture.</div>`;
 

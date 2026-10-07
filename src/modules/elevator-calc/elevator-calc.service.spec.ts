@@ -339,7 +339,7 @@ describe('ElevatorCalcService', () => {
       ).rejects.toThrow(/at least 1,600 mm wide/);
     });
 
-    it("prints the company's specification sheet for a vehicle product, with its platform and clear shaft", async () => {
+    it("prints a vehicle product's platform as its car, and the building's shaft, in the usual block", async () => {
       const result = await calc({
         ...WORKED_EXAMPLE,
         ...forProduct('CAR_LIFT'),
@@ -352,12 +352,8 @@ describe('ElevatorCalcService', () => {
       expect(result.technical.carDepthMm).toBe(5600);
       expect(result.technical.shaftWidthMm).toBe(3400);
       expect(result.technical.shaftDepthMm).toBe(6500);
-      expect(result.technical.specSheet?.[0]).toEqual({
-        label: 'Type',
-        value: 'Heavy-duty vehicle/car lift',
-      });
       expect(result.technical.counterweightMassKg).toBeNull();
-      expect(result.notes.at(-1)).toMatch(/shop drawing/);
+      expect(result.notes).toEqual([]);
     });
 
     it('refuses a product that is not in the list', async () => {
@@ -483,7 +479,7 @@ describe('ElevatorCalcService', () => {
     // drop absent keys — so emitting nulls here is what keeps a lift's
     // specification off an escalator quotation.
     it.each(['CAR_PLATFORM_LIFT', 'ESCALATOR'] as const)(
-      'emits no EN 81 machine geometry for %s — the specification sheet instead',
+      'emits no EN 81 machine geometry for %s',
       async (productType) => {
         const result = await calc({
           ...WORKED_EXAMPLE,
@@ -494,7 +490,6 @@ describe('ElevatorCalcService', () => {
         });
 
         expect(result.technical.productType).toBe(productType);
-        expect(result.technical.specSheet?.length).toBeGreaterThan(5);
         for (const key of [
           'capacityPersons',
           'carHeightMm',

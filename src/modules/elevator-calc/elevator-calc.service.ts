@@ -17,7 +17,7 @@ import {
   qty2,
   selectGuideRail,
 } from './calc-math';
-import { VEHICLE_SPECS, VEHICLE_SPEC_NOTE } from './vehicle-specs';
+import { VEHICLE_SPECS } from './vehicle-specs';
 import {
   PASSENGER_CAR_HEIGHT_MM,
   selectPassengerLift,
@@ -319,9 +319,8 @@ const resolve = (
       : {}),
   };
   if (vehicle) {
-    // The company's standard specification, not EN 81 geometry: a vehicle
-    // lift has a platform and a clear shaft, and the document gives both.
-    notes.push(VEHICLE_SPEC_NOTE);
+    // The company's standard figures, not EN 81 geometry: the platform is
+    // the car, the building's opening the shaft; no machine to size.
     const technical: TechnicalSpecs = {
       ...EMPTY_GEOMETRY,
       productType: input.productType,
@@ -331,7 +330,6 @@ const resolve = (
       // on the sheet beside it.
       shaftWidthMm: request.shaftWidthMm ?? null,
       shaftDepthMm: request.shaftDepthMm ?? null,
-      specSheet: [...vehicle.sheet],
     };
     return { input, technical, notes };
   }

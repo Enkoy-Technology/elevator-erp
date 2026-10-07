@@ -454,48 +454,48 @@ export const LiftResult = ({
             </ul>
           ) : null}
         </>
-      ) : result.technical.specSheet ? (
-        <>
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
-            {(
+      ) : isVehicleProduct(result.technical.productType) ? (
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
+          {(
+            [
+              ...(result.input.capacityKg > 0
+                ? [['Rated load (kg)', formatNumber(result.input.capacityKg)] as const]
+                : []),
+              ['Speed (m/s)', String(result.input.speedMs)] as const,
+              ...(result.technical.carWidthMm !== null
+                ? [
+                    [
+                      'Platform W×D (mm)',
+                      `${formatNumber(result.technical.carWidthMm)} × ${formatNumber(result.technical.carDepthMm)}`,
+                    ] as const,
+                  ]
+                : []),
+              ...(result.technical.productType === 'ESCALATOR'
+                ? []
+                : [['Door (mm)', doorLabel(result.input)] as const]),
               [
-                ...(result.input.capacityKg > 0
-                  ? [['Rated load (kg)', formatNumber(result.input.capacityKg)] as const]
-                  : []),
-                [
-                  result.technical.shaftDepthMm === null
-                    ? 'Opening width (mm)'
-                    : 'Shaft W×D (mm)',
-                  result.technical.shaftDepthMm === null
-                    ? formatNumber(result.technical.shaftWidthMm)
-                    : `${formatNumber(result.technical.shaftWidthMm)} × ${formatNumber(result.technical.shaftDepthMm)}`,
-                ] as const,
-                ['Speed (m/s)', String(result.input.speedMs)] as const,
-                ['Stops', formatNumber(result.input.stops)] as const,
-              ]
-            ).map(([k, v]) => (
-              <div key={k}>
-                <dt className="text-xs text-slate-500">{k}</dt>
-                <dd className="font-medium text-slate-900">{v}</dd>
-              </div>
-            ))}
-          </dl>
-          <dl className="mt-4 divide-y divide-slate-100 text-sm">
-            {result.technical.specSheet.map((row) => (
-              <div key={row.label} className="grid gap-1 py-2 sm:grid-cols-[14rem_1fr]">
-                <dt className="text-xs text-slate-500 sm:pt-0.5">{row.label}</dt>
-                <dd className="text-slate-900">{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-          {result.notes.length > 0 ? (
-            <ul className="mt-4 space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              {result.notes.map((note) => (
-                <li key={note}>{note}</li>
-              ))}
-            </ul>
-          ) : null}
-        </>
+                result.technical.shaftDepthMm === null
+                  ? 'Opening width (mm)'
+                  : 'Shaft W×D (mm)',
+                result.technical.shaftDepthMm === null
+                  ? formatNumber(result.technical.shaftWidthMm)
+                  : `${formatNumber(result.technical.shaftWidthMm)} × ${formatNumber(result.technical.shaftDepthMm)}`,
+              ] as const,
+              ['Stops', formatNumber(result.input.stops)] as const,
+              [
+                result.technical.productType === 'ESCALATOR'
+                  ? 'Rise (mm)'
+                  : 'Travel (mm)',
+                formatNumber(Math.round(result.input.travelHeightM * 1000)),
+              ] as const,
+            ]
+          ).map(([k, v]) => (
+            <div key={k}>
+              <dt className="text-xs text-slate-500">{k}</dt>
+              <dd className="font-medium text-slate-900">{v}</dd>
+            </div>
+          ))}
+        </dl>
       ) : result.technical.capacityPersons === null ? (
         <p className="text-sm text-slate-500">
           {productName(products, result.technical.productType)} is priced as a
