@@ -4,7 +4,7 @@ import { useState, type Dispatch, type SetStateAction } from 'react';
 
 import { NumberInput } from '@/app/quotations/number-input';
 
-import { formatNumber } from '@/lib/money';
+import { formatNumber, sumEtb } from '@/lib/money';
 import {
   productName,
   type CalcInputPayload,
@@ -393,10 +393,21 @@ export const LiftResult = ({
     <section className="rounded-2xl bg-navy-800 p-6 text-white">
       <p className="text-sm text-navy-100/70">List price</p>
       <p className="font-display mt-1 text-3xl font-bold tracking-tight text-gold-400">
-        {formatMoney(result.pricing.totalBeforeMargin)}
+        {/* The sheet's own figure, VAT in — what the customer pays. The
+            quotation shows the net and the VAT it splits into. */}
+        {formatMoney(
+          result.pricing.listVatIncluded
+            ? sumEtb([
+                result.pricing.totalBeforeMargin,
+                result.pricing.listVatIncluded,
+              ])
+            : result.pricing.totalBeforeMargin,
+        )}
       </p>
       <p className="mt-2 text-xs text-navy-100/60">
-        Before VAT. The quotation adds the statutory rate.
+        {result.pricing.listVatIncluded
+          ? "VAT included, as on the company's price sheet."
+          : 'The quotation adds VAT at the statutory rate.'}
       </p>
     </section>
 
