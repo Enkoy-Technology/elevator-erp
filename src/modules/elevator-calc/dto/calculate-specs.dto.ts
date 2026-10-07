@@ -41,14 +41,14 @@ export class CalculateSpecsDto {
   @IsOptional()
   @IsInt()
   @Min(1000)
-  @Max(6000)
+  @Max(10000)
   shaftWidthMm?: number;
 
   @ApiPropertyOptional({ minimum: 1000, maximum: 6000, example: 1750 })
   @IsOptional()
   @IsInt()
   @Min(1000)
-  @Max(6000)
+  @Max(10000)
   shaftDepthMm?: number;
 
   @ApiPropertyOptional({

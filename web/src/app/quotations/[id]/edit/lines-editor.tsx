@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 import {
   STANDARD_LIFT_PRODUCTS,
+  VEHICLE_STANDARD,
   startingCapacityKg,
   startingSpeedAndDoor,
   usesRise,
@@ -174,7 +175,20 @@ const toPayload = (
           shaftDepthMm: num(draft.shaftDepthMm, 1750),
         }
       : {
-          capacityKg: num(draft.capacityKg, 1000),
+          // A vehicle product is quoted against the building's opening; an
+          // escalator against its width alone, and carries no rated load.
+          ...(VEHICLE_STANDARD[draft.productType]
+            ? {
+                shaftWidthMm: num(draft.shaftWidthMm, 1835),
+                ...(VEHICLE_STANDARD[draft.productType]?.shaftDepthMm !==
+                undefined
+                  ? { shaftDepthMm: num(draft.shaftDepthMm, 1750) }
+                  : {}),
+              }
+            : {}),
+          ...(VEHICLE_STANDARD[draft.productType]?.ratedLoad === false
+            ? {}
+            : { capacityKg: num(draft.capacityKg, 1000) }),
           // Travel is 3.5 m × stops on the API; only a rise-priced product (escalator) sends it.
           ...(usesRise(products, draft.productType)
             ? { travelHeightM: num(draft.travelHeightM, 1) }
@@ -475,6 +489,13 @@ export const LinesEditor = ({
                           });
                           next.speedMs = String(specs.speedMs);
                           next.doorWidthMm = String(specs.doorWidthMm);
+                          if (specs.shaftWidthMm !== undefined) {
+                            next.shaftWidthMm = String(specs.shaftWidthMm);
+                            next.shaftDepthMm =
+                              specs.shaftDepthMm === undefined
+                                ? ''
+                                : String(specs.shaftDepthMm);
+                          }
                           setDrafts((prev) => ({ ...prev, [line.id]: next }));
                         }}
                       >
@@ -536,14 +557,59 @@ export const LinesEditor = ({
                         </Field>
                       </>
                     ) : (
-                      <Field label="Capacity (kg)" htmlFor={`cap-${line.id}`}>
-                        <NumberInput
-                          id={`cap-${line.id}`}
-                          disabled={!editable}
-                          value={draft.capacityKg}
-                          onValueChange={(v) => setField(line, 'capacityKg', v)}
-                        />
-                      </Field>
+                      <>
+                        {VEHICLE_STANDARD[draft.productType] ? (
+                          <Field
+                            label={
+                              draft.productType === 'ESCALATOR'
+                                ? 'Opening width (mm)'
+                                : 'Shaft width (mm)'
+                            }
+                            htmlFor={`sw-${line.id}`}
+                          >
+                            <NumberInput
+                              id={`sw-${line.id}`}
+                              disabled={!editable}
+                              value={draft.shaftWidthMm}
+                              onValueChange={(v) =>
+                                setField(line, 'shaftWidthMm', v)
+                              }
+                            />
+                          </Field>
+                        ) : null}
+                        {VEHICLE_STANDARD[draft.productType]?.shaftDepthMm !==
+                        undefined ? (
+                          <Field
+                            label="Shaft depth (mm)"
+                            htmlFor={`sd-${line.id}`}
+                          >
+                            <NumberInput
+                              id={`sd-${line.id}`}
+                              disabled={!editable}
+                              value={draft.shaftDepthMm}
+                              onValueChange={(v) =>
+                                setField(line, 'shaftDepthMm', v)
+                              }
+                            />
+                          </Field>
+                        ) : null}
+                        {VEHICLE_STANDARD[draft.productType]?.ratedLoad ===
+                        false ? null : (
+                          <Field
+                            label="Capacity (kg)"
+                            htmlFor={`cap-${line.id}`}
+                          >
+                            <NumberInput
+                              id={`cap-${line.id}`}
+                              disabled={!editable}
+                              value={draft.capacityKg}
+                              onValueChange={(v) =>
+                                setField(line, 'capacityKg', v)
+                              }
+                            />
+                          </Field>
+                        )}
+                      </>
                     )}
 
                     <Field

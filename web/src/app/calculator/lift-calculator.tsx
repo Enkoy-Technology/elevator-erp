@@ -77,13 +77,27 @@ export const isStandardLift = (productType: string): boolean =>
  * escalator, which the form starts at when one is chosen.
  */
 export const VEHICLE_STANDARD: Readonly<
-  Record<string, { speedMs: number; doorWidthMm?: number }>
+  Record<
+    string,
+    {
+      speedMs: number;
+      doorWidthMm?: number;
+      /** The building's opening the form asks for: its document minimum. */
+      shaftWidthMm: number;
+      /** Absent for the escalator, which takes a width only. */
+      shaftDepthMm?: number;
+      /** False for the escalator: no rated load. */
+      ratedLoad: boolean;
+    }
+  >
 > = {
-  CAR_LIFT: { speedMs: 0.5, doorWidthMm: 2600 },
-  CAR_PLATFORM_LIFT: { speedMs: 0.3, doorWidthMm: 2600 },
-  CAR_STACKING_LIFT: { speedMs: 0.15 },
-  ESCALATOR: { speedMs: 0.5 },
+  CAR_LIFT: { speedMs: 0.5, doorWidthMm: 2600, shaftWidthMm: 3400, shaftDepthMm: 6500, ratedLoad: true },
+  CAR_PLATFORM_LIFT: { speedMs: 0.3, doorWidthMm: 2600, shaftWidthMm: 2900, shaftDepthMm: 5500, ratedLoad: true },
+  CAR_STACKING_LIFT: { speedMs: 0.15, shaftWidthMm: 3100, shaftDepthMm: 5600, ratedLoad: true },
+  ESCALATOR: { speedMs: 0.5, shaftWidthMm: 1600, ratedLoad: false },
 };
+export const isVehicleProduct = (productType: string): boolean =>
+  productType in VEHICLE_STANDARD;
 
 /**
  * The speed and door to start a product at: the company's standard for a
@@ -93,12 +107,21 @@ export const VEHICLE_STANDARD: Readonly<
 export const startingSpeedAndDoor = (
   productType: string,
   current: { speedMs: number; doorWidthMm: number },
-): { speedMs: number; doorWidthMm: number } => {
+): {
+  speedMs: number;
+  doorWidthMm: number;
+  shaftWidthMm?: number;
+  shaftDepthMm?: number;
+} => {
   const standard = VEHICLE_STANDARD[productType];
   if (standard) {
     return {
       speedMs: standard.speedMs,
       doorWidthMm: standard.doorWidthMm ?? current.doorWidthMm,
+      shaftWidthMm: standard.shaftWidthMm,
+      ...(standard.shaftDepthMm !== undefined
+        ? { shaftDepthMm: standard.shaftDepthMm }
+        : {}),
     };
   }
   const fromVehicle = Object.values(VEHICLE_STANDARD).some(
@@ -145,11 +168,20 @@ export const toRequest = (
     doorWidthMm,
     ...common
   } = form;
+  const vehicle = VEHICLE_STANDARD[form.productType];
   return isStandardLift(form.productType)
     ? { ...common, shaftWidthMm, shaftDepthMm, floors }
     : {
         ...common,
-        capacityKg,
+        // A vehicle product is quoted against the building's opening; an
+        // escalator against its width alone, and carries no rated load.
+        ...(vehicle
+          ? {
+              shaftWidthMm,
+              ...(vehicle.shaftDepthMm !== undefined ? { shaftDepthMm } : {}),
+            }
+          : {}),
+        ...(vehicle && !vehicle.ratedLoad ? {} : { capacityKg }),
         stops,
         // Travel is 3.5 m × stops on the API; only a rise-priced product sends it.
         ...(usesRise(products, form.productType) ? { travelHeightM } : {}),
@@ -265,7 +297,20 @@ export const LiftInputs = ({
       <div className="grid grid-cols-2 gap-3">
         {standard ? null : (
           <>
-            {numberField('capacityKg', 'Capacity (kg)')}
+            {VEHICLE_STANDARD[form.productType]
+              ? numberField(
+                  'shaftWidthMm',
+                  form.productType === 'ESCALATOR'
+                    ? 'Opening width (mm)'
+                    : 'Shaft width (mm)',
+                )
+              : null}
+            {VEHICLE_STANDARD[form.productType]?.shaftDepthMm !== undefined
+              ? numberField('shaftDepthMm', 'Shaft depth (mm)')
+              : null}
+            {VEHICLE_STANDARD[form.productType]?.ratedLoad === false
+              ? null
+              : numberField('capacityKg', 'Capacity (kg)')}
             {numberField('stops', 'Stops')}
             {usesRise(products, form.productType)
               ? numberField('travelHeightM', 'Rise (m)')
@@ -403,10 +448,20 @@ export const LiftResult = ({
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
             {(
               [
-                ['Rated load (kg)', formatNumber(result.input.capacityKg)],
-                ['Speed (m/s)', String(result.input.speedMs)],
-                ['Stops', formatNumber(result.input.stops)],
-              ] as const
+                ...(result.input.capacityKg > 0
+                  ? [['Rated load (kg)', formatNumber(result.input.capacityKg)] as const]
+                  : []),
+                [
+                  result.technical.shaftDepthMm === null
+                    ? 'Opening width (mm)'
+                    : 'Shaft W×D (mm)',
+                  result.technical.shaftDepthMm === null
+                    ? formatNumber(result.technical.shaftWidthMm)
+                    : `${formatNumber(result.technical.shaftWidthMm)} × ${formatNumber(result.technical.shaftDepthMm)}`,
+                ] as const,
+                ['Speed (m/s)', String(result.input.speedMs)] as const,
+                ['Stops', formatNumber(result.input.stops)] as const,
+              ]
             ).map(([k, v]) => (
               <div key={k}>
                 <dt className="text-xs text-slate-500">{k}</dt>

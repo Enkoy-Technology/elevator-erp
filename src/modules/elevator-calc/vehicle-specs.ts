@@ -16,6 +16,14 @@ export interface VehicleSpec {
   /** Net platform (car) and clear shaft, mm, where the document gives them. */
   platformMm?: { width: number; depth: number };
   clearShaftMm?: { width: number; depth: number };
+  /**
+   * The building's opening the salesperson must enter (client, 2026-10-07:
+   * every vehicle product takes a shaft width and depth; the escalator a
+   * width only) and the least the document allows for it.
+   */
+  shaftMm: { minWidth: number; minDepth?: number };
+  /** False for the escalator: it carries people on steps, not a rated load. */
+  ratedLoad: boolean;
 }
 
 const SAFETY_LIFT =
@@ -24,6 +32,9 @@ const SAFETY_LIFT =
 export const VEHICLE_SPECS: Readonly<Record<string, VehicleSpec>> = {
   ESCALATOR: {
     speed: { min: 0.5, max: 0.65, standard: 0.5 },
+    // The structural opening for a 1000 mm step: 1600–1700 mm.
+    shaftMm: { minWidth: 1600 },
+    ratedLoad: false,
     sheet: [
       { label: 'Type', value: 'Heavy-duty commercial escalator' },
       { label: 'Inclination', value: '30° standard; 35° where architectural conditions require' },
@@ -54,6 +65,8 @@ export const VEHICLE_SPECS: Readonly<Record<string, VehicleSpec>> = {
     door: { min: 2600, max: 2800, standard: 2600 },
     platformMm: { width: 2800, depth: 5600 },
     clearShaftMm: { width: 3400, depth: 6500 },
+    shaftMm: { minWidth: 3400, minDepth: 6500 },
+    ratedLoad: true,
     sheet: [
       { label: 'Type', value: 'Heavy-duty vehicle/car lift' },
       { label: 'Rated capacity', value: 'Minimum 3,500 kg; 4,000 kg recommended where heavy SUV/pick-up use is expected' },
@@ -78,6 +91,9 @@ export const VEHICLE_SPECS: Readonly<Record<string, VehicleSpec>> = {
   CAR_STACKING_LIFT: {
     speed: { min: 0.08, max: 0.15, standard: 0.15 },
     platformMm: { width: 2800, depth: 5500 },
+    // No shaft as such: the overall equipment footprint, 3100–3300 × 5600–6000.
+    shaftMm: { minWidth: 3100, minDepth: 5600 },
+    ratedLoad: true,
     sheet: [
       { label: 'Type', value: 'Two-level independent car parking / stacking lift' },
       { label: 'Rated capacity', value: 'Minimum 3,500 kg per platform; 4,000 kg recommended for heavy SUV/pick-up applications' },
@@ -103,6 +119,8 @@ export const VEHICLE_SPECS: Readonly<Record<string, VehicleSpec>> = {
     door: { min: 2400, max: 2800, standard: 2600 },
     platformMm: { width: 2500, depth: 5000 },
     clearShaftMm: { width: 2900, depth: 5500 },
+    shaftMm: { minWidth: 2900, minDepth: 5500 },
+    ratedLoad: true,
     sheet: [
       { label: 'Type', value: 'Heavy-duty vehicle platform lift' },
       { label: 'Rated capacity', value: 'Minimum 3,500 kg; 4,000 kg recommended' },

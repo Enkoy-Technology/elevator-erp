@@ -257,9 +257,25 @@ const resolve = (
     return { input, technical, notes };
   }
 
-  const missing = (
-    ['capacityKg', 'stops', 'speedMs', 'doorType', 'doorWidthMm'] as const
-  ).filter((key) => request[key] === undefined);
+  const vehicle = VEHICLE_SPECS[request.productType];
+  const required: (keyof CalcRequest)[] = [
+    'stops',
+    'speedMs',
+    'doorType',
+    'doorWidthMm',
+  ];
+  if (!vehicle || vehicle.ratedLoad) {
+    required.push('capacityKg');
+  }
+  if (vehicle) {
+    // Every vehicle product is quoted against the building's opening; the
+    // escalator against its width alone (client, 2026-10-07).
+    required.push('shaftWidthMm');
+    if (vehicle.shaftMm.minDepth !== undefined) {
+      required.push('shaftDepthMm');
+    }
+  }
+  const missing = required.filter((key) => request[key] === undefined);
   if (missing.length > 0) {
     throw new BadRequestException(
       usesPassengerTable(request.productType)
@@ -268,9 +284,23 @@ const resolve = (
         : `Missing ${missing.join(', ')}`,
     );
   }
+  if (vehicle) {
+    const { minWidth, minDepth } = vehicle.shaftMm;
+    if (request.shaftWidthMm! < minWidth) {
+      throw new BadRequestException(
+        `${request.productType === 'ESCALATOR' ? 'An escalator' : 'This product'} needs an opening at least ${minWidth.toLocaleString('en-US')} mm wide — ${request.shaftWidthMm!.toLocaleString('en-US')} mm is below the company's standard.`,
+      );
+    }
+    if (minDepth !== undefined && request.shaftDepthMm! < minDepth) {
+      throw new BadRequestException(
+        `This product needs a shaft at least ${minDepth.toLocaleString('en-US')} mm deep — ${request.shaftDepthMm!.toLocaleString('en-US')} mm is below the company's standard.`,
+      );
+    }
+  }
   const input: CalcInput = {
     productType: request.productType,
-    capacityKg: request.capacityKg!,
+    // An escalator has no rated load; 0 keeps the price formula's C defined.
+    capacityKg: vehicle && !vehicle.ratedLoad ? 0 : request.capacityKg!,
     stops: request.stops!,
     // The client's rule for every lift: 3,500 mm per floor × the stops.
     // Only an escalator sends its own figure — its price is its rise.
@@ -284,8 +314,10 @@ const resolve = (
     buildingUsage,
     marginPercent: request.marginPercent,
     taxPercent: request.taxPercent,
+    ...(vehicle
+      ? { shaftWidthMm: request.shaftWidthMm, shaftDepthMm: request.shaftDepthMm }
+      : {}),
   };
-  const vehicle = VEHICLE_SPECS[input.productType];
   if (vehicle) {
     // The company's standard specification, not EN 81 geometry: a vehicle
     // lift has a platform and a clear shaft, and the document gives both.
@@ -295,8 +327,10 @@ const resolve = (
       productType: input.productType,
       carWidthMm: vehicle.platformMm?.width ?? null,
       carDepthMm: vehicle.platformMm?.depth ?? null,
-      shaftWidthMm: vehicle.clearShaftMm?.width ?? null,
-      shaftDepthMm: vehicle.clearShaftMm?.depth ?? null,
+      // The building's opening, as entered; the document's clear shaft is
+      // on the sheet beside it.
+      shaftWidthMm: request.shaftWidthMm ?? null,
+      shaftDepthMm: request.shaftDepthMm ?? null,
       specSheet: [...vehicle.sheet],
     };
     return { input, technical, notes };

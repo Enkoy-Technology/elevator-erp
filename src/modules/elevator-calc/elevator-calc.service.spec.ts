@@ -24,10 +24,10 @@ const productTypes = {
 const forProduct = (productType: string): Partial<CalcInput> =>
   (
     {
-      CAR_LIFT: { speedMs: 0.5, doorWidthMm: 2600 },
-      CAR_PLATFORM_LIFT: { speedMs: 0.3, doorWidthMm: 2600 },
-      CAR_STACKING_LIFT: { speedMs: 0.15 },
-      ESCALATOR: { speedMs: 0.5 },
+      CAR_LIFT: { speedMs: 0.5, doorWidthMm: 2600, shaftWidthMm: 3400, shaftDepthMm: 6500 },
+      CAR_PLATFORM_LIFT: { speedMs: 0.3, doorWidthMm: 2600, shaftWidthMm: 2900, shaftDepthMm: 5500 },
+      CAR_STACKING_LIFT: { speedMs: 0.15, shaftWidthMm: 3100, shaftDepthMm: 5600 },
+      ESCALATOR: { speedMs: 0.5, shaftWidthMm: 1600 },
     } as Record<string, Partial<CalcInput>>
   )[productType] ?? {};
 
@@ -174,6 +174,7 @@ describe('ElevatorCalcService', () => {
         calc({
           ...WORKED_EXAMPLE,
           productType: 'CAR_LIFT',
+          ...forProduct('CAR_LIFT'),
           capacityKg: 3000,
           marginPercent: 0,
           taxPercent: 0,
@@ -276,10 +277,13 @@ describe('ElevatorCalcService', () => {
         calc({
           ...WORKED_EXAMPLE,
           productType: 'CAR_LIFT',
+          ...forProduct('CAR_LIFT'),
           capacityKg: 3500,
           stops: 2,
           speedMs: 0.5,
           doorWidthMm: 2600,
+          shaftWidthMm: 3400,
+          shaftDepthMm: 6500,
           ...extra,
         });
       await expect(car({})).resolves.toBeDefined();
@@ -298,11 +302,49 @@ describe('ElevatorCalcService', () => {
       ).rejects.toThrow(/2,400–2,800 mm/);
     });
 
+    it("takes the building's shaft for a vehicle product, at least the document's clear shaft, and prints it", async () => {
+      const car = (extra: Partial<CalcRequest>) =>
+        calc({
+          ...WORKED_EXAMPLE,
+          ...forProduct('CAR_LIFT'),
+          productType: 'CAR_LIFT',
+          ...forProduct('CAR_LIFT'),
+          capacityKg: 3500,
+          stops: 2,
+          ...extra,
+        });
+      const ok = await car({ shaftWidthMm: 3600, shaftDepthMm: 7000 });
+      expect(ok.technical.shaftWidthMm).toBe(3600);
+      expect(ok.technical.shaftDepthMm).toBe(7000);
+      expect(ok.input.shaftWidthMm).toBe(3600);
+      await expect(car({ shaftWidthMm: undefined })).rejects.toThrow(/Missing shaftWidthMm/);
+      await expect(car({ shaftWidthMm: 3000 })).rejects.toThrow(/at least 3,400 mm wide/);
+      await expect(car({ shaftDepthMm: 6000 })).rejects.toThrow(/at least 6,500 mm deep/);
+    });
+
+    it('asks an escalator for its opening width only — no depth, no rated load', async () => {
+      const result = await calc({
+        ...WORKED_EXAMPLE,
+        productType: 'ESCALATOR',
+        speedMs: 0.5,
+        shaftWidthMm: 1700,
+        capacityKg: undefined,
+        shaftDepthMm: undefined,
+      });
+      expect(result.input.capacityKg).toBe(0);
+      expect(result.technical.shaftWidthMm).toBe(1700);
+      expect(result.technical.shaftDepthMm).toBeNull();
+      await expect(
+        calc({ ...WORKED_EXAMPLE, productType: 'ESCALATOR', speedMs: 0.5, shaftWidthMm: 1500 }),
+      ).rejects.toThrow(/at least 1,600 mm wide/);
+    });
+
     it("prints the company's specification sheet for a vehicle product, with its platform and clear shaft", async () => {
       const result = await calc({
         ...WORKED_EXAMPLE,
         ...forProduct('CAR_LIFT'),
         productType: 'CAR_LIFT',
+          ...forProduct('CAR_LIFT'),
         capacityKg: 3500,
         stops: 2,
       });

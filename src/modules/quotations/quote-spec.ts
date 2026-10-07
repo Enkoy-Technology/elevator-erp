@@ -24,7 +24,7 @@ export const buildSpecSummary = (input: {
   plan?: FloorPlan | null;
 }): string | null => {
   const segments: string[] = [];
-  if (input.capacityKg != null) {
+  if (input.capacityKg != null && input.capacityKg > 0) {
     segments.push(
       input.capacityPersons != null
         ? `${input.capacityKg}KG -${input.capacityPersons}persons`
