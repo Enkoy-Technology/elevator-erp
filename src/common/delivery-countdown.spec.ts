@@ -31,13 +31,13 @@ describe('deliveryCountdown', () => {
     });
   });
 
-  it('once overdue, charges 0.002% of the contract total for every calendar day', () => {
+  it('once overdue, charges 0.02% of the contract total for every calendar day', () => {
     // Due Thu 28 Jan; Thu 4 Feb is 5 working days and 7 calendar days late.
-    // 7,000,000 x 0.002% = 140.00 a day.
+    // 7,000,000 x 0.02% = 1,400.00 a day.
     expect(deliveryCountdown([signed()], '2027-02-04')).toEqual({
       deliveryDueDate: '2027-01-28',
       deliveryDaysLeft: -5,
-      deliveryPenaltyEtb: '980.00',
+      deliveryPenaltyEtb: '9800.00',
     });
   });
 

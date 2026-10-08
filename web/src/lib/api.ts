@@ -640,7 +640,7 @@ export interface Project {
   deliveryDaysLeft?: number | null;
   /**
    * The delay penalty run up so far: the contract's percent of its total
-   * (0.002% unless it states its own) for every calendar day past the due
+   * (0.02% unless it states its own) for every calendar day past the due
    * date. Null unless the delivery is overdue.
    */
   deliveryPenaltyEtb?: string | null;
