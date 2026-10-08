@@ -32,7 +32,7 @@ export const DeliveryCell = ({ project }: { project: DeliveryFields }) => {
               ? 'Due today'
               : `${-days} ${plural} overdue`
         }
-        tone={days < 0 ? 'danger' : days <= 14 ? 'warn' : 'neutral'}
+        tone={days <= 25 ? 'danger' : 'good'}
       />
       {project.deliveryPenaltyEtb ? (
         <span className="whitespace-nowrap text-xs text-red-700">
