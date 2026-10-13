@@ -62,6 +62,11 @@ export const siteSurveys = pgTable(
     machineRoom: text('machine_room'),
     /** As written on the form: "2", or a word. Never parsed. */
     units: text('units'),
+    /**
+     * When someone other than a salesperson first opened the sheet. Null is
+     * "new": the admin list highlights it until a manager has looked.
+     */
+    seenAt: timestamp('seen_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

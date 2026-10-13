@@ -26,6 +26,7 @@ const survey = (over: Partial<SiteSurveyRecord> = {}): SiteSurveyRecord => ({
   overheadMm: null,
   machineRoom: 'With MR',
   units: '1',
+  seenAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   ...over,
@@ -39,6 +40,7 @@ describe('SiteSurveysService', () => {
     findById: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
+    markSeen: jest.fn(),
   };
   const notifications = { create: jest.fn() };
   const service = new SiteSurveysService(
@@ -190,4 +192,40 @@ describe('SiteSurveysService', () => {
       );
     },
   );
+
+  it('marks a new sheet seen the first time a manager opens it', async () => {
+    surveys.findById.mockResolvedValue({
+      ...survey(),
+      surveyedByName: 'Abebe',
+    });
+
+    const opened = await service.getById(
+      { userId: 'gm-1', tenantId: TENANT_ID, role: 'GENERAL_MANAGER' },
+      'survey-1',
+    );
+
+    expect(surveys.markSeen).toHaveBeenCalledWith(TENANT_ID, 'survey-1');
+    expect(opened.seenAt).toBeInstanceOf(Date);
+  });
+
+  it('leaves a sheet new when its salesperson reads it, or once already seen', async () => {
+    surveys.findById.mockResolvedValueOnce({
+      ...survey(),
+      surveyedByName: 'Abebe',
+    });
+    await service.getById(
+      { userId: USER_ID, tenantId: TENANT_ID, role: 'SALESPERSON' },
+      'survey-1',
+    );
+    surveys.findById.mockResolvedValueOnce({
+      ...survey({ seenAt: new Date('2026-10-01') }),
+      surveyedByName: 'Abebe',
+    });
+    await service.getById(
+      { userId: 'gm-1', tenantId: TENANT_ID, role: 'GENERAL_MANAGER' },
+      'survey-1',
+    );
+
+    expect(surveys.markSeen).not.toHaveBeenCalled();
+  });
 });

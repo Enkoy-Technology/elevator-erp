@@ -976,6 +976,8 @@ export interface SiteSurvey {
   units: string | null;
   createdAt: string;
   updatedAt: string;
+  /** When a manager first opened it; null means not looked at yet. */
+  seenAt: string | null;
 }
 
 /**

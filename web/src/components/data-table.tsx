@@ -63,6 +63,8 @@ export interface DataTableProps<T> {
   getRowHref?: (row: T) => string;
   /** Announced to screen readers and printed above the table. */
   caption?: string;
+  /** Extra classes for one row, e.g. a background for rows needing attention. */
+  getRowClassName?: (row: T) => string | undefined;
 
   /**
    * Row selection. Requires `getRowId` — without a stable id there is
@@ -140,6 +142,7 @@ export const DataTable = <T,>({
   onRowClick,
   getRowHref,
   caption,
+  getRowClassName,
   selectable = false,
   selectedIds,
   onSelectionChange,
@@ -335,7 +338,7 @@ export const DataTable = <T,>({
                       onRowClick || href
                         ? 'cursor-pointer transition hover:bg-slate-50 focus-visible:bg-slate-50'
                         : 'transition hover:bg-slate-50/60'
-                    } print:hover:bg-transparent`}
+                    } ${getRowClassName?.(row.original) ?? ''} print:hover:bg-transparent`}
                   >
                     {canSelect && getRowId ? (
                       <td className="w-10 px-4 py-3 align-middle print:hidden">

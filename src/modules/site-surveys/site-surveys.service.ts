@@ -41,6 +41,12 @@ export class SiteSurveysService {
     if (!survey) {
       throw new NotFoundException('Site survey not found');
     }
+    // A salesperson reading their own sheet does not make it seen; the
+    // highlight is for the managers it was sent to.
+    if (user.role !== 'SALESPERSON' && survey.seenAt === null) {
+      await this.surveysRepository.markSeen(user.tenantId, id);
+      return { ...survey, seenAt: new Date() };
+    }
     return survey;
   }
 

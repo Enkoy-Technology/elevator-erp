@@ -9,7 +9,12 @@ import { Check, Eye, Pencil, Trash2, X } from 'lucide-react';
 import { btnPrimary, btnSecondary } from '@/components/form-styles';
 import { DataTable } from '@/components/data-table';
 import { Dialog } from '@/components/dialog';
-import { ListToolbar, RowAction, SearchField } from '@/components/list-toolbar';
+import {
+  ListToolbar,
+  RowAction,
+  SearchField,
+  StatusPill,
+} from '@/components/list-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
 import { formatDate } from '@/lib/datetime';
@@ -46,6 +51,13 @@ const surveyDay = (iso: string): string => formatDate(`${iso}T00:00:00`);
  * is already scoped server-side, so this only keeps the buttons honest; it is
  * not the defence.
  */
+/**
+ * A sheet no manager has opened yet. A salesperson's list never lights up:
+ * the highlight is for the people the sheets are sent to.
+ */
+const isNew = (survey: SiteSurvey, me: AuthProfile | null): boolean =>
+  me !== null && me.role !== 'SALESPERSON' && survey.seenAt === null;
+
 const canActOn = (survey: SiteSurvey, me: AuthProfile | null): boolean =>
   me !== null &&
   (me.role !== 'SALESPERSON' || survey.surveyedByUserId === me.userId);
@@ -192,8 +204,13 @@ export default function SurveysPage() {
       header: 'Project name',
       enableSorting: true,
       cell: ({ row }) => (
-        <span className="font-medium text-slate-900">
+        <span className="inline-flex items-center gap-2 font-medium text-slate-900">
           {row.original.projectName}
+          {/* The word, not only the green row: colour alone is invisible
+              to a screen reader and to colour-blind readers. */}
+          {isNew(row.original, me) ? (
+            <StatusPill label="New" tone="good" />
+          ) : null}
         </span>
       ),
     },
@@ -532,6 +549,9 @@ export default function SurveysPage() {
             columns={columns}
             rows={surveys}
             getRowId={(survey) => survey.id}
+            getRowClassName={(survey) =>
+              isNew(survey, me) ? 'bg-emerald-50' : undefined
+            }
             loading={loading}
             pagination={{
               page,

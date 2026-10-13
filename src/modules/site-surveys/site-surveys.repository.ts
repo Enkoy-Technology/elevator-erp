@@ -150,6 +150,19 @@ export class SiteSurveysRepository {
     });
   }
 
+  /**
+   * The first manager to open a sheet takes it off the "new" list. Only an
+   * unseen row is written, and `updatedAt` stays: looking is not changing.
+   */
+  async markSeen(tenantId: string, id: string): Promise<void> {
+    await this.tenantDb.withTenant(tenantId, (tx) =>
+      tx
+        .update(siteSurveys)
+        .set({ seenAt: new Date() })
+        .where(and(eq(siteSurveys.id, id), isNull(siteSurveys.seenAt))),
+    );
+  }
+
   async update(
     tenantId: string,
     id: string,
