@@ -17,7 +17,7 @@ import {
   qty2,
   selectGuideRail,
 } from './calc-math';
-import { hasDoor, VEHICLE_SPECS } from './vehicle-specs';
+import { hasDoor, hasMachineRoom, VEHICLE_SPECS } from './vehicle-specs';
 import {
   PASSENGER_CAR_HEIGHT_MM,
   selectPassengerLift,
@@ -286,7 +286,7 @@ const resolve = (
     const { minWidth, minDepth } = vehicle.shaftMm;
     if (request.shaftWidthMm! < minWidth) {
       throw new BadRequestException(
-        `${request.productType === 'ESCALATOR' ? 'An escalator' : 'This product'} needs an opening at least ${minWidth.toLocaleString('en-US')} mm wide — ${request.shaftWidthMm!.toLocaleString('en-US')} mm is below the company's standard.`,
+        `${request.productType === 'ESCALATOR' ? `An escalator needs a width of at least ${minWidth.toLocaleString('en-US')} mm` : `This product needs an opening at least ${minWidth.toLocaleString('en-US')} mm wide`} — ${request.shaftWidthMm!.toLocaleString('en-US')} mm is below the company's standard.`,
       );
     }
     if (minDepth !== undefined && request.shaftDepthMm! < minDepth) {
@@ -306,7 +306,9 @@ const resolve = (
       request.travelHeightM ??
       Number((request.stops! * FLOOR_HEIGHT_M).toFixed(2)),
     speedMs: request.speedMs!,
-    machineRoomType,
+    // An escalator has no machine room; the key is left out, so no
+    // document prints one.
+    ...(hasMachineRoom(request.productType) ? { machineRoomType } : {}),
     // A doorless product (escalator, car stacking lift) carries 0 here, and
     // every renderer leaves the door out on 0.
     doorType: request.doorType ?? 'CENTER_OPEN',
@@ -347,6 +349,8 @@ const FLOOR_HEIGHT_M = 3.5;
 const computeLiftGeometry = (
   input: CalcInput,
 ): Omit<TechnicalSpecs, 'productType'> => {
+  // Only the escalator omits it, and it never reaches the lift geometry.
+  const machineRoomType = input.machineRoomType ?? 'MRL';
   const car = computeCarDimensions(input.capacityKg, input.buildingUsage);
   const shaft = computeShaftDimensions(car.widthMm, car.depthMm, input.speedMs);
   const counterweight = computeCounterweightMassKg(
@@ -356,7 +360,7 @@ const computeLiftGeometry = (
   );
   const motorKw = computeMotorPowerKw(input.capacityKg, input.speedMs);
   const machineRoom = computeMachineRoom(
-    input.machineRoomType,
+    machineRoomType,
     shaft.widthMm,
     shaft.depthMm,
     input.speedMs,
@@ -374,7 +378,7 @@ const computeLiftGeometry = (
     overheadClearanceMm: computeOverheadClearanceMm(
       input.stops,
       input.speedMs,
-      input.machineRoomType,
+      machineRoomType,
     ),
     counterweightMassKg: qty2(counterweight),
     motorPowerKw: qty2(motorKw),

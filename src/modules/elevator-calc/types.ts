@@ -26,7 +26,8 @@ export interface CalcInput {
   stops: number;
   travelHeightM: number;
   speedMs: number;
-  machineRoomType: MachineRoomType;
+  /** Absent for an escalator, which has no machine room. */
+  machineRoomType?: MachineRoomType;
   doorType: DoorType;
   doorWidthMm: number;
   buildingUsage: BuildingUsage;

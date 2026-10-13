@@ -88,16 +88,21 @@ export const VEHICLE_STANDARD: Readonly<
       shaftDepthMm?: number;
       /** False for the escalator: no rated load. */
       ratedLoad: boolean;
+      /** False for the escalator: no machine room to choose. */
+      machineRoom?: false;
     }
   >
 > = {
   CAR_LIFT: { speedMs: 0.5, doorWidthMm: 2600, shaftWidthMm: 3400, shaftDepthMm: 6500, ratedLoad: true },
   CAR_PLATFORM_LIFT: { speedMs: 0.3, doorWidthMm: 2600, shaftWidthMm: 2900, shaftDepthMm: 5500, ratedLoad: true },
   CAR_STACKING_LIFT: { speedMs: 0.15, shaftWidthMm: 3100, shaftDepthMm: 5600, ratedLoad: true },
-  ESCALATOR: { speedMs: 0.5, shaftWidthMm: 1600, ratedLoad: false },
+  ESCALATOR: { speedMs: 0.5, shaftWidthMm: 1000, ratedLoad: false, machineRoom: false },
 };
 export const isVehicleProduct = (productType: string): boolean =>
   productType in VEHICLE_STANDARD;
+/** Every product but the escalator has a machine room choice. */
+export const hasMachineRoom = (productType: string): boolean =>
+  VEHICLE_STANDARD[productType]?.machineRoom !== false;
 /** An escalator and a car stacking lift have no door. */
 export const hasDoor = (productType: string): boolean => {
   const standard = VEHICLE_STANDARD[productType];
@@ -171,8 +176,13 @@ export const toRequest = (
     speedMs,
     doorType,
     doorWidthMm,
-    ...common
+    machineRoomType,
+    ...rest
   } = form;
+  // An escalator has no machine room to send.
+  const common = hasMachineRoom(form.productType)
+    ? { ...rest, machineRoomType }
+    : rest;
   const vehicle = VEHICLE_STANDARD[form.productType];
   return isStandardLift(form.productType)
     ? { ...common, shaftWidthMm, shaftDepthMm, floors }
@@ -305,7 +315,7 @@ export const LiftInputs = ({
               ? numberField(
                   'shaftWidthMm',
                   form.productType === 'ESCALATOR'
-                    ? 'Opening width (mm)'
+                    ? 'Width (mm)'
                     : 'Shaft width (mm)',
                 )
               : null}
@@ -327,22 +337,24 @@ export const LiftInputs = ({
         )}
       </div>
 
-      <label className="block">
-        <span className={label}>Machine room</span>
-        <select
-          className={field}
-          value={form.machineRoomType}
-          onChange={(e) =>
-            setForm((prev) => ({
-              ...prev,
-              machineRoomType: e.target.value as 'MR' | 'MRL',
-            }))
-          }
-        >
-          <option value="MR">Machine Room (MR)</option>
-          <option value="MRL">Machine Room Less (MRL)</option>
-        </select>
-      </label>
+      {hasMachineRoom(form.productType) ? (
+        <label className="block">
+          <span className={label}>Machine room</span>
+          <select
+            className={field}
+            value={form.machineRoomType}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                machineRoomType: e.target.value as 'MR' | 'MRL',
+              }))
+            }
+          >
+            <option value="MR">Machine Room (MR)</option>
+            <option value="MRL">Machine Room Less (MRL)</option>
+          </select>
+        </label>
+      ) : null}
 
       {standard || !hasDoor(form.productType) ? null : (
         <label className="block">
@@ -481,7 +493,7 @@ export const LiftResult = ({
                 : []),
               [
                 result.technical.shaftDepthMm === null
-                  ? 'Opening width (mm)'
+                  ? 'Width (mm)'
                   : 'Shaft W×D (mm)',
                 result.technical.shaftDepthMm === null
                   ? formatNumber(result.technical.shaftWidthMm)

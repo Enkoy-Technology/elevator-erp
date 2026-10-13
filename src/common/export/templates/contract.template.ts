@@ -6,6 +6,7 @@ import {
   renderReferencePlate,
   renderSignaturePair,
 } from './layout';
+import { printsMachineRoom } from './commercial-document';
 import { formatEtb } from './money-format';
 import { fmtDate } from './quotation.template';
 
@@ -141,7 +142,7 @@ const equipmentTable = (lines: readonly ContractEquipmentLine[]): string => {
   const rows = lines
     .map((line) => {
       const details = [
-        line.machineRoomLabel,
+        printsMachineRoom(line.productType) ? line.machineRoomLabel : null,
         line.tractionMachineType,
         line.controlSystem,
         line.powerSupply,

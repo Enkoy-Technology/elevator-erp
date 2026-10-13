@@ -1,5 +1,9 @@
 import type { DocumentTemplate, TenantBranding } from '../document-pdf.service';
-import { DOOR_TYPE_LABELS, PRODUCT_LABELS } from './commercial-document';
+import {
+  DOOR_TYPE_LABELS,
+  PRODUCT_LABELS,
+  printsMachineRoom,
+} from './commercial-document';
 import {
   esc,
   renderLayout,
@@ -155,7 +159,12 @@ export const buildTechnicalProposalHtml = (
   const productLabel =
     typeof product === 'string' ? (PRODUCT_LABELS[product] ?? product) : '—';
 
-  const dutyRows = renderRows(input, DUTY_ROWS);
+  const dutyRows = renderRows(
+    input,
+    printsMachineRoom(product)
+      ? DUTY_ROWS
+      : DUTY_ROWS.filter((r) => r.key !== 'machineRoomType'),
+  );
   const geometryRows = renderRows(tech, SPEC_ROWS);
 
   // A flat-priced product (escalator, car platform lift) has EVERY geometry

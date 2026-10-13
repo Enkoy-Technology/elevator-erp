@@ -18,6 +18,7 @@ import type { AuthenticatedUser } from '../../types/auth.types';
 import { D, money } from '../elevator-calc/calc-math';
 import { ElevatorCalcService } from '../elevator-calc/elevator-calc.service';
 import type { CalcRequest, PricingBreakdown } from '../elevator-calc/types';
+import { hasMachineRoom } from '../elevator-calc/vehicle-specs';
 import { ProjectsService } from '../projects/projects.service';
 import { ratePayloadSchemaFor } from '../rates/rate-payloads';
 import { RatesService } from '../rates/rates.service';
@@ -570,7 +571,10 @@ export class QuotationsService {
           speedMs: calcInput.speedMs,
           plan,
         }),
-      machineRoomLabel: dto.machineRoomLabel ?? null,
+      // An escalator has no machine room, whatever the line carried before.
+      machineRoomLabel: hasMachineRoom(dto.productType)
+        ? (dto.machineRoomLabel ?? null)
+        : null,
       floorLabels: dto.floorLabels ?? null,
       // `||`, not `??`: the editor sends an empty string to mean "go back to
       // the compressed form", and a merged update would otherwise keep the

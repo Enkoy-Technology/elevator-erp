@@ -37,6 +37,14 @@ export const PRODUCT_LABELS: Record<string, string> = {
   ESCALATOR: 'Escalator',
 };
 
+/**
+ * An escalator has no machine room (client, 2026-10-13); lines saved before
+ * that still carry one, so the printers drop it here. Mirrors
+ * hasMachineRoom in modules/elevator-calc/vehicle-specs.ts.
+ */
+export const printsMachineRoom = (productType: unknown): boolean =>
+  productType !== 'ESCALATOR';
+
 const MACHINE_ROOM_LABELS: Record<string, string> = {
   MR: 'With machine room',
   MRL: 'Without machine room (MRL)',
@@ -348,9 +356,11 @@ const renderSpecTable = (line: DocumentLineData): string => {
     ],
     [
       'With or without machine room',
-      line.machineRoomLabel ??
-        MACHINE_ROOM_LABELS[String(calc.machineRoomType)] ??
-        null,
+      printsMachineRoom(line.productType ?? tech.productType)
+        ? (line.machineRoomLabel ??
+          MACHINE_ROOM_LABELS[String(calc.machineRoomType)] ??
+          null)
+        : null,
     ],
     [
       'Load (Capacity)',

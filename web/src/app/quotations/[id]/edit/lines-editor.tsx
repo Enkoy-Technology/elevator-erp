@@ -7,6 +7,7 @@ import {
   STANDARD_LIFT_PRODUCTS,
   VEHICLE_STANDARD,
   hasDoor,
+  hasMachineRoom,
   startingCapacityKg,
   startingSpeedAndDoor,
   usesRise,
@@ -199,14 +200,19 @@ const toPayload = (
             ? { doorType: draft.doorType, doorWidthMm: num(draft.doorWidthMm, 900) }
             : {}),
         }),
-    machineRoomType: draft.machineRoomType,
+    ...(hasMachineRoom(draft.productType)
+      ? { machineRoomType: draft.machineRoomType }
+      : {}),
     buildingUsage: draft.buildingUsage,
     marginPercent: num(draft.marginPercent, 0),
     quantity: num(draft.quantity, 1),
     // Floors win where they are given — their count IS the stop count, and
     // sending both invites the two to disagree.
     ...(floorLabels ? { floorLabels } : { stops: num(draft.stops, 2) }),
-    machineRoomLabel: text(draft.machineRoomLabel),
+    // An escalator has no machine room; the API clears its label.
+    machineRoomLabel: hasMachineRoom(draft.productType)
+      ? text(draft.machineRoomLabel)
+      : undefined,
     // Sent even when empty, unlike its neighbours: an empty value is a
     // meaningful instruction here — print the compressed form again.
     floorDisplaySummary: draft.floorDisplaySummary.trim(),
@@ -564,7 +570,7 @@ export const LinesEditor = ({
                           <Field
                             label={
                               draft.productType === 'ESCALATOR'
-                                ? 'Opening width (mm)'
+                                ? 'Width (mm)'
                                 : 'Shaft width (mm)'
                             }
                             htmlFor={`sw-${line.id}`}
@@ -673,38 +679,40 @@ export const LinesEditor = ({
                       </>
                     )}
 
-                    <Field label="Machine room" htmlFor={`mr-${line.id}`}>
-                      <select
-                        id={`mr-${line.id}`}
-                        className={fieldClass}
-                        disabled={!editable}
-                        value={draft.machineRoomType}
-                        onChange={(e) => {
-                          const machineRoomType = e.target.value as
-                            'MR' | 'MRL';
-                          setDrafts((prev) => ({
-                            ...prev,
-                            [line.id]: {
-                              ...draftFor(line),
-                              machineRoomType,
-                              // The printed label follows the choice unless
-                              // someone has worded it themselves.
-                              machineRoomLabel:
-                                draftFor(line).machineRoomLabel === '' ||
-                                draftFor(line).machineRoomLabel === 'MRL' ||
-                                draftFor(line).machineRoomLabel === 'WITH MR'
-                                  ? machineRoomType === 'MRL'
-                                    ? 'MRL'
-                                    : 'WITH MR'
-                                  : draftFor(line).machineRoomLabel,
-                            },
-                          }));
-                        }}
-                      >
-                        <option value="MRL">MRL (machine-room-less)</option>
-                        <option value="MR">With machine room</option>
-                      </select>
-                    </Field>
+                    {hasMachineRoom(draft.productType) ? (
+                      <Field label="Machine room" htmlFor={`mr-${line.id}`}>
+                        <select
+                          id={`mr-${line.id}`}
+                          className={fieldClass}
+                          disabled={!editable}
+                          value={draft.machineRoomType}
+                          onChange={(e) => {
+                            const machineRoomType = e.target.value as
+                              'MR' | 'MRL';
+                            setDrafts((prev) => ({
+                              ...prev,
+                              [line.id]: {
+                                ...draftFor(line),
+                                machineRoomType,
+                                // The printed label follows the choice unless
+                                // someone has worded it themselves.
+                                machineRoomLabel:
+                                  draftFor(line).machineRoomLabel === '' ||
+                                  draftFor(line).machineRoomLabel === 'MRL' ||
+                                  draftFor(line).machineRoomLabel === 'WITH MR'
+                                    ? machineRoomType === 'MRL'
+                                      ? 'MRL'
+                                      : 'WITH MR'
+                                    : draftFor(line).machineRoomLabel,
+                              },
+                            }));
+                          }}
+                        >
+                          <option value="MRL">MRL (machine-room-less)</option>
+                          <option value="MR">With machine room</option>
+                        </select>
+                      </Field>
+                    ) : null}
 
                     {isStandardLift(draft) || !hasDoor(draft.productType) ? null : (
                       <Field label="Door type" htmlFor={`doortype-${line.id}`}>
@@ -818,22 +826,24 @@ export const LinesEditor = ({
                             }
                           />
                         </Field>
-                        <Field
-                          label="Machine room label"
-                          htmlFor={`mrl-${line.id}`}
-                          hint="As printed on the spec sheet."
-                        >
-                          <input
-                            id={`mrl-${line.id}`}
-                            className={fieldClass}
-                            disabled={!editable}
-                            placeholder="MRL"
-                            value={draft.machineRoomLabel}
-                            onChange={(e) =>
-                              setField(line, 'machineRoomLabel', e.target.value)
-                            }
-                          />
-                        </Field>
+                        {hasMachineRoom(draft.productType) ? (
+                          <Field
+                            label="Machine room label"
+                            htmlFor={`mrl-${line.id}`}
+                            hint="As printed on the spec sheet."
+                          >
+                            <input
+                              id={`mrl-${line.id}`}
+                              className={fieldClass}
+                              disabled={!editable}
+                              placeholder="MRL"
+                              value={draft.machineRoomLabel}
+                              onChange={(e) =>
+                                setField(line, 'machineRoomLabel', e.target.value)
+                              }
+                            />
+                          </Field>
+                        ) : null}
                         <Field
                           label="Door height (mm)"
                           htmlFor={`dh-${line.id}`}

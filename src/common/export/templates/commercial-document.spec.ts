@@ -170,6 +170,15 @@ describe('the client-shaped commercial document', () => {
     expect(buildQuotationHtml(data, branding)).not.toContain('Special notes');
   });
 
+  it('prints no machine room for an escalator, even one saved with a label', () => {
+    const html = buildQuotationHtml(
+      { ...data, lines: [{ ...line, productType: 'ESCALATOR', machineRoomLabel: 'MRL' }] },
+      branding,
+    );
+    expect(html).toContain('Escalator');
+    expect(html).not.toContain('With or without machine room');
+  });
+
   it('renders the 19-row specification table, numbered 1..n after absent rows are dropped', () => {
     const html = buildQuotationHtml(data, branding);
     for (const label of [

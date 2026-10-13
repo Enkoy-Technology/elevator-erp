@@ -21,15 +21,18 @@ export interface VehicleSpec {
   shaftMm: { minWidth: number; minDepth?: number };
   /** False for the escalator: it carries people on steps, not a rated load. */
   ratedLoad: boolean;
+  /** False for the escalator: it has no machine room to choose (client, 2026-10-13). */
+  machineRoom: boolean;
 }
 
 
 export const VEHICLE_SPECS: Readonly<Record<string, VehicleSpec>> = {
   ESCALATOR: {
     speed: { min: 0.5, max: 0.65, standard: 0.5 },
-    // The structural opening for a 1000 mm step: 1600–1700 mm.
-    shaftMm: { minWidth: 1600 },
+    // The escalator's width; the client's floor is 1,000 mm (2026-10-13).
+    shaftMm: { minWidth: 1000 },
     ratedLoad: false,
+    machineRoom: false,
   },
   CAR_LIFT: {
     speed: { min: 0.3, max: 0.5, standard: 0.5 },
@@ -38,6 +41,7 @@ export const VEHICLE_SPECS: Readonly<Record<string, VehicleSpec>> = {
     clearShaftMm: { width: 3400, depth: 6500 },
     shaftMm: { minWidth: 3400, minDepth: 6500 },
     ratedLoad: true,
+    machineRoom: true,
   },
   CAR_STACKING_LIFT: {
     speed: { min: 0.08, max: 0.15, standard: 0.15 },
@@ -45,6 +49,7 @@ export const VEHICLE_SPECS: Readonly<Record<string, VehicleSpec>> = {
     // No shaft as such: the overall equipment footprint, 3100–3300 × 5600–6000.
     shaftMm: { minWidth: 3100, minDepth: 5600 },
     ratedLoad: true,
+    machineRoom: true,
   },
   CAR_PLATFORM_LIFT: {
     speed: { min: 0.15, max: 0.3, standard: 0.3 },
@@ -53,6 +58,7 @@ export const VEHICLE_SPECS: Readonly<Record<string, VehicleSpec>> = {
     clearShaftMm: { width: 2900, depth: 5500 },
     shaftMm: { minWidth: 2900, minDepth: 5500 },
     ratedLoad: true,
+    machineRoom: true,
   },
 };
 
@@ -65,3 +71,7 @@ export const hasDoor = (productType: string): boolean => {
   return vehicle === undefined || vehicle.door !== undefined;
 };
 
+
+/** Every product but the escalator has a machine room choice, MR or MRL. */
+export const hasMachineRoom = (productType: string): boolean =>
+  VEHICLE_SPECS[productType]?.machineRoom ?? true;

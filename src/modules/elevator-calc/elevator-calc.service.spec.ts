@@ -322,7 +322,7 @@ describe('ElevatorCalcService', () => {
       await expect(car({ shaftDepthMm: 6000 })).rejects.toThrow(/at least 6,500 mm deep/);
     });
 
-    it('asks an escalator for its opening width only — no depth, no rated load', async () => {
+    it('asks an escalator for its width only — no depth, no rated load, no machine room', async () => {
       const result = await calc({
         ...WORKED_EXAMPLE,
         productType: 'ESCALATOR',
@@ -334,6 +334,8 @@ describe('ElevatorCalcService', () => {
       expect(result.input.capacityKg).toBe(0);
       expect(result.technical.shaftWidthMm).toBe(1700);
       expect(result.technical.shaftDepthMm).toBeNull();
+      // Even when the form sends one, an escalator carries no machine room.
+      expect(result.input).not.toHaveProperty('machineRoomType');
       // No door either: none asked for, 0 carried so nothing prints.
       const noDoor = await calc({
         productType: 'ESCALATOR',
@@ -346,8 +348,15 @@ describe('ElevatorCalcService', () => {
       });
       expect(noDoor.input.doorWidthMm).toBe(0);
       await expect(
-        calc({ ...WORKED_EXAMPLE, productType: 'ESCALATOR', speedMs: 0.5, shaftWidthMm: 1500 }),
-      ).rejects.toThrow(/at least 1,600 mm wide/);
+        calc({ ...WORKED_EXAMPLE, productType: 'ESCALATOR', speedMs: 0.5, shaftWidthMm: 999 }),
+      ).rejects.toThrow(/width of at least 1,000 mm/);
+      const narrowest = await calc({
+        ...WORKED_EXAMPLE,
+        productType: 'ESCALATOR',
+        speedMs: 0.5,
+        shaftWidthMm: 1000,
+      });
+      expect(narrowest.technical.shaftWidthMm).toBe(1000);
     });
 
     it("prints a vehicle product's platform as its car, and the building's shaft, in the usual block", async () => {

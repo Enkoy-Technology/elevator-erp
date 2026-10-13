@@ -36,6 +36,7 @@ import { TenantDbService } from '../../database/tenant-db.service';
 import { autoAdvanceProject } from '../projects/project-auto-advance';
 import type { QuotationDocumentRow } from './quotation-document.mapper';
 import { buildSpecSummary } from './quote-spec';
+import { hasMachineRoom } from '../elevator-calc/vehicle-specs';
 
 export type QuotationRecord = typeof quotations.$inferSelect;
 
@@ -803,7 +804,10 @@ const legacyLineValues = (
     // The company's standard configuration, so the proforma and the
     // contract's Article 2 print a real machine instead of "—". Same
     // defaults the lines editor offers; each is editable there.
-    machineRoomLabel: calcInput.machineRoomType ?? 'MRL',
+    // An escalator has no machine room to print.
+    machineRoomLabel: hasMachineRoom(calcInput.productType ?? '')
+      ? (calcInput.machineRoomType ?? 'MRL')
+      : null,
     floorLabels: null,
     floorDisplaySummary: null,
     doorHeightMm: STANDARD_LINE.doorHeightMm,
