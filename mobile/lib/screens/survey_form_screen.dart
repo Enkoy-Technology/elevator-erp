@@ -36,7 +36,12 @@ class _SurveyFormScreenState extends State<SurveyFormScreen> {
     text: _s?.overheadMm?.toString(),
   );
   late final _units = TextEditingController(text: _s?.units);
+  late final _capacity = TextEditingController(
+    text: _s?.capacityKg?.toString(),
+  );
   late String _machineRoom = _s?.machineRoom ?? '';
+  late String? _productType = _s?.productType;
+  List<Product>? _products;
   bool _dirty = false;
   bool _saving = false;
   String? _error;
@@ -52,7 +57,19 @@ class _SurveyFormScreenState extends State<SurveyFormScreen> {
     _floors,
     _overhead,
     _units,
+    _capacity,
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // The list is the company's own; without it the section says so and the
+    // rest of the sheet still saves.
+    api.listProducts().then(
+      (rows) => mounted ? setState(() => _products = rows) : null,
+      onError: (_) => mounted ? setState(() => _products = const []) : null,
+    );
+  }
 
   @override
   void dispose() {
@@ -102,6 +119,8 @@ class _SurveyFormScreenState extends State<SurveyFormScreen> {
       'overheadMm': _mm(_overhead),
       'machineRoom': _machineRoom.isEmpty ? null : _machineRoom,
       'units': _text(_units),
+      'productType': _productType,
+      'capacityKg': _hasLoad ? int.tryParse(_capacity.text) : null,
     };
     try {
       final s = _s;
@@ -220,6 +239,7 @@ class _SurveyFormScreenState extends State<SurveyFormScreen> {
                   textInputAction: TextInputAction.next,
                 ),
               ]),
+              _group('Lift', _liftFields(scheme)),
               _group('Shaft', [
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -320,6 +340,98 @@ class _SurveyFormScreenState extends State<SurveyFormScreen> {
         ),
       ),
     );
+  }
+
+  Product? get _product =>
+      _products?.where((p) => p.code == _productType).firstOrNull;
+
+  /// The escalator has no rated load; nothing picked yet still asks.
+  bool get _hasLoad => _product?.hasLoad ?? true;
+
+  /// What is being sold, in two taps: the product, then a usual load (or
+  /// any other, typed).
+  List<Widget> _liftFields(ColorScheme scheme) {
+    final products = _products;
+    if (products == null) {
+      return const [LinearProgressIndicator()];
+    }
+    final picked = _productType;
+    return [
+      Text('Product', style: TextStyle(color: scheme.onSurfaceVariant)),
+      const SizedBox(height: 8),
+      if (products.isEmpty && picked == null)
+        Text(
+          'The product list did not load. The manager can pick it later.',
+          style: TextStyle(color: scheme.onSurfaceVariant),
+        ),
+      Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          // A product since removed from the list keeps its chip.
+          if (picked != null && !products.any((p) => p.code == picked))
+            ChoiceChip(
+              label: Text(productLabel(picked)),
+              selected: true,
+              onSelected: (_) => setState(() {
+                _productType = null;
+                _dirty = true;
+              }),
+            ),
+          for (final p in products)
+            ChoiceChip(
+              label: Text(p.name),
+              selected: picked == p.code,
+              // Tapping the chosen one again clears it.
+              onSelected: (on) => setState(() {
+                _productType = on ? p.code : null;
+                _dirty = true;
+              }),
+            ),
+        ],
+      ),
+      if (_hasLoad) ...[
+        const SizedBox(height: 20),
+        TextFormField(
+          controller: _capacity,
+          decoration: const InputDecoration(
+            labelText: 'Capacity',
+            suffixText: 'kg',
+          ),
+          style: mono,
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(4),
+          ],
+          textInputAction: TextInputAction.next,
+          // The calculator's own bounds, so the quotation can use it as is.
+          validator: (v) {
+            final kg = int.tryParse(v ?? '');
+            final lowest = _product?.lowestKg ?? 320;
+            return kg != null && (kg < lowest || kg > 5000)
+                ? '$lowest to 5000 kg'
+                : null;
+          },
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final kg
+                in _product?.commonCapacities ??
+                    const [450, 630, 800, 1000, 1600])
+              ActionChip(
+                label: Text('$kg kg'),
+                onPressed: () => setState(() {
+                  _capacity.text = '$kg';
+                  _dirty = true;
+                }),
+              ),
+          ],
+        ),
+      ],
+    ];
   }
 
   /// One part of the sheet, on its own card.

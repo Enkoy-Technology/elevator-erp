@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  foreignKey,
   index,
   integer,
   pgTable,
@@ -9,6 +10,8 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
+import { customers } from './customers';
+import { projects } from './projects';
 import { tenants } from './tenants';
 
 /**
@@ -19,9 +22,9 @@ import { tenants } from './tenants';
  * sheets come back mostly blank, filled with whatever the person standing in
  * the stairwell could measure.
  *
- * Deliberately standalone: it does NOT create a customer, a project or a
- * quotation, and nothing reads it back into the sales flow. It is captured
- * so managers can see it in the system instead of in a chat app.
+ * A manager turns a sheet into the sales flow by converting it: that opens
+ * (or picks) the customer and opens the project, both recorded here, and the
+ * quotation then starts from the sheet's measurements (client, 2026-10-14).
  */
 export const siteSurveys = pgTable(
   'site_surveys',
@@ -63,6 +66,17 @@ export const siteSurveys = pgTable(
     /** As written on the form: "2", or a word. Never parsed. */
     units: text('units'),
     /**
+     * The product, as a code from Settings → Products & prices (PASSENGER,
+     * CAR_LIFT, …). Not a foreign key: products are rows a manager can
+     * rename, and a sheet keeps what the salesperson picked.
+     */
+    productType: text('product_type'),
+    /** Rated load, kilograms, if the customer said. */
+    capacityKg: integer('capacity_kg'),
+    /** Set by converting the sheet; both null until then. */
+    customerId: uuid('customer_id'),
+    projectId: uuid('project_id'),
+    /**
      * When someone other than a salesperson first opened the sheet. Null is
      * "new": the admin list highlights it until a manager has looked.
      */
@@ -76,6 +90,16 @@ export const siteSurveys = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.tenantId, table.id] }),
+    foreignKey({
+      name: 'site_surveys_customer_fk',
+      columns: [table.tenantId, table.customerId],
+      foreignColumns: [customers.tenantId, customers.id],
+    }),
+    foreignKey({
+      name: 'site_surveys_project_fk',
+      columns: [table.tenantId, table.projectId],
+      foreignColumns: [projects.tenantId, projects.id],
+    }),
     index('site_surveys_tenant_created_idx').on(
       table.tenantId,
       table.createdAt,

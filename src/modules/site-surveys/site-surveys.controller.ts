@@ -27,6 +27,7 @@ import { CurrentUser, Roles } from '../../common/decorators';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { ImportSiteSurveysResultDto } from './dto/import-site-surveys.dto';
 import {
+  ConvertSiteSurveyDto,
   CreateSiteSurveyDto,
   UpdateSiteSurveyDto,
 } from './dto/site-survey.dto';
@@ -44,8 +45,8 @@ const IMPORT_EXTENSIONS = /\.(xlsx|csv)$/i;
 
 /**
  * The company's SITE COLLECTION FORM, captured in the ERP instead of sent to
- * the manager over Telegram. Deliberately standalone (client, 2026-09-22):
- * nothing here touches quotations, projects, customers or the calculator.
+ * the manager over Telegram. A manager converts a sheet into a customer and
+ * a project; the quotation then starts from its measurements.
  */
 @ApiTags('site-surveys')
 @ApiBearerAuth('access-token')
@@ -165,6 +166,20 @@ export class SiteSurveysController {
     @Body() dto: UpdateSiteSurveyDto,
   ) {
     return this.siteSurveysService.update(user, id, dto);
+  }
+
+  @Post(':id/convert')
+  @Roles('GENERAL_MANAGER', 'SALES_MANAGER')
+  @ApiOperation({
+    summary:
+      'Open the customer (or pick one) and a LEAD project from a site survey. 409 if it already has one.',
+  })
+  convert(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ConvertSiteSurveyDto,
+  ) {
+    return this.siteSurveysService.convert(user, id, dto);
   }
 
   @Delete(':id')

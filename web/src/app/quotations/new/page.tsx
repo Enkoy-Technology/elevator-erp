@@ -19,6 +19,7 @@ import {
   createQuotationFromCalc,
   getAccessToken,
   getCurrentRole,
+  getSiteSurvey,
   getVatPercent,
   listProductTypes,
   priceQuotation,
@@ -29,9 +30,16 @@ import {
   type CalcResult,
   type ProductTypeRow,
   type Project,
+  type SiteSurvey,
   type UserRole,
 } from '@/lib/api';
+import { formatDate } from '@/lib/datetime';
 import { formatEtb, splitGrossEtb, withVatEtb } from '@/lib/money';
+import {
+  surveyFloorLabels,
+  surveyFloors,
+  surveyMachineRoom,
+} from '@/lib/survey-to-calc';
 import { NumberInput } from '../number-input';
 
 /**
@@ -40,6 +48,9 @@ import { NumberInput } from '../number-input';
  * floors for a standard passenger lift, the classic figures otherwise),
  * sees the specs and the list price, and confirms — that lift becomes the
  * quotation's first line and the project moves to QUOTATION on its own.
+ *
+ * Arriving from a converted site survey (`?surveyId=`), the lift starts
+ * from the sheet's measurements instead of the worked example.
  */
 
 /** Mirrors @Roles on the quotation mutation routes; CEO and ADMIN bypass. */
@@ -65,6 +76,7 @@ export default function NewQuotationPage() {
   const [offered, setOffered] = useState('');
   const [validUntil, setValidUntil] = useState('');
   const [notes, setNotes] = useState('');
+  const [survey, setSurvey] = useState<SiteSurvey | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -78,8 +90,14 @@ export default function NewQuotationPage() {
       router.replace('/quotations');
       return;
     }
-    const wanted =
-      new URLSearchParams(window.location.search).get('projectId') ?? '';
+    const query = new URLSearchParams(window.location.search);
+    const wanted = query.get('projectId') ?? '';
+    const surveyId = query.get('surveyId');
+    if (surveyId) {
+      void getSiteSurvey(surveyId)
+        .then(setSurvey)
+        .catch(() => undefined);
+    }
     void getVatPercent()
       .then(setVatPercent)
       .catch(() => undefined);
@@ -121,6 +139,33 @@ export default function NewQuotationPage() {
     setResult(null);
   }, [projectId, projects, products]);
 
+  // The sheet's figures over whatever the form holds; anything it left
+  // blank, or wrote in a way that cannot be read, stays as it was.
+  useEffect(() => {
+    if (!survey || products.length === 0) {
+      return;
+    }
+    const floors = surveyFloors(survey.floors);
+    const machineRoomType = surveyMachineRoom(survey.machineRoom);
+    setForm((prev) => ({
+      ...prev,
+      ...(survey.shaftWidthMm ? { shaftWidthMm: survey.shaftWidthMm } : {}),
+      ...(survey.shaftDepthMm ? { shaftDepthMm: survey.shaftDepthMm } : {}),
+      ...(floors ? { floors, stops: floors } : {}),
+      ...(survey.capacityKg
+        ? {
+            capacityKg: startingCapacityKg(
+              products,
+              prev.productType,
+              survey.capacityKg,
+            ),
+          }
+        : {}),
+      ...(machineRoomType ? { machineRoomType } : {}),
+    }));
+    setResult(null);
+  }, [survey, products]);
+
   const onCalculate = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
@@ -157,10 +202,19 @@ export default function NewQuotationPage() {
       // one thing the editor is still for. The first line carries the
       // quotation's own id.
       const floors = lift.floors ?? lift.stops ?? 2;
-      const floorLabels = [
-        'G',
-        ...Array.from({ length: floors - 1 }, (_, i) => String(i + 1)),
-      ].join(',');
+      // The survey's own levels (a basement, a mezzanine) when the floor
+      // count is still the one it gave; otherwise G, 1, 2 ….
+      const fromSurvey =
+        survey?.projectId === projectId &&
+        surveyFloors(survey.floors) === floors
+          ? surveyFloorLabels(survey.floors)
+          : null;
+      const floorLabels =
+        fromSurvey ??
+        [
+          'G',
+          ...Array.from({ length: floors - 1 }, (_, i) => String(i + 1)),
+        ].join(',');
       await updateQuotationLine(quotation.id, quotation.id, { floorLabels });
       // The price was decided here too: a figure other than the
       // calculator's is applied as the agreed price, VAT-inclusive when
@@ -238,6 +292,18 @@ export default function NewQuotationPage() {
                 )}
               </select>
             </label>
+
+            {survey ? (
+              <p className="rounded-lg border border-gold-500/40 bg-gold-500/10 px-3 py-2 text-sm text-slate-700">
+                Filled in from the site survey of{' '}
+                {formatDate(`${survey.surveyDate}T00:00:00`)}
+                {survey.floors ? ` (floors: ${survey.floors})` : ''}. Check the
+                figures, then calculate.
+                {survey.units && survey.units.trim() !== '1'
+                  ? ` The survey says ${survey.units} units: the price here is for one lift. Set the quantity on the offer.`
+                  : ''}
+              </p>
+            ) : null}
 
             <LiftInputs form={form} setForm={setForm} products={products} />
 

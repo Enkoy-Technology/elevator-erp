@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 
 import { Field, FormPage, FormSection } from '@/components/form-page';
 import { fieldClass } from '@/components/form-styles';
@@ -9,7 +9,9 @@ import { NumberInput } from '@/app/quotations/number-input';
 import {
   ApiError,
   createSiteSurvey,
+  listProductTypes,
   updateSiteSurvey,
+  type ProductTypeRow,
   type SiteSurvey,
   type SiteSurveyUpdate,
 } from '@/lib/api';
@@ -56,6 +58,17 @@ export const SurveyForm = ({ survey }: { survey: SiteSurvey | null }) => {
   );
   const [machineRoom, setMachineRoom] = useState(survey?.machineRoom ?? '');
   const [units, setUnits] = useState(survey?.units ?? '');
+  const [productType, setProductType] = useState(survey?.productType ?? '');
+  const [capacityKg, setCapacityKg] = useState(
+    digits(survey?.capacityKg ?? null),
+  );
+  const [products, setProducts] = useState<ProductTypeRow[]>([]);
+
+  useEffect(() => {
+    void listProductTypes()
+      .then(setProducts)
+      .catch(() => undefined);
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -75,6 +88,8 @@ export const SurveyForm = ({ survey }: { survey: SiteSurvey | null }) => {
       overheadMm: count(overheadMm),
       machineRoom: text(machineRoom),
       units: units.trim() === '' ? null : units.trim(),
+      productType: productType || null,
+      capacityKg: count(capacityKg),
     };
     try {
       if (editId) {
@@ -161,6 +176,40 @@ export const SurveyForm = ({ survey }: { survey: SiteSurvey | null }) => {
             placeholder="+251911234567"
             value={contactPhone}
             onChange={(e) => setContactPhone(e.target.value)}
+          />
+        </Field>
+      </FormSection>
+
+      <FormSection title="Lift">
+        <Field label="Product" htmlFor="productType">
+          <select
+            id="productType"
+            className={fieldClass}
+            value={productType}
+            onChange={(e) => setProductType(e.target.value)}
+          >
+            <option value="">—</option>
+            {/* A product renamed or removed since keeps its code here. */}
+            {productType && !products.some((p) => p.code === productType) ? (
+              <option value={productType}>{productType}</option>
+            ) : null}
+            {products.map((p) => (
+              <option key={p.code} value={p.code}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field
+          label="Capacity (kg)"
+          htmlFor="capacityKg"
+          hint="320 to 5,000 kg, if the customer said."
+        >
+          <NumberInput
+            id="capacityKg"
+            value={capacityKg}
+            onValueChange={setCapacityKg}
           />
         </Field>
       </FormSection>

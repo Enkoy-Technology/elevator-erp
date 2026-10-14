@@ -1,5 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, ne, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  isNull,
+  ne,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 
 import { todayIso } from '../../common/business-time';
 import {
@@ -7,11 +19,16 @@ import {
   toPaginatedResult,
   type PaginatedResult,
 } from '../../common/pagination';
-import { siteSurveys, users } from '../../database/schema';
-import { SiteSurveyDuplicateError } from '../../common/exceptions';
+import { customers, projects, siteSurveys, users } from '../../database/schema';
+import {
+  SiteSurveyConvertedError,
+  SiteSurveyDuplicateError,
+} from '../../common/exceptions';
+import { normalizeEthiopic } from '../../common/text/ethiopic-normalize';
 import type { TenantTransaction } from '../../database/database.types';
 import { TenantDbService } from '../../database/tenant-db.service';
 import type {
+  ConvertSiteSurveyDto,
   CreateSiteSurveyDto,
   SiteSurveyPatch,
 } from './dto/site-survey.dto';
@@ -254,6 +271,117 @@ export class SiteSurveysRepository {
     });
   }
 
+  /**
+   * The sheet enters the sales flow: the customer (picked, or created from
+   * `dto.customer`), a LEAD project for it, and the sheet's link to both —
+   * in one transaction, so a failure never leaves a customer with no
+   * project or a project the sheet does not point at. The inserts mirror
+   * CustomersRepository.create and ProjectsRepository.create; those open
+   * their own transactions and cannot join this one.
+   */
+  async convert(
+    tenantId: string,
+    userId: string,
+    id: string,
+    dto: ConvertSiteSurveyDto,
+  ): Promise<{ customerId: string; projectId: string }> {
+    return this.tenantDb.withTenant(tenantId, async (tx) => {
+      // Locked, so two managers converting at once open one project.
+      const [survey] = await tx
+        .select()
+        .from(siteSurveys)
+        .where(eq(siteSurveys.id, id))
+        .for('update');
+      if (!survey) {
+        throw new NotFoundException('Site survey not found');
+      }
+      if (survey.projectId) {
+        throw new SiteSurveyConvertedError(survey.projectName);
+      }
+
+      let customerId = dto.customerId;
+      if (customerId) {
+        const [existing] = await tx
+          .select({ id: customers.id })
+          .from(customers)
+          .where(
+            and(eq(customers.id, customerId), isNull(customers.deletedAt)),
+          );
+        if (!existing) {
+          throw new NotFoundException('Customer not found');
+        }
+      } else if (dto.customer) {
+        const c = dto.customer;
+        const [created] = await tx
+          .insert(customers)
+          .values({
+            tenantId,
+            name: c.name,
+            nameNormalized: normalizeEthiopic(c.name),
+            legalName: c.legalName,
+            tinNumber: c.tinNumber,
+            email: c.email?.toLowerCase(),
+            phone: c.phone,
+            alternatePhone: c.alternatePhone,
+            addressLine1: c.addressLine1,
+            addressLine2: c.addressLine2,
+            city: c.city,
+            region: c.region,
+            country: c.country ?? 'ET',
+            buildingName: c.buildingName,
+            customerType: c.customerType ?? 'COMMERCIAL',
+            tags: c.tags,
+            notes: c.notes,
+            createdByUserId: userId,
+            ...(c.smsConsentGiven ? { smsConsentAt: new Date() } : {}),
+          })
+          .returning({ id: customers.id });
+        customerId = created?.id;
+      }
+      if (!customerId) {
+        throw new Error('Failed to resolve the customer');
+      }
+
+      const p = dto.project;
+      const [project] = await tx
+        .insert(projects)
+        .values({
+          tenantId,
+          customerId,
+          name: p.name,
+          nameNormalized: normalizeEthiopic(p.name),
+          code: p.code,
+          productType: p.productType ?? null,
+          siteAddressLine1: p.siteAddressLine1,
+          siteAddressLine2: p.siteAddressLine2,
+          siteCity: p.siteCity,
+          siteRegion: p.siteRegion,
+          siteCountry: p.siteCountry ?? 'ET',
+          buildingName: p.buildingName,
+          // Whoever surveyed the site is the one who knows the customer. An
+          // imported sheet names its collectors only in words; its
+          // surveyedByUserId is whoever uploaded it, so no default there.
+          salesRepUserId:
+            p.salesRepUserId ??
+            (survey.collectedByName === null ? survey.surveyedByUserId : null),
+          notes: p.notes,
+          createdByUserId: userId,
+          status: 'LEAD',
+          statusChangedAt: new Date(),
+        })
+        .returning({ id: projects.id });
+      if (!project) {
+        throw new Error('Failed to insert project');
+      }
+
+      await tx
+        .update(siteSurveys)
+        .set({ customerId, projectId: project.id, updatedAt: new Date() })
+        .where(eq(siteSurveys.id, id));
+      return { customerId, projectId: project.id };
+    });
+  }
+
   async create(
     tenantId: string,
     surveyedByUserId: string,
@@ -321,6 +449,8 @@ const toInsert = (
   overheadMm: dto.overheadMm,
   machineRoom: dto.machineRoom,
   units: dto.units,
+  productType: dto.productType,
+  capacityKg: dto.capacityKg,
 });
 
 const scopedWhere = (id: string, surveyedByUserId?: string) =>

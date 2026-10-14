@@ -15,6 +15,9 @@ class Survey {
     this.overheadMm,
     this.machineRoom,
     this.units,
+    this.productType,
+    this.capacityKg,
+    this.projectId,
     this.surveyedByName,
   });
 
@@ -31,6 +34,9 @@ class Survey {
     overheadMm: json['overheadMm'] as int?,
     machineRoom: json['machineRoom'] as String?,
     units: json['units'] as String?,
+    productType: json['productType'] as String?,
+    capacityKg: json['capacityKg'] as int?,
+    projectId: json['projectId'] as String?,
     surveyedByName: json['surveyedByName'] as String?,
   );
 
@@ -54,7 +60,54 @@ class Survey {
 
   /// A number or a word, as written on the form.
   final String? units;
+
+  /// A product code from the company's price list, e.g. 'PASSENGER'.
+  final String? productType;
+
+  /// Rated load in kg, if the customer said.
+  final int? capacityKg;
+
+  /// Set once a manager has turned the survey into a project.
+  final String? projectId;
   final String? surveyedByName;
+}
+
+/// One product from the company's price list (`GET /v1/product-types`).
+class Product {
+  const Product(this.code, this.name, {this.minCapacityKg});
+
+  factory Product.fromJson(Map<String, dynamic> json) => Product(
+    json['code'] as String,
+    json['name'] as String,
+    minCapacityKg: json['minCapacityKg'] as int?,
+  );
+
+  final String code;
+  final String name;
+
+  /// The smallest load it is sold at (a car lift from 3,500 kg); null for none.
+  final int? minCapacityKg;
+
+  /// The escalator is priced on its rise and has no rated load.
+  bool get hasLoad => code != 'ESCALATOR';
+
+  /// The lowest capacity the quotation will accept for this product.
+  int get lowestKg => (minCapacityKg ?? 0) > 320 ? minCapacityKg! : 320;
+
+  /// The loads a salesperson usually hears, from this product's minimum up.
+  List<int> get commonCapacities {
+    if (!hasLoad) return const [];
+    final usual = lowestKg >= 2000
+        ? [lowestKg, 4000, 5000]
+        : const [450, 630, 800, 1000, 1600];
+    return usual.where((kg) => kg >= lowestKg && kg <= 5000).toSet().toList();
+  }
+}
+
+/// 'CAR_LIFT' as 'Car lift', for a code whose product name is not at hand.
+String productLabel(String code) {
+  final words = code.toLowerCase().replaceAll('_', ' ');
+  return words.isEmpty ? code : words[0].toUpperCase() + words.substring(1);
 }
 
 /// One page of `GET /v1/site-surveys`.

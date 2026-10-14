@@ -117,6 +117,14 @@ class Api {
 
   Future<void> deleteSurvey(String id) => _send('DELETE', '/site-surveys/$id');
 
+  /// The company's products, in price-list order.
+  Future<List<Product>> listProducts() async {
+    final rows = await _send('GET', '/product-types') as List;
+    return rows
+        .map((row) => Product.fromJson(row as Map<String, dynamic>))
+        .toList();
+  }
+
   /// Sends one request and returns the decoded JSON body (null when empty).
   Future<Object?> _send(
     String method,

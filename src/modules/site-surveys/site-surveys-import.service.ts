@@ -14,7 +14,8 @@ import type {
 } from './dto/import-site-surveys.dto';
 import { SiteSurveysRepository } from './site-surveys.repository';
 
-type Field = keyof CreateSiteSurveyDto;
+/** The paper form's columns. Product and capacity are typed in the app; the sheet has neither. */
+type Field = Exclude<keyof CreateSiteSurveyDto, 'productType' | 'capacityKg'>;
 
 /**
  * Who collected the sheet, from the line the client writes by hand directly

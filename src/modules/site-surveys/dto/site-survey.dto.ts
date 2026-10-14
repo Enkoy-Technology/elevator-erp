@@ -1,18 +1,30 @@
-import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import {
+  ApiProperty,
+  ApiPropertyOptional,
+  OmitType,
+  PartialType,
+} from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   IsDateString,
+  IsDefined,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   Max,
   MaxLength,
   Min,
   MinLength,
   Validate,
+  ValidateNested,
 } from 'class-validator';
 
 import { IsEthiopianPhoneConstraint } from '../../../common/dto/phone';
+import { CreateCustomerDto } from '../../customers/dto/create-customer.dto';
+import { CreateProjectDto } from '../../projects/dto/create-project.dto';
 
 // Same date-only shape as CreateRateVersionDto: the regex pins the format,
 // IsDateString({strict:true}) rejects '2026-02-30'.
@@ -101,6 +113,24 @@ export class CreateSiteSurveyDto {
   @IsString()
   @MaxLength(60)
   units?: string;
+
+  @ApiPropertyOptional({
+    example: 'PASSENGER',
+    description: 'A code from GET /product-types.',
+  })
+  @IsOptional()
+  @Matches(/^[A-Z0-9_]{1,40}$/, {
+    message: 'productType must be a product code such as PASSENGER',
+  })
+  productType?: string;
+
+  /** The calculator's own bounds, so a converted sheet always calculates. */
+  @ApiPropertyOptional({ minimum: 320, maximum: 5000, example: 630 })
+  @IsOptional()
+  @IsInt()
+  @Min(320)
+  @Max(5000)
+  capacityKg?: number;
 }
 
 /**
@@ -118,3 +148,37 @@ export class UpdateSiteSurveyDto extends PartialType(CreateSiteSurveyDto) {}
 export type SiteSurveyPatch = {
   [K in keyof UpdateSiteSurveyDto]?: UpdateSiteSurveyDto[K] | null;
 };
+
+/** The project's own fields; the customer comes from the conversion. */
+export class ConvertSiteSurveyProjectDto extends OmitType(CreateProjectDto, [
+  'customerId',
+] as const) {}
+
+/**
+ * Converting a sheet: the customer it belongs to, picked or new, and the
+ * project it opens. Exactly one of `customerId` and `customer`.
+ */
+export class ConvertSiteSurveyDto {
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description: 'An existing customer. Omit to create `customer` instead.',
+  })
+  @IsOptional()
+  @IsUUID()
+  customerId?: string;
+
+  @ApiPropertyOptional({ type: () => CreateCustomerDto })
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => CreateCustomerDto)
+  customer?: CreateCustomerDto;
+
+  @ApiProperty({ type: () => ConvertSiteSurveyProjectDto })
+  // Without these, a missing or array-shaped project passes validation.
+  @IsDefined()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => ConvertSiteSurveyProjectDto)
+  project!: ConvertSiteSurveyProjectDto;
+}

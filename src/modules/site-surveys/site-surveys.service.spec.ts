@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 import type {
   SiteSurveyRecord,
@@ -26,6 +26,10 @@ const survey = (over: Partial<SiteSurveyRecord> = {}): SiteSurveyRecord => ({
   overheadMm: null,
   machineRoom: 'With MR',
   units: '1',
+  productType: null,
+  capacityKg: null,
+  customerId: null,
+  projectId: null,
   seenAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -41,6 +45,7 @@ describe('SiteSurveysService', () => {
     update: jest.fn(),
     delete: jest.fn(),
     markSeen: jest.fn(),
+    convert: jest.fn(),
   };
   const notifications = { create: jest.fn() };
   const service = new SiteSurveysService(
@@ -227,5 +232,47 @@ describe('SiteSurveysService', () => {
     );
 
     expect(surveys.markSeen).not.toHaveBeenCalled();
+  });
+
+  describe('convert', () => {
+    const manager = {
+      userId: USER_ID,
+      tenantId: TENANT_ID,
+      role: 'SALES_MANAGER' as const,
+    };
+    const project = { name: 'Bole Plaza', productType: 'PASSENGER' };
+
+    it('opens the project for a picked customer', async () => {
+      surveys.convert.mockResolvedValue({ customerId: 'c', projectId: 'p' });
+      const dto = {
+        customerId: '44444444-4444-4444-4444-444444444444',
+        project,
+      };
+
+      await expect(service.convert(manager, survey().id, dto)).resolves.toEqual(
+        { customerId: 'c', projectId: 'p' },
+      );
+      expect(surveys.convert).toHaveBeenCalledWith(
+        TENANT_ID,
+        USER_ID,
+        survey().id,
+        dto,
+      );
+    });
+
+    it('wants exactly one of a picked customer and a new one', async () => {
+      const both = {
+        customerId: '44444444-4444-4444-4444-444444444444',
+        customer: { name: 'Ato Abebe', phone: '0911234567' },
+        project,
+      };
+      await expect(service.convert(manager, survey().id, both)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(
+        service.convert(manager, survey().id, { project }),
+      ).rejects.toThrow(BadRequestException);
+      expect(surveys.convert).not.toHaveBeenCalled();
+    });
   });
 });

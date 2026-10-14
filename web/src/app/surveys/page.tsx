@@ -211,6 +211,9 @@ export default function SurveysPage() {
           {isNew(row.original, me) ? (
             <StatusPill label="New" tone="good" />
           ) : null}
+          {row.original.projectId ? (
+            <StatusPill label="Converted" tone="active" />
+          ) : null}
         </span>
       ),
     },

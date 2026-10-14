@@ -184,6 +184,22 @@ class _SurveyDetailScreenState extends State<SurveyDetailScreen> {
               const SizedBox(height: 28),
               const Eyebrow('Details', rule: true),
               const SizedBox(height: 6),
+              _spec(
+                'Status',
+                s.projectId == null
+                    ? 'With the manager'
+                    : 'Converted to a project',
+                plain: true,
+              ),
+              _spec(
+                'Product',
+                s.productType == null ? null : productLabel(s.productType!),
+                plain: true,
+              ),
+              _spec(
+                'Capacity',
+                s.capacityKg == null ? null : '${s.capacityKg} kg',
+              ),
               _spec('Floors', s.floors),
               _spec('Machine room', s.machineRoom),
               _spec('Units', s.units),

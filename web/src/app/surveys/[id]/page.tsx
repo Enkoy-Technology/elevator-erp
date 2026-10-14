@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 
-import { btnDanger, btnSecondary } from '@/components/form-styles';
+import { btnDanger, btnPrimary, btnSecondary } from '@/components/form-styles';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
 import { useConfirm } from '@/components/use-confirm';
@@ -13,8 +13,12 @@ import {
   ApiError,
   deleteSiteSurvey,
   getAccessToken,
+  getCurrentRole,
   getSiteSurvey,
+  listProductTypes,
+  type ProductTypeRow,
   type SiteSurvey,
+  type UserRole,
 } from '@/lib/api';
 
 /**
@@ -26,7 +30,17 @@ import {
  * No permission check here: GET /site-surveys/:id is already scoped, so a
  * salesperson can only ever load their own sheet, and anything that loads
  * is theirs to edit.
+ *
+ * A manager converts the sheet into a customer and a project; from then on
+ * the page offers the quotation, pre-filled from the sheet.
  */
+
+/** Mirrors @Roles on POST /site-surveys/:id/convert; CEO and ADMIN bypass. */
+const canConvert = (role: UserRole | null): boolean =>
+  role === 'GENERAL_MANAGER' ||
+  role === 'SALES_MANAGER' ||
+  role === 'CEO' ||
+  role === 'ADMIN';
 
 const dash = (value: string | number | null): string =>
   value === null || value === '' ? '—' : String(value);
@@ -67,6 +81,8 @@ export default function SiteSurveyPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [products, setProducts] = useState<ProductTypeRow[]>([]);
+  const [role, setRole] = useState<UserRole | null>(null);
 
   useEffect(() => {
     if (!getAccessToken()) {
@@ -74,6 +90,10 @@ export default function SiteSurveyPage() {
       return;
     }
     let cancelled = false;
+    setRole(getCurrentRole());
+    void listProductTypes()
+      .then((rows) => !cancelled && setProducts(rows))
+      .catch(() => undefined);
     const load = async () => {
       try {
         const record = await getSiteSurvey(id);
@@ -107,7 +127,9 @@ export default function SiteSurveyPage() {
     if (
       (await confirm({
         title: `Delete the survey for ${survey.projectName}?`,
-        description: 'The sheet is removed for good. Nothing else uses it.',
+        description: survey.projectId
+          ? 'The sheet is removed for good. Its customer and project stay.'
+          : 'The sheet is removed for good. Nothing else uses it.',
         confirmLabel: 'Delete',
         tone: 'danger',
       })) === null
@@ -155,6 +177,29 @@ export default function SiteSurveyPage() {
           backLabel="Site surveys"
           actions={
             <>
+              {survey.projectId ? (
+                <>
+                  <Link
+                    href={`/customers/${survey.customerId}`}
+                    className={btnSecondary}
+                  >
+                    Customer
+                  </Link>
+                  <Link
+                    href={`/quotations/new?projectId=${survey.projectId}&surveyId=${survey.id}`}
+                    className={btnPrimary}
+                  >
+                    New quotation
+                  </Link>
+                </>
+              ) : canConvert(role) ? (
+                <Link
+                  href={`/surveys/${survey.id}/convert`}
+                  className={btnPrimary}
+                >
+                  Convert to quotation
+                </Link>
+              ) : null}
               <Link
                 href={`/surveys/${survey.id}/edit`}
                 className={btnSecondary}
@@ -203,6 +248,13 @@ export default function SiteSurveyPage() {
             <Row label="OH (mm)">{dash(survey.overheadMm)}</Row>
             <Row label="Machine room">{dash(survey.machineRoom)}</Row>
             <Row label="Units">{dash(survey.units)}</Row>
+            <Row label="Product">
+              {survey.productType
+                ? (products.find((p) => p.code === survey.productType)?.name ??
+                  survey.productType)
+                : '—'}
+            </Row>
+            <Row label="Capacity (kg)">{dash(survey.capacityKg)}</Row>
             <Row label="Collected by">{dash(survey.surveyedByName)}</Row>
             <Row label="Submitted">{formatDateTime(survey.createdAt)}</Row>
             <Row label="Last changed">{formatDateTime(survey.updatedAt)}</Row>

@@ -1,8 +1,14 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { NotificationsRepository } from '../notifications/notifications.repository';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import type {
+  ConvertSiteSurveyDto,
   CreateSiteSurveyDto,
   SiteSurveyPatch,
 } from './dto/site-survey.dto';
@@ -57,6 +63,20 @@ export class SiteSurveysService {
       dto,
       scopeFor(user),
     );
+  }
+
+  /** Turns the sheet into a customer and a LEAD project, ready to quote. */
+  async convert(
+    user: AuthenticatedUser,
+    id: string,
+    dto: ConvertSiteSurveyDto,
+  ): Promise<{ customerId: string; projectId: string }> {
+    if (Boolean(dto.customerId) === Boolean(dto.customer)) {
+      throw new BadRequestException(
+        'Pick an existing customer or describe a new one: exactly one.',
+      );
+    }
+    return this.surveysRepository.convert(user.tenantId, user.userId, id, dto);
   }
 
   delete(user: AuthenticatedUser, id: string) {

@@ -974,6 +974,12 @@ export interface SiteSurvey {
   /** The sheet's words: 'With MR', 'MRL'. */
   machineRoom: string | null;
   units: string | null;
+  /** A code from Settings → Products & prices; null if not picked. */
+  productType: string | null;
+  capacityKg: number | null;
+  /** Set once a manager has converted the sheet; null until then. */
+  customerId: string | null;
+  projectId: string | null;
   createdAt: string;
   updatedAt: string;
   /** When a manager first opened it; null means not looked at yet. */
@@ -997,6 +1003,8 @@ export interface SiteSurveyUpdate {
   overheadMm?: number | null;
   machineRoom?: string | null;
   units?: string | null;
+  productType?: string | null;
+  capacityKg?: number | null;
 }
 
 /**
@@ -1054,6 +1062,23 @@ export const updateSiteSurvey = (
 /** Hard delete — the sheet is standalone, nothing references it. */
 export const deleteSiteSurvey = (id: string): Promise<void> =>
   apiFetch<void>(`/site-surveys/${id}`, { method: 'DELETE' });
+
+/** Exactly one of `customerId` (an existing customer) and `customer` (a new one). */
+export interface ConvertSiteSurveyPayload {
+  customerId?: string;
+  customer?: CreateCustomerPayload & { phone: string };
+  project: Omit<CreateProjectPayload, 'customerId'>;
+}
+
+/** Opens the customer and a LEAD project from the sheet, in one go. */
+export const convertSiteSurvey = (
+  id: string,
+  payload: ConvertSiteSurveyPayload,
+): Promise<{ customerId: string; projectId: string }> =>
+  apiFetch(`/site-surveys/${id}/convert`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 
 /** One row the server refused, named the way a person finds it in the sheet. */
 export interface SiteSurveyImportError {
