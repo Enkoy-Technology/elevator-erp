@@ -69,6 +69,8 @@ export interface ProformaDocumentRow {
   warrantyPartsMonths?: number | null;
   warrantyFreeServiceMonths?: number | null;
   validityDays?: number | null;
+  /** The quotation's special notes, snapshotted at issue. Null on a pre-notes proforma. */
+  notes?: string | null;
 }
 
 /** Mirrors quotation-document.mapper's documentLine — same printed shape. */
@@ -120,8 +122,9 @@ export const proformaDocumentData = (
   taxPercent: vatPercentLabel(p.subtotalEtb, p.vatEtb),
   vatEtb: p.vatEtb,
   totalEtb: p.totalEtb,
-  // proformas has no notes column of its own (see database/schema/proformas.ts).
-  notes: null,
+  // Snapshotted off the quotation at issue (see proformas.notes), so the
+  // proforma prints the same Special notes the quotation did.
+  notes: p.notes ?? null,
   // Everything below was snapshotted at issue time and, until now, written
   // and never read — the customer's proforma printed one implied line and
   // no terms at all, while the quotation it came from printed both.

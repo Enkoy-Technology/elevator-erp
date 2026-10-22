@@ -1,0 +1,1 @@
+ALTER TABLE "proformas" ADD COLUMN "notes" text;

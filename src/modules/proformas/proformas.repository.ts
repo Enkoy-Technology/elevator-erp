@@ -436,6 +436,7 @@ export class ProformasRepository {
           warrantyPartsMonths: quote.warrantyPartsMonths,
           warrantyFreeServiceMonths: quote.warrantyFreeServiceMonths,
           validityDays: quote.validityDays,
+          notes: quote.notes,
           paymentTerms: terms.map((term): ProformaPaymentTerm => ({
             sequence: term.sequence,
             label: term.label,

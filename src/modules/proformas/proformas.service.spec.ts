@@ -34,6 +34,7 @@ describe('ProformasService', () => {
     warrantyFreeServiceMonths: null,
     validityDays: null,
     paymentTerms: null,
+    notes: null,
     issuedAt: new Date('2026-08-08T00:00:00.000Z'),
     issuedByUserId: user.userId,
     validUntil: null,

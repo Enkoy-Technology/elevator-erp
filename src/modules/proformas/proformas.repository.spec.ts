@@ -163,6 +163,33 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
     );
   });
 
+  it("snapshots the quotation's special notes onto the proforma, so both documents state the same scope", async () => {
+    const notes = 'Price excludes civil works and the 3-phase supply.';
+    const update = jest.fn(() => makeUpdateChain([{ ...quoteRow, notes }]));
+    const select = jest
+      .fn()
+      .mockReturnValueOnce(makeSelectChain([{ id: RATE_VERSION_ID }]))
+      .mockReturnValueOnce(makeSelectChain([{ fiscalYearStart: '07-08' }]))
+      .mockReturnValue(makeSelectChain([{ status: 'QUOTATION' }]));
+    let insertedProforma: Record<string, unknown> = {};
+    const insert = jest
+      .fn()
+      .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
+      .mockReturnValueOnce(
+        makeProformaInsertChain((v) => (insertedProforma = v), [{ id: 'pf-1' }]),
+      )
+      .mockReturnValue(makeLinesInsertChain());
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ update, select, insert }),
+    );
+    const repo = new ProformasRepository({ withTenant } as never);
+
+    await repo.issue(TENANT_ID, USER_ID, QUOTE_ID, null);
+
+    expect(insertedProforma.notes).toBe(notes);
+  });
+
   it('throws WorkflowTransitionError (409) when the quotation is not APPROVED', async () => {
     const update = jest.fn(() => makeUpdateChain([]));
     const select = jest.fn(() => makeSelectChain([{ id: QUOTE_ID }]));

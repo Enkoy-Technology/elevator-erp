@@ -1,3 +1,4 @@
+import { buildProformaHtml } from '../../common/export/templates/proforma.template';
 import {
   PROFORMA_DOCUMENT_COLUMNS,
   proformaDocumentData,
@@ -48,6 +49,22 @@ describe('proformaDocumentData', () => {
       boilerplate: undefined,
       components: undefined,
     });
+  });
+
+  it("prints the quotation's special notes, snapshotted at issue — and no section when there were none", () => {
+    // The proforma IS the approved quotation (client, 2026-10-23): the
+    // quotation printed its Special notes on page 1 and the proforma issued
+    // from it printed none, so the two documents stated different scopes.
+    const notes = 'Price excludes civil works and the 3-phase supply.';
+    const data = proformaDocumentData({ ...row, notes });
+    expect(data.notes).toBe(notes);
+    expect(buildProformaHtml(data, null)).toContain('<h2>Special notes</h2>');
+    expect(buildProformaHtml(data, null)).toContain(notes);
+
+    // Issued before the column existed (NULL), or from a quotation with none.
+    expect(
+      buildProformaHtml(proformaDocumentData({ ...row, notes: null }), null),
+    ).not.toContain('Special notes');
   });
 
   it('maps the snapshotted lines, payment terms and commercial terms', () => {

@@ -120,6 +120,16 @@ export const proformas = pgTable(
      */
     paymentTerms: jsonb('payment_terms').$type<ProformaPaymentTerm[]>(),
 
+    /**
+     * The quotation's "Special notes", copied at issue time like every other
+     * term above. The client treats the proforma as the approved quotation
+     * (2026-10-23): the quotation printed its notes on page 1 and the
+     * proforma issued from it printed none, so the two stated different
+     * scopes. NULL on a proforma issued before this column — no backfill,
+     * the customer already holds that document as printed.
+     */
+    notes: text('notes'),
+
     issuedAt: timestamp('issued_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
