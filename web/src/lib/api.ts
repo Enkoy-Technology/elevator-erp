@@ -352,6 +352,8 @@ export interface CalcResult {
     capacityAdjustment: string;
     /** Only when the price list is VAT-inclusive: what was divided out of it. */
     listVatIncluded?: string;
+    /** With listVatIncluded: the rate the list was divided by, e.g. '15.00'. */
+    listVatPercent?: string;
     totalBeforeMargin: string;
     marginAmount: string;
     subtotalWithMargin: string;

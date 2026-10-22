@@ -315,6 +315,12 @@ export default function EditQuotationPage() {
             onLinesChange={(next) => {
               setLines(next);
               setLinesDirty(true);
+              // A line change re-prices the header on the server, back to
+              // list with the negotiation cleared; without this the Price
+              // step showed the old totals and would not apply a price.
+              void getQuotation(id)
+                .then(setQuotation)
+                .catch(() => undefined);
             }}
             editable={editable}
           />

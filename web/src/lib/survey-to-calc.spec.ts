@@ -2,7 +2,29 @@ import {
   surveyFloorLabels,
   surveyFloors,
   surveyMachineRoom,
+  surveyUnits,
 } from './survey-to-calc';
+
+describe('surveyUnits', () => {
+  it.each([
+    ['2', 2],
+    ['3', 3],
+    ['Two(2)', 2],
+    ['1pc', 1],
+    ['2 units', 2],
+    ['  3 ', 3],
+    ['999', 999],
+  ])('reads %p as %d lifts', (text, units) => {
+    expect(surveyUnits(text)).toBe(units);
+  });
+
+  it.each([null, '', 'two', '2-3', '2.5', '0', '1000', '2 of 630kg'])(
+    'leaves %p to the person',
+    (text) => {
+      expect(surveyUnits(text)).toBeNull();
+    },
+  );
+});
 
 describe('surveyFloors', () => {
   it.each([

@@ -12,30 +12,16 @@ import {
   type CalcResult,
   type ProductTypeRow,
 } from '@/lib/api';
-
-/**
- * A passenger lift is described by its shaft and floors alone: the company's
- * standard table names the lift, and the API fills in the rest. The classic
- * figures below stay for every other product.
- */
-export const WORKED_EXAMPLE: CalcInputPayload = {
-  productType: 'PASSENGER',
-  shaftWidthMm: 1835,
-  shaftDepthMm: 1750,
-  floors: 12,
-  capacityKg: 1000,
-  stops: 12,
-  travelHeightM: 45,
-  speedMs: 1.6,
-  machineRoomType: 'MRL',
-  doorType: 'CENTER_OPEN',
-  doorWidthMm: 900,
-  buildingUsage: 'COMMERCIAL',
-  // The calculator shows the list price only; margin and VAT belong to the
-  // quotation, where the statutory rate and the agreed price live.
-  marginPercent: 0,
-  taxPercent: 0,
-};
+import {
+  VEHICLE_STANDARD,
+  hasDoor,
+  hasMachineRoom,
+  isStandardLift,
+  isVehicleProduct,
+  usesRise,
+  withProduct,
+  type PassengerShaft,
+} from '@/lib/lift-form';
 
 const field =
   'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm ' +
@@ -54,114 +40,7 @@ type NumberKey =
   | 'speedMs'
   | 'doorWidthMm';
 
-/** The products the company's shaft table describes: the passenger lift and its finishes. Mirrors the API's PASSENGER_CLASS_PRODUCTS. */
-export const STANDARD_LIFT_PRODUCTS: readonly string[] = [
-  'PASSENGER',
-  'HOSPITAL',
-  'PANORAMIC',
-  'HOME',
-  'CARGO',
-];
-export const isStandardLift = (productType: string): boolean =>
-  STANDARD_LIFT_PRODUCTS.includes(productType);
-
 /** The request the API wants: shaft and floors for a standard lift, everything for the rest. */
-/**
- * The capacity to start a product at: its own minimum when the current figure
- * is below it (a car lift is sold from 3,500 kg — better to open on that
- * than to type 1,000 and be told no), otherwise what was there.
- */
-/**
- * Mirrors the API's vehicle-specs.ts: the speed and door the company's
- * standard specification (2026-10-06) gives each vehicle product and the
- * escalator, which the form starts at when one is chosen.
- */
-export const VEHICLE_STANDARD: Readonly<
-  Record<
-    string,
-    {
-      speedMs: number;
-      doorWidthMm?: number;
-      /** The building's opening the form asks for: its document minimum. */
-      shaftWidthMm: number;
-      /** Absent for the escalator, which takes a width only. */
-      shaftDepthMm?: number;
-      /** False for the escalator: no rated load. */
-      ratedLoad: boolean;
-      /** False for the escalator: no machine room to choose. */
-      machineRoom?: false;
-    }
-  >
-> = {
-  CAR_LIFT: { speedMs: 0.5, doorWidthMm: 2600, shaftWidthMm: 3400, shaftDepthMm: 6500, ratedLoad: true },
-  CAR_PLATFORM_LIFT: { speedMs: 0.3, doorWidthMm: 2600, shaftWidthMm: 2900, shaftDepthMm: 5500, ratedLoad: true },
-  CAR_STACKING_LIFT: { speedMs: 0.15, shaftWidthMm: 3100, shaftDepthMm: 5600, ratedLoad: true },
-  ESCALATOR: { speedMs: 0.5, shaftWidthMm: 1000, ratedLoad: false, machineRoom: false },
-};
-export const isVehicleProduct = (productType: string): boolean =>
-  productType in VEHICLE_STANDARD;
-/** Every product but the escalator has a machine room choice. */
-export const hasMachineRoom = (productType: string): boolean =>
-  VEHICLE_STANDARD[productType]?.machineRoom !== false;
-/** An escalator and a car stacking lift have no door. */
-export const hasDoor = (productType: string): boolean => {
-  const standard = VEHICLE_STANDARD[productType];
-  return standard === undefined || standard.doorWidthMm !== undefined;
-};
-
-/**
- * The speed and door to start a product at: the company's standard for a
- * vehicle product or escalator, the passenger defaults when coming back
- * from one (a vehicle's figures would be absurd on a passenger lift).
- */
-export const startingSpeedAndDoor = (
-  productType: string,
-  current: { speedMs: number; doorWidthMm: number },
-): {
-  speedMs: number;
-  doorWidthMm: number;
-  shaftWidthMm?: number;
-  shaftDepthMm?: number;
-} => {
-  const standard = VEHICLE_STANDARD[productType];
-  if (standard) {
-    return {
-      speedMs: standard.speedMs,
-      doorWidthMm: standard.doorWidthMm ?? current.doorWidthMm,
-      shaftWidthMm: standard.shaftWidthMm,
-      ...(standard.shaftDepthMm !== undefined
-        ? { shaftDepthMm: standard.shaftDepthMm }
-        : {}),
-    };
-  }
-  const fromVehicle = Object.values(VEHICLE_STANDARD).some(
-    (s) => s.speedMs === current.speedMs,
-  );
-  return {
-    speedMs: fromVehicle ? WORKED_EXAMPLE.speedMs : current.speedMs,
-    doorWidthMm:
-      current.doorWidthMm >= 2400 ? WORKED_EXAMPLE.doorWidthMm : current.doorWidthMm,
-  };
-};
-
-export const startingCapacityKg = (
-  products: readonly ProductTypeRow[],
-  productType: string,
-  currentKg: number,
-): number => {
-  const min = products.find((p) => p.code === productType)?.minCapacityKg;
-  return min != null && currentKg < min ? min : currentKg;
-};
-
-/** Whether the product's price is its rise (an escalator) — the one product that still asks for it. */
-export const usesRise = (
-  products: readonly ProductTypeRow[],
-  productType: string,
-): boolean =>
-  /\brise\b/i.test(
-    products.find((p) => p.code === productType)?.effectiveFormula ?? '',
-  );
-
 export const toRequest = (
   form: CalcInputPayload,
   products: readonly ProductTypeRow[] = [],
@@ -224,10 +103,13 @@ export const LiftInputs = ({
   form,
   setForm,
   products,
+  passengerShaft,
 }: {
   form: CalcInputPayload;
   setForm: Dispatch<SetStateAction<CalcInputPayload>>;
   products: readonly ProductTypeRow[];
+  /** The page's, so a product chosen by its project shares it (see withProduct). */
+  passengerShaft: { current: PassengerShaft | null };
 }) => {
   // What the salesperson has typed, kept as text so "1." survives until the
   // next digit; the form only ever sees the number. A browser number input
@@ -266,16 +148,7 @@ export const LiftInputs = ({
           className={field}
           value={form.productType}
           onChange={(e) =>
-            setForm((prev) => ({
-              ...prev,
-              productType: e.target.value,
-              capacityKg: startingCapacityKg(
-                products,
-                e.target.value,
-                prev.capacityKg,
-              ),
-              ...startingSpeedAndDoor(e.target.value, prev),
-            }))
+            setForm(withProduct(form, e.target.value, products, passengerShaft))
           }
         >
           {products.map((p) => (
@@ -284,12 +157,14 @@ export const LiftInputs = ({
             </option>
           ))}
         </select>
-        {products.some(
-          (p) =>
-            p.code === form.productType &&
-            Number(p.perStopEtb) === 0 &&
-            Number(p.perKgEtb) === 0,
-        ) && (
+        {/* The escalator's rates are 0 too, but its rise moves the price. */}
+        {!usesRise(products, form.productType) &&
+          products.some(
+            (p) =>
+              p.code === form.productType &&
+              Number(p.perStopEtb) === 0 &&
+              Number(p.perKgEtb) === 0,
+          ) && (
           <span className="mt-1 block text-xs text-slate-500">
             Flat price — stops and capacity do not change it.
           </span>
@@ -615,7 +490,12 @@ export const LiftResult = ({
                   ],
                 ] as const)
               : []),
-            ['List price', result.pricing.totalBeforeMargin],
+            // The headline is the list, VAT in; with VAT divided out this
+            // row is the net, and two "List price" figures read as one.
+            [
+              result.pricing.listVatIncluded ? 'Net of VAT' : 'List price',
+              result.pricing.totalBeforeMargin,
+            ],
           ] as const
         ).map(([k, v]) => (
           <div

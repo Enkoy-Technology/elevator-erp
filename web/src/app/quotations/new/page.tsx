@@ -1,14 +1,12 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import {
   LiftInputs,
-  startingCapacityKg,
   LiftResult,
   toRequest,
-  WORKED_EXAMPLE,
 } from '@/app/calculator/lift-calculator';
 import { btnPrimary, btnSecondary, fieldClass } from '@/components/form-styles';
 import { PageHeader } from '@/components/page-header';
@@ -34,11 +32,19 @@ import {
   type UserRole,
 } from '@/lib/api';
 import { formatDate } from '@/lib/datetime';
-import { formatEtb, splitGrossEtb, withVatEtb } from '@/lib/money';
+import {
+  offerPreviewEtb,
+  startingCapacityKg,
+  withProduct,
+  WORKED_EXAMPLE,
+  type PassengerShaft,
+} from '@/lib/lift-form';
+import { formatEtb, splitGrossEtb } from '@/lib/money';
 import {
   surveyFloorLabels,
   surveyFloors,
   surveyMachineRoom,
+  surveyUnits,
 } from '@/lib/survey-to-calc';
 import { NumberInput } from '../number-input';
 
@@ -70,7 +76,15 @@ export default function NewQuotationPage() {
   const [projectId, setProjectId] = useState('');
   const [products, setProducts] = useState<ProductTypeRow[]>([]);
   const [form, setForm] = useState<CalcInputPayload>(WORKED_EXAMPLE);
-  const [result, setResult] = useState<CalcResult | null>(null);
+  const passengerShaft = useRef<PassengerShaft | null>(null);
+  // The result belongs to the figures it was calculated from: edit the lift
+  // after Calculate and it is gone, so Create can only save what is on
+  // screen (it saved the edited lift under the old price).
+  const [calculated, setCalculated] = useState<{
+    form: CalcInputPayload;
+    result: CalcResult;
+  } | null>(null);
+  const result = calculated?.form === form ? calculated.result : null;
   const [vatApplies, setVatApplies] = useState(true);
   const [vatPercent, setVatPercent] = useState('15');
   const [offered, setOffered] = useState('');
@@ -113,7 +127,9 @@ export default function NewQuotationPage() {
   }, [router]);
 
   // The project chose the product when it was opened; changing the project
-  // here follows it, and the result is stale until recalculated.
+  // here follows it, with the figures the dropdown would start it at (a car
+  // lift project opened at 1.6 m/s, which Calculate refused), and the result
+  // is stale until recalculated.
   useEffect(() => {
     const project = projects.find((p) => p.id === projectId);
     const productType =
@@ -125,18 +141,10 @@ export default function NewQuotationPage() {
       setForm((prev) =>
         prev.productType === productType
           ? prev
-          : {
-              ...prev,
-              productType,
-              capacityKg: startingCapacityKg(
-                products,
-                productType,
-                prev.capacityKg,
-              ),
-            },
+          : withProduct(prev, productType, products, passengerShaft),
       );
     }
-    setResult(null);
+    setCalculated(null);
   }, [projectId, projects, products]);
 
   // The sheet's figures over whatever the form holds; anything it left
@@ -163,17 +171,25 @@ export default function NewQuotationPage() {
         : {}),
       ...(machineRoomType ? { machineRoomType } : {}),
     }));
-    setResult(null);
+    setCalculated(null);
   }, [survey, products]);
+
+  // The survey's UNITS become the line's quantity once it is created; text
+  // that cannot be read stays a note for the salesperson.
+  const units =
+    survey && survey.projectId === projectId ? surveyUnits(survey.units) : null;
 
   const onCalculate = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
     setCalculating(true);
     try {
-      setResult(await calculateSpecs(toRequest(form, products)));
+      setCalculated({
+        form,
+        result: await calculateSpecs(toRequest(form, products)),
+      });
     } catch (err) {
-      setResult(null);
+      setCalculated(null);
       setError(
         err instanceof ApiError ? err.message : 'Calculation request failed',
       );
@@ -215,7 +231,10 @@ export default function NewQuotationPage() {
           'G',
           ...Array.from({ length: floors - 1 }, (_, i) => String(i + 1)),
         ].join(',');
-      await updateQuotationLine(quotation.id, quotation.id, { floorLabels });
+      await updateQuotationLine(quotation.id, quotation.id, {
+        floorLabels,
+        ...(units === null ? {} : { quantity: units }),
+      });
       // The price was decided here too: a figure other than the
       // calculator's is applied as the agreed price, VAT-inclusive when
       // VAT is on. Last, because any change to a line resets an agreed
@@ -235,12 +254,19 @@ export default function NewQuotationPage() {
 
   const project = projects.find((p) => p.id === projectId);
 
-  // What the offer will say, both ways. The calculator's figure is ex VAT;
-  // the agreed figure is typed the way the customer hears it — inclusive
-  // when VAT is on.
+  // What the offer will say, both ways, as the server will store it. The
+  // agreed figure is typed the way the customer hears it — inclusive when
+  // VAT is on.
   const rate = vatApplies ? vatPercent : '0';
-  const listNet = result?.pricing.totalBeforeMargin ?? null;
-  const listGross = listNet ? withVatEtb(listNet, rate).grossEtb : null;
+  const preview = result
+    ? offerPreviewEtb(result.pricing, {
+        marginPercent: form.marginPercent,
+        quantity: units ?? 1,
+        vatPercent: rate,
+      })
+    : null;
+  const listNet = preview?.netEtb ?? null;
+  const listGross = preview?.grossEtb ?? null;
   const agreedGross = offered.trim() ? offered.trim() : listGross;
   const agreed = agreedGross ? splitGrossEtb(agreedGross, rate) : null;
 
@@ -299,13 +325,20 @@ export default function NewQuotationPage() {
                 {formatDate(`${survey.surveyDate}T00:00:00`)}
                 {survey.floors ? ` (floors: ${survey.floors})` : ''}. Check the
                 figures, then calculate.
-                {survey.units && survey.units.trim() !== '1'
-                  ? ` The survey says ${survey.units} units: the price here is for one lift. Set the quantity on the offer.`
-                  : ''}
+                {units !== null && units > 1
+                  ? ` The survey says ${units} units: the offer is made for ${units} lifts, and the price here is for all ${units}.`
+                  : units === null && survey.units && survey.units.trim() !== '1'
+                    ? ` The survey says ${survey.units} units: the price here is for one lift. Set the quantity on the offer.`
+                    : ''}
               </p>
             ) : null}
 
-            <LiftInputs form={form} setForm={setForm} products={products} />
+            <LiftInputs
+              form={form}
+              setForm={setForm}
+              products={products}
+              passengerShaft={passengerShaft}
+            />
 
             <label className="block">
               <span className={label}>Offer expires on</span>
@@ -391,7 +424,7 @@ export default function NewQuotationPage() {
                           {formatEtb(listNet)}
                         </td>
                         <td className="py-1.5 text-right">
-                          {formatEtb(withVatEtb(listNet, rate).taxEtb)}
+                          {formatEtb(preview?.taxEtb ?? '0')}
                         </td>
                         <td className="py-1.5 text-right font-semibold">
                           {formatEtb(listGross)}

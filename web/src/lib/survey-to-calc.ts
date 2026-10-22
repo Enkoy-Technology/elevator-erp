@@ -73,3 +73,14 @@ export const surveyMachineRoom = (text: string | null): 'MR' | 'MRL' | null => {
   if (/\bmr\b|machine\s*room/i.test(text)) return 'MR';
   return null;
 };
+
+/**
+ * The sheet's UNITS: "2", "Two(2)", "1pc", "2 units". Exactly one whole
+ * number in the text, within a quotation line's 1–999; "2-3", "2.5", a
+ * second figure ("2 of 630kg") or a number written as a word is not certain.
+ */
+export const surveyUnits = (text: string | null): number | null => {
+  const only = /^\D*(\d+)\D*$/.exec(text ?? '');
+  const units = only ? Number(only[1]) : 0;
+  return units >= 1 && units <= 999 ? units : null;
+};

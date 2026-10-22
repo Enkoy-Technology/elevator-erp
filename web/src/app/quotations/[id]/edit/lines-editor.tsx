@@ -1,17 +1,19 @@
 'use client';
 
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   STANDARD_LIFT_PRODUCTS,
   VEHICLE_STANDARD,
   hasDoor,
   hasMachineRoom,
+  isVehicleProduct,
   startingCapacityKg,
   startingSpeedAndDoor,
   usesRise,
-} from '@/app/calculator/lift-calculator';
+  type PassengerShaft,
+} from '@/lib/lift-form';
 import { Field } from '@/components/form-page';
 import {
   btnGhost,
@@ -28,8 +30,6 @@ import {
   removeQuotationLine,
   reorderQuotationLines,
   updateQuotationLine,
-  type CreateQuotationLinePayload,
-  type ProductType,
   type QuotationLine,
 } from '@/lib/api';
 import { formatEtb } from '@/lib/money';
@@ -37,6 +37,7 @@ import { formatEtb } from '@/lib/money';
 import { describeFloorPlan } from '../../floor-plan';
 import { FloorPicker } from '../../floor-picker';
 import { NumberInput } from '../../number-input';
+import { NEW_LINE, num, toPayload, type LineDraft } from './line-payload';
 
 /**
  * Page 1 of the client's proforma is a line table with a "No of Units"
@@ -49,69 +50,6 @@ import { NumberInput } from '../../number-input';
  * round-trip before anyone can see what it costs. Same reason the contract
  * instalment editor owns its own Save.
  */
-
-/** Everything a line holds, as strings — what the inputs actually carry. */
-interface LineDraft {
-  productType: ProductType;
-  /** A passenger lift is picked from the standard table by its shaft. */
-  shaftWidthMm: string;
-  shaftDepthMm: string;
-  capacityKg: string;
-  stops: string;
-  travelHeightM: string;
-  speedMs: string;
-  machineRoomType: 'MR' | 'MRL';
-  doorType: 'CENTER_OPEN' | 'TELESCOPIC' | 'SWING';
-  doorWidthMm: string;
-  buildingUsage: 'RESIDENTIAL' | 'COMMERCIAL' | 'HOSPITAL' | 'INDUSTRIAL';
-  marginPercent: string;
-  quantity: string;
-  machineRoomLabel: string;
-  floorLabels: string;
-  floorDisplaySummary: string;
-  doorHeightMm: string;
-  ropingRatio: string;
-  tractionMachineType: string;
-  controlSystem: string;
-  powerSupply: string;
-  lightSupply: string;
-  entranceCount: string;
-  specSummary: string;
-}
-
-/**
- * The spec-sheet half is prefilled from the client's own proforma rather
- * than left blank: those ten rows are the same on nine quotes out of ten,
- * and a blank field is what made them paste boilerplate that then drifted
- * (their page 2 says Simplex where page 3 says Duplex). Typed-over when
- * a lift is genuinely different, ignored otherwise.
- */
-export const NEW_LINE: LineDraft = {
-  productType: 'PASSENGER',
-  shaftWidthMm: '1835',
-  shaftDepthMm: '1750',
-  capacityKg: '1000',
-  stops: '12',
-  travelHeightM: '45',
-  speedMs: '1.6',
-  machineRoomType: 'MRL',
-  doorType: 'CENTER_OPEN',
-  doorWidthMm: '900',
-  buildingUsage: 'COMMERCIAL',
-  marginPercent: '0',
-  quantity: '1',
-  machineRoomLabel: 'MRL',
-  floorLabels: '',
-  floorDisplaySummary: '',
-  doorHeightMm: '2100',
-  ropingRatio: '2:1',
-  tractionMachineType: 'Gearless',
-  controlSystem: 'Simplex',
-  powerSupply: '380V AC 50HZ 3-phase 4 lines',
-  lightSupply: '240V AC 50HZ Single phase',
-  entranceCount: '1',
-  specSummary: '',
-};
 
 const str = (
   value: number | string | null | undefined,
@@ -148,88 +86,9 @@ const toDraft = (line: QuotationLine): LineDraft => {
   };
 };
 
-const num = (value: string, fallback: number): number => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && value.trim() !== '' ? parsed : fallback;
-};
-
-/** Blank means "leave it alone": the API's validators reject null on every
- *  spec field, so an empty box omits the key instead of blanking it. */
-const text = (value: string): string | undefined =>
-  value.trim() === '' ? undefined : value.trim();
-
 /** A passenger-class lift is described by its shaft; the standard table fills in the rest. */
 const isStandardLift = (draft: LineDraft): boolean =>
   STANDARD_LIFT_PRODUCTS.includes(draft.productType);
-
-const toPayload = (
-  draft: LineDraft,
-  products: readonly ProductTypeRow[],
-): CreateQuotationLinePayload => {
-  const floorLabels = text(draft.floorLabels);
-  return {
-    productType: draft.productType,
-    // Shaft and floors for a standard lift; the classic figures for the rest.
-    // Stops (or the floor labels) double as the floor count.
-    ...(isStandardLift(draft)
-      ? {
-          shaftWidthMm: num(draft.shaftWidthMm, 1835),
-          shaftDepthMm: num(draft.shaftDepthMm, 1750),
-        }
-      : {
-          // A vehicle product is quoted against the building's opening; an
-          // escalator against its width alone, and carries no rated load.
-          ...(VEHICLE_STANDARD[draft.productType]
-            ? {
-                shaftWidthMm: num(draft.shaftWidthMm, 1835),
-                ...(VEHICLE_STANDARD[draft.productType]?.shaftDepthMm !==
-                undefined
-                  ? { shaftDepthMm: num(draft.shaftDepthMm, 1750) }
-                  : {}),
-              }
-            : {}),
-          ...(VEHICLE_STANDARD[draft.productType]?.ratedLoad === false
-            ? {}
-            : { capacityKg: num(draft.capacityKg, 1000) }),
-          // Travel is 3.5 m × stops on the API; only a rise-priced product (escalator) sends it.
-          ...(usesRise(products, draft.productType)
-            ? { travelHeightM: num(draft.travelHeightM, 1) }
-            : {}),
-          speedMs: num(draft.speedMs, 1),
-          ...(hasDoor(draft.productType)
-            ? { doorType: draft.doorType, doorWidthMm: num(draft.doorWidthMm, 900) }
-            : {}),
-        }),
-    ...(hasMachineRoom(draft.productType)
-      ? { machineRoomType: draft.machineRoomType }
-      : {}),
-    buildingUsage: draft.buildingUsage,
-    marginPercent: num(draft.marginPercent, 0),
-    quantity: num(draft.quantity, 1),
-    // Floors win where they are given — their count IS the stop count, and
-    // sending both invites the two to disagree.
-    ...(floorLabels ? { floorLabels } : { stops: num(draft.stops, 2) }),
-    // An escalator has no machine room; the API clears its label.
-    machineRoomLabel: hasMachineRoom(draft.productType)
-      ? text(draft.machineRoomLabel)
-      : undefined,
-    // Sent even when empty, unlike its neighbours: an empty value is a
-    // meaningful instruction here — print the compressed form again.
-    floorDisplaySummary: draft.floorDisplaySummary.trim(),
-    doorHeightMm: draft.doorHeightMm.trim()
-      ? num(draft.doorHeightMm, 2100)
-      : undefined,
-    ropingRatio: text(draft.ropingRatio),
-    tractionMachineType: text(draft.tractionMachineType),
-    controlSystem: text(draft.controlSystem),
-    powerSupply: text(draft.powerSupply),
-    lightSupply: text(draft.lightSupply),
-    entranceCount: draft.entranceCount.trim()
-      ? num(draft.entranceCount, 1)
-      : undefined,
-    specSummary: text(draft.specSummary),
-  };
-};
 
 const message = (err: unknown, fallback: string): string =>
   err instanceof ApiError ? err.message : fallback;
@@ -254,6 +113,8 @@ export const LinesEditor = ({
   }, []);
 
   const [drafts, setDrafts] = useState<Record<string, LineDraft>>({});
+  /** Per line, the shaft it had before it became a vehicle product (see startingSpeedAndDoor). */
+  const passengerShafts = useRef<Record<string, PassengerShaft>>({});
   // A lift with no floors yet has never been described — it is the
   // placeholder the create screen opened the quotation with, so open it
   // rather than making someone hunt for the one row that needs work.
@@ -480,8 +341,15 @@ export const LinesEditor = ({
                         disabled={!editable}
                         value={draft.productType}
                         onChange={(e) => {
+                          const current = draftFor(line);
+                          if (!isVehicleProduct(current.productType)) {
+                            passengerShafts.current[line.id] = {
+                              shaftWidthMm: Number(current.shaftWidthMm) || undefined,
+                              shaftDepthMm: Number(current.shaftDepthMm) || undefined,
+                            };
+                          }
                           const next = {
-                            ...draftFor(line),
+                            ...current,
                             productType: e.target.value,
                           };
                           next.capacityKg = String(
@@ -491,12 +359,23 @@ export const LinesEditor = ({
                               Number(next.capacityKg) || 0,
                             ),
                           );
-                          const specs = startingSpeedAndDoor(e.target.value, {
-                            speedMs: Number(next.speedMs) || 1,
-                            doorWidthMm: Number(next.doorWidthMm) || 900,
-                          });
+                          const specs = startingSpeedAndDoor(
+                            e.target.value,
+                            {
+                              productType: current.productType,
+                              speedMs: Number(next.speedMs) || 1,
+                              doorWidthMm: Number(next.doorWidthMm) || 900,
+                            },
+                            passengerShafts.current[line.id] ?? null,
+                          );
                           next.speedMs = String(specs.speedMs);
                           next.doorWidthMm = String(specs.doorWidthMm);
+                          if (specs.stops !== undefined) {
+                            next.stops = String(specs.stops);
+                          }
+                          if (specs.travelHeightM !== undefined) {
+                            next.travelHeightM = String(specs.travelHeightM);
+                          }
                           if (specs.shaftWidthMm !== undefined) {
                             next.shaftWidthMm = String(specs.shaftWidthMm);
                             next.shaftDepthMm =

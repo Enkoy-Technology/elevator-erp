@@ -2,7 +2,7 @@
 
 import { btnPrimary } from '@/components/form-styles';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Sidebar } from '@/components/sidebar';
@@ -15,16 +15,13 @@ import {
   type CalcResult,
   getAccessToken,
 } from '@/lib/api';
-import {
-  LiftInputs,
-  LiftResult,
-  toRequest,
-  WORKED_EXAMPLE,
-} from './lift-calculator';
+import { WORKED_EXAMPLE, type PassengerShaft } from '@/lib/lift-form';
+import { LiftInputs, LiftResult, toRequest } from './lift-calculator';
 
 export default function CalculatorPage() {
   const router = useRouter();
   const [form, setForm] = useState<CalcInputPayload>(WORKED_EXAMPLE);
+  const passengerShaft = useRef<PassengerShaft | null>(null);
   const [products, setProducts] = useState<ProductTypeRow[]>([]);
   const [result, setResult] = useState<CalcResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +78,12 @@ export default function CalculatorPage() {
             onSubmit={(event) => void onSubmit(event)}
             className="h-fit space-y-4 rounded-2xl border border-slate-200 bg-white p-6"
           >
-            <LiftInputs form={form} setForm={setForm} products={products} />
+            <LiftInputs
+              form={form}
+              setForm={setForm}
+              products={products}
+              passengerShaft={passengerShaft}
+            />
 
             {error && (
               <p
