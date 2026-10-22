@@ -45,6 +45,53 @@ export const PRODUCT_LABELS: Record<string, string> = {
 export const printsMachineRoom = (productType: unknown): boolean =>
   productType !== 'ESCALATOR';
 
+/**
+ * An escalator has no ropes, no traction machine and no lift group control,
+ * but every line is created with the passenger defaults for all three
+ * (2026-10-23), so the printers drop them here.
+ */
+export const printsTractionDrive = (productType: unknown): boolean =>
+  productType !== 'ESCALATOR';
+
+/**
+ * The vehicle products a car drives onto. The calculator stores their
+ * platform in carWidthMm/carDepthMm and gives them no car height
+ * (client, 2026-10-06), so they print it as a platform, not a car.
+ */
+const PLATFORM_PRODUCTS: readonly string[] = [
+  'CAR_LIFT',
+  'CAR_PLATFORM_LIFT',
+  'CAR_STACKING_LIFT',
+];
+
+const isPlatformProduct = (productType: unknown): boolean =>
+  typeof productType === 'string' && PLATFORM_PRODUCTS.includes(productType);
+
+/**
+ * The name a stored figure prints under for this product, so the Word
+ * files, the warranty certificate and the technical proposal call the same
+ * dimension what page 2 calls it (2026-10-23): a vehicle lift's car is its
+ * platform, and the escalator's one dimension is its width — it has no
+ * shaft. Any other key, or any other product, keeps `label`.
+ */
+export const specLabel = (
+  productType: unknown,
+  key: string,
+  label: string,
+): string => {
+  if (isPlatformProduct(productType)) {
+    if (key === 'carWidthMm') {
+      return 'Platform width';
+    }
+    if (key === 'carDepthMm') {
+      return 'Platform depth';
+    }
+  }
+  return productType === 'ESCALATOR' && key === 'shaftWidthMm'
+    ? 'Width'
+    : label;
+};
+
 const MACHINE_ROOM_LABELS: Record<string, string> = {
   MR: 'With machine room',
   MRL: 'Without machine room (MRL)',
@@ -342,12 +389,20 @@ const renderCommercialTerms = (
 const renderSpecTable = (line: DocumentLineData): string => {
   const calc = line.calcInput ?? {};
   const tech = line.technicalSpec ?? {};
-  const capacityKg = text(calc.capacityKg);
+  const product = line.productType ?? tech.productType;
+  const escalator = product === 'ESCALATOR';
+  // No door, and the price sheet calls its stops parking levels.
+  const stacking = product === 'CAR_STACKING_LIFT';
+  const platform = isPlatformProduct(product);
+  // 0 is the calculator's placeholder for a product with no rated load (the
+  // escalator), not a load of nothing.
+  const capacityKg = calc.capacityKg === 0 ? null : text(calc.capacityKg);
   const persons = text(tech.capacityPersons);
   const travelHeightM = calc.travelHeightM;
+  const drive = printsTractionDrive(product);
 
   const rows: ReadonlyArray<readonly [string, string | null]> = [
-    ['Elevator Type', productLabel(line.productType ?? tech.productType)],
+    ['Elevator Type', productLabel(product)],
     [
       'Ordering quantity',
       line.quantity == null
@@ -356,7 +411,7 @@ const renderSpecTable = (line: DocumentLineData): string => {
     ],
     [
       'With or without machine room',
-      printsMachineRoom(line.productType ?? tech.productType)
+      printsMachineRoom(product)
         ? (line.machineRoomLabel ??
           MACHINE_ROOM_LABELS[String(calc.machineRoomType)] ??
           null)
@@ -378,26 +433,46 @@ const renderSpecTable = (line: DocumentLineData): string => {
         ? `${(travelHeightM * 1000).toLocaleString('en-US')}mm`
         : null,
     ],
-    ['Floors/stops/doors', text(line.floorsStopsDoors)],
+    // Neither the escalator nor the car stacking lift has floors with doors
+    // to count; the stacker states its levels instead.
+    [
+      'Floors/stops/doors',
+      escalator || stacking ? null : text(line.floorsStopsDoors),
+    ],
+    ['Parking levels', stacking ? text(calc.stops) : null],
     [
       'Entrances',
       line.entranceCount == null
         ? null
         : `${line.entranceCount} ${line.entranceCount === 1 ? 'entrance' : 'entrances'}`,
     ],
-    ['Floor display', text(line.floorDisplaySummary)],
+    [
+      'Floor display',
+      escalator || stacking ? null : text(line.floorDisplaySummary),
+    ],
     ['Depth of Pit (mm)', text(tech.pitDepthMm)],
     ['O/H height of overhead (mm)', text(tech.overheadClearanceMm)],
     [
       'Shaft size (W x D)',
-      dims(['W', 'D'], [tech.shaftWidthMm, tech.shaftDepthMm]),
+      escalator
+        ? null
+        : dims(['W', 'D'], [tech.shaftWidthMm, tech.shaftDepthMm]),
     ],
+    // The escalator's one dimension, stored where a lift keeps its shaft.
+    ['Width', escalator ? dims([''], [tech.shaftWidthMm]) : null],
+    // A vehicle lift's car is its platform, which has no height.
     [
       'Car size (W x D x H)',
-      dims(
-        ['W', 'D', 'H'],
-        [tech.carWidthMm, tech.carDepthMm, tech.carHeightMm],
-      ),
+      platform
+        ? null
+        : dims(
+            ['W', 'D', 'H'],
+            [tech.carWidthMm, tech.carDepthMm, tech.carHeightMm],
+          ),
+    ],
+    [
+      'Platform size (W x D)',
+      platform ? dims(['W', 'D'], [tech.carWidthMm, tech.carDepthMm]) : null,
     ],
     // A door width of 0 is a product with no door (escalator, car stacking
     // lift): neither row prints.
@@ -411,9 +486,9 @@ const renderSpecTable = (line: DocumentLineData): string => {
     ],
     ['Power supply', text(line.powerSupply)],
     ['Light supply', text(line.lightSupply)],
-    ['Roping', text(line.ropingRatio)],
-    ['Traction Machine', text(line.tractionMachineType)],
-    ['Control System', text(line.controlSystem)],
+    ['Roping', drive ? text(line.ropingRatio) : null],
+    ['Traction Machine', drive ? text(line.tractionMachineType) : null],
+    ['Control System', drive ? text(line.controlSystem) : null],
   ];
 
   const body = rows

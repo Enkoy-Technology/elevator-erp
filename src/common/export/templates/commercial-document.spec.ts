@@ -436,3 +436,168 @@ describe('documentReferenceCode', () => {
     expect(documentReferenceCode('', '   ')).toBeNull();
   });
 });
+
+/**
+ * Page 2 for the products that are not passenger lifts, from what the
+ * calculator really stores for each (elevator-calc.service.ts): the
+ * escalator's capacityKg 0 and door 0 placeholders and its width in
+ * shaftWidthMm, a vehicle lift's platform in carWidthMm/carDepthMm with no
+ * car height, and the passenger traction defaults every new line is given.
+ */
+describe('page 2 for an escalator and the vehicle lifts', () => {
+  const NO_GEOMETRY = {
+    capacityPersons: null,
+    carWidthMm: null,
+    carDepthMm: null,
+    carHeightMm: null,
+    shaftWidthMm: null,
+    shaftDepthMm: null,
+    standardLift: null,
+    pitDepthMm: null,
+    overheadClearanceMm: null,
+    counterweightMassKg: null,
+    motorPowerKw: null,
+    guideRailSpec: null,
+    machineRoomWidthMm: null,
+    machineRoomDepthMm: null,
+    machineRoomHeightMm: null,
+  };
+
+  const escalator: DocumentLineData = {
+    ...line,
+    productType: 'ESCALATOR',
+    specSummary: 'Speed 0.5m/s / G+1 / 2 floors/2 doors',
+    machineRoomLabel: null,
+    floorDisplaySummary: 'G+1',
+    floorsStopsDoors: '2/2/2',
+    entranceCount: null,
+    calcInput: {
+      productType: 'ESCALATOR',
+      capacityKg: 0,
+      stops: 2,
+      travelHeightM: 5,
+      speedMs: 0.5,
+      doorType: 'CENTER_OPEN',
+      doorWidthMm: 0,
+      buildingUsage: 'COMMERCIAL',
+      shaftWidthMm: 1000,
+    },
+    technicalSpec: {
+      ...NO_GEOMETRY,
+      productType: 'ESCALATOR',
+      shaftWidthMm: 1000,
+    },
+  };
+
+  const vehicle = (
+    productType: string,
+    platform: readonly [number, number],
+    opening: readonly [number, number],
+    doorWidthMm: number,
+  ): DocumentLineData => ({
+    ...line,
+    productType,
+    specSummary: '3500KG / Speed 0.3m/s / G+1 / 2 floors/2 doors',
+    floorDisplaySummary: 'G+1',
+    floorsStopsDoors: '2/2/2',
+    entranceCount: null,
+    calcInput: {
+      productType,
+      capacityKg: 3500,
+      stops: 2,
+      travelHeightM: 7,
+      speedMs: 0.3,
+      machineRoomType: 'MR',
+      doorType: 'CENTER_OPEN',
+      doorWidthMm,
+      buildingUsage: 'COMMERCIAL',
+      shaftWidthMm: opening[0],
+      shaftDepthMm: opening[1],
+    },
+    technicalSpec: {
+      ...NO_GEOMETRY,
+      productType,
+      carWidthMm: platform[0],
+      carDepthMm: platform[1],
+      shaftWidthMm: opening[0],
+      shaftDepthMm: opening[1],
+    },
+  });
+
+  const page2 = (l: DocumentLineData): string =>
+    buildQuotationHtml({ ...data, lines: [l] }, branding);
+
+  it('prints a passenger lift exactly as before: no platform, no parking levels, no bare width', () => {
+    const html = page2(line);
+    expect(html).toContain('Floors/stops/doors</td><td>13/13/13</td>');
+    expect(html).toContain('Floor display');
+    expect(html).toContain('Car size (W x D x H)');
+    expect(html).toContain('Roping');
+    expect(html).not.toContain('Platform size');
+    expect(html).not.toContain('Parking levels');
+    expect(html).not.toContain('Width</td>');
+    expect(html).toContain('<span class="rowno">20</span>Control System');
+  });
+
+  it('prints an escalator with no load, no doors and no traction drive, and states its width', () => {
+    const html = page2(escalator);
+    expect(html).toContain('Elevator Type</td><td>Escalator</td>');
+    expect(html).toContain('0.5 m/s');
+    expect(html).toContain('5,000mm');
+    expect(html).toContain('Width</td><td>1000 mm</td>');
+    expect(html).toContain('Power supply');
+    for (const absent of [
+      'Load (Capacity)',
+      '0 KG',
+      'Floors/stops/doors',
+      'Floor display',
+      'Shaft size',
+      'Door size',
+      'Roping',
+      'Traction Machine',
+      'Control System',
+    ]) {
+      expect(html).not.toContain(absent);
+    }
+  });
+
+  it('prints a car stacking lift with parking levels instead of floors and doors, and its platform', () => {
+    const html = page2(
+      vehicle('CAR_STACKING_LIFT', [2800, 5500], [3200, 5800], 0),
+    );
+    expect(html).toContain('Car stacking lift');
+    expect(html).toContain('3500 KG');
+    expect(html).toContain('Parking levels</td><td>2</td>');
+    expect(html).toContain(
+      'Platform size (W x D)</td><td>W2800 x D5500 mm</td>',
+    );
+    expect(html).toContain('W3200 x D5800 mm');
+    expect(html).not.toContain('Floors/stops/doors');
+    expect(html).not.toContain('Floor display');
+    expect(html).not.toContain('Car size');
+    expect(html).not.toContain('Door size');
+  });
+
+  it('prints a car lift with its floors, doors and platform', () => {
+    const html = page2(vehicle('CAR_LIFT', [2800, 5600], [3400, 6500], 2600));
+    expect(html).toContain('Floors/stops/doors</td><td>2/2/2</td>');
+    expect(html).toContain('Floor display');
+    expect(html).toContain(
+      'Platform size (W x D)</td><td>W2800 x D5600 mm</td>',
+    );
+    expect(html).toContain('W3400 x D6500 mm');
+    expect(html).toContain('W2600 x H2100 mm');
+    expect(html).not.toContain('Car size');
+    expect(html).not.toContain('Parking levels');
+  });
+
+  it('prints a car platform lift with its platform', () => {
+    const html = page2(
+      vehicle('CAR_PLATFORM_LIFT', [2500, 5000], [2900, 5500], 2600),
+    );
+    expect(html).toContain(
+      'Platform size (W x D)</td><td>W2500 x D5000 mm</td>',
+    );
+    expect(html).not.toContain('Car size');
+  });
+});

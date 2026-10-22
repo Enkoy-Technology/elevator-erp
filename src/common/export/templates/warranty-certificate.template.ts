@@ -6,7 +6,7 @@ import {
   renderReferencePlate,
   renderSignatureBlock,
 } from './layout';
-import { fmtDate, TECH_ROWS } from './quotation.template';
+import { fmtDate, techRowCells } from './quotation.template';
 
 /** Registry key for this builder; already a member of DocumentTemplate. */
 export const WARRANTY_CERTIFICATE_TEMPLATE: DocumentTemplate =
@@ -127,11 +127,11 @@ export const buildWarrantyCertificateHtml = (
   const d = data as WarrantyCertificateTemplateData;
   const tech = d.technicalSpec ?? {};
 
-  const techRows = TECH_ROWS.filter((r) => tech[r.key] != null)
-    .map((r) => {
-      const value = r.format ? r.format(tech[r.key]) : tech[r.key];
-      return `<tr><td>${r.label}</td><td class="num">${esc(value)}${r.unit ? ` ${r.unit}` : ''}</td></tr>`;
-    })
+  const techRows = techRowCells(tech)
+    .map(
+      (cell) =>
+        `<tr><td>${cell.label}</td><td class="num">${esc(cell.value)}</td></tr>`,
+    )
     .join('');
 
   const bodyHtml = `

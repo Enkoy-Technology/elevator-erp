@@ -16,7 +16,7 @@ import { documentReferenceCode } from './commercial-document';
 import { formatEtb, netOfTaxEtb } from './money-format';
 import {
   fmtDate,
-  TECH_ROWS,
+  techRowCells,
   type QuotationTemplateData,
 } from './quotation.template';
 
@@ -48,11 +48,8 @@ export const buildQuotationDocx = (
   // Same one line the PDF prints: the salespeople and the model code.
   const reference = documentReferenceCode(d.salesName, d.referenceCode);
 
-  const techRows = TECH_ROWS.filter((r) => tech[r.key] != null).map((r) =>
-    row(
-      r.label,
-      `${r.format ? r.format(tech[r.key]) : String(tech[r.key])}${r.unit ? ` ${r.unit}` : ''}`,
-    ),
+  const techRows = techRowCells(tech).map((cell) =>
+    row(cell.label, cell.value),
   );
 
   // Page 1's line table, same columns as the PDF. A pre-lines quotation

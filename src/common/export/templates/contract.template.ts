@@ -6,7 +6,11 @@ import {
   renderReferencePlate,
   renderSignaturePair,
 } from './layout';
-import { printsMachineRoom } from './commercial-document';
+import {
+  PRODUCT_LABELS,
+  printsMachineRoom,
+  printsTractionDrive,
+} from './commercial-document';
 import { formatEtb } from './money-format';
 import { fmtDate } from './quotation.template';
 
@@ -141,15 +145,19 @@ const party = (
 const equipmentTable = (lines: readonly ContractEquipmentLine[]): string => {
   const rows = lines
     .map((line) => {
+      const drive = printsTractionDrive(line.productType);
       const details = [
         printsMachineRoom(line.productType) ? line.machineRoomLabel : null,
-        line.tractionMachineType,
-        line.controlSystem,
+        drive ? line.tractionMachineType : null,
+        drive ? line.controlSystem : null,
         line.powerSupply,
       ]
         .filter(Boolean)
         .join(' / ');
-      return `<tr><td class="num">${esc(line.quantity)}</td><td>${esc(line.productType)}</td><td>${esc(line.specSummary ?? '—')}</td><td>${esc(details || '—')}</td></tr>`;
+      // The product's name, as the quotation and proforma print it; a
+      // product not listed falls back to its own value.
+      const type = PRODUCT_LABELS[line.productType] ?? line.productType;
+      return `<tr><td class="num">${esc(line.quantity)}</td><td>${esc(type)}</td><td>${esc(line.specSummary ?? '—')}</td><td>${esc(details || '—')}</td></tr>`;
     })
     .join('');
   return `<table class="lines"><thead><tr><th class="num">Units</th><th>Type</th><th>Specification</th><th>Configuration</th></tr></thead><tbody>${rows}</tbody></table>`;

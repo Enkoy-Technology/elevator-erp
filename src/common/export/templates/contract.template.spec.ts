@@ -64,6 +64,52 @@ const signed: ContractTemplateData = {
   signedAt: '2026-08-14',
 };
 
+describe('buildContractHtml Article 2 by product', () => {
+  // Every new line is given the passenger traction defaults
+  // (quotations.repository.ts STANDARD_LINE), escalator included.
+  const line = (productType: string) => ({
+    quantity: 1,
+    productType,
+    specSummary: 'Speed 0.5m/s / G+1',
+    machineRoomLabel: 'WITH MR',
+    tractionMachineType: 'Gearless',
+    controlSystem: 'Simplex',
+    powerSupply: '380V AC 50HZ 3-phase',
+  });
+
+  it('names each product the way the quotation and proforma do, never by its code', () => {
+    const html = buildContractHtml(
+      {
+        ...draft,
+        equipment: [
+          line('CAR_STACKING_LIFT'),
+          { ...line('PASSENGER'), quantity: 2 },
+        ],
+      },
+      branding,
+    );
+    expect(html).toContain('<td>Car stacking lift</td>');
+    expect(html).toContain('<td>Passenger elevator</td>');
+    expect(html).not.toContain('CAR_STACKING_LIFT');
+    expect(html).not.toContain('<td>PASSENGER</td>');
+    // A lift keeps its drive and control.
+    expect(html).toContain(
+      'WITH MR / Gearless / Simplex / 380V AC 50HZ 3-phase',
+    );
+  });
+
+  it('prints no traction machine or control system for an escalator', () => {
+    const html = buildContractHtml(
+      { ...draft, equipment: [line('ESCALATOR')] },
+      branding,
+    );
+    expect(html).toContain('<td>Escalator</td>');
+    expect(html).toContain('<td>380V AC 50HZ 3-phase</td>');
+    expect(html).not.toContain('Gearless');
+    expect(html).not.toContain('Simplex');
+  });
+});
+
 describe('buildContractHtml', () => {
   it('titles a DRAFT "CONTRACT DRAFT" and prints no signature date', () => {
     const html = buildContractHtml(draft, branding);

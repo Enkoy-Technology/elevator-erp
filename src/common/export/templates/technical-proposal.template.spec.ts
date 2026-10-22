@@ -153,3 +153,89 @@ describe('buildTechnicalProposalHtml', () => {
     expect(html).toContain('#1B2A4A');
   });
 });
+
+/**
+ * What the calculator really stores for these products
+ * (elevator-calc.service.ts): the escalator's capacityKg 0 placeholder and
+ * its width in shaftWidthMm, a vehicle lift's platform in
+ * carWidthMm/carDepthMm.
+ */
+describe('buildTechnicalProposalHtml for an escalator and the vehicle lifts', () => {
+  const geometry = flat.technicalSpec ?? {};
+  const row = (label: string, value: string): string =>
+    `<tr><td>${label}</td><td class="num">${value}</td></tr>`;
+
+  it('keeps the passenger labels and duty rows', () => {
+    const html = buildTechnicalProposalHtml(passenger, branding);
+    expect(html).toContain(row('Car width', '1600 mm'));
+    expect(html).toContain(row('Shaft width', '2000 mm'));
+    expect(html).toContain(row('Number of stops', '8'));
+    expect(html).toContain(row('Building usage', 'Commercial'));
+    expect(html).not.toContain('Platform width');
+  });
+
+  it('prints an escalator with no rated load, no stops and no building usage, and its width as Width', () => {
+    const html = buildTechnicalProposalHtml(
+      {
+        ...flat,
+        calcInput: {
+          productType: 'ESCALATOR',
+          capacityKg: 0,
+          stops: 2,
+          travelHeightM: 5,
+          speedMs: 0.5,
+          doorType: 'CENTER_OPEN',
+          doorWidthMm: 0,
+          buildingUsage: 'COMMERCIAL',
+          shaftWidthMm: 1000,
+        },
+        technicalSpec: { ...geometry, shaftWidthMm: 1000 },
+      },
+      branding,
+    );
+    expect(html).toContain(row('Width', '1000 mm'));
+    expect(html).toContain(row('Travel height', '5 m'));
+    expect(html).toContain(row('Rated speed', '0.5 m/s'));
+    expect(html).not.toContain('Rated load');
+    expect(html).not.toContain('0 kg');
+    expect(html).not.toContain('Number of stops');
+    expect(html).not.toContain('Building usage');
+    expect(html).not.toContain('Shaft width');
+  });
+
+  it.each([
+    ['CAR_LIFT', 2800, 5600],
+    ['CAR_PLATFORM_LIFT', 2500, 5000],
+    ['CAR_STACKING_LIFT', 2800, 5500],
+  ])('labels the %s platform as the platform, not a car', (product, w, d) => {
+    const html = buildTechnicalProposalHtml(
+      {
+        ...flat,
+        calcInput: {
+          productType: product,
+          capacityKg: 3500,
+          stops: 2,
+          travelHeightM: 7,
+          speedMs: 0.3,
+          machineRoomType: 'MR',
+          buildingUsage: 'COMMERCIAL',
+        },
+        technicalSpec: {
+          ...geometry,
+          productType: product,
+          carWidthMm: w,
+          carDepthMm: d,
+          shaftWidthMm: 3400,
+          shaftDepthMm: 6500,
+        },
+      },
+      branding,
+    );
+    expect(html).toContain(row('Rated load', '3500 kg'));
+    expect(html).toContain(row('Platform width', `${w} mm`));
+    expect(html).toContain(row('Platform depth', `${d} mm`));
+    expect(html).toContain(row('Shaft width', '3400 mm'));
+    expect(html).not.toContain('Car width');
+    expect(html).not.toContain('Car depth');
+  });
+});

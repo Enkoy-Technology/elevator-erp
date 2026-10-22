@@ -80,6 +80,51 @@ describe('buildQuotationDocx', () => {
     );
   });
 
+  // What the calculator stores: a vehicle lift's platform in
+  // carWidthMm/carDepthMm, the escalator's width in shaftWidthMm.
+  it('labels a passenger car and shaft, a vehicle platform, and an escalator width each by name', async () => {
+    const tech = (spec: Record<string, unknown>): Promise<string> =>
+      documentXml(
+        buildQuotationDocx({ ...data, technicalSpec: spec }, branding),
+      );
+
+    const passenger = await tech({
+      productType: 'PASSENGER',
+      carWidthMm: 1400,
+      carDepthMm: 1350,
+      shaftWidthMm: 1900,
+    });
+    expect(passenger).toContain('Car width');
+    expect(passenger).toContain('Shaft width');
+    expect(passenger).not.toContain('Platform width');
+
+    for (const productType of [
+      'CAR_LIFT',
+      'CAR_PLATFORM_LIFT',
+      'CAR_STACKING_LIFT',
+    ]) {
+      const xml = await tech({
+        productType,
+        carWidthMm: 2800,
+        carDepthMm: 5600,
+        shaftWidthMm: 3400,
+      });
+      expect(xml).toContain('Platform width');
+      expect(xml).toContain('Platform depth');
+      expect(xml).toContain('Shaft width');
+      expect(xml).not.toContain('Car width');
+      expect(xml).not.toContain('Car depth');
+    }
+
+    const escalator = await tech({
+      productType: 'ESCALATOR',
+      shaftWidthMm: 1000,
+    });
+    expect(escalator).toContain('>Width<');
+    expect(escalator).toContain('1000 mm');
+    expect(escalator).not.toContain('Shaft width');
+  });
+
   it('does not throw when branding is absent (falls back to the default accent colour)', () => {
     expect(() => buildQuotationDocx(data, null)).not.toThrow();
   });

@@ -125,6 +125,34 @@ describe('buildWarrantyCertificateHtml', () => {
     ).toContain('No handover date was recorded');
   });
 
+  it('describes a vehicle lift by its platform and an escalator by its width', () => {
+    const covered = (spec: Record<string, unknown>): string =>
+      buildWarrantyCertificateHtml({ ...data, technicalSpec: spec }, branding);
+
+    const carLift = covered({
+      productType: 'CAR_LIFT',
+      carWidthMm: 2800,
+      carDepthMm: 5600,
+      shaftWidthMm: 3400,
+    });
+    expect(carLift).toContain(
+      '<td>Platform width</td><td class="num">2800 mm</td>',
+    );
+    expect(carLift).toContain(
+      '<td>Platform depth</td><td class="num">5600 mm</td>',
+    );
+    expect(carLift).toContain('<td>Shaft width</td>');
+    expect(carLift).not.toContain('Car width');
+
+    const escalator = covered({ productType: 'ESCALATOR', shaftWidthMm: 1000 });
+    expect(escalator).toContain('<td>Width</td><td class="num">1000 mm</td>');
+    expect(escalator).not.toContain('Shaft width');
+
+    expect(covered({ productType: 'PASSENGER', carWidthMm: 1400 })).toContain(
+      '<td>Car width</td>',
+    );
+  });
+
   it('escapes customer-controlled text', () => {
     const html = buildWarrantyCertificateHtml(
       { ...data, projectName: '<script>alert(1)</script>' },

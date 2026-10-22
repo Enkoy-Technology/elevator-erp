@@ -60,6 +60,41 @@ describe('buildProformaDocx', () => {
     expect(text(data)).not.toContain('Reference code');
   });
 
+  // The Word proforma used to skip the Product row's format and print the
+  // raw code; and a vehicle's platform is not a car, nor an escalator's
+  // width a shaft.
+  it('names the product and labels a vehicle platform and an escalator width by name', () => {
+    const stacking = text({
+      ...data,
+      technicalSpec: {
+        productType: 'CAR_STACKING_LIFT',
+        carWidthMm: 2800,
+        carDepthMm: 5500,
+        shaftWidthMm: 3200,
+        shaftDepthMm: 5800,
+      },
+    });
+    expect(stacking).toContain('Car stacking lift');
+    expect(stacking).not.toContain('CAR_STACKING_LIFT');
+    expect(stacking).toContain('Platform width');
+    expect(stacking).toContain('Platform depth');
+    expect(stacking).not.toContain('Car width');
+
+    const escalator = text({
+      ...data,
+      technicalSpec: { productType: 'ESCALATOR', shaftWidthMm: 1000 },
+    });
+    expect(escalator).toContain('"Width"');
+    expect(escalator).not.toContain('Shaft width');
+
+    const passenger = text({
+      ...data,
+      technicalSpec: { productType: 'PASSENGER', carWidthMm: 1400 },
+    });
+    expect(passenger).toContain('Passenger elevator');
+    expect(passenger).toContain('Car width');
+  });
+
   it('does not throw when branding is absent', () => {
     expect(() => buildProformaDocx(data, null)).not.toThrow();
   });

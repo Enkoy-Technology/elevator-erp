@@ -15,7 +15,7 @@ import {
 import { documentReferenceCode } from './commercial-document';
 import { formatEtb } from './money-format';
 import type { ProformaTemplateData } from './proforma.template';
-import { fmtDate, TECH_ROWS } from './quotation.template';
+import { fmtDate, techRowCells } from './quotation.template';
 
 export { formatEtb };
 
@@ -38,8 +38,8 @@ export const buildProformaDocx = (
   // Snapshotted already joined at issue time; see buildProformaHtml.
   const reference = documentReferenceCode(d.salesName, d.referenceCode);
 
-  const techRows = TECH_ROWS.filter((r) => tech[r.key] != null).map((r) =>
-    row(r.label, `${String(tech[r.key])}${r.unit ? ` ${r.unit}` : ''}`),
+  const techRows = techRowCells(tech).map((cell) =>
+    row(cell.label, cell.value),
   );
 
   const children: (Paragraph | Table)[] = [

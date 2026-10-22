@@ -3,6 +3,7 @@ import {
   DOOR_TYPE_LABELS,
   PRODUCT_LABELS,
   printsMachineRoom,
+  specLabel,
 } from './commercial-document';
 import {
   esc,
@@ -146,14 +147,24 @@ export const buildTechnicalProposalHtml = (
   const d = data as TechnicalProposalTemplateData;
   const tech = d.technicalSpec ?? {};
   const stored = d.calcInput ?? {};
-  // A door width of 0 is a product with no door (escalator, car stacking
-  // lift): neither door row prints.
-  const input =
-    stored.doorWidthMm === 0
-      ? { ...stored, doorType: undefined, doorWidthMm: undefined }
-      : stored;
+  const product = tech.productType ?? stored.productType;
+  const input = {
+    ...stored,
+    // A door width of 0 is a product with no door (escalator, car stacking
+    // lift): neither door row prints.
+    ...(stored.doorWidthMm === 0
+      ? { doorType: undefined, doorWidthMm: undefined }
+      : {}),
+    // 0 is the calculator's placeholder for a product with no rated load
+    // (the escalator), not a load of nothing.
+    ...(stored.capacityKg === 0 ? { capacityKg: undefined } : {}),
+    // An escalator has no stops, only the rise the form also asks for, and
+    // building usage sizes a lift's car, which it does not have.
+    ...(product === 'ESCALATOR'
+      ? { stops: undefined, buildingUsage: undefined }
+      : {}),
+  };
 
-  const product = tech.productType ?? input.productType;
   // Anything that is not a stored enum string (missing, or a malformed jsonb
   // payload) prints as an em dash rather than "[object Object]".
   const productLabel =
@@ -165,7 +176,10 @@ export const buildTechnicalProposalHtml = (
       ? DUTY_ROWS
       : DUTY_ROWS.filter((r) => r.key !== 'machineRoomType'),
   );
-  const geometryRows = renderRows(tech, SPEC_ROWS);
+  const geometryRows = renderRows(
+    tech,
+    SPEC_ROWS.map((r) => ({ ...r, label: specLabel(product, r.key, r.label) })),
+  );
 
   // A flat-priced product (escalator, car platform lift) has EVERY geometry
   // field null by definition — see TechnicalSpecs. Say so in one line instead

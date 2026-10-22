@@ -3,6 +3,7 @@ import {
   documentReferenceCode,
   PRODUCT_LABELS,
   renderCommercialBody,
+  specLabel,
   type CommercialTermsData,
   type DocumentAppendixContent,
   type DocumentLineData,
@@ -115,6 +116,21 @@ export const TECH_ROWS: ReadonlyArray<{
   { key: 'machineRoomDepthMm', label: 'Machine room depth', unit: 'mm' },
   { key: 'machineRoomHeightMm', label: 'Machine room height', unit: 'mm' },
 ];
+
+/**
+ * TECH_ROWS as they print for one snapshot: absent figures dropped, every
+ * value formatted, every label the product's own (a vehicle lift's
+ * platform, an escalator's width — see specLabel). Both Word files and the
+ * warranty certificate read this, so none of them can print a raw product
+ * code or a car on a machine that has a platform.
+ */
+export const techRowCells = (
+  tech: Record<string, unknown>,
+): ReadonlyArray<{ label: string; value: string }> =>
+  TECH_ROWS.filter((r) => tech[r.key] != null).map((r) => ({
+    label: specLabel(tech.productType, r.key, r.label),
+    value: `${r.format ? r.format(tech[r.key]) : String(tech[r.key])}${r.unit ? ` ${r.unit}` : ''}`,
+  }));
 
 /**
  * The single line a document with no line items implies: its own header,
