@@ -87,6 +87,10 @@ export const specLabel = (
       return 'Platform depth';
     }
   }
+  // The price sheet's L: a stacker's stops are the parking levels it serves.
+  if (productType === 'CAR_STACKING_LIFT' && key === 'stops') {
+    return 'Parking levels';
+  }
   return productType === 'ESCALATOR' && key === 'shaftWidthMm'
     ? 'Width'
     : label;

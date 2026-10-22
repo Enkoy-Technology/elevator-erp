@@ -328,6 +328,9 @@ export default function EditQuotationPage() {
 
         {step === 'price' ? (
           <PriceBox
+            // Remount on every server update, so a refetch that lands after
+            // the Price step opened replaces the figures it started with.
+            key={quotation.updatedAt}
             quotationId={id}
             quotation={quotation}
             lines={lines}

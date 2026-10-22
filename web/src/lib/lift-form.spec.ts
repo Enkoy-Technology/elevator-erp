@@ -117,6 +117,7 @@ describe('offerPreviewEtb', () => {
   // The client's 800 kg, N=15 example: a 7,570,000 sheet price, VAT in.
   const inclusive = {
     totalBeforeMargin: '6582608.70',
+    subtotalWithMargin: '6582608.70',
     listVatIncluded: '987391.30',
     listVatPercent: '15.00',
   };
@@ -140,6 +141,7 @@ describe('offerPreviewEtb', () => {
       offerPreviewEtb(
         {
           totalBeforeMargin: '3660869.57',
+          subtotalWithMargin: '3660869.57',
           listVatIncluded: '549130.43',
           listVatPercent: '15.00',
         },
@@ -154,11 +156,10 @@ describe('offerPreviewEtb', () => {
 
   it('puts the margin on the gross before multiplying', () => {
     expect(
-      offerPreviewEtb(inclusive, {
-        marginPercent: 10,
-        quantity: 2,
-        vatPercent: '15',
-      }),
+      offerPreviewEtb(
+        { ...inclusive, subtotalWithMargin: '7240869.57' },
+        { marginPercent: 10, quantity: 2, vatPercent: '15' },
+      ),
     ).toEqual({
       // 6,582,608.70 × 1.1 = 7,240,869.57; 7,570,000 × 1.1 = 8,327,000.
       netEtb: '14481739.14',
@@ -188,10 +189,21 @@ describe('offerPreviewEtb', () => {
     });
   });
 
+  it('takes the net the server stores, so a sub-cent list price is not rounded twice', () => {
+    // A list of 100.004 at 25% margin: the server stores money(100.004 × 1.25)
+    // = 125.01. Rounding the list first (100.00), then the margin, gives 125.00.
+    expect(
+      offerPreviewEtb(
+        { totalBeforeMargin: '100.00', subtotalWithMargin: '125.01' },
+        { marginPercent: 25, quantity: 1, vatPercent: '15' },
+      ),
+    ).toEqual({ netEtb: '125.01', taxEtb: '18.75', grossEtb: '143.76' });
+  });
+
   it('adds VAT to the net when the list is net', () => {
     expect(
       offerPreviewEtb(
-        { totalBeforeMargin: '7160000.00' },
+        { totalBeforeMargin: '7160000.00', subtotalWithMargin: '7160000.00' },
         { marginPercent: 0, quantity: 2, vatPercent: '15' },
       ),
     ).toEqual({

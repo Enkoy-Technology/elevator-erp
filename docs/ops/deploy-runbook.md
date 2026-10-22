@@ -320,6 +320,13 @@ Settings and set the company name, slogan, logo and colours, and download
 one quotation PDF. That last step is the real check — it is the only one
 that exercises Chromium, fonts and the branding row together.
 
+Also under Settings → Pricing, set **VAT included in the price list** to
+15%. Shining Star's price sheet is what the customer pays, VAT in (client,
+2026-10-07), and the demo tenant runs that way. Bootstrapping a tenant seeds
+the products but not this setting, and without it every lift prices 15%
+above the demo: a 1835 × 1750 lift at 12 floors totals 8,234,000 ETB
+instead of 7,160,000.
+
 ## UAT specifics
 
 ### DNS before first start

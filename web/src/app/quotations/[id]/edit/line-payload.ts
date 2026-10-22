@@ -85,8 +85,11 @@ export const num = (value: string, fallback: number): number => {
  * (2026-10-23). The server keeps the stored figure on an update and refuses
  * an add that lacks one.
  */
-const figure = (value: string): number | undefined =>
-  value.trim() === '' ? undefined : Number(value);
+const figure = (value: string): number | undefined => {
+  // Not a number at all ('.', '1..') is blank too: NaN would go out as null.
+  const parsed = Number(value);
+  return value.trim() === '' || !Number.isFinite(parsed) ? undefined : parsed;
+};
 
 /** Blank means "leave it alone": the API's validators reject null on every
  *  spec field, so an empty box omits the key instead of blanking it. */

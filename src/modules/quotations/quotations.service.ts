@@ -122,20 +122,9 @@ export class QuotationsService {
 
     // At the sheet figure when the sheet is VAT-inclusive at this rate;
     // net + VAT × rate otherwise — see sheetGrossEtb.
-    const { taxAmountEtb, totalEtb: totalPriceEtb } = quoteTotals(
-      [
-        {
-          netEtb: result.pricing.subtotalWithMargin,
-          grossEtb: sheetGrossEtb(
-            {
-              pricingBreakdown: result.pricing,
-              calcInput: resolvedInput,
-              quantity: 1,
-            },
-            vatPercent.toFixed(2),
-          ),
-        },
-      ],
+    const { taxAmountEtb, totalEtb: totalPriceEtb } = unitTotals(
+      result.pricing,
+      resolvedInput,
       vatPercent.toFixed(2),
     );
 
@@ -564,22 +553,7 @@ export class QuotationsService {
 
     // Per unit, by the same rule as the header — see sheetGrossEtb.
     const subtotalWithMargin = D(result.pricing.subtotalWithMargin);
-    const unit = quoteTotals(
-      [
-        {
-          netEtb: result.pricing.subtotalWithMargin,
-          grossEtb: sheetGrossEtb(
-            {
-              pricingBreakdown: result.pricing,
-              calcInput: storedCalcInput,
-              quantity: 1,
-            },
-            taxPercent,
-          ),
-        },
-      ],
-      taxPercent,
-    );
+    const unit = unitTotals(result.pricing, storedCalcInput, taxPercent);
     const pricingBreakdown: PricingBreakdown = {
       ...result.pricing,
       taxAmount: unit.taxAmountEtb,
@@ -671,6 +645,30 @@ export type QuotationDocumentData = QuotationDocumentRow & {
   lines: QuotationLineRecord[];
   paymentTerms: QuotationPaymentTermRecord[];
 };
+
+/**
+ * One unit of a calculated lift at `vatPercent`: the sheet figure when the
+ * price list is VAT-inclusive at that rate, net + VAT × rate otherwise. The
+ * header (createForProject) and each line (buildLineValues) both price
+ * through this, so the two cannot drift apart.
+ */
+const unitTotals = (
+  pricing: PricingBreakdown,
+  calcInput: unknown,
+  vatPercent: string,
+): ReturnType<typeof quoteTotals> =>
+  quoteTotals(
+    [
+      {
+        netEtb: pricing.subtotalWithMargin,
+        grossEtb: sheetGrossEtb(
+          { pricingBreakdown: pricing, calcInput, quantity: 1 },
+          vatPercent,
+        ),
+      },
+    ],
+    vatPercent,
+  );
 
 /**
  * A PATCH body must not blank what it does not mention. TypeScript class

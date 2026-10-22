@@ -12,7 +12,7 @@ import {
   signatureTable,
   textBlock,
 } from './docx-layout';
-import { documentReferenceCode } from './commercial-document';
+import { documentReferenceCode, PRODUCT_LABELS } from './commercial-document';
 import { formatEtb, netOfTaxEtb } from './money-format';
 import {
   fmtDate,
@@ -57,7 +57,7 @@ export const buildQuotationDocx = (
   // the same fallback buildQuotationHtml uses.
   const lineRows = (d.lines ?? []).map((line) =>
     row(
-      `${line.quantity} x ${line.specSummary ?? line.productType}`,
+      `${line.quantity} x ${line.specSummary ?? PRODUCT_LABELS[line.productType ?? ''] ?? line.productType}`,
       formatEtb(line.lineTotalEtb),
     ),
   );
@@ -99,7 +99,7 @@ export const buildQuotationDocx = (
       row(`VAT (${d.taxPercent ?? '0'}%)`, formatEtb(d.taxAmountEtb)),
       grandRow('Grand total', formatEtb(d.totalPriceEtb)),
     ]),
-    ...(d.notes ? [heading('Notes', primary), textBlock(d.notes)] : []),
+    ...(d.notes ? [heading('Special notes', primary), textBlock(d.notes)] : []),
     signatureTable(branding),
   ];
 

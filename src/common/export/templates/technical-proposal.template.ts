@@ -172,9 +172,10 @@ export const buildTechnicalProposalHtml = (
 
   const dutyRows = renderRows(
     input,
-    printsMachineRoom(product)
+    (printsMachineRoom(product)
       ? DUTY_ROWS
-      : DUTY_ROWS.filter((r) => r.key !== 'machineRoomType'),
+      : DUTY_ROWS.filter((r) => r.key !== 'machineRoomType')
+    ).map((r) => ({ ...r, label: specLabel(product, r.key, r.label) })),
   );
   const geometryRows = renderRows(
     tech,

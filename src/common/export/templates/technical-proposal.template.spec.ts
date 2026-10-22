@@ -203,6 +203,25 @@ describe('buildTechnicalProposalHtml for an escalator and the vehicle lifts', ()
     expect(html).not.toContain('Shaft width');
   });
 
+  it("calls a car stacking lift's stops its parking levels, as page 2 does", () => {
+    const html = buildTechnicalProposalHtml(
+      {
+        ...flat,
+        calcInput: {
+          productType: 'CAR_STACKING_LIFT',
+          capacityKg: 3500,
+          stops: 2,
+          speedMs: 0.15,
+          machineRoomType: 'MR',
+        },
+        technicalSpec: { ...geometry, productType: 'CAR_STACKING_LIFT' },
+      },
+      branding,
+    );
+    expect(html).toContain(row('Parking levels', '2'));
+    expect(html).not.toContain('Number of stops');
+  });
+
   it.each([
     ['CAR_LIFT', 2800, 5600],
     ['CAR_PLATFORM_LIFT', 2500, 5000],

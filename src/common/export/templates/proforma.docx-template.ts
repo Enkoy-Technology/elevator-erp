@@ -66,7 +66,7 @@ export const buildProformaDocx = (
       row(`VAT (${d.taxPercent ?? '0'}%)`, formatEtb(d.vatEtb)),
       grandRow('Total', formatEtb(d.totalEtb)),
     ]),
-    ...(d.notes ? [heading('Notes', primary), textBlock(d.notes)] : []),
+    ...(d.notes ? [heading('Special notes', primary), textBlock(d.notes)] : []),
     signatureTable(branding),
   ];
 

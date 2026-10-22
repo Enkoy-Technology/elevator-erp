@@ -29,6 +29,12 @@ describe('toPayload', () => {
     expect(payload).not.toHaveProperty('stops');
   });
 
+  it('treats a box that is not a number as blank, never sending null', () => {
+    const payload = sent({ ...NEW_LINE, shaftWidthMm: '.', stops: '1..' });
+    expect(payload).not.toHaveProperty('shaftWidthMm');
+    expect(payload).not.toHaveProperty('stops');
+  });
+
   it('does not put the demo figures in for a blank car-lift box', () => {
     const payload = sent({
       ...NEW_LINE,

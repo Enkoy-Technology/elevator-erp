@@ -40,6 +40,10 @@ describe('buildProformaDocx', () => {
     expect(buildProformaDocx(data, branding)).toBeInstanceOf(Document);
   });
 
+  it('heads the notes "Special notes", as the PDF does', () => {
+    expect(text(data)).toContain('SPECIAL NOTES'); // Word headings are set in capitals
+  });
+
   it('names the project in the party block — never the customer, never a Prepared by line', () => {
     const json = text(data);
     expect(json).toContain('Bole Twin Towers — Lift A');

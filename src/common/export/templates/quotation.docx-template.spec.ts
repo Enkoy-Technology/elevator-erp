@@ -58,6 +58,33 @@ describe('buildQuotationDocx', () => {
     expect(buildQuotationDocx(data, branding)).toBeInstanceOf(Document);
   });
 
+  it('heads the notes "Special notes", as the PDF does', async () => {
+    const xml = await documentXml(buildQuotationDocx(data, branding));
+    expect(xml).toContain('SPECIAL NOTES'); // Word headings are set in capitals
+  });
+
+  it("names a line's product, not its code, when the line has no summary", async () => {
+    const xml = await documentXml(
+      buildQuotationDocx(
+        {
+          ...data,
+          lines: [
+            {
+              productType: 'CAR_STACKING_LIFT',
+              specSummary: null,
+              quantity: 1,
+              unitPriceEtb: '5043478.26',
+              lineTotalEtb: '5043478.26',
+            },
+          ],
+        },
+        branding,
+      ),
+    );
+    expect(xml).toContain('1 x Car stacking lift');
+    expect(xml).not.toContain('CAR_STACKING_LIFT');
+  });
+
   it('names the project, never the customer and never a Prepared by line', async () => {
     const xml = await documentXml(buildQuotationDocx(data, branding));
     expect(xml).toContain('Bole Twin Towers — Lift A');

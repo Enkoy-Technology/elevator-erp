@@ -241,7 +241,10 @@ export const usesRise = (
 export const offerPreviewEtb = (
   pricing: Pick<
     CalcResult['pricing'],
-    'totalBeforeMargin' | 'listVatIncluded' | 'listVatPercent'
+    | 'totalBeforeMargin'
+    | 'subtotalWithMargin'
+    | 'listVatIncluded'
+    | 'listVatPercent'
   >,
   {
     marginPercent,
@@ -252,10 +255,9 @@ export const offerPreviewEtb = (
   // withVatEtb is x + x·p%, half-up to the cent: the margin's rule as well.
   const margin = String(marginPercent);
   const units = String(quantity);
-  const netEtb = lineTotalEtb(
-    units,
-    withVatEtb(pricing.totalBeforeMargin, margin).grossEtb,
-  );
+  // The per-unit net the server stores, not one re-derived here: rounding a
+  // sub-cent list price and then its margin would land a cent away.
+  const netEtb = lineTotalEtb(units, pricing.subtotalWithMargin);
   if (
     pricing.listVatIncluded !== undefined &&
     pricing.listVatPercent !== undefined &&
