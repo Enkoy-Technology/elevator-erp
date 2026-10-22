@@ -82,8 +82,9 @@ export const computeProductPrice = (
   };
 };
 
+/** Persons a rated load carries: load ÷ 75, rounded down (EN 81-20), so 800 kg is 10. */
 export const passengerCapacity = (capacityKg: number): number =>
-  D(capacityKg).div(75).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
+  D(capacityKg).div(75).toDecimalPlaces(0, Decimal.ROUND_DOWN).toNumber();
 
 export const computeCarDimensions = (
   capacityKg: number,

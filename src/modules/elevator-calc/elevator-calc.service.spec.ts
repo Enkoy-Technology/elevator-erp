@@ -1,4 +1,5 @@
 import { ElevatorCalcService } from './elevator-calc.service';
+import { PASSENGER_LIFTS, selectPassengerLift } from './passenger-table';
 import {
   DEFAULT_PRODUCT_TYPES,
   type ProductTypesRepository,
@@ -600,38 +601,83 @@ describe('ElevatorCalcService', () => {
       expect(result.notes[0]).toMatch(/maximum is 1.75/);
     });
 
-    it('rounds a non-standard shaft UP to the next standard lift and says so', async () => {
-      // 1800 × 1800 (3.24 m²) is just over the 8-person's 1835 × 1750
-      // (3.21 m²), so it is the 10-person, 800 kg — never the 6-person that
-      // would fit inside it.
-      const up = await standard({ shaftWidthMm: 1800, shaftDepthMm: 1800 });
-      expect(up.technical.capacityPersons).toBe(10);
-      expect(up.input.capacityKg).toBe(800);
-      expect(up.notes[0]).toMatch(/next standard size is the 10-person/);
-
-      // 2000 × 1800 (3.6 m²) is over the 10-person's 1980 × 1750 (3.47 m²).
-      const result = await standard({ shaftWidthMm: 2000, shaftDepthMm: 1800 });
-      expect(result.technical.capacityPersons).toBe(13);
-      expect(result.notes[0]).toMatch(/not a standard shaft/);
+    it('takes the biggest standard lift that fits inside a non-standard shaft and says so', async () => {
+      // The client's case (2026-10-22): 2000 × 2200 holds the 10-person's
+      // 1980 × 1750, not the 15-person 1150 kg whose shaft is 2430 mm wide.
+      const result = await standard({ shaftWidthMm: 2000, shaftDepthMm: 2200 });
+      expect(result.technical.capacityPersons).toBe(10);
+      expect(result.input.capacityKg).toBe(800);
+      expect(result.notes[0]).toMatch(
+        /biggest standard lift that fits is the 10-person/,
+      );
       // The spec sheet says the building's shaft, and names the row beside it.
       expect(result.technical.shaftWidthMm).toBe(2000);
-      expect(result.technical.shaftDepthMm).toBe(1800);
+      expect(result.technical.shaftDepthMm).toBe(2200);
       expect(result.technical.standardLift).toBe(
-        '13-person lift, 2200 × 1750 mm standard shaft',
+        '10-person lift, 1980 × 1750 mm standard shaft',
       );
+
+      // 1800 wide holds neither the 8-person's 1835 nor the 10-person's 1980.
+      const narrow = await standard({ shaftWidthMm: 1800, shaftDepthMm: 1800 });
+      expect(narrow.technical.capacityPersons).toBe(6);
+      // Turned the other way, 2200 wide × 2000 deep holds the 13-person.
+      const wide = await standard({ shaftWidthMm: 2200, shaftDepthMm: 2000 });
+      expect(wide.input.capacityKg).toBe(1000);
+    });
+
+    it('never picks a lift whose standard shaft is wider or deeper than the one entered', () => {
+      const misfits: string[] = [];
+      for (let width = 1500; width <= 3500; width += 50) {
+        for (let depth = 1400; depth <= 3500; depth += 50) {
+          const picked = selectPassengerLift(width, depth);
+          if (
+            picked &&
+            (picked.lift.shaftWidthMm > width ||
+              picked.lift.shaftDepthMm > depth)
+          ) {
+            misfits.push(`${width} × ${depth}`);
+          }
+        }
+      }
+      expect(misfits).toEqual([]);
     });
 
     it('takes the largest lift for a shaft bigger than every standard one', async () => {
       const result = await standard({ shaftWidthMm: 3000, shaftDepthMm: 3000 });
       expect(result.technical.capacityPersons).toBe(21);
+      // Of the three 21-person lifts that fit, the one with the biggest shaft.
+      expect(result.technical.standardLift).toBe(
+        '21-person lift, 2350 × 2900 mm standard shaft',
+      );
     });
 
-    it('names the smallest lift for a shaft smaller than any standard one, with the note', async () => {
-      const result = await standard({ shaftWidthMm: 1200, shaftDepthMm: 1200 });
-      expect(result.technical.standardLift).toBe(
-        '5-person lift, 1650 × 1450 mm standard shaft',
+    it('names its own row for an exact standard shaft, even where a bigger lift would fit', () => {
+      // 1650 × 1650 is the 5-person 2S, though the 6-person's 1550 × 1600 fits inside it.
+      expect(selectPassengerLift(1650, 1650)).toMatchObject({
+        exact: true,
+        lift: { persons: 5, door: '2S' },
+      });
+    });
+
+    it('refuses a shaft no standard lift fits, naming the smallest standard shafts', async () => {
+      await expect(
+        standard({ shaftWidthMm: 1200, shaftDepthMm: 1200 }),
+      ).rejects.toThrow(
+        /No standard passenger lift fits a 1200 × 1200 mm shaft.*1550 × 1600 mm and 1650 × 1450 mm/,
       );
-      expect(result.notes[0]).toMatch(/not a standard shaft/);
+    });
+
+    it("rates the 2200 × 1750 lift 1000 kg for its 13 persons, as the client's table does", async () => {
+      const result = await standard({ shaftWidthMm: 2200, shaftDepthMm: 1750 });
+      expect(result.technical.capacityPersons).toBe(13);
+      expect(result.input.capacityKg).toBe(1000);
+    });
+
+    it('gives every standard lift the persons its rated load carries (load ÷ 75, rounded down)', () => {
+      const wrong = PASSENGER_LIFTS.filter(
+        (lift) => lift.persons !== Math.floor(lift.loadKg / 75),
+      ).map((lift) => `${lift.persons} persons at ${lift.loadKg} kg`);
+      expect(wrong).toEqual([]);
     });
 
     it('still wants every figure for a product outside the table', async () => {
@@ -643,5 +689,10 @@ describe('ElevatorCalcService', () => {
         }),
       ).rejects.toThrow(/capacityKg/);
     });
+  });
+
+  it('counts persons as load ÷ 75 rounded down when every figure is given', async () => {
+    const result = await calc({ ...WORKED_EXAMPLE, capacityKg: 800 });
+    expect(result.technical.capacityPersons).toBe(10);
   });
 });

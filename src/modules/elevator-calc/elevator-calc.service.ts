@@ -21,6 +21,7 @@ import { hasDoor, hasMachineRoom, VEHICLE_SPECS } from './vehicle-specs';
 import {
   PASSENGER_CAR_HEIGHT_MM,
   selectPassengerLift,
+  SMALLEST_PASSENGER_SHAFTS,
   speedForFloors,
   usesPassengerTable,
 } from './passenger-table';
@@ -210,10 +211,16 @@ const resolve = (
     const shaftWidthMm = request.shaftWidthMm!;
     const shaftDepthMm = request.shaftDepthMm!;
     const floors = request.floors!;
-    const { lift, exact } = selectPassengerLift(shaftWidthMm, shaftDepthMm);
+    const selection = selectPassengerLift(shaftWidthMm, shaftDepthMm);
+    if (!selection) {
+      throw new BadRequestException(
+        `No standard passenger lift fits a ${shaftWidthMm} × ${shaftDepthMm} mm shaft. The smallest standard shafts are ${SMALLEST_PASSENGER_SHAFTS.map((lift) => `${lift.shaftWidthMm} × ${lift.shaftDepthMm} mm`).join(' and ')}.`,
+      );
+    }
+    const { lift, exact } = selection;
     if (!exact) {
       notes.push(
-        `${shaftWidthMm} × ${shaftDepthMm} mm is not a standard shaft; the next standard size is the ${lift.persons}-person (${lift.shaftWidthMm} × ${lift.shaftDepthMm} mm shaft).`,
+        `${shaftWidthMm} × ${shaftDepthMm} mm is not a standard shaft; the biggest standard lift that fits is the ${lift.persons}-person (${lift.shaftWidthMm} × ${lift.shaftDepthMm} mm shaft).`,
       );
     }
     const bandSpeed = speedForFloors(floors);

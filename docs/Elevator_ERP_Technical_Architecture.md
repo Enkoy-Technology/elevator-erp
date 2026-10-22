@@ -965,7 +965,7 @@ financial computations.
 | Parameter          | Symbol | Unit    | Constraints          |
 | ------------------ | ------ | ------- | -------------------- |
 | Rated Load         | Q      | kg      | 320 £ Q £ 5000       |
-| Passenger Capacity | P      | persons | P = Q / 75 (rounded) |
+| Passenger Capacity | P      | persons | P = Q / 75 (rounded down) |
 | Number of Stops    | N      | count   | 2 £ N £ 64           |
 | Travel Height      | H      | m       | 3 £ H £ 200          |
 0.4 £ v £ 10.0

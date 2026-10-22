@@ -73,8 +73,9 @@ export const PASSENGER_LIFTS: readonly PassengerLift[] = [
   row(8, 630, 2.0, 1100, 1400, 'CO', 800, 1835, 1750),
   row(8, 630, 2.0, 1100, 1400, '2S', 800, 1600, 1850),
   row(10, 800, 2.0, 1350, 1400, 'CO', 800, 1980, 1750),
-  // Rated 800 kg, not the 1,000 of the 2026-09-09 table (client, 2026-10-06).
-  row(13, 800, 2.0, 1600, 1400, 'CO', 900, 2200, 1750),
+  // 1000 kg, as in the client's specification. Rated 800 kg (2026-10-06) it
+  // printed 13 persons, which 800 kg cannot carry (client, 2026-10-22).
+  row(13, 1000, 2.0, 1600, 1400, 'CO', 900, 2200, 1750),
   row(13, 1000, 2.0, 1100, 2100, 'CO', 900, 1960, 2450),
   row(15, 1150, 2.0, 1700, 1500, 'CO', 1000, 2430, 1950),
   row(15, 1150, 2.0, 1800, 1450, 'CO', 1000, 2500, 1900),
@@ -106,16 +107,16 @@ export interface PassengerSelection {
 
 /**
  * The lift for a shaft. An exact standard shaft names its row; any other
- * shaft rounds UP: the smallest standard lift whose shaft (by area) is at
- * least as large as the one entered — an 1800 × 1800 shaft is bigger than
- * the 8-person's 1835 × 1750, so it is the 10-person, 800 kg, never the
- * 6-person that merely fits inside it (client, 2026-10-06). A shaft
- * bigger than every standard one takes the largest lift.
+ * shaft takes the biggest standard lift whose own shaft fits inside it, in
+ * width and in depth (of two the same load, the bigger shaft). A 2000 × 2200
+ * shaft is the 10-person, 800 kg, not the 15-person whose 2430 mm wide shaft
+ * it cannot hold (client, 2026-10-22); rounding up by area, the rule since
+ * 2026-10-06, always chose a lift that did not fit. Null when none fits.
  */
 export const selectPassengerLift = (
   shaftWidthMm: number,
   shaftDepthMm: number,
-): PassengerSelection => {
+): PassengerSelection | null => {
   const exact = PASSENGER_LIFTS.find(
     (lift) =>
       lift.shaftWidthMm === shaftWidthMm && lift.shaftDepthMm === shaftDepthMm,
@@ -123,14 +124,21 @@ export const selectPassengerLift = (
   if (exact) {
     return { lift: exact, exact: true };
   }
-  const area = shaftWidthMm * shaftDepthMm;
-  const byArea = [...PASSENGER_LIFTS].sort(
+  const biggest = PASSENGER_LIFTS.filter(
+    (lift) =>
+      lift.shaftWidthMm <= shaftWidthMm && lift.shaftDepthMm <= shaftDepthMm,
+  ).sort(
     (a, b) =>
-      a.shaftWidthMm * a.shaftDepthMm - b.shaftWidthMm * b.shaftDepthMm ||
-      b.persons - a.persons,
-  );
-  const lift =
-    byArea.find((row) => row.shaftWidthMm * row.shaftDepthMm >= area) ??
-    byArea[byArea.length - 1]!;
-  return { lift, exact: false };
+      b.loadKg - a.loadKg ||
+      b.shaftWidthMm * b.shaftDepthMm - a.shaftWidthMm * a.shaftDepthMm,
+  )[0];
+  return biggest ? { lift: biggest, exact: false } : null;
 };
+
+/** The narrowest and the shallowest standard shafts, named when none fits. */
+export const SMALLEST_PASSENGER_SHAFTS: readonly PassengerLift[] = [
+  ...new Set([
+    PASSENGER_LIFTS.reduce((a, b) => (b.shaftWidthMm < a.shaftWidthMm ? b : a)),
+    PASSENGER_LIFTS.reduce((a, b) => (b.shaftDepthMm < a.shaftDepthMm ? b : a)),
+  ]),
+];
