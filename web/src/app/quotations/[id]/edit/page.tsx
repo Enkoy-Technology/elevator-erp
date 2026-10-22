@@ -111,6 +111,8 @@ export default function EditQuotationPage() {
   /** A negotiated price is split across the lifts that existed when it was
    *  applied, so editing one leaves the price box showing an old answer. */
   const [linesDirty, setLinesDirty] = useState(false);
+  /** Bumped only when a line change re-reads the quotation; see PriceBox below. */
+  const [repricedCount, setRepricedCount] = useState(0);
   const [terms, setTerms] = useState<TermRow[]>([]);
   const [salesName, setSalesName] = useState('');
   const [referenceCode, setReferenceCode] = useState('');
@@ -319,7 +321,10 @@ export default function EditQuotationPage() {
               // list with the negotiation cleared; without this the Price
               // step showed the old totals and would not apply a price.
               void getQuotation(id)
-                .then(setQuotation)
+                .then((fresh) => {
+                  setQuotation(fresh);
+                  setRepricedCount((count) => count + 1);
+                })
                 .catch(() => undefined);
             }}
             editable={editable}
@@ -328,9 +333,11 @@ export default function EditQuotationPage() {
 
         {step === 'price' ? (
           <PriceBox
-            // Remount on every server update, so a refetch that lands after
-            // the Price step opened replaces the figures it started with.
-            key={quotation.updatedAt}
+            // Remount when a line change re-priced the quotation, so a refetch
+            // landing after the Price step opened replaces the figures it
+            // started with. Not on its own saves (they stamp updatedAt too):
+            // that would drop focus and anything typed while a price applies.
+            key={repricedCount}
             quotationId={id}
             quotation={quotation}
             lines={lines}
