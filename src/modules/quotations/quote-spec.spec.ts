@@ -83,6 +83,32 @@ describe('buildSpecSummary', () => {
   it('is null when there is nothing to say', () => {
     expect(buildSpecSummary({})).toBeNull();
   });
+
+  it("prints no load for an escalator's 0 kg placeholder and no doors for a product without one", () => {
+    const plan = describeFloorPlan('G,1', 1);
+    expect(
+      buildSpecSummary({ productType: 'ESCALATOR', capacityKg: 0, speedMs: 0.5, plan }),
+    ).toBe('Speed 0.5m/s / G+1 / 2 floors');
+    expect(
+      buildSpecSummary({
+        productType: 'CAR_STACKING_LIFT',
+        capacityKg: 4000,
+        speedMs: 0.15,
+        plan,
+      }),
+    ).toBe('4000KG / Speed 0.15m/s / G+1 / 2 floors');
+  });
+
+  it('keeps the doors for a product that has one', () => {
+    expect(
+      buildSpecSummary({
+        productType: 'CAR_LIFT',
+        capacityKg: 3500,
+        speedMs: 0.5,
+        plan: describeFloorPlan('G,1', 1),
+      }),
+    ).toBe('3500KG / Speed 0.5m/s / G+1 / 2 floors/2 doors');
+  });
 });
 
 describe('paymentTermsMismatchReason', () => {

@@ -35,6 +35,8 @@ import {
   allocateToLines,
   computeDiscount,
   deriveFromGrandTotal,
+  quoteTotals,
+  sheetGrossEtb,
 } from './quote-pricing';
 import {
   buildSpecSummary,
@@ -118,11 +120,24 @@ export class QuotationsService {
     // capacity and speed the technical proposal prints.
     const { taxPercent: _placeholder, ...resolvedInput } = result.input;
 
-    const subtotalWithMargin = D(result.pricing.subtotalWithMargin);
-    const taxAmount = subtotalWithMargin.mul(vatPercent).div(100);
-    const totalPrice = subtotalWithMargin.plus(taxAmount);
-    const taxAmountEtb = money(taxAmount);
-    const totalPriceEtb = money(totalPrice);
+    // At the sheet figure when the sheet is VAT-inclusive at this rate;
+    // net + VAT × rate otherwise — see sheetGrossEtb.
+    const { taxAmountEtb, totalEtb: totalPriceEtb } = quoteTotals(
+      [
+        {
+          netEtb: result.pricing.subtotalWithMargin,
+          grossEtb: sheetGrossEtb(
+            {
+              pricingBreakdown: result.pricing,
+              calcInput: resolvedInput,
+              quantity: 1,
+            },
+            vatPercent.toFixed(2),
+          ),
+        },
+      ],
+      vatPercent.toFixed(2),
+    );
 
     const pricingBreakdown: PricingBreakdown = {
       ...result.pricing,
@@ -356,9 +371,13 @@ export class QuotationsService {
     // re-pricing an already-negotiated quotation must measure the discount
     // against the formula, not against last week's negotiation.
     const listTotals = lines.map((line) => listTotalEtb(line));
-    const listSum = listTotals.reduce((sum, total) => sum.plus(D(total)), D(0));
-    const calculatedTotalEtb = money(
-      listSum.mul(D(quote.taxPercent).div(100).plus(1)),
+    // A quotation agreed at exactly the sheet figure is no discount.
+    const { totalEtb: calculatedTotalEtb } = quoteTotals(
+      lines.map((line, index) => ({
+        netEtb: listTotals[index]!,
+        grossEtb: sheetGrossEtb(line, quote.taxPercent),
+      })),
+      quote.taxPercent,
     );
 
     const { subtotalEtb, taxAmountEtb, totalEtb } = deriveFromGrandTotal(
@@ -541,17 +560,33 @@ export class QuotationsService {
     };
     const result = await this.calcService.calculateSpecs(tenantId, request);
     const calcInput = result.input;
+    const { taxPercent: _unused, ...storedCalcInput } = calcInput;
 
+    // Per unit, by the same rule as the header — see sheetGrossEtb.
     const subtotalWithMargin = D(result.pricing.subtotalWithMargin);
-    const taxAmount = subtotalWithMargin.mul(D(taxPercent)).div(100);
+    const unit = quoteTotals(
+      [
+        {
+          netEtb: result.pricing.subtotalWithMargin,
+          grossEtb: sheetGrossEtb(
+            {
+              pricingBreakdown: result.pricing,
+              calcInput: storedCalcInput,
+              quantity: 1,
+            },
+            taxPercent,
+          ),
+        },
+      ],
+      taxPercent,
+    );
     const pricingBreakdown: PricingBreakdown = {
       ...result.pricing,
-      taxAmount: money(taxAmount),
-      totalPrice: money(subtotalWithMargin.plus(taxAmount)),
+      taxAmount: unit.taxAmountEtb,
+      totalPrice: unit.totalEtb,
     };
 
     const quantity = dto.quantity ?? 1;
-    const { taxPercent: _unused, ...storedCalcInput } = calcInput;
 
     return {
       productType: dto.productType,
@@ -566,6 +601,7 @@ export class QuotationsService {
       specSummary:
         dto.specSummary ??
         buildSpecSummary({
+          productType: dto.productType,
           capacityKg: calcInput.capacityKg,
           capacityPersons: result.technical.capacityPersons,
           speedMs: calcInput.speedMs,

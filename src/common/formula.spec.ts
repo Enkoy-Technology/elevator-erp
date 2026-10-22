@@ -2,6 +2,7 @@ import {
   DEFAULT_PRICING_FORMULA,
   evaluateFormula,
   formulaProblem,
+  formulaUsesRise,
   renderFormula,
 } from './formula';
 
@@ -187,5 +188,27 @@ describe('renderFormula', () => {
     expect(renderFormula('-(C-630kg)1000 + Rise', {})).toBe(
       '−(C − 630) 1,000 + Rise',
     );
+  });
+});
+
+describe('formulaUsesRise', () => {
+  it("is true for the escalator's formula and for every alias of the rise", () => {
+    expect(formulaUsesRise('Base price + (Rise − 6) × 500,000')).toBe(true);
+    expect(formulaUsesRise('base + (travel - 6) * 500000')).toBe(true);
+    expect(formulaUsesRise('base + HEIGHT * 1000')).toBe(true);
+    expect(formulaUsesRise('base + max(0, h - 6) * 500000')).toBe(true);
+  });
+
+  it('is false for a formula on stops and capacity, the company starter included', () => {
+    expect(formulaUsesRise(DEFAULT_PRICING_FORMULA)).toBe(false);
+    expect(formulaUsesRise('base + (N - 10) * 80,000')).toBe(false);
+  });
+
+  it('reads names, not letters: a longer name that only contains one is not the rise', () => {
+    expect(formulaUsesRise('base + heights + perKg')).toBe(false);
+  });
+
+  it('is false for a formula that does not parse — pricing reports that one', () => {
+    expect(formulaUsesRise('base + rise # 2')).toBe(false);
   });
 });

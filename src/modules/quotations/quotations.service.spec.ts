@@ -5,7 +5,10 @@ import {
   DiscountApprovalRequiredError,
   WorkflowTransitionError,
 } from '../../common/exceptions';
+import { DEFAULT_PRICING_FORMULA } from '../../common/formula';
 import type { AuthenticatedUser } from '../../types/auth.types';
+import { ElevatorCalcService } from '../elevator-calc/elevator-calc.service';
+import { DEFAULT_PRODUCT_TYPES } from '../elevator-calc/product-types.repository';
 import type { CalcResult } from '../elevator-calc/types';
 import type { QuotationRecord } from './quotations.repository';
 import { QuotationsService } from './quotations.service';
@@ -752,6 +755,151 @@ describe('QuotationsService', () => {
         user.tenantId,
         expect.objectContaining({ stops: 6 }),
       );
+    });
+  });
+
+  // The demo tenant's sheet is VAT-inclusive (price_list_vat_percent 15.00);
+  // these run the real calculator so the figures are the sheet's own.
+  describe('a VAT-inclusive price sheet', () => {
+    const settings = {
+      formula: DEFAULT_PRICING_FORMULA,
+      priceListVatPercent: '15.00' as string | null,
+    };
+    const realCalc = new ElevatorCalcService({
+      findByCode: async (_tenantId: string, code: string) => {
+        const row = DEFAULT_PRODUCT_TYPES.find((p) => p.code === code);
+        return row ? { ...row, tenantId: user.tenantId, id: code } : null;
+      },
+      pricingSettings: async () => settings,
+    } as never);
+    const sheetService = new QuotationsService(
+      repo as never,
+      realCalc,
+      projectsService as never,
+      rates as never,
+    );
+
+    /** Passenger, typed in full (the classic path): 800 kg, 15 stops is 7,570,000 on the sheet. */
+    const passenger = (overrides: Record<string, unknown> = {}) =>
+      ({
+        productType: 'PASSENGER',
+        capacityKg: 800,
+        stops: 15,
+        speedMs: 1.6,
+        machineRoomType: 'MRL',
+        doorType: 'CENTER_OPEN',
+        doorWidthMm: 900,
+        buildingUsage: 'COMMERCIAL',
+        marginPercent: 0,
+        ...overrides,
+      }) as never;
+
+    const created = async (dto: never) => {
+      await sheetService.createForProject(user, project.id, dto);
+      const [, values] = repo.create.mock.calls.at(-1)!;
+      return values as Record<string, string> & {
+        pricingBreakdown: Record<string, string>;
+      };
+    };
+
+    beforeEach(() => {
+      settings.priceListVatPercent = '15.00';
+      projectsService.getById.mockResolvedValue(project);
+      rates.resolve.mockResolvedValue({
+        id: '77777777-7777-7777-7777-777777777777',
+        kind: 'VAT',
+        validFrom: '2024-08-21',
+        validTo: null,
+        payload: { percent: '15' },
+      });
+      repo.create.mockResolvedValue(draft);
+      repo.findById.mockResolvedValue(draft);
+      repo.addLine.mockImplementation(async () => ({}));
+      repo.applyPricing.mockImplementation(async () => draft);
+    });
+
+    it("totals exactly the sheet's 7,570,000.00, not 7,570,000.01", async () => {
+      const values = await created(passenger());
+      expect(values.totalPriceEtb).toBe('7570000.00');
+      expect(values.taxAmountEtb).toBe('987391.30');
+      expect(values.pricingBreakdown.totalPrice).toBe('7570000.00');
+      expect(values.pricingBreakdown.taxAmount).toBe('987391.30');
+    });
+
+    it("totals the live proforma's 7,890,000.00, not 7,890,000.01", async () => {
+      const values = await created(passenger({ stops: 19 }));
+      expect(values.totalPriceEtb).toBe('7890000.00');
+      expect(values.taxAmountEtb).toBe('1029130.43');
+    });
+
+    it('puts the margin on the sheet figure: 25% on 7,000,000 is 8,750,000.00', async () => {
+      const values = await created(
+        passenger({ stops: 10, capacityKg: 630, marginPercent: 25 }),
+      );
+      expect(values.totalPriceEtb).toBe('8750000.00');
+    });
+
+    it('is unchanged for a tenant whose sheet is ex-VAT', async () => {
+      settings.priceListVatPercent = null;
+      const values = await created(passenger());
+      // 7,570,000 net + 15% = 8,705,500
+      expect(values.taxAmountEtb).toBe('1135500.00');
+      expect(values.totalPriceEtb).toBe('8705500.00');
+    });
+
+    it('charges the net alone when VAT is off', async () => {
+      const values = await created(passenger({ vatApplies: false }));
+      expect(values.taxAmountEtb).toBe('0.00');
+      expect(values.totalPriceEtb).toBe('6582608.70');
+    });
+
+    it("prices a line's own unit at the sheet figure", async () => {
+      await sheetService.addLine(user, draft.id, passenger({ quantity: 3 }));
+      const [, , values] = repo.addLine.mock.calls[0]!;
+      expect(values.pricingBreakdown.totalPrice).toBe('7570000.00');
+      expect(values.pricingBreakdown.taxAmount).toBe('987391.30');
+      expect(values.unitPriceEtb).toBe('6582608.70');
+      expect(values.lineTotalEtb).toBe('19747826.10');
+    });
+
+    it('shows no discount on a quotation agreed at exactly the sheet figure', async () => {
+      const { pricingBreakdown } = await created(passenger());
+      repo.listLines.mockResolvedValue([
+        {
+          ...line('L1', pricingBreakdown.subtotalWithMargin!),
+          calcInput: { productType: 'PASSENGER', marginPercent: 0 },
+          pricingBreakdown,
+        },
+      ]);
+      await sheetService.priceFromGrandTotal(user, draft.id, {
+        grandTotalEtb: '7570000.00',
+      });
+      const [, , header] = repo.applyPricing.mock.calls[0]!;
+      expect(header).toMatchObject({
+        calculatedTotalEtb: '7570000.00',
+        totalPriceEtb: '7570000.00',
+        taxAmountEtb: '987391.30',
+        discountAmountEtb: '0.00',
+        discountPercent: '0.00',
+      });
+    });
+
+    it('measures a snapshot from before the sheet rate was recorded as it always was', async () => {
+      const { pricingBreakdown } = await created(passenger());
+      const { listVatPercent: _old, ...oldSnapshot } = pricingBreakdown;
+      repo.listLines.mockResolvedValue([
+        {
+          ...line('L1', pricingBreakdown.subtotalWithMargin!),
+          calcInput: { productType: 'PASSENGER', marginPercent: 0 },
+          pricingBreakdown: oldSnapshot,
+        },
+      ]);
+      await sheetService.priceFromGrandTotal(user, draft.id, {
+        grandTotalEtb: '7570000.00',
+      });
+      const [, , header] = repo.applyPricing.mock.calls[0]!;
+      // 6,582,608.70 × 1.15 = 7,570,000.005
+      expect(header.calculatedTotalEtb).toBe('7570000.01');
     });
   });
 });

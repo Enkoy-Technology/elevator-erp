@@ -1,6 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 
-import { FormulaError, renderFormula } from '../../common/formula';
+import {
+  FormulaError,
+  formulaUsesRise,
+  renderFormula,
+} from '../../common/formula';
 
 import {
   computeCarDimensions,
@@ -74,7 +78,12 @@ export class ElevatorCalcService {
       );
     }
 
-    const { input, technical, notes } = resolve(request, product.liftGeometry);
+    const applied = product.formula ?? formula;
+    const { input, technical, notes } = resolve(
+      request,
+      product.liftGeometry,
+      formulaUsesRise(applied),
+    );
     if (
       product.minCapacityKg !== null &&
       input.capacityKg < product.minCapacityKg
@@ -108,7 +117,7 @@ export class ElevatorCalcService {
         input.stops,
         input.capacityKg,
         input.travelHeightM,
-        product.formula ?? formula,
+        applied,
       );
     } catch (err) {
       if (err instanceof FormulaError) {
@@ -148,7 +157,6 @@ export class ElevatorCalcService {
       refC: product.refCapacityKg,
       kgStep: product.kgStep,
     };
-    const applied = product.formula ?? formula;
 
     return {
       technical,
@@ -172,7 +180,10 @@ export class ElevatorCalcService {
         capacityAdjustment: money(capacityAdjustment),
         ...(listVatIncluded === null
           ? {}
-          : { listVatIncluded: money(listVatIncluded) }),
+          : {
+              listVatIncluded: money(listVatIncluded),
+              listVatPercent: D(priceListVatPercent!).toFixed(2),
+            }),
         totalBeforeMargin: money(totalBeforeMargin),
         marginAmount: money(marginAmount),
         subtotalWithMargin: money(subtotalWithMargin),
@@ -196,6 +207,7 @@ export class ElevatorCalcService {
 const resolve = (
   request: CalcRequest,
   liftGeometry: boolean,
+  pricesOnRise: boolean,
 ): { input: CalcInput; technical: TechnicalSpecs; notes: string[] } => {
   const notes: string[] = [];
   const machineRoomType = request.machineRoomType ?? 'MRL';
@@ -308,9 +320,12 @@ const resolve = (
     capacityKg: vehicle && !vehicle.ratedLoad ? 0 : request.capacityKg!,
     stops: request.stops!,
     // The client's rule for every lift: 3,500 mm per floor × the stops.
-    // Only an escalator sends its own figure — its price is its rise.
+    // Only a product priced on its rise (the escalator) keeps its own
+    // figure. Anything else sent here is stale — a line edit merges the
+    // stored input, so a 2-stop car lift re-saved with 5 stops still
+    // carried 7 m (client testing, 2026-10-23).
     travelHeightM:
-      request.travelHeightM ??
+      (pricesOnRise ? request.travelHeightM : undefined) ??
       Number((request.stops! * FLOOR_HEIGHT_M).toFixed(2)),
     speedMs: request.speedMs!,
     // An escalator has no machine room; the key is left out, so no

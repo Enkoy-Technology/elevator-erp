@@ -354,6 +354,27 @@ export const evaluateFormula = (
   return new Parser(tokenize(formula), scope).parse();
 };
 
+/**
+ * Whether the formula prices the travel height — any name that reads as
+ * `rise` (rise, travel, height, h). Only such a product keeps a travel the
+ * salesperson typed; every other lift travels 3.5 m a stop (client,
+ * 2026-10-23). Read off the tokens, so "heights" is not "height". False for
+ * a formula that does not tokenize: evaluating it reports the problem.
+ */
+export const formulaUsesRise = (formula: string): boolean => {
+  try {
+    return tokenize(formula).some(
+      (token) =>
+        token.kind === 'id' && ALIASES[token.name.toLowerCase()] === 'rise',
+    );
+  } catch (err) {
+    if (err instanceof FormulaError) {
+      return false;
+    }
+    throw err;
+  }
+};
+
 /** Well inside numeric(14,2); a list price past this is a typo, not a lift. */
 const MAX_PRICE = new Decimal('1e12');
 

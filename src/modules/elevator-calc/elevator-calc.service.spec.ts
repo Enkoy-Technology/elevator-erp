@@ -133,6 +133,9 @@ describe('ElevatorCalcService', () => {
       // The sheet says 7,000,000 for the base machine, VAT in.
       expect(result.pricing.basePrice).toBe('7000000.00');
       expect(result.pricing.listVatIncluded).toBe('913043.48');
+      // The rate it was divided out at travels with it, so a quotation can
+      // tell whether the VAT it charges is the VAT already in the sheet.
+      expect(result.pricing.listVatPercent).toBe('15.00');
       expect(result.pricing.totalBeforeMargin).toBe('6086956.52');
       expect(result.pricing.taxAmount).toBe('913043.48');
       expect(result.pricing.totalPrice).toBe('7000000.00');
@@ -148,12 +151,50 @@ describe('ElevatorCalcService', () => {
         taxPercent: 0,
       });
       expect(result.pricing.listVatIncluded).toBeUndefined();
+      expect(result.pricing.listVatPercent).toBeUndefined();
     });
 
     it('computes travel as 3.5 m × stops when a classic lift sends none', async () => {
       const { travelHeightM: _omitted, ...noTravel } = WORKED_EXAMPLE;
       const result = await calc({ ...noTravel, stops: 12 });
       expect(result.input.travelHeightM).toBe(42);
+    });
+
+    it("takes a car lift's travel from its stops, never a figure carried over from an earlier edit", async () => {
+      // A 2-stop car lift (7 m) re-saved with 5 stops: the line edit still
+      // carries the old 7 m, but a lift travels 3.5 m a stop.
+      const result = await calc({
+        ...WORKED_EXAMPLE,
+        ...forProduct('CAR_LIFT'),
+        productType: 'CAR_LIFT',
+        capacityKg: 3500,
+        stops: 5,
+        travelHeightM: 7,
+        marginPercent: 0,
+        taxPercent: 0,
+      });
+      expect(result.input.travelHeightM).toBe(17.5);
+    });
+
+    it('takes a passenger lift typed in full off its stops too, not the travel typed beside them', async () => {
+      const result = await calc({ ...WORKED_EXAMPLE, stops: 12, travelHeightM: 45 });
+      expect(result.input.travelHeightM).toBe(42);
+    });
+
+    it('keeps a typed travel for a product whose formula prices the rise', async () => {
+      (productTypes.pricingSettings as jest.Mock).mockResolvedValueOnce({
+        formula: 'base + (travel - 35) * 10000',
+        priceListVatPercent: null,
+      });
+      const result = await calc({
+        ...WORKED_EXAMPLE,
+        stops: 12,
+        travelHeightM: 45,
+        marginPercent: 0,
+        taxPercent: 0,
+      });
+      expect(result.input.travelHeightM).toBe(45);
+      expect(result.pricing.totalPrice).toBe('7100000.00');
     });
 
     it("keeps an escalator's own rise — its price is the rise", async () => {

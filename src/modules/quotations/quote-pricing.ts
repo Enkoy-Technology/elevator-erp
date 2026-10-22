@@ -77,6 +77,91 @@ export const deriveFromGrandTotal = (
   };
 };
 
+/** A line as its price snapshot left it — all the sheet rule below reads. */
+export interface SheetPricedLine {
+  pricingBreakdown: unknown;
+  calcInput: unknown;
+  quantity: number;
+}
+
+/**
+ * What a line sells for VAT in, when its price came off a VAT-inclusive
+ * sheet and the quotation charges that same VAT: the sheet figure itself,
+ * plus the margin, times the units. Null otherwise — VAT off, another
+ * rate, an ex-VAT sheet, a hand-entered line, or a snapshot from before the
+ * calculator recorded the sheet's rate.
+ *
+ * Why: the calculator divides 7,570,000 by 1.15 and rounds the net to
+ * 6,582,608.70; adding 15% back to that net gives 7,570,000.01, which is
+ * what the client saw on the demo quotation, proforma and contract
+ * (2026-10-23). The sheet price is the figure the customer was promised,
+ * so it is taken as is and the VAT is what is left over — the same
+ * subtraction deriveFromGrandTotal makes.
+ */
+export const sheetGrossEtb = (
+  line: SheetPricedLine,
+  vatPercent: string,
+): string | null => {
+  const breakdown = line.pricingBreakdown as {
+    totalBeforeMargin?: string;
+    listVatIncluded?: string;
+    listVatPercent?: string;
+  } | null;
+  if (
+    !breakdown?.listVatIncluded ||
+    !breakdown.listVatPercent ||
+    breakdown.totalBeforeMargin === undefined ||
+    !parse(vatPercent, "vatPercent").equals(
+      parse(breakdown.listVatPercent, "listVatPercent"),
+    )
+  ) {
+    return null;
+  }
+  const marginPercent =
+    (line.calcInput as { marginPercent?: number } | null)?.marginPercent ?? 0;
+  const perUnit = money(
+    parse(breakdown.totalBeforeMargin, "totalBeforeMargin")
+      .plus(parse(breakdown.listVatIncluded, "listVatIncluded"))
+      .mul(new Decimal(marginPercent).div(100).plus(1)),
+  );
+  return money(new Decimal(perUnit).mul(line.quantity));
+};
+
+/**
+ * A quotation's totals from its lines' net (ex-VAT) amounts. When every
+ * line has a sheet gross (see sheetGrossEtb) the total is their sum and
+ * VAT is total − subtotal; otherwise VAT is subtotal × rate, as it always
+ * was, because one line off the sheet means there is no sheet total to keep.
+ */
+export const quoteTotals = (
+  lines: readonly { netEtb: string; grossEtb: string | null }[],
+  vatPercent: string,
+): { subtotalEtb: string; taxAmountEtb: string; totalEtb: string } => {
+  const subtotal = lines.reduce(
+    (sum, line) => sum.plus(parse(line.netEtb, "netEtb")),
+    new Decimal(0),
+  );
+  const grosses = lines.flatMap((line) =>
+    line.grossEtb === null ? [] : [line.grossEtb],
+  );
+  const total =
+    lines.length > 0 && grosses.length === lines.length
+      ? grosses.reduce(
+          (sum, gross) => sum.plus(parse(gross, "grossEtb")),
+          new Decimal(0),
+        )
+      : subtotal.plus(
+          new Decimal(
+            money(subtotal.mul(parse(vatPercent, "vatPercent")).div(100)),
+          ),
+        );
+  return {
+    subtotalEtb: money(subtotal),
+    taxAmountEtb: money(total.minus(subtotal)),
+    totalEtb: money(total),
+  };
+};
+
 /**
  * Spread a negotiated subtotal across line items pro-rata by each line's
  * list total, using largest-remainder so the returned amounts sum to

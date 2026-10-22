@@ -4,6 +4,8 @@ import {
   allocateToLines,
   computeDiscount,
   deriveFromGrandTotal,
+  quoteTotals,
+  sheetGrossEtb,
 } from "./quote-pricing";
 
 const sum = (values: readonly string[]): string =>
@@ -250,6 +252,133 @@ describe("the three exports together (the real 8-page proforma)", () => {
     expect(discount).toEqual({
       discountAmountEtb: "686500.00",
       discountPercent: "8.06",
+    });
+  });
+});
+
+/** A line priced off the demo tenant's VAT-inclusive sheet (15.00). */
+const sheetLine = (
+  totalBeforeMargin: string,
+  listVatIncluded: string,
+  { marginPercent = 0, quantity = 1 } = {},
+) => ({
+  pricingBreakdown: {
+    totalBeforeMargin,
+    listVatIncluded,
+    listVatPercent: "15.00",
+  },
+  calcInput: { marginPercent },
+  quantity,
+});
+
+describe("sheetGrossEtb", () => {
+  it("is the sheet figure itself: 800 kg, 15 stops is 7,570,000.00, not a cent more", () => {
+    // 7,570,000 / 1.15 = 6,582,608.695… -> 6,582,608.70 net; re-adding 15%
+    // to that net gives 7,570,000.01.
+    expect(sheetGrossEtb(sheetLine("6582608.70", "987391.30"), "15.00")).toBe(
+      "7570000.00",
+    );
+  });
+
+  it("multiplies the sheet figure by the units, not the rounded net", () => {
+    // 3 × 4,210,000; 3 × 3,660,869.57 × 1.15 would be 12,630,000.02.
+    expect(
+      sheetGrossEtb(
+        sheetLine("3660869.57", "549130.43", { quantity: 3 }),
+        "15.00",
+      ),
+    ).toBe("12630000.00");
+  });
+
+  it("puts the margin on the sheet figure", () => {
+    expect(
+      sheetGrossEtb(
+        sheetLine("6086956.52", "913043.48", { marginPercent: 25 }),
+        "15.00",
+      ),
+    ).toBe("8750000.00");
+  });
+
+  it("compares the rates as numbers, not as text", () => {
+    expect(sheetGrossEtb(sheetLine("6582608.70", "987391.30"), "15")).toBe(
+      "7570000.00",
+    );
+  });
+
+  it("is null when the quotation charges no VAT, or another rate than the sheet's", () => {
+    const line = sheetLine("6582608.70", "987391.30");
+    expect(sheetGrossEtb(line, "0.00")).toBeNull();
+    expect(sheetGrossEtb(line, "10.00")).toBeNull();
+  });
+
+  it("is null for an ex-VAT sheet, a hand-entered line, or a snapshot from before the rate was recorded", () => {
+    expect(
+      sheetGrossEtb(
+        {
+          pricingBreakdown: { totalBeforeMargin: "7570000.00" },
+          calcInput: {},
+          quantity: 1,
+        },
+        "15.00",
+      ),
+    ).toBeNull();
+    expect(
+      sheetGrossEtb(
+        { pricingBreakdown: null, calcInput: null, quantity: 1 },
+        "15.00",
+      ),
+    ).toBeNull();
+    expect(
+      sheetGrossEtb(
+        {
+          pricingBreakdown: {
+            totalBeforeMargin: "6582608.70",
+            listVatIncluded: "987391.30",
+          },
+          calcInput: { marginPercent: 0 },
+          quantity: 1,
+        },
+        "15.00",
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("quoteTotals", () => {
+  it("takes the total from the sheet and VAT as what is left when every line came off it", () => {
+    expect(
+      quoteTotals([{ netEtb: "6582608.70", grossEtb: "7570000.00" }], "15.00"),
+    ).toEqual({
+      subtotalEtb: "6582608.70",
+      taxAmountEtb: "987391.30",
+      totalEtb: "7570000.00",
+    });
+  });
+
+  it("adds VAT to the net as before when any line did not", () => {
+    expect(
+      quoteTotals(
+        [
+          { netEtb: "6582608.70", grossEtb: "7570000.00" },
+          { netEtb: "1000000.00", grossEtb: null },
+        ],
+        "15.00",
+      ),
+    ).toEqual({
+      subtotalEtb: "7582608.70",
+      // 7,582,608.70 × 15% = 1,137,391.305 -> 1,137,391.31
+      taxAmountEtb: "1137391.31",
+      totalEtb: "8720000.01",
+    });
+  });
+
+  it("is the net alone at 0% VAT", () => {
+    expect(
+      quoteTotals([{ netEtb: "6582608.70", grossEtb: null }], "0.00"),
+    ).toEqual({
+      subtotalEtb: "6582608.70",
+      taxAmountEtb: "0.00",
+      totalEtb: "6582608.70",
     });
   });
 });

@@ -35,6 +35,7 @@ import {
 import { TenantDbService } from '../../database/tenant-db.service';
 import { autoAdvanceProject } from '../projects/project-auto-advance';
 import type { QuotationDocumentRow } from './quotation-document.mapper';
+import { quoteTotals, sheetGrossEtb } from './quote-pricing';
 import { buildSpecSummary } from './quote-spec';
 import { hasMachineRoom } from '../elevator-calc/vehicle-specs';
 
@@ -701,33 +702,70 @@ const requireQuotation = async (
  * a one-lift scope is not a price for a two-lift scope, and silently
  * carrying it over would bill the customer the old number for new work. The
  * sign-off goes with it, so a re-negotiated price is signed off again.
+ *
+ * The lines go back to list with it. Clearing only the header left the
+ * other lines at their negotiated share: one lift still discounted under a
+ * total nobody agreed, and no record of the discount left to approve
+ * (client testing, 2026-10-23). A hand-entered line, with no calculator
+ * price to return to, keeps what it says.
  */
 const resyncHeaderFromLines = async (
   tx: TenantTransaction,
   quotation: QuotationRecord,
 ): Promise<void> => {
-  const lines = await tx
+  const stored = await tx
     .select()
     .from(quotationLines)
     .where(eq(quotationLines.quotationId, quotation.id))
     .orderBy(asc(quotationLines.sequence));
 
-  const subtotal = lines.reduce(
-    // lineTotalEtb is nullable in the column type but written on every
-    // insert; treat an absent one as zero rather than throwing mid-resync.
-    (sum, line) => sum.plus(new Decimal(line.lineTotalEtb ?? 0)),
-    new Decimal(0),
+  const now = new Date();
+  const lines: QuotationLineRecord[] = [];
+  for (const line of stored) {
+    const list = (
+      line.pricingBreakdown as { subtotalWithMargin?: string } | null
+    )?.subtotalWithMargin;
+    if (!list) {
+      lines.push(line);
+      continue;
+    }
+    const unitPriceEtb = new Decimal(list).toFixed(2);
+    const lineTotalEtb = new Decimal(list).mul(line.quantity).toFixed(2);
+    if (
+      line.unitPriceEtb !== unitPriceEtb ||
+      line.lineTotalEtb !== lineTotalEtb
+    ) {
+      await tx
+        .update(quotationLines)
+        .set({ unitPriceEtb, lineTotalEtb, updatedAt: now })
+        .where(
+          and(
+            eq(quotationLines.id, line.id),
+            eq(quotationLines.quotationId, quotation.id),
+          ),
+        );
+    }
+    lines.push({ ...line, unitPriceEtb, lineTotalEtb });
+  }
+
+  // At the sheet figure when every line came off a VAT-inclusive sheet at
+  // this rate; net + VAT × rate otherwise — see sheetGrossEtb.
+  const totals = quoteTotals(
+    lines.map((line) => ({
+      // lineTotalEtb is nullable in the column type but written on every
+      // insert; treat an absent one as zero rather than throwing mid-resync.
+      netEtb: line.lineTotalEtb ?? '0.00',
+      grossEtb: sheetGrossEtb(line, quotation.taxPercent),
+    })),
+    quotation.taxPercent,
   );
-  const tax = subtotal
-    .mul(new Decimal(quotation.taxPercent).div(100))
-    .toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
 
   await tx
     .update(quotations)
     .set({
-      subtotalEtb: subtotal.toFixed(2),
-      taxAmountEtb: tax.toFixed(2),
-      totalPriceEtb: subtotal.plus(tax).toFixed(2),
+      subtotalEtb: totals.subtotalEtb,
+      taxAmountEtb: totals.taxAmountEtb,
+      totalPriceEtb: totals.totalEtb,
       calculatedTotalEtb: null,
       discountAmountEtb: null,
       discountPercent: null,
@@ -788,12 +826,14 @@ const legacyLineValues = (
   const exVatTotalEtb = new Decimal(quotation.totalPriceEtb)
     .minus(quotation.taxAmountEtb)
     .toFixed(2);
+  const escalator = calcInput.productType === 'ESCALATOR';
   return {
     productType: calcInput.productType ?? 'PASSENGER',
     calcInput: quotation.calcInput,
     technicalSpec: quotation.technicalSpec,
     pricingBreakdown: quotation.pricingBreakdown,
     specSummary: buildSpecSummary({
+      productType: calcInput.productType,
       capacityKg: calcInput.capacityKg,
       capacityPersons: technical.capacityPersons,
       speedMs: calcInput.speedMs,
@@ -810,10 +850,21 @@ const legacyLineValues = (
       : null,
     floorLabels: null,
     floorDisplaySummary: null,
-    doorHeightMm: STANDARD_LINE.doorHeightMm,
-    ropingRatio: STANDARD_LINE.ropingRatio,
-    tractionMachineType: STANDARD_LINE.tractionMachineType,
-    controlSystem: STANDARD_LINE.controlSystem,
+    // An escalator has no car door, roping, traction machine or lift
+    // controller to print (client testing, 2026-10-23).
+    ...(escalator
+      ? {
+          doorHeightMm: null,
+          ropingRatio: null,
+          tractionMachineType: null,
+          controlSystem: null,
+        }
+      : {
+          doorHeightMm: STANDARD_LINE.doorHeightMm,
+          ropingRatio: STANDARD_LINE.ropingRatio,
+          tractionMachineType: STANDARD_LINE.tractionMachineType,
+          controlSystem: STANDARD_LINE.controlSystem,
+        }),
     powerSupply: STANDARD_LINE.powerSupply,
     lightSupply: STANDARD_LINE.lightSupply,
     entranceCount: null,

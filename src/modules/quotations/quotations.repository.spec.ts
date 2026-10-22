@@ -2,6 +2,7 @@ import Decimal from 'decimal.js';
 import { NotFoundException } from '@nestjs/common';
 
 import { WorkflowTransitionError } from '../../common/exceptions';
+import { quotationLines, quotations } from '../../database/schema';
 import { QuotationsRepository } from './quotations.repository';
 
 const TENANT_ID = '22222222-2222-2222-2222-222222222222';
@@ -447,6 +448,190 @@ describe('QuotationsRepository.addLine — materializing a pre-lines quotation',
       discountAmountEtb: null,
       discountPercent: null,
       discountApprovedByUserId: null,
+    });
+  });
+});
+
+describe('QuotationsRepository — the header rebuilt from the lines after a line change', () => {
+  const draftHeader = {
+    tenantId: TENANT_ID,
+    id: QUOTE_ID,
+    status: 'DRAFT',
+    taxPercent: '15.00',
+    calculatedTotalEtb: '15000000.00',
+    discountAmountEtb: '1468000.00',
+    discountPercent: '8.91',
+  };
+
+  /**
+   * A fake tx for updateLine: requireDraft, the lines materializeLegacyLine
+   * finds, the line write, then the lines the resync re-reads. Every
+   * update is recorded against the table it was made on.
+   */
+  const makeTx = (lines: Record<string, unknown>[]) => {
+    const selectChain = (terminal: 'limit' | 'orderBy', rows: unknown[]) => {
+      const link: Record<string, jest.Mock> = {};
+      link.from = jest.fn(() => link);
+      link.where = jest.fn(() => link);
+      link[terminal] = jest.fn(() => Promise.resolve(rows));
+      return link;
+    };
+    const updates: { table: unknown; values: Record<string, unknown> }[] = [];
+    const updateChain = (table: unknown) => {
+      const link: Record<string, jest.Mock> & {
+        then?: (onFulfilled: (v: unknown) => unknown) => Promise<unknown>;
+      } = {};
+      link.set = jest.fn((values: Record<string, unknown>) => {
+        updates.push({ table, values });
+        return link;
+      });
+      link.where = jest.fn(() => link);
+      link.returning = jest.fn(() => Promise.resolve([{ id: 'L2' }]));
+      link.then = (onFulfilled) => Promise.resolve(undefined).then(onFulfilled);
+      return link;
+    };
+    const tx = {
+      select: jest
+        .fn()
+        .mockImplementationOnce(() => selectChain('limit', [draftHeader]))
+        .mockImplementation(() => selectChain('orderBy', lines)),
+      update: jest.fn((table: unknown) => updateChain(table)),
+    };
+    const repo = new QuotationsRepository({
+      withTenant: jest.fn(
+        async (_tenantId: string, fn: (t: unknown) => Promise<unknown>) =>
+          fn(tx),
+      ),
+    } as never);
+    const lineWrites = () =>
+      updates
+        .filter((u) => u.table === quotationLines)
+        .map((u) => u.values)
+        // the first is updateLine's own write of the edited line
+        .slice(1);
+    const header = () =>
+      updates.filter((u) => u.table === quotations).at(-1)?.values;
+    return { repo, lineWrites, header };
+  };
+
+  it('puts every line back at its list price, so the header is a total someone can stand behind', async () => {
+    // Two 7,160,000 lifts agreed at 15,000,000 (6,521,739.13 each), then
+    // line 2 goes to quantity 2: line 1 must not stay discounted.
+    const { repo, lineWrites, header } = makeTx([
+      {
+        id: 'L1',
+        quantity: 1,
+        pricingBreakdown: { subtotalWithMargin: '7160000.00' },
+        unitPriceEtb: '6521739.13',
+        lineTotalEtb: '6521739.13',
+      },
+      {
+        id: 'L2',
+        quantity: 2,
+        pricingBreakdown: { subtotalWithMargin: '7160000.00' },
+        unitPriceEtb: '7160000.00',
+        lineTotalEtb: '14320000.00',
+      },
+    ]);
+
+    await repo.updateLine(TENANT_ID, QUOTE_ID, 'L2', { quantity: 2 } as never);
+
+    expect(lineWrites()).toEqual([
+      expect.objectContaining({
+        unitPriceEtb: '7160000.00',
+        lineTotalEtb: '7160000.00',
+      }),
+    ]);
+    expect(header()).toMatchObject({
+      subtotalEtb: '21480000.00',
+      taxAmountEtb: '3222000.00',
+      totalPriceEtb: '24702000.00',
+      calculatedTotalEtb: null,
+      discountAmountEtb: null,
+      discountPercent: null,
+      discountApprovedByUserId: null,
+    });
+  });
+
+  it('leaves a hand-entered line (no calculator run) at what it says', async () => {
+    const { repo, lineWrites, header } = makeTx([
+      { id: 'L1', quantity: 1, pricingBreakdown: null, lineTotalEtb: '500.00' },
+    ]);
+    await repo.updateLine(TENANT_ID, QUOTE_ID, 'L1', {} as never);
+    expect(lineWrites()).toEqual([]);
+    expect(header()).toMatchObject({ subtotalEtb: '500.00' });
+  });
+
+  it("totals three lifts at the sheet's 4,210,000 to exactly 12,630,000.00", async () => {
+    const { repo, header } = makeTx([
+      {
+        id: 'L1',
+        quantity: 3,
+        calcInput: { productType: 'PASSENGER', marginPercent: 0 },
+        pricingBreakdown: {
+          totalBeforeMargin: '3660869.57',
+          listVatIncluded: '549130.43',
+          listVatPercent: '15.00',
+          subtotalWithMargin: '3660869.57',
+        },
+        unitPriceEtb: '3660869.57',
+        lineTotalEtb: '10982608.71',
+      },
+    ]);
+    await repo.updateLine(TENANT_ID, QUOTE_ID, 'L1', { quantity: 3 } as never);
+    // Net + 15% would be 12,630,000.02.
+    expect(header()).toMatchObject({
+      subtotalEtb: '10982608.71',
+      taxAmountEtb: '1647391.29',
+      totalPriceEtb: '12630000.00',
+    });
+  });
+});
+
+describe('QuotationsRepository.listLines — a pre-lines escalator quotation', () => {
+  it('prints no load, roping, traction, control or door height — an escalator has none of them', async () => {
+    const escalator = {
+      tenantId: TENANT_ID,
+      id: QUOTE_ID,
+      status: 'DRAFT',
+      calcInput: { productType: 'ESCALATOR', capacityKg: 0, speedMs: 0.5 },
+      technicalSpec: { capacityPersons: null },
+      pricingBreakdown: { subtotalWithMargin: '6956521.74' },
+      taxAmountEtb: '1043478.26',
+      totalPriceEtb: '8000000.00',
+    };
+    const chain = (terminal: 'limit' | 'orderBy', rows: unknown[]) => {
+      const link: Record<string, jest.Mock> = {};
+      link.from = jest.fn(() => link);
+      link.where = jest.fn(() => link);
+      link[terminal] = jest.fn(() => Promise.resolve(rows));
+      return link;
+    };
+    const tx = {
+      select: jest
+        .fn()
+        .mockImplementationOnce(() => chain('limit', [escalator]))
+        .mockImplementationOnce(() => chain('orderBy', [])),
+    };
+    const repo = new QuotationsRepository({
+      withTenant: jest.fn(
+        async (_tenantId: string, fn: (t: unknown) => Promise<unknown>) =>
+          fn(tx),
+      ),
+    } as never);
+
+    const [line] = await repo.listLines(TENANT_ID, QUOTE_ID);
+
+    expect(line).toMatchObject({
+      productType: 'ESCALATOR',
+      specSummary: 'Speed 0.5m/s',
+      machineRoomLabel: null,
+      doorHeightMm: null,
+      ropingRatio: null,
+      tractionMachineType: null,
+      controlSystem: null,
+      // It still runs on the building's supply.
+      powerSupply: '380V AC 50HZ 3-phase 4 lines',
     });
   });
 });

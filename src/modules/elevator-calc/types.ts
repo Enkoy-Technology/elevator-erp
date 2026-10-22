@@ -115,6 +115,14 @@ export interface PricingBreakdown {
    * base + stops + capacity − this = totalBeforeMargin.
    */
   listVatIncluded?: string;
+  /**
+   * The tenant's VAT percent that `listVatIncluded` was divided out at,
+   * e.g. '15.00' — set whenever it is. A quotation charging this same rate
+   * prices the line at the sheet figure itself rather than re-adding VAT to
+   * the rounded net, which drifted a cent off the sheet (client testing,
+   * 2026-10-23). Absent on snapshots taken before it existed.
+   */
+  listVatPercent?: string;
   totalBeforeMargin: string;
   marginAmount: string;
   subtotalWithMargin: string;

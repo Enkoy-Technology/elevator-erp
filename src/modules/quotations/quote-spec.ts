@@ -1,6 +1,7 @@
 import Decimal from 'decimal.js';
 
 import type { FloorPlan } from '../../common/floor-plan';
+import { hasDoor } from '../elevator-calc/vehicle-specs';
 
 // The floor-plan vocabulary lives in /common so the proforma mapper can
 // reach it too (a module may not import from another module). Re-exported
@@ -16,8 +17,13 @@ export {
  * "800KG -10persons / Speed 1.5m/s / B+G+M+10 / 13 floors/13 doors".
  * Only ever a DEFAULT: `quotation_lines.spec_summary` is stored, so a line
  * the salesperson worded themselves is never re-derived over.
+ *
+ * No load for a 0 kg capacity (the escalator's placeholder), and no doors
+ * for a product without one — the escalator and the car stacking lift
+ * (client testing, 2026-10-23).
  */
 export const buildSpecSummary = (input: {
+  productType?: string | null;
   capacityKg?: number | null;
   capacityPersons?: number | null;
   speedMs?: number | null;
@@ -36,7 +42,11 @@ export const buildSpecSummary = (input: {
   }
   if (input.plan) {
     segments.push(input.plan.displaySummary);
-    segments.push(`${input.plan.floors} floors/${input.plan.doors} doors`);
+    segments.push(
+      input.productType && !hasDoor(input.productType)
+        ? `${input.plan.floors} floors`
+        : `${input.plan.floors} floors/${input.plan.doors} doors`,
+    );
   }
   return segments.length > 0 ? segments.join(' / ') : null;
 };
