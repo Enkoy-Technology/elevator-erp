@@ -320,9 +320,12 @@ export default function EditQuotationPage() {
               // A line change re-prices the header on the server, back to
               // list with the negotiation cleared; without this the Price
               // step showed the old totals and would not apply a price.
-              void getQuotation(id)
-                .then((fresh) => {
+              // The lines too: a change to one lift puts every other lift
+              // back at list price, which the editor's own reply cannot show.
+              void Promise.all([getQuotation(id), listQuotationLines(id)])
+                .then(([fresh, freshLines]) => {
                   setQuotation(fresh);
+                  setLines(freshLines);
                   setRepricedCount((count) => count + 1);
                 })
                 .catch(() => undefined);

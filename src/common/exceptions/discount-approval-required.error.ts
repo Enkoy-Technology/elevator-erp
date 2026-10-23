@@ -1,8 +1,9 @@
 import { DomainError } from './domain.error';
 
 /**
- * A quotation may not be submitted because its negotiated discount is above
- * the tenant's `discountApprovalThresholdPercent` and nobody has signed off.
+ * A quotation may not be submitted, or its proforma issued, because its
+ * negotiated discount is above the tenant's
+ * `discountApprovalThresholdPercent` and nobody has signed off.
  *
  * Distinct from WorkflowTransitionError on purpose: the transition itself is
  * legal (DRAFT -> PENDING_APPROVAL), and the UI's remedy is a different one

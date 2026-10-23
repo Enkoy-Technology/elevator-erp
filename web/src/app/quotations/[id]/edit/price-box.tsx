@@ -10,16 +10,10 @@ import {
   type Quotation,
   type QuotationLine,
 } from '@/lib/api';
-import {
-  discountedEtb,
-  discountPercentEtb,
-  formatEtb,
-  lineTotalEtb,
-  sumEtb,
-  withVatEtb,
-} from '@/lib/money';
+import { discountedEtb, discountPercentEtb, formatEtb } from '@/lib/money';
 
 import { NumberInput } from '../../number-input';
+import { calculatorFiguresEtb } from './price-figures';
 
 /**
  * How this client actually sells: they agree a round number with the
@@ -36,24 +30,6 @@ import { NumberInput } from '../../number-input';
  * exactly one right place for that rule to live. So the field applies on
  * blur — type, tab out, read the answer.
  */
-
-/**
- * What the frozen calculator says the lifts are worth, ex VAT — the same
- * basis the server measures the discount against (`listTotalEtb`), so the
- * running figure here and the saved one agree. Exact string arithmetic; no
- * money value is ever passed through `Number`.
- */
-const calculatorSubtotalEtb = (lines: readonly QuotationLine[]): string =>
-  sumEtb(
-    lines.map((line) =>
-      line.pricingBreakdown?.subtotalWithMargin
-        ? lineTotalEtb(
-            String(line.quantity),
-            line.pricingBreakdown.subtotalWithMargin,
-          )
-        : (line.lineTotalEtb ?? '0.00'),
-    ),
-  );
 
 const Row = ({
   label,
@@ -120,19 +96,18 @@ export const PriceBox = ({
   const latest = useRef(grandTotal);
   latest.current = grandTotal;
 
-  const calcSubtotal = calculatorSubtotalEtb(lines);
-  const calcVat = withVatEtb(calcSubtotal, quotation.taxPercent);
+  const calc = calculatorFiguresEtb(quotation, lines);
   const isMoney = (value: string): boolean => /^\d+(\.\d{1,2})?$/.test(value);
   const onDiscountChange = (value: string) => {
     setDiscount(value);
     if (isMoney(value)) {
-      setGrandTotal(discountedEtb(calcVat.grossEtb, value));
+      setGrandTotal(discountedEtb(calc.grossEtb, value));
     }
   };
   const onGrandTotalChange = (value: string) => {
     setGrandTotal(value);
     if (isMoney(value)) {
-      const percent = discountPercentEtb(calcVat.grossEtb, value);
+      const percent = discountPercentEtb(calc.grossEtb, value);
       // A price above the calculator is a premium, which the field cannot
       // hold (no minus sign); the applied row below still names it.
       setDiscount(percent.startsWith('-') ? '' : percent);
@@ -216,9 +191,9 @@ export const PriceBox = ({
         <tbody className="tabular-nums">
           <tr className="border-t border-slate-100">
             <td className="py-1.5 text-slate-600">Calculator</td>
-            <td className="py-1.5 text-right">{formatEtb(calcSubtotal)}</td>
-            <td className="py-1.5 text-right">{formatEtb(calcVat.taxEtb)}</td>
-            <td className="py-1.5 text-right">{formatEtb(calcVat.grossEtb)}</td>
+            <td className="py-1.5 text-right">{formatEtb(calc.netEtb)}</td>
+            <td className="py-1.5 text-right">{formatEtb(calc.taxEtb)}</td>
+            <td className="py-1.5 text-right">{formatEtb(calc.grossEtb)}</td>
           </tr>
           <tr className="border-t border-slate-200 font-semibold text-navy-900">
             <td className="py-1.5">

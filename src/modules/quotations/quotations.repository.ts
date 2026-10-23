@@ -414,13 +414,15 @@ export class QuotationsRepository {
           ),
         );
       const remaining = existing.filter((line) => line.id !== lineId);
-      const resequenced = await resequence(
+      await resequence(
         tx,
         quotationId,
         remaining.map((line) => line.id),
       );
       await resyncHeaderFromLines(tx, quotation);
-      return resequenced;
+      // Read after the resync, which puts every line back at list price:
+      // the rows resequence returned still carry the negotiated shares.
+      return persistedLines(tx, quotationId);
     });
   }
 

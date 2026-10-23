@@ -553,6 +553,70 @@ describe('QuotationsRepository — the header rebuilt from the lines after a lin
     });
   });
 
+  it('answers a removal with the lines as they are after the resync, back at list', async () => {
+    // Three lifts at negotiated shares; removing one resets the other two to
+    // list. The reply must be those reset rows, not the ones read before.
+    const negotiated = (id: string) => ({
+      id,
+      quantity: 1,
+      sequence: 1,
+      pricingBreakdown: { subtotalWithMargin: '7160000.00' },
+      unitPriceEtb: '6521739.13',
+      lineTotalEtb: '6521739.13',
+    });
+    const atList = (id: string) => ({
+      ...negotiated(id),
+      unitPriceEtb: '7160000.00',
+      lineTotalEtb: '7160000.00',
+    });
+    const reads = [
+      [negotiated('L1'), negotiated('L2'), negotiated('L3')], // materialize
+      [negotiated('L1'), negotiated('L2')], // resequence's own re-read
+      [negotiated('L1'), negotiated('L2')], // the resync's read
+      [atList('L1'), atList('L2')], // after the resync wrote them back
+    ];
+    const ordered = () => {
+      const link: Record<string, jest.Mock> = {};
+      link.from = jest.fn(() => link);
+      link.where = jest.fn(() => link);
+      link.orderBy = jest.fn(() => Promise.resolve(reads.shift()));
+      return link;
+    };
+    const header = () => {
+      const link: Record<string, jest.Mock> = {};
+      link.from = jest.fn(() => link);
+      link.where = jest.fn(() => link);
+      link.limit = jest.fn(() => Promise.resolve([draftHeader]));
+      return link;
+    };
+    const awaited = () => {
+      const link: Record<string, jest.Mock> & {
+        then?: (onFulfilled: (v: unknown) => unknown) => Promise<unknown>;
+      } = {};
+      link.set = jest.fn(() => link);
+      link.where = jest.fn(() => link);
+      link.then = (onFulfilled) => Promise.resolve(undefined).then(onFulfilled);
+      return link;
+    };
+    const tx = {
+      select: jest.fn().mockImplementationOnce(header).mockImplementation(ordered),
+      update: jest.fn(awaited),
+      delete: jest.fn(awaited),
+    };
+    const repo = new QuotationsRepository({
+      withTenant: jest.fn(
+        async (_tenantId: string, fn: (t: unknown) => Promise<unknown>) => fn(tx),
+      ),
+    } as never);
+
+    const lines = await repo.removeLine(TENANT_ID, QUOTE_ID, 'L3');
+
+    expect(lines.map((line) => line.lineTotalEtb)).toEqual([
+      '7160000.00',
+      '7160000.00',
+    ]);
+  });
+
   it('leaves a hand-entered line (no calculator run) at what it says', async () => {
     const { repo, lineWrites, header } = makeTx([
       { id: 'L1', quantity: 1, pricingBreakdown: null, lineTotalEtb: '500.00' },

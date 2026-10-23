@@ -268,7 +268,11 @@ export default function NewQuotationPage() {
   const listNet = preview?.netEtb ?? null;
   const listGross = preview?.grossEtb ?? null;
   const agreedGross = offered.trim() ? offered.trim() : listGross;
-  const agreed = agreedGross ? splitGrossEtb(agreedGross, rate) : null;
+  // No figure typed means no price call, so the offer keeps the lines' own
+  // split: show the preview's, not one divided down from its total.
+  const agreed = offered.trim()
+    ? splitGrossEtb(offered.trim(), rate)
+    : preview;
 
   return (
     <div className="flex min-h-screen">
