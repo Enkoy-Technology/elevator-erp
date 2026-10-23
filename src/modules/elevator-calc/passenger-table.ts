@@ -103,7 +103,16 @@ export interface PassengerSelection {
   lift: PassengerLift;
   /** True when the shaft entered is exactly a standard shaft. */
   exact: boolean;
+  /** True when no standard shaft fits inside the one entered, so the smallest lift is quoted. */
+  undersized?: boolean;
 }
+
+/** The smallest standard lift — the lightest, then the smaller shaft: the 5-person, 400 kg. */
+const SMALLEST_LIFT = [...PASSENGER_LIFTS].sort(
+  (a, b) =>
+    a.loadKg - b.loadKg ||
+    a.shaftWidthMm * a.shaftDepthMm - b.shaftWidthMm * b.shaftDepthMm,
+)[0]!;
 
 /**
  * The lift for a shaft. An exact standard shaft names its row; any other
@@ -111,12 +120,14 @@ export interface PassengerSelection {
  * width and in depth (of two the same load, the bigger shaft). A 2000 × 2200
  * shaft is the 10-person, 800 kg, not the 15-person whose 2430 mm wide shaft
  * it cannot hold (client, 2026-10-22); rounding up by area, the rule since
- * 2026-10-06, always chose a lift that did not fit. Null when none fits.
+ * 2026-10-06, always chose a lift that did not fit. A shaft no standard one
+ * fits (1500 × 1500, down to the 1000 × 1000 the form allows) is quoted as
+ * the smallest lift, not refused (client, 2026-10-23).
  */
 export const selectPassengerLift = (
   shaftWidthMm: number,
   shaftDepthMm: number,
-): PassengerSelection | null => {
+): PassengerSelection => {
   const exact = PASSENGER_LIFTS.find(
     (lift) =>
       lift.shaftWidthMm === shaftWidthMm && lift.shaftDepthMm === shaftDepthMm,
@@ -132,13 +143,7 @@ export const selectPassengerLift = (
       b.loadKg - a.loadKg ||
       b.shaftWidthMm * b.shaftDepthMm - a.shaftWidthMm * a.shaftDepthMm,
   )[0];
-  return biggest ? { lift: biggest, exact: false } : null;
+  return biggest
+    ? { lift: biggest, exact: false }
+    : { lift: SMALLEST_LIFT, exact: false, undersized: true };
 };
-
-/** The narrowest and the shallowest standard shafts, named when none fits. */
-export const SMALLEST_PASSENGER_SHAFTS: readonly PassengerLift[] = [
-  ...new Set([
-    PASSENGER_LIFTS.reduce((a, b) => (b.shaftWidthMm < a.shaftWidthMm ? b : a)),
-    PASSENGER_LIFTS.reduce((a, b) => (b.shaftDepthMm < a.shaftDepthMm ? b : a)),
-  ]),
-];

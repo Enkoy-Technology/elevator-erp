@@ -666,13 +666,20 @@ describe('ElevatorCalcService', () => {
       expect(wide.input.capacityKg).toBe(1000);
     });
 
-    it('never picks a lift whose standard shaft is wider or deeper than the one entered', () => {
+    it('never picks a lift whose standard shaft is wider or deeper than the one entered, unless none fits', () => {
       const misfits: string[] = [];
-      for (let width = 1500; width <= 3500; width += 50) {
-        for (let depth = 1400; depth <= 3500; depth += 50) {
+      const wrongFlag: string[] = [];
+      for (let width = 1000; width <= 3500; width += 50) {
+        for (let depth = 1000; depth <= 3500; depth += 50) {
           const picked = selectPassengerLift(width, depth);
+          const anyFits = PASSENGER_LIFTS.some(
+            (lift) => lift.shaftWidthMm <= width && lift.shaftDepthMm <= depth,
+          );
+          if ((picked.undersized ?? false) === anyFits) {
+            wrongFlag.push(`${width} × ${depth}`);
+          }
           if (
-            picked &&
+            !picked.undersized &&
             (picked.lift.shaftWidthMm > width ||
               picked.lift.shaftDepthMm > depth)
           ) {
@@ -681,6 +688,7 @@ describe('ElevatorCalcService', () => {
         }
       }
       expect(misfits).toEqual([]);
+      expect(wrongFlag).toEqual([]);
     });
 
     it('takes the largest lift for a shaft bigger than every standard one', async () => {
@@ -700,12 +708,25 @@ describe('ElevatorCalcService', () => {
       });
     });
 
-    it('refuses a shaft no standard lift fits, naming the smallest standard shafts', async () => {
-      await expect(
-        standard({ shaftWidthMm: 1200, shaftDepthMm: 1200 }),
-      ).rejects.toThrow(
-        /No standard passenger lift fits a 1200 × 1200 mm shaft.*1550 × 1600 mm and 1650 × 1450 mm/,
+    it('quotes the smallest standard lift for a shaft no standard one fits, and says so', async () => {
+      // The client's case (2026-10-23): a 1500 × 1500 hospital shaft is
+      // quoted, not refused, down to the 1000 × 1000 the form allows.
+      const result = await standard({
+        productType: 'HOSPITAL',
+        shaftWidthMm: 1500,
+        shaftDepthMm: 1500,
+        floors: 12,
+      });
+      expect(result.technical.capacityPersons).toBe(5);
+      expect(result.input.capacityKg).toBe(400);
+      expect(result.technical.standardLift).toBe(
+        '5-person lift, 1650 × 1450 mm standard shaft',
       );
+      expect(result.notes[0]).toMatch(
+        /1500 × 1500 mm is smaller than every standard shaft.*5-person.*manufacturer/,
+      );
+      const smallest = await standard({ shaftWidthMm: 1000, shaftDepthMm: 1000 });
+      expect(smallest.technical.capacityPersons).toBe(5);
     });
 
     it("rates the 2200 × 1750 lift 1000 kg for its 13 persons, as the client's table does", async () => {
