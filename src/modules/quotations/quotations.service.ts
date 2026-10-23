@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 
 import { todayIso } from '../../common/business-time';
+import { discountNeedsSignOff } from '../../common/discount-sign-off';
 import {
   DiscountApprovalRequiredError,
   WorkflowTransitionError,
@@ -454,11 +455,16 @@ export class QuotationsService {
       await this.quotationsRepository.getDiscountApprovalThresholdPercent(
         user.tenantId,
       );
-    // A negative percent is a PREMIUM, not a discount — it passes.
-    if (threshold === null || D(quote.discountPercent).lte(D(threshold))) {
-      return;
+    // The same rule the proforma enforces at issue; a premium passes.
+    if (
+      discountNeedsSignOff(
+        quote.discountPercent,
+        quote.discountApprovedByUserId,
+        threshold,
+      )
+    ) {
+      throw new DiscountApprovalRequiredError(quote.discountPercent, threshold!);
     }
-    throw new DiscountApprovalRequiredError(quote.discountPercent, threshold);
   }
 
   // ---------------------------------------------------------------------

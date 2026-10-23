@@ -15,9 +15,14 @@ export class DiscountApprovalRequiredError extends DomainError {
   readonly problemType = 'discount-approval-required';
   readonly title = 'Discount approval required';
 
-  constructor(discountPercent: string, thresholdPercent: string) {
+  constructor(
+    discountPercent: string,
+    thresholdPercent: string,
+    /** What the sign-off is missing for: submitting, or issuing the proforma. */
+    before: 'submitting it' | 'issuing its proforma' = 'submitting it',
+  ) {
     super(
-      `This quotation discounts ${discountPercent}%, above the ${thresholdPercent}% that needs sign-off. Have the discount approved before submitting it.`,
+      `This quotation discounts ${discountPercent}%, above the ${thresholdPercent}% that needs sign-off. Have the discount approved before ${before}.`,
     );
   }
 }

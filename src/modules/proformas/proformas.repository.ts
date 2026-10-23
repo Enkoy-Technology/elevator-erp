@@ -17,7 +17,11 @@ import {
 
 import { todayIso } from '../../common/business-time';
 import { documentReferenceCode } from '../../common/export/templates/commercial-document';
-import { WorkflowTransitionError } from '../../common/exceptions';
+import { discountNeedsSignOff } from '../../common/discount-sign-off';
+import {
+  DiscountApprovalRequiredError,
+  WorkflowTransitionError,
+} from '../../common/exceptions';
 import { computeFiscalYear } from '../../common/fiscal-year';
 import {
   normalizePageQuery,
@@ -322,12 +326,36 @@ export class ProformasRepository {
 
       // 2. Fiscal year for today, from this tenant's configured boundary.
       const [tenant] = await tx
-        .select({ fiscalYearStart: tenants.fiscalYearStart })
+        .select({
+          fiscalYearStart: tenants.fiscalYearStart,
+          discountApprovalThresholdPercent:
+            tenants.discountApprovalThresholdPercent,
+        })
         .from(tenants)
         .where(eq(tenants.id, tenantId))
         .limit(1);
       if (!tenant) {
         throw new NotFoundException('Tenant not found');
+      }
+
+      // 2b. Discount sign-off. Checking at submit is not enough: an offer
+      // stays editable while it awaits approval, so a price agreed after it
+      // was submitted, or a VAT toggle that re-applies one, would reach a
+      // proforma unsigned. Every proforma is issued here, so this is where
+      // the sign-off cannot be stepped around; throwing rolls the CAS back.
+      const threshold = tenant.discountApprovalThresholdPercent ?? null;
+      if (
+        discountNeedsSignOff(
+          quote.discountPercent,
+          quote.discountApprovedByUserId,
+          threshold,
+        )
+      ) {
+        throw new DiscountApprovalRequiredError(
+          quote.discountPercent!,
+          threshold!,
+          'issuing its proforma',
+        );
       }
       const fiscalYear = computeFiscalYear(today, tenant.fiscalYearStart);
 

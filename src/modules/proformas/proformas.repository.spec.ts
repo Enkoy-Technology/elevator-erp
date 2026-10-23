@@ -1,7 +1,10 @@
 import { NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 
-import { WorkflowTransitionError } from '../../common/exceptions';
+import {
+  DiscountApprovalRequiredError,
+  WorkflowTransitionError,
+} from '../../common/exceptions';
 import { computeFiscalYear } from '../../common/fiscal-year';
 import { todayIso } from '../../common/business-time';
 import { ProformasRepository } from './proformas.repository';
@@ -161,6 +164,65 @@ describe('ProformasRepository.issue — one-transaction CAS + claim + insert', (
     expect(insertedProforma.proformaNumber).toBe(
       `PF-${fy.label.replace('/', '-')}-0001`,
     );
+  });
+
+  describe('discount sign-off — enforced here, where every proforma is issued', () => {
+    /** issue() for a quotation carrying `discount`, at a tenant threshold of 10%. */
+    const issueWith = async (discount: {
+      discountPercent: string | null;
+      discountApprovedByUserId: string | null;
+    }) => {
+      const update = jest.fn(() => makeUpdateChain([{ ...quoteRow, ...discount }]));
+      const select = jest
+        .fn()
+        .mockReturnValueOnce(makeSelectChain([{ id: RATE_VERSION_ID }]))
+        .mockReturnValueOnce(
+          makeSelectChain([
+            { fiscalYearStart: '07-08', discountApprovalThresholdPercent: '10.00' },
+          ]),
+        )
+        .mockReturnValue(makeSelectChain([{ status: 'QUOTATION' }]));
+      const insert = jest
+        .fn()
+        .mockReturnValueOnce(makeSeqInsertChain([{ lastValue: 1 }]))
+        .mockReturnValueOnce(makeProformaInsertChain(() => {}, [{ id: 'pf-1' }]))
+        .mockReturnValue(makeLinesInsertChain());
+      const withTenant = jest.fn(
+        async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+          fn({ update, select, insert }),
+      );
+      const repo = new ProformasRepository({ withTenant } as never);
+      return { insert, issued: repo.issue(TENANT_ID, USER_ID, QUOTE_ID, null) };
+    };
+
+    it('refuses a discount above the threshold that nobody signed off, and claims no number', async () => {
+      // Priced 40% below list AFTER it was submitted: the check at submit
+      // never saw this discount.
+      const { insert, issued } = await issueWith({
+        discountPercent: '40.00',
+        discountApprovedByUserId: null,
+      });
+      await expect(issued).rejects.toBeInstanceOf(DiscountApprovalRequiredError);
+      await expect(issued).rejects.toThrow(/before issuing its proforma/);
+      expect(insert).not.toHaveBeenCalled();
+    });
+
+    it('issues once the discount is signed off', async () => {
+      const { insert, issued } = await issueWith({
+        discountPercent: '40.00',
+        discountApprovedByUserId: USER_ID,
+      });
+      await expect(issued).resolves.toEqual({ id: 'pf-1' });
+      expect(insert).toHaveBeenCalled();
+    });
+
+    it('issues a discount at the threshold without a sign-off', async () => {
+      const { issued } = await issueWith({
+        discountPercent: '10.00',
+        discountApprovedByUserId: null,
+      });
+      await expect(issued).resolves.toEqual({ id: 'pf-1' });
+    });
   });
 
   it("snapshots the quotation's special notes onto the proforma, so both documents state the same scope", async () => {
