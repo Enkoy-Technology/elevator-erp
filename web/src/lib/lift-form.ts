@@ -60,7 +60,11 @@ export const VEHICLE_STANDARD: Readonly<
     {
       speedMs: number;
       doorWidthMm?: number;
-      /** The building's opening the form asks for: its document minimum. */
+      /**
+       * The opening the form starts at: the specification's standard one.
+       * The API's minimum can be lower (car platform and stacking lifts take
+       * 2000 × 5000, client 2026-10-23).
+       */
       shaftWidthMm: number;
       /** Absent for the escalator, which takes a width only. */
       shaftDepthMm?: number;

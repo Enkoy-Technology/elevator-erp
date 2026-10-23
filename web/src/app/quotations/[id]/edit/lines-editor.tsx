@@ -423,13 +423,13 @@ export const LinesEditor = ({
                           hint={
                             line.calcInput?.floors !== undefined &&
                             line.technicalSpec
-                              ? `Standard lift: ${line.technicalSpec.capacityPersons ?? '—'} persons · ${line.calcInput.capacityKg} kg · ${line.calcInput.speedMs} m/s · door ${line.calcInput.doorWidthMm} mm` +
-                                (line.technicalSpec.shaftWidthMm !==
-                                  line.calcInput.shaftWidthMm ||
-                                line.technicalSpec.shaftDepthMm !==
-                                  line.calcInput.shaftDepthMm
-                                  ? ` · fits a ${line.technicalSpec.shaftWidthMm} × ${line.technicalSpec.shaftDepthMm} standard shaft inside the ${line.calcInput.shaftWidthMm} × ${line.calcInput.shaftDepthMm} entered.`
-                                  : '.')
+                              ? `Standard lift: ${line.technicalSpec.capacityPersons ?? '—'} persons · ${line.calcInput.capacityKg} kg · ${line.calcInput.speedMs} m/s · door ${line.calcInput.doorWidthMm} mm.` +
+                                // What the calculator said when the line was
+                                // priced: a shaft no standard one fits, a
+                                // non-standard shaft, a capped speed.
+                                (line.technicalSpec.notes?.length
+                                  ? ` ${line.technicalSpec.notes.join(' ')}`
+                                  : '')
                               : 'Persons, load, speed, car and door follow from the shaft and the floors.'
                           }
                         >
@@ -469,6 +469,8 @@ export const LinesEditor = ({
                           <Field
                             label="Shaft depth (mm)"
                             htmlFor={`sd-${line.id}`}
+                            // An opening below the specification's own.
+                            hint={line.technicalSpec?.notes?.join(' ')}
                           >
                             <NumberInput
                               id={`sd-${line.id}`}

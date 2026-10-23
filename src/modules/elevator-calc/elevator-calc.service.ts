@@ -198,7 +198,7 @@ export class ElevatorCalcService {
 /**
  * Complete the request. Standard-lift mode (a passenger-class request
  * carrying a shaft and floors) reads the company's table: the shaft picks the lift,
- * the floors give stops, travel (3.0 m a floor) and the speed band, capped
+ * the floors give stops, travel (3.5 m a floor) and the speed band, capped
  * at what that lift allows. The technical block is then exactly what the
  * table says — car, door, shaft, persons — and nothing else. Classic mode
  * requires every figure and computes the EN 81 geometry as before.
@@ -228,7 +228,7 @@ const resolve = (
     );
     if (undersized) {
       notes.push(
-        `${shaftWidthMm} × ${shaftDepthMm} mm is smaller than every standard shaft; it is quoted as the smallest standard lift, the ${lift.persons}-person (${lift.shaftWidthMm} × ${lift.shaftDepthMm} mm standard shaft), to be confirmed by the manufacturer's drawing.`,
+        `No standard shaft fits inside ${shaftWidthMm} × ${shaftDepthMm} mm; it is quoted as the smallest standard lift, the ${lift.persons}-person ${lift.loadKg} kg (${lift.shaftWidthMm} × ${lift.shaftDepthMm} mm standard shaft), to be confirmed by the manufacturer's drawing.`,
       );
     } else if (!exact) {
       notes.push(
@@ -343,6 +343,18 @@ const resolve = (
       : {}),
   };
   if (vehicle) {
+    // The client takes openings below the specification's own (2026-10-23);
+    // say so rather than print a platform bigger than its shaft unremarked.
+    const reference = vehicle.clearShaftMm ?? vehicle.platformMm;
+    if (
+      reference &&
+      (request.shaftWidthMm! < reference.width ||
+        request.shaftDepthMm! < reference.depth)
+    ) {
+      notes.push(
+        `The ${request.shaftWidthMm} × ${request.shaftDepthMm} mm opening is smaller than the ${reference.width} × ${reference.depth} mm ${vehicle.clearShaftMm ? 'clear shaft' : 'platform'} in the specification; to be confirmed by the manufacturer's drawing.`,
+      );
+    }
     // The company's standard figures, not EN 81 geometry: the platform is
     // the car, the building's opening the shaft; no machine to size.
     const technical: TechnicalSpecs = {

@@ -314,6 +314,74 @@ describe('ElevatorCalcService', () => {
       expect(await cheapest('CAR_STACKING_LIFT')).toBe('5800000.00');
     });
 
+    it.each([
+      ['CAR_PLATFORM_LIFT', { speedMs: 0.3, doorWidthMm: 2600 }],
+      ['CAR_STACKING_LIFT', { speedMs: 0.15 }],
+    ] as const)(
+      'takes a %s opening from 2,000 wide × 5,000 deep (client, 2026-10-23)',
+      async (productType, figures) => {
+        const opening = (shaftWidthMm: number, shaftDepthMm: number) =>
+          calc({
+            ...WORKED_EXAMPLE,
+            productType,
+            ...figures,
+            capacityKg: 3500,
+            stops: 2,
+            shaftWidthMm,
+            shaftDepthMm,
+          });
+        expect((await opening(2000, 5000)).input).toMatchObject({
+          shaftWidthMm: 2000,
+          shaftDepthMm: 5000,
+        });
+        await expect(opening(1999, 5000)).rejects.toThrow(
+          /at least 2,000 mm wide/,
+        );
+        await expect(opening(2000, 4999)).rejects.toThrow(
+          /at least 5,000 mm deep/,
+        );
+      },
+    );
+
+    it("notes an opening smaller than the specification's own shaft or platform, without refusing it", async () => {
+      const vehicle = (
+        productType: string,
+        figures: Partial<CalcRequest>,
+        shaftWidthMm: number,
+        shaftDepthMm: number,
+      ) =>
+        calc({
+          ...WORKED_EXAMPLE,
+          productType,
+          ...figures,
+          capacityKg: 3500,
+          stops: 2,
+          shaftWidthMm,
+          shaftDepthMm,
+        });
+      const platform = { speedMs: 0.3, doorWidthMm: 2600 };
+      expect(
+        (await vehicle('CAR_PLATFORM_LIFT', platform, 2000, 5000)).notes,
+      ).toEqual([
+        expect.stringMatching(
+          /2000 × 5000 mm opening is smaller than the 2900 × 5500 mm clear shaft.*manufacturer/,
+        ),
+      ]);
+      expect(
+        (await vehicle('CAR_STACKING_LIFT', { speedMs: 0.15 }, 2000, 5000)).notes,
+      ).toEqual([
+        expect.stringMatching(/smaller than the 2800 × 5500 mm platform/),
+      ]);
+      // At the specification's own figures there is nothing to say.
+      expect(
+        (await vehicle('CAR_PLATFORM_LIFT', platform, 2900, 5500)).notes,
+      ).toEqual([]);
+      expect(
+        (await vehicle('CAR_LIFT', { speedMs: 0.5, doorWidthMm: 2600 }, 3400, 6500))
+          .notes,
+      ).toEqual([]);
+    });
+
     it("holds the vehicle products to the company's standard speed and door (specification, 2026-10-06)", async () => {
       const car = (extra: Partial<CalcRequest>) =>
         calc({
@@ -675,7 +743,7 @@ describe('ElevatorCalcService', () => {
           const anyFits = PASSENGER_LIFTS.some(
             (lift) => lift.shaftWidthMm <= width && lift.shaftDepthMm <= depth,
           );
-          if ((picked.undersized ?? false) === anyFits) {
+          if (picked.undersized === anyFits) {
             wrongFlag.push(`${width} × ${depth}`);
           }
           if (
@@ -723,7 +791,7 @@ describe('ElevatorCalcService', () => {
         '5-person lift, 1650 × 1450 mm standard shaft',
       );
       expect(result.notes[0]).toMatch(
-        /1500 × 1500 mm is smaller than every standard shaft.*5-person.*manufacturer/,
+        /No standard shaft fits inside 1500 × 1500 mm.*5-person.*manufacturer/,
       );
       const smallest = await standard({ shaftWidthMm: 1000, shaftDepthMm: 1000 });
       expect(smallest.technical.capacityPersons).toBe(5);

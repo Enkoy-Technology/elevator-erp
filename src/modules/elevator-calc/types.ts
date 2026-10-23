@@ -102,6 +102,13 @@ export interface TechnicalSpecs {
   machineRoomWidthMm: number | null;
   machineRoomDepthMm: number | null;
   machineRoomHeightMm: number | null;
+  /**
+   * What the calculator told the salesperson about this lift (a shaft no
+   * standard one fits, a non-standard shaft, a capped speed), kept with a
+   * stored line so the line editor, which has no calculator screen, still
+   * shows it. Never printed; absent when there was nothing to say.
+   */
+  notes?: string[];
 }
 
 /** Money fields serialized to 2-decimal strings (ETB). */

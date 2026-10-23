@@ -853,6 +853,29 @@ describe('QuotationsService', () => {
       expect(values.totalPriceEtb).toBe('6582608.70');
     });
 
+    it("keeps the calculator's note on a line whose shaft no standard lift fits", async () => {
+      // The line editor has no calculator screen: the note is what tells the
+      // salesperson the 5-person was quoted for a shaft below its own.
+      await sheetService.addLine(user, draft.id, {
+        productType: 'HOSPITAL',
+        shaftWidthMm: 1500,
+        shaftDepthMm: 1500,
+        stops: 12,
+        machineRoomType: 'MRL',
+        buildingUsage: 'COMMERCIAL',
+        marginPercent: 0,
+      } as never);
+      const [, , values] = repo.addLine.mock.calls.at(-1)!;
+      expect(values.technicalSpec).toMatchObject({
+        capacityPersons: 5,
+        notes: [
+          expect.stringMatching(
+            /No standard shaft fits inside 1500 × 1500 mm.*5-person.*manufacturer/,
+          ),
+        ],
+      });
+    });
+
     it("prices a line's own unit at the sheet figure", async () => {
       await sheetService.addLine(user, draft.id, passenger({ quantity: 3 }));
       const [, , values] = repo.addLine.mock.calls[0]!;

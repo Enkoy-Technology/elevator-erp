@@ -18,7 +18,12 @@ import type { QuoteStatus } from '../../database/schema';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { D, money } from '../elevator-calc/calc-math';
 import { ElevatorCalcService } from '../elevator-calc/elevator-calc.service';
-import type { CalcRequest, PricingBreakdown } from '../elevator-calc/types';
+import type {
+  CalcRequest,
+  CalcResult,
+  PricingBreakdown,
+  TechnicalSpecs,
+} from '../elevator-calc/types';
 import { hasMachineRoom } from '../elevator-calc/vehicle-specs';
 import { ProjectsService } from '../projects/projects.service';
 import { ratePayloadSchemaFor } from '../rates/rate-payloads';
@@ -146,7 +151,7 @@ export class QuotationsService {
       warrantyPartsMonths: DEFAULT_WARRANTY_MONTHS,
       version: 1,
       calcInput: resolvedInput,
-      technicalSpec: result.technical,
+      technicalSpec: withNotes(result),
       pricingBreakdown,
       rateVersionId: rateVersion.id,
       marginPercent: String(calcInput.marginPercent),
@@ -571,7 +576,7 @@ export class QuotationsService {
     return {
       productType: dto.productType,
       calcInput: storedCalcInput,
-      technicalSpec: result.technical,
+      technicalSpec: withNotes(result),
       pricingBreakdown,
       quantity,
       // List prices. A negotiated grand total overwrites both — see
@@ -651,6 +656,16 @@ export type QuotationDocumentData = QuotationDocumentRow & {
   lines: QuotationLineRecord[];
   paymentTerms: QuotationPaymentTermRecord[];
 };
+
+/**
+ * The technical block with the calculator's notes on it, so a stored line
+ * keeps what the salesperson was told about the lift (see
+ * TechnicalSpecs.notes): the line editor has no calculator screen to show it.
+ */
+const withNotes = (result: CalcResult): TechnicalSpecs =>
+  result.notes.length > 0
+    ? { ...result.technical, notes: result.notes }
+    : result.technical;
 
 /**
  * One unit of a calculated lift at `vatPercent`: the sheet figure when the

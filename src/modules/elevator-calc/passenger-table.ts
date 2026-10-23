@@ -104,7 +104,7 @@ export interface PassengerSelection {
   /** True when the shaft entered is exactly a standard shaft. */
   exact: boolean;
   /** True when no standard shaft fits inside the one entered, so the smallest lift is quoted. */
-  undersized?: boolean;
+  undersized: boolean;
 }
 
 /** The smallest standard lift — the lightest, then the smaller shaft: the 5-person, 400 kg. */
@@ -133,7 +133,7 @@ export const selectPassengerLift = (
       lift.shaftWidthMm === shaftWidthMm && lift.shaftDepthMm === shaftDepthMm,
   );
   if (exact) {
-    return { lift: exact, exact: true };
+    return { lift: exact, exact: true, undersized: false };
   }
   const biggest = PASSENGER_LIFTS.filter(
     (lift) =>
@@ -144,6 +144,6 @@ export const selectPassengerLift = (
       b.shaftWidthMm * b.shaftDepthMm - a.shaftWidthMm * a.shaftDepthMm,
   )[0];
   return biggest
-    ? { lift: biggest, exact: false }
+    ? { lift: biggest, exact: false, undersized: false }
     : { lift: SMALLEST_LIFT, exact: false, undersized: true };
 };

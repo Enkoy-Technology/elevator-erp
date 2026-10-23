@@ -46,8 +46,10 @@ export const VEHICLE_SPECS: Readonly<Record<string, VehicleSpec>> = {
   CAR_STACKING_LIFT: {
     speed: { min: 0.08, max: 0.15, standard: 0.15 },
     platformMm: { width: 2800, depth: 5500 },
-    // No shaft as such: the overall equipment footprint, 3100–3300 × 5600–6000.
-    shaftMm: { minWidth: 3100, minDepth: 5600 },
+    // No shaft as such: the specification's equipment footprint is
+    // 3100–3300 × 5600–6000, but the client takes openings from 2000 × 5000
+    // (2026-10-23).
+    shaftMm: { minWidth: 2000, minDepth: 5000 },
     ratedLoad: true,
     machineRoom: true,
   },
@@ -56,7 +58,9 @@ export const VEHICLE_SPECS: Readonly<Record<string, VehicleSpec>> = {
     door: { min: 2400, max: 2800, standard: 2600 },
     platformMm: { width: 2500, depth: 5000 },
     clearShaftMm: { width: 2900, depth: 5500 },
-    shaftMm: { minWidth: 2900, minDepth: 5500 },
+    // Below the specification's clear shaft: the client takes openings from
+    // 2000 × 5000 (2026-10-23).
+    shaftMm: { minWidth: 2000, minDepth: 5000 },
     ratedLoad: true,
     machineRoom: true,
   },

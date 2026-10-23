@@ -345,6 +345,8 @@ export interface CalcResult {
     machineRoomWidthMm: number | null;
     machineRoomDepthMm: number | null;
     machineRoomHeightMm: number | null;
+    /** On a stored line: what the calculator said about the lift (shaft, speed cap). */
+    notes?: string[];
   };
   pricing: {
     basePrice: string;
