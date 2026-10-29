@@ -5,7 +5,12 @@
  * start of a quotation and the line editor alike.
  */
 
-import type { CalcInputPayload, CalcResult, ProductTypeRow } from './api';
+import type {
+  CalcInputPayload,
+  CalcRequestPayload,
+  CalcResult,
+  ProductTypeRow,
+} from './api';
 import {
   isZeroEtb,
   lineTotalEtb,
@@ -222,6 +227,9 @@ export const withProduct = (
     ...form,
     productType,
     capacityKg: startingCapacityKg(products, productType, form.capacityKg),
+    // A load or head count typed for one product says nothing of another.
+    capacityKgOverride: undefined,
+    capacityPersonsOverride: undefined,
     ...startingSpeedAndDoor(productType, form, passengerShaft.current),
   };
 };
@@ -234,6 +242,63 @@ export const usesRise = (
   /\brise\b/i.test(
     products.find((p) => p.code === productType)?.effectiveFormula ?? '',
   );
+
+/** The request the API wants: shaft and floors for a standard lift, everything for the rest. */
+export const toRequest = (
+  form: CalcInputPayload,
+  products: readonly ProductTypeRow[] = [],
+): CalcRequestPayload => {
+  const {
+    shaftWidthMm,
+    shaftDepthMm,
+    floors,
+    capacityKg,
+    stops,
+    travelHeightM,
+    speedMs,
+    doorType,
+    doorWidthMm,
+    machineRoomType,
+    capacityKgOverride,
+    capacityPersonsOverride,
+    ...rest
+  } = form;
+  // An escalator has no machine room to send.
+  const common = hasMachineRoom(form.productType)
+    ? { ...rest, machineRoomType }
+    : rest;
+  const vehicle = VEHICLE_STANDARD[form.productType];
+  return isStandardLift(form.productType)
+    ? {
+        ...common,
+        shaftWidthMm,
+        shaftDepthMm,
+        floors,
+        // Typed over the table's: printed, the price staying the table lift's.
+        capacityKgOverride,
+        capacityPersonsOverride,
+      }
+    : {
+        ...common,
+        // A vehicle product is quoted against the building's opening; an
+        // escalator against its width alone, and carries no rated load.
+        ...(vehicle
+          ? {
+              shaftWidthMm,
+              ...(vehicle.shaftDepthMm !== undefined ? { shaftDepthMm } : {}),
+            }
+          : {}),
+        // The load is typed as itself here; persons may be typed over.
+        ...(vehicle && !vehicle.ratedLoad
+          ? {}
+          : { capacityKg, capacityPersonsOverride }),
+        stops,
+        // Travel is 3.5 m × stops on the API; only a rise-priced product sends it.
+        ...(usesRise(products, form.productType) ? { travelHeightM } : {}),
+        speedMs,
+        ...(hasDoor(form.productType) ? { doorType, doorWidthMm } : {}),
+      };
+};
 
 /**
  * What the new quotation will hold for this lift, net, VAT and gross, by the

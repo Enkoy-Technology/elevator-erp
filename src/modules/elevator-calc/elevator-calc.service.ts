@@ -78,17 +78,13 @@ export class ElevatorCalcService {
     }
 
     const applied = product.formula ?? formula;
-    const { input, technical, notes } = resolve(
+    const { input, technical, notes, pricedKg } = withTypedPersons(
       request,
-      product.liftGeometry,
-      formulaUsesRise(applied),
+      resolve(request, product.liftGeometry, formulaUsesRise(applied)),
     );
-    if (
-      product.minCapacityKg !== null &&
-      input.capacityKg < product.minCapacityKg
-    ) {
+    if (product.minCapacityKg !== null && pricedKg < product.minCapacityKg) {
       throw new BadRequestException(
-        `${product.name} is sold from ${product.minCapacityKg.toLocaleString('en-US')} kg — ${input.capacityKg.toLocaleString('en-US')} kg is below the minimum.`,
+        `${product.name} is sold from ${product.minCapacityKg.toLocaleString('en-US')} kg — ${pricedKg.toLocaleString('en-US')} kg is below the minimum.`,
       );
     }
     const vehicle = VEHICLE_SPECS[product.code];
@@ -114,7 +110,7 @@ export class ElevatorCalcService {
       priced = computeProductPrice(
         product,
         input.stops,
-        input.capacityKg,
+        pricedKg,
         input.travelHeightM,
         applied,
       );
@@ -130,7 +126,7 @@ export class ElevatorCalcService {
     const listPrice = basePrice.plus(stopsAdjustment).plus(capacityAdjustment);
     if (!listPrice.isFinite() || listPrice.isNegative()) {
       throw new BadRequestException(
-        `The pricing formula under Settings gives ${listPrice.toFixed(2)} for ${input.stops} stops at ${input.capacityKg} kg; a list price cannot be negative.`,
+        `The pricing formula under Settings gives ${listPrice.toFixed(2)} for ${input.stops} stops at ${pricedKg} kg; a list price cannot be negative.`,
       );
     }
     // The client's sheet is gross — 7,000,000 is what the customer pays,
@@ -165,7 +161,7 @@ export class ElevatorCalcService {
           ...productValues,
           base: product.basePriceEtb,
           N: input.stops,
-          C: input.capacityKg,
+          C: pricedKg,
           rise: input.travelHeightM,
         })} = ${renderFormula(money(listPrice), {})}${
           listVatIncluded === null
@@ -195,6 +191,14 @@ export class ElevatorCalcService {
   }
 }
 
+type Resolved = {
+  input: CalcInput;
+  technical: TechnicalSpecs;
+  notes: string[];
+  /** The load of the machine sold, which the formula prices: a typed rated load only prints. */
+  pricedKg: number;
+};
+
 /**
  * Complete the request. Standard-lift mode (a passenger-class request
  * carrying a shaft and floors) reads the company's table: the shaft picks the lift,
@@ -207,7 +211,7 @@ const resolve = (
   request: CalcRequest,
   liftGeometry: boolean,
   pricesOnRise: boolean,
-): { input: CalcInput; technical: TechnicalSpecs; notes: string[] } => {
+): Resolved => {
   const notes: string[] = [];
   const machineRoomType = request.machineRoomType ?? 'MRL';
   const buildingUsage = request.buildingUsage ?? 'COMMERCIAL';
@@ -242,9 +246,26 @@ const resolve = (
         `${floors} floors call for ${bandSpeed} m/s; this lift's maximum is ${lift.maxSpeedMs} m/s, so that is what is quoted.`,
       );
     }
+    // A typed load prints in place of the table's (client, 2026-10-29); the
+    // shaft still names the machine, and that is what is priced. Pricing the
+    // typed load let a lower one cut the price past the discount sign-off
+    // while the bigger machine was still installed (security review).
+    const typedKg = request.capacityKgOverride ?? undefined;
+    const capacityKg = typedKg ?? lift.loadKg;
+    if (typedKg !== undefined && typedKg !== lift.loadKg) {
+      notes.push(
+        `Rated load typed as ${typedKg} kg; the standard lift for this shaft is the ${lift.persons}-person ${lift.loadKg} kg, and it is priced as that lift.`,
+      );
+    }
+    // The row's head count beside a different one typed would contradict it
+    // on the documents; a typed figure that is the table's own changes nothing.
+    const persons =
+      request.capacityPersonsOverride ??
+      (typedKg === undefined ? lift.persons : passengerCapacity(capacityKg));
+    const asTable = capacityKg === lift.loadKg && persons === lift.persons;
     const input: CalcInput = {
       productType: request.productType,
-      capacityKg: lift.loadKg,
+      capacityKg,
       stops: floors,
       // The client's rule: 3,500 mm per floor, times the floor count.
       travelHeightM: Number((floors * FLOOR_HEIGHT_M).toFixed(2)),
@@ -258,11 +279,14 @@ const resolve = (
       shaftWidthMm,
       shaftDepthMm,
       floors,
+      ...(typedKg === undefined ? {} : { capacityKgOverride: typedKg }),
     };
     const technical: TechnicalSpecs = {
       ...EMPTY_GEOMETRY,
       productType: request.productType,
-      capacityPersons: lift.persons,
+      // withTypedPersons puts a typed head count in its place.
+      capacityPersons:
+        typedKg === undefined ? lift.persons : passengerCapacity(capacityKg),
       carWidthMm: lift.carWidthMm,
       carDepthMm: lift.carDepthMm,
       carHeightMm: PASSENGER_CAR_HEIGHT_MM,
@@ -271,9 +295,9 @@ const resolve = (
       // beside it rather than silently replacing it.
       shaftWidthMm,
       shaftDepthMm,
-      standardLift: `${lift.persons}-person lift, ${lift.shaftWidthMm} × ${lift.shaftDepthMm} mm standard shaft`,
+      standardLift: `${asTable ? `${lift.persons}-person lift, ` : ''}${lift.shaftWidthMm} × ${lift.shaftDepthMm} mm standard shaft`,
     };
-    return { input, technical, notes };
+    return { input, technical, notes, pricedKg: lift.loadKg };
   }
 
   const vehicle = VEHICLE_SPECS[request.productType];
@@ -367,13 +391,45 @@ const resolve = (
       shaftWidthMm: request.shaftWidthMm ?? null,
       shaftDepthMm: request.shaftDepthMm ?? null,
     };
-    return { input, technical, notes };
+    return { input, technical, notes, pricedKg: input.capacityKg };
   }
   const technical: TechnicalSpecs = {
     productType: input.productType,
     ...(liftGeometry ? computeLiftGeometry(input) : EMPTY_GEOMETRY),
   };
-  return { input, technical, notes };
+  return { input, technical, notes, pricedKg: input.capacityKg };
+};
+
+/**
+ * The persons typed on the specification (client, 2026-10-29), on any
+ * product with a rated load: printed as typed, never priced. More persons
+ * than the load carries at 75 kg each is quoted, and said.
+ */
+const withTypedPersons = (
+  request: CalcRequest,
+  resolved: Resolved,
+): Resolved => {
+  const persons = request.capacityPersonsOverride ?? undefined;
+  if (
+    persons === undefined ||
+    VEHICLE_SPECS[request.productType]?.ratedLoad === false
+  ) {
+    return resolved;
+  }
+  const { input, technical, notes } = resolved;
+  const carries = passengerCapacity(input.capacityKg);
+  return {
+    ...resolved,
+    input: { ...input, capacityPersonsOverride: persons },
+    technical: { ...technical, capacityPersons: persons },
+    notes:
+      persons > carries
+        ? [
+            ...notes,
+            `${persons} persons is more than ${input.capacityKg} kg carries at 75 kg a person (${carries}).`,
+          ]
+        : notes,
+  };
 };
 
 /** Floor pitch when only the floor count is known — the client's 3,500 mm per floor. */

@@ -2,6 +2,7 @@ import type { CalcInputPayload, ProductTypeRow } from './api';
 import {
   offerPreviewEtb,
   startingSpeedAndDoor,
+  toRequest,
   withProduct,
   WORKED_EXAMPLE,
   type PassengerShaft,
@@ -105,11 +106,60 @@ describe('withProduct', () => {
     });
   });
 
+  it('drops a typed load and persons: each product starts at its own figures', () => {
+    const memory = { current: null };
+    const next = withProduct(
+      { ...WORKED_EXAMPLE, capacityKgOverride: 800, capacityPersonsOverride: 10 },
+      'HOSPITAL',
+      products,
+      memory,
+    );
+    expect(next.capacityKgOverride).toBeUndefined();
+    expect(next.capacityPersonsOverride).toBeUndefined();
+  });
+
   it('opens an escalator at its base rise', () => {
     const memory = { current: null };
     expect(
       withProduct(WORKED_EXAMPLE, 'ESCALATOR', products, memory),
     ).toMatchObject({ travelHeightM: 6, stops: 2, shaftWidthMm: 1000 });
+  });
+});
+
+describe('toRequest', () => {
+  it("sends a standard lift's typed load and persons with its shaft and floors", () => {
+    expect(
+      toRequest({
+        ...WORKED_EXAMPLE,
+        capacityKgOverride: 800,
+        capacityPersonsOverride: 10,
+      }),
+    ).toMatchObject({
+      shaftWidthMm: 1835,
+      floors: 12,
+      capacityKgOverride: 800,
+      capacityPersonsOverride: 10,
+    });
+  });
+
+  it("sends typed persons outside the table but never the table's load, and neither for an escalator", () => {
+    const car = toRequest(
+      {
+        ...WORKED_EXAMPLE,
+        productType: 'CAR_LIFT',
+        capacityKg: 3500,
+        capacityKgOverride: 800,
+        capacityPersonsOverride: 2,
+      },
+      products,
+    );
+    expect(car).toMatchObject({ capacityKg: 3500, capacityPersonsOverride: 2 });
+    expect(car).not.toHaveProperty('capacityKgOverride');
+    const steps = toRequest(
+      { ...WORKED_EXAMPLE, productType: 'ESCALATOR', capacityPersonsOverride: 2 },
+      products,
+    );
+    expect(steps).not.toHaveProperty('capacityPersonsOverride');
   });
 });
 

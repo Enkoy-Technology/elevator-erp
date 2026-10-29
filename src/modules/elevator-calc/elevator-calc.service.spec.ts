@@ -810,6 +810,86 @@ describe('ElevatorCalcService', () => {
       expect(wrong).toEqual([]);
     });
 
+    // The client edits the load or the persons on the specification (2026-10-29).
+    it("prints a typed rated load in place of the table's, and prices the lift the shaft names", async () => {
+      const result = await standard({ capacityKgOverride: 800 });
+      expect(result.input).toMatchObject({
+        capacityKg: 800,
+        capacityKgOverride: 800,
+      });
+      expect(result.technical.capacityPersons).toBe(10);
+      // The shaft still picks the machine: the 8-person's car and door,
+      // named by its shaft so no head count contradicts the typed one.
+      expect(result.input.doorWidthMm).toBe(800);
+      expect(result.technical.standardLift).toBe(
+        '1835 × 1750 mm standard shaft',
+      );
+      // The 8-person 630 kg lift's price, 7,000,000 + (8-10)×80,000: a typed
+      // load is not a price change — that is the Price step, and its
+      // sign-off (security review, 2026-10-29).
+      expect(result.pricing.totalPrice).toBe('6840000.00');
+      expect(result.notes).toEqual([
+        expect.stringMatching(
+          /Rated load typed as 800 kg; the standard lift for this shaft is the 8-person 630 kg, and it is priced as that lift/,
+        ),
+      ]);
+      const lower = await standard({ capacityKgOverride: 320 });
+      expect(lower.pricing.totalPrice).toBe('6840000.00');
+    });
+
+    it("says nothing of typed figures that are the table's own, and keeps its name", async () => {
+      const load = await standard({ capacityKgOverride: 630 });
+      expect(load.notes).toEqual([]);
+      expect(load.technical.standardLift).toBe(
+        '8-person lift, 1835 × 1750 mm standard shaft',
+      );
+      expect(
+        (await standard({ capacityPersonsOverride: 8 })).technical.standardLift,
+      ).toBe('8-person lift, 1835 × 1750 mm standard shaft');
+    });
+
+    it('prints typed persons without touching the load or the price', async () => {
+      const result = await standard({ capacityPersonsOverride: 7 });
+      expect(result.technical.capacityPersons).toBe(7);
+      expect(result.input).toMatchObject({
+        capacityKg: 630,
+        capacityPersonsOverride: 7,
+      });
+      expect(result.technical.standardLift).toBe(
+        '1835 × 1750 mm standard shaft',
+      );
+      expect(result.pricing.totalPrice).toBe('6840000.00');
+      expect(result.notes).toEqual([]);
+
+      const both = await standard({
+        capacityKgOverride: 1000,
+        capacityPersonsOverride: 12,
+      });
+      expect(both.technical.capacityPersons).toBe(12);
+      expect(both.input.capacityKg).toBe(1000);
+    });
+
+    it('says so when the persons typed are more than the load carries', async () => {
+      const result = await standard({ capacityPersonsOverride: 13 });
+      expect(result.notes).toEqual([
+        expect.stringMatching(/13 persons is more than 630 kg carries.*\(8\)/),
+      ]);
+    });
+
+    it('goes back to the table when a typed figure is cleared', async () => {
+      const result = await standard({
+        capacityKgOverride: null,
+        capacityPersonsOverride: null,
+      });
+      expect(result.technical.capacityPersons).toBe(8);
+      expect(result.input.capacityKg).toBe(630);
+      expect(result.input).not.toHaveProperty('capacityKgOverride');
+      expect(result.input).not.toHaveProperty('capacityPersonsOverride');
+      expect(result.technical.standardLift).toBe(
+        '8-person lift, 1835 × 1750 mm standard shaft',
+      );
+    });
+
     it('still wants every figure for a product outside the table', async () => {
       await expect(
         service.calculateSpecs(TENANT_ID, {
@@ -824,5 +904,39 @@ describe('ElevatorCalcService', () => {
   it('counts persons as load ÷ 75 rounded down when every figure is given', async () => {
     const result = await calc({ ...WORKED_EXAMPLE, capacityKg: 800 });
     expect(result.technical.capacityPersons).toBe(10);
+  });
+
+  it('prints typed persons on every product with a rated load, and only there', async () => {
+    const classic = await calc({ ...WORKED_EXAMPLE, capacityPersonsOverride: 12 });
+    expect(classic.technical.capacityPersons).toBe(12);
+    expect(classic.technical.carWidthMm).toBe(1100);
+
+    const vehicle = (productType: string, extra: Partial<CalcRequest>) =>
+      calc({
+        ...WORKED_EXAMPLE,
+        ...forProduct(productType),
+        productType,
+        capacityKg: 3500,
+        stops: 2,
+        ...extra,
+      });
+    expect(
+      (await vehicle('CAR_LIFT', { capacityPersonsOverride: 2 })).technical
+        .capacityPersons,
+    ).toBe(2);
+    expect(
+      (await vehicle('CAR_LIFT', {})).technical.capacityPersons,
+    ).toBeNull();
+    // An escalator carries people on steps, not a rated load.
+    expect(
+      (await vehicle('ESCALATOR', { capacityPersonsOverride: 2 })).technical
+        .capacityPersons,
+    ).toBeNull();
+  });
+
+  it("types a lift's load in its capacity outside the table, so the table's override is not kept", async () => {
+    const result = await calc({ ...WORKED_EXAMPLE, capacityKgOverride: 800 });
+    expect(result.input.capacityKg).toBe(1000);
+    expect(result.input).not.toHaveProperty('capacityKgOverride');
   });
 });

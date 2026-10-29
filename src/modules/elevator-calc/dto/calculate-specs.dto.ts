@@ -126,6 +126,36 @@ export class CalculateSpecsDto {
   @IsEnum(BUILDING_USAGES)
   buildingUsage?: BuildingUsage;
 
+  // --- Typed over what the calculator derives. Null clears one, which is
+  // how a stored line goes back to the derived figure.
+  @ApiPropertyOptional({
+    minimum: 320,
+    maximum: 5000,
+    nullable: true,
+    example: 800,
+    description:
+      "Standard passenger lift: the rated load to print in place of the table's. Not priced: the price stays the standard lift's. Ignored outside the table, whose load is capacityKg.",
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(320)
+  @Max(5000)
+  capacityKgOverride?: number | null;
+
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: 100,
+    nullable: true,
+    example: 10,
+    description:
+      'The persons the specification prints, on any product with a rated load. Never priced.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  capacityPersonsOverride?: number | null;
+
   @ApiProperty({ minimum: 0, maximum: 100, example: 25 })
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)

@@ -876,6 +876,170 @@ describe('QuotationsService', () => {
       });
     });
 
+    describe('a load or persons typed on the specification (client, 2026-10-29)', () => {
+      const standardLine = (extra: Record<string, unknown> = {}) =>
+        ({
+          productType: 'PASSENGER',
+          shaftWidthMm: 1835,
+          shaftDepthMm: 1750,
+          stops: 12,
+          machineRoomType: 'MRL',
+          buildingUsage: 'COMMERCIAL',
+          marginPercent: 0,
+          ...extra,
+        }) as never;
+
+      /** The line as the repository stores it after an addLine. */
+      const stored = async (extra: Record<string, unknown>) => {
+        await sheetService.addLine(user, draft.id, standardLine(extra));
+        const [, , values] = repo.addLine.mock.calls.at(-1)!;
+        return { id: 'line-1', ...values } as Record<string, unknown>;
+      };
+      const updated = async (
+        line: Record<string, unknown>,
+        dto: Record<string, unknown>,
+      ) => {
+        repo.listLines.mockResolvedValue([line]);
+        repo.updateLine.mockImplementation(async () => ({}));
+        await sheetService.updateLine(user, draft.id, 'line-1', dto);
+        const [, , , values] = repo.updateLine.mock.calls.at(-1)!;
+        return values as {
+          calcInput: Record<string, unknown>;
+          technicalSpec: Record<string, unknown>;
+          specSummary: string | null;
+        };
+      };
+
+      it("prints them on the line and its description, at the standard lift's price", async () => {
+        const line = await stored({
+          capacityKgOverride: 800,
+          capacityPersonsOverride: 10,
+        });
+        expect(line.calcInput).toMatchObject({
+          capacityKg: 800,
+          capacityKgOverride: 800,
+          capacityPersonsOverride: 10,
+        });
+        expect(line.technicalSpec).toMatchObject({ capacityPersons: 10 });
+        expect(line.specSummary).toBe('800KG -10persons / Speed 1.5m/s');
+        // The 8-person 630 kg at 12 floors, as on the sheet.
+        expect(line.pricingBreakdown).toMatchObject({ totalPrice: '7160000.00' });
+      });
+
+      it('keeps them on the quotation a calculation starts', async () => {
+        const values = await created({
+          productType: 'PASSENGER',
+          shaftWidthMm: 1835,
+          shaftDepthMm: 1750,
+          floors: 12,
+          machineRoomType: 'MRL',
+          buildingUsage: 'COMMERCIAL',
+          marginPercent: 0,
+          capacityKgOverride: 800,
+          capacityPersonsOverride: 10,
+        } as never);
+        expect(values.calcInput).toMatchObject({
+          capacityKg: 800,
+          capacityKgOverride: 800,
+          capacityPersonsOverride: 10,
+        });
+        expect(values.technicalSpec).toMatchObject({ capacityPersons: 10 });
+        expect(values.totalPriceEtb).toBe('7160000.00');
+      });
+
+      it('follows a description the create page wrote before the floors were picked', async () => {
+        // The create page saves the lift, then its floors without a
+        // description: the stored one has no floor plan in it.
+        const line: Record<string, unknown> = {
+          ...(await stored({})),
+          floorLabels: 'G,1,2,3,4,5,6,7,8,9,10,11',
+          entranceCount: 1,
+        };
+        expect(line.specSummary).toBe('630KG -8persons / Speed 1.5m/s');
+        const values = await updated(line, {
+          capacityPersonsOverride: 10,
+          specSummary: line.specSummary,
+        });
+        expect(values.specSummary).toBe(
+          '630KG -10persons / Speed 1.5m/s / G+11 / 12 floors/12 doors',
+        );
+      });
+
+      it('keeps a description just trimmed by hand, though the system wrote it first', async () => {
+        const line: Record<string, unknown> = {
+          ...(await stored({})),
+          floorLabels: 'G,1,2,3,4,5,6,7,8,9,10,11',
+          entranceCount: 1,
+          specSummary:
+            '630KG -8persons / Speed 1.5m/s / G+11 / 12 floors/12 doors',
+        };
+        const values = await updated(line, {
+          specSummary: '630KG -8persons / Speed 1.5m/s',
+        });
+        expect(values.specSummary).toBe('630KG -8persons / Speed 1.5m/s');
+      });
+
+      it('writes the description again when its box is cleared', async () => {
+        const line = { ...(await stored({})), specSummary: 'Typed by hand' };
+        const values = await updated(line, { specSummary: '' });
+        expect(values.specSummary).toBe('630KG -8persons / Speed 1.5m/s');
+      });
+
+      it('drops them when the line becomes another product, unless the edit gives them', async () => {
+        const line = await stored({ capacityPersonsOverride: 10 });
+        const car = {
+          productType: 'CAR_LIFT',
+          capacityKg: 3500,
+          speedMs: 0.5,
+          doorType: 'CENTER_OPEN',
+          doorWidthMm: 2600,
+          shaftWidthMm: 3400,
+          shaftDepthMm: 6500,
+          stops: 2,
+        };
+        const values = await updated(line, car);
+        expect(values.technicalSpec.capacityPersons).toBeNull();
+        expect(values.calcInput).not.toHaveProperty('capacityPersonsOverride');
+        const kept = await updated(line, { ...car, capacityPersonsOverride: 2 });
+        expect(kept.technicalSpec.capacityPersons).toBe(2);
+      });
+
+      it("goes back to the table when they are cleared, and rewrites the description it wrote", async () => {
+        const line = await stored({
+          capacityKgOverride: 800,
+          capacityPersonsOverride: 10,
+        });
+        // The editor sends the stored description back as it found it.
+        const values = await updated(line, {
+          capacityKgOverride: null,
+          capacityPersonsOverride: null,
+          specSummary: line.specSummary,
+        });
+        expect(values.calcInput.capacityKg).toBe(630);
+        expect(values.calcInput).not.toHaveProperty('capacityKgOverride');
+        expect(values.calcInput).not.toHaveProperty('capacityPersonsOverride');
+        expect(values.technicalSpec.capacityPersons).toBe(8);
+        expect(values.specSummary).toBe('630KG -8persons / Speed 1.5m/s');
+      });
+
+      it('keeps them through an edit that does not mention them', async () => {
+        const line = await stored({ capacityPersonsOverride: 7 });
+        const values = await updated(line, { stops: 13 });
+        expect(values.technicalSpec.capacityPersons).toBe(7);
+        expect(values.specSummary).toBe('630KG -7persons / Speed 1.5m/s');
+      });
+
+      it('keeps a description typed by hand', async () => {
+        const line = {
+          ...(await stored({})),
+          specSummary: 'Hospital bed lift, 8 persons',
+        };
+        const values = await updated(line, { capacityPersonsOverride: 10 });
+        expect(values.technicalSpec.capacityPersons).toBe(10);
+        expect(values.specSummary).toBe('Hospital bed lift, 8 persons');
+      });
+    });
+
     it("prices a line's own unit at the sheet figure", async () => {
       await sheetService.addLine(user, draft.id, passenger({ quantity: 3 }));
       const [, , values] = repo.addLine.mock.calls[0]!;

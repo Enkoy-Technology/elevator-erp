@@ -3,11 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
-import {
-  LiftInputs,
-  LiftResult,
-  toRequest,
-} from '@/app/calculator/lift-calculator';
+import { LiftInputs, LiftResult } from '@/app/calculator/lift-calculator';
 import { btnPrimary, btnSecondary, fieldClass } from '@/components/form-styles';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
@@ -35,6 +31,7 @@ import { formatDate } from '@/lib/datetime';
 import {
   offerPreviewEtb,
   startingCapacityKg,
+  toRequest,
   withProduct,
   WORKED_EXAMPLE,
   type PassengerShaft,

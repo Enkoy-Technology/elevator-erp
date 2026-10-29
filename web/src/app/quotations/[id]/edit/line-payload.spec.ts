@@ -17,6 +17,43 @@ const escalator = {
 } as ProductTypeRow;
 
 describe('toPayload', () => {
+  it('sends a typed load and persons, and null for a blank one so the derived figure comes back', () => {
+    expect(
+      sent({
+        ...NEW_LINE,
+        capacityKgOverride: '800',
+        capacityPersonsOverride: '10',
+      }),
+    ).toMatchObject({ capacityKgOverride: 800, capacityPersonsOverride: 10 });
+    const blank = sent({
+      ...NEW_LINE,
+      capacityKgOverride: ' ',
+      capacityPersonsOverride: '',
+    });
+    expect(blank.capacityKgOverride).toBeNull();
+    expect(blank.capacityPersonsOverride).toBeNull();
+  });
+
+  it('sends an empty description, which has the system write it again', () => {
+    expect(sent({ ...NEW_LINE, specSummary: '  ' }).specSummary).toBe('');
+  });
+
+  it("sends persons but not the table's load outside the table, and neither for an escalator", () => {
+    const car = sent({
+      ...NEW_LINE,
+      productType: 'CAR_LIFT',
+      capacityKgOverride: '800',
+      capacityPersonsOverride: '2',
+    });
+    expect(car.capacityKgOverride).toBeNull();
+    expect(car.capacityPersonsOverride).toBe(2);
+    const steps = sent(
+      { ...NEW_LINE, productType: 'ESCALATOR', capacityPersonsOverride: '2' },
+      [escalator],
+    );
+    expect(steps.capacityPersonsOverride).toBeNull();
+  });
+
   it('leaves a cleared calculation box out, so the server keeps the stored figure', () => {
     const payload = sent({
       ...NEW_LINE,

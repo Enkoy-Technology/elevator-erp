@@ -42,6 +42,15 @@ export interface CalcInput {
   shaftWidthMm?: number;
   shaftDepthMm?: number;
   floors?: number;
+  /**
+   * Typed over what the calculator derives (client, 2026-10-29): a rated
+   * load in place of the standard table's — a lift outside the table types
+   * its load as `capacityKg` — and the persons the specification prints.
+   * Kept apart from `capacityKg` so a line remembers which figure was typed
+   * and which came from the table.
+   */
+  capacityKgOverride?: number;
+  capacityPersonsOverride?: number;
 }
 
 /**
@@ -70,7 +79,11 @@ export type CalcRequest = Pick<
       | 'doorWidthMm'
       | 'buildingUsage'
     >
-  >;
+  > & {
+    /** Null clears a typed figure: how a line goes back to the derived one. */
+    capacityKgOverride?: number | null;
+    capacityPersonsOverride?: number | null;
+  };
 
 /**
  * Every field except `productType` is null for products without lift geometry: §4.1

@@ -18,6 +18,9 @@ export interface LineDraft {
   shaftWidthMm: string;
   shaftDepthMm: string;
   capacityKg: string;
+  /** Typed over the standard table's load, and the persons; blank derives them. */
+  capacityKgOverride: string;
+  capacityPersonsOverride: string;
   stops: string;
   travelHeightM: string;
   speedMs: string;
@@ -52,6 +55,8 @@ export const NEW_LINE: LineDraft = {
   shaftWidthMm: '1835',
   shaftDepthMm: '1750',
   capacityKg: '1000',
+  capacityKgOverride: '',
+  capacityPersonsOverride: '',
   stops: '12',
   travelHeightM: '45',
   speedMs: '1.6',
@@ -137,6 +142,16 @@ export const toPayload = (
               }
             : {}),
         }),
+    // Null when blank, unlike the figures above: the server keeps a stored
+    // line's absent key, and a cleared box means "derive it again". The load
+    // overrides the standard table only; an escalator has no persons.
+    capacityKgOverride: isStandardLift(draft.productType)
+      ? (figure(draft.capacityKgOverride) ?? null)
+      : null,
+    capacityPersonsOverride:
+      VEHICLE_STANDARD[draft.productType]?.ratedLoad === false
+        ? null
+        : (figure(draft.capacityPersonsOverride) ?? null),
     ...(hasMachineRoom(draft.productType)
       ? { machineRoomType: draft.machineRoomType }
       : {}),
@@ -164,6 +179,8 @@ export const toPayload = (
     entranceCount: draft.entranceCount.trim()
       ? num(draft.entranceCount, 1)
       : undefined,
-    specSummary: text(draft.specSummary),
+    // Sent even when empty, as the floor display is: an empty description
+    // means "write it again from the figures".
+    specSummary: draft.specSummary.trim(),
   };
 };

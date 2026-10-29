@@ -15,8 +15,12 @@ import {
   type CalcResult,
   getAccessToken,
 } from '@/lib/api';
-import { WORKED_EXAMPLE, type PassengerShaft } from '@/lib/lift-form';
-import { LiftInputs, LiftResult, toRequest } from './lift-calculator';
+import {
+  toRequest,
+  WORKED_EXAMPLE,
+  type PassengerShaft,
+} from '@/lib/lift-form';
+import { LiftInputs, LiftResult } from './lift-calculator';
 
 export default function CalculatorPage() {
   const router = useRouter();

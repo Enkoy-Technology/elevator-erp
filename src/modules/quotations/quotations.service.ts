@@ -19,6 +19,7 @@ import type { AuthenticatedUser } from '../../types/auth.types';
 import { D, money } from '../elevator-calc/calc-math';
 import { ElevatorCalcService } from '../elevator-calc/elevator-calc.service';
 import type {
+  CalcInput,
   CalcRequest,
   CalcResult,
   PricingBreakdown,
@@ -278,6 +279,21 @@ export class QuotationsService {
       entranceCount: line.entranceCount,
       ...definedOnly(dto),
     } as CreateQuotationLineDto;
+    // A load or head count typed for one product says nothing of another.
+    if (dto.productType !== undefined && dto.productType !== line.productType) {
+      merged.capacityKgOverride = dto.capacityKgOverride;
+      merged.capacityPersonsOverride = dto.capacityPersonsOverride;
+    }
+    // A description the system wrote follows the lift it describes, so a
+    // typed load or head count reaches page 1; one typed by hand stays. Only
+    // the stored text can be the system's — the editor sends it back as it
+    // found it — never a text this edit brings.
+    if (
+      (dto.specSummary === undefined || dto.specSummary === line.specSummary) &&
+      writtenSummaries(line).includes(line.specSummary)
+    ) {
+      merged.specSummary = undefined;
+    }
     return this.quotationsRepository.updateLine(
       user.tenantId,
       id,
@@ -552,6 +568,8 @@ export class QuotationsService {
       doorType: dto.doorType,
       doorWidthMm: dto.doorWidthMm,
       buildingUsage: dto.buildingUsage,
+      capacityKgOverride: dto.capacityKgOverride,
+      capacityPersonsOverride: dto.capacityPersonsOverride,
       marginPercent: dto.marginPercent,
       // Same placeholder as createForProject: VAT is the statutory rate
       // already resolved onto the quotation header, applied below in
@@ -583,8 +601,10 @@ export class QuotationsService {
       // priceFromGrandTotal.
       unitPriceEtb: money(subtotalWithMargin),
       lineTotalEtb: money(subtotalWithMargin.mul(quantity)),
+      // `||`, as for the floor display below: an empty box means "write it
+      // again from the figures".
       specSummary:
-        dto.specSummary ??
+        dto.specSummary ||
         buildSpecSummary({
           productType: dto.productType,
           capacityKg: calcInput.capacityKg,
@@ -666,6 +686,29 @@ const withNotes = (result: CalcResult): TechnicalSpecs =>
   result.notes.length > 0
     ? { ...result.technical, notes: result.notes }
     : result.technical;
+
+/**
+ * The page-1 descriptions the system writes for the line as stored: with its
+ * floor plan, and without one — what a quotation started on the create page
+ * keeps, its floors being saved after it.
+ */
+const writtenSummaries = (line: QuotationLineRecord): (string | null)[] => {
+  const input = line.calcInput as Partial<CalcInput> | null;
+  const lift = {
+    productType: line.productType,
+    capacityKg: input?.capacityKg,
+    capacityPersons: (line.technicalSpec as Partial<TechnicalSpecs> | null)
+      ?.capacityPersons,
+    speedMs: input?.speedMs,
+  };
+  return [
+    buildSpecSummary({
+      ...lift,
+      plan: describeFloorPlan(line.floorLabels, line.entranceCount),
+    }),
+    buildSpecSummary(lift),
+  ];
+};
 
 /**
  * One unit of a calculated lift at `vatPercent`: the sheet figure when the

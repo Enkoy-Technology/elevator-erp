@@ -304,6 +304,14 @@ export interface CalcInputPayload {
   shaftWidthMm?: number;
   shaftDepthMm?: number;
   floors?: number;
+  /**
+   * Typed over what the calculator derives: a standard lift's rated load
+   * and the persons any lift with a load prints. Printed, NOT priced: the
+   * price stays the standard lift's, or a typed load would cut the price
+   * past the discount sign-off. Null clears one on a stored line.
+   */
+  capacityKgOverride?: number | null;
+  capacityPersonsOverride?: number | null;
 }
 
 /**

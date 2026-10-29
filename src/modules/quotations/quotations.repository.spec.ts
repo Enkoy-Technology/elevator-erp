@@ -553,6 +553,70 @@ describe('QuotationsRepository — the header rebuilt from the lines after a lin
     });
   });
 
+  it("keeps the header's specification the first lift's, so the documents that print it follow a line edit", async () => {
+    // The technical proposal, the Word files and the warranty print the
+    // header's spec: a persons count typed on the line must reach them.
+    const first = {
+      id: 'L1',
+      quantity: 1,
+      pricingBreakdown: { subtotalWithMargin: '7160000.00' },
+      calcInput: { productType: 'PASSENGER', capacityKg: 630, capacityPersonsOverride: 10 },
+      technicalSpec: { productType: 'PASSENGER', capacityPersons: 10 },
+    };
+    const { repo, header } = makeTx([
+      first,
+      {
+        id: 'L2',
+        quantity: 1,
+        pricingBreakdown: { subtotalWithMargin: '7160000.00' },
+        calcInput: { productType: 'HOSPITAL', capacityKg: 630 },
+        technicalSpec: { productType: 'HOSPITAL', capacityPersons: 8 },
+      },
+    ]);
+    await repo.updateLine(TENANT_ID, QUOTE_ID, 'L1', {} as never);
+    expect(header()).toMatchObject({
+      calcInput: first.calcInput,
+      technicalSpec: first.technicalSpec,
+      pricingBreakdown: first.pricingBreakdown,
+    });
+
+    // A first line typed by hand has no specification to hand over.
+    const { repo: handRepo, header: handHeader } = makeTx([
+      { id: 'L1', quantity: 1, calcInput: null, technicalSpec: null, lineTotalEtb: '100.00' },
+    ]);
+    await handRepo.updateLine(TENANT_ID, QUOTE_ID, 'L1', {} as never);
+    expect(handHeader()).not.toHaveProperty('technicalSpec');
+    expect(handHeader()).not.toHaveProperty('calcInput');
+  });
+
+  it('keeps the header on the first lift through a reorder, leaving the price and its sign-off alone', async () => {
+    const hospital = {
+      id: 'L2',
+      quantity: 1,
+      pricingBreakdown: { subtotalWithMargin: '6840000.00' },
+      calcInput: { productType: 'HOSPITAL', capacityKg: 630 },
+      technicalSpec: { productType: 'HOSPITAL', capacityPersons: 8 },
+    };
+    // The lines as they read back after the reorder.
+    const { repo, header } = makeTx([
+      hospital,
+      {
+        id: 'L1',
+        quantity: 1,
+        pricingBreakdown: { subtotalWithMargin: '7160000.00' },
+        calcInput: { productType: 'PASSENGER', capacityKg: 630 },
+        technicalSpec: { productType: 'PASSENGER', capacityPersons: 8 },
+      },
+    ]);
+    await repo.reorderLines(TENANT_ID, QUOTE_ID, ['L2', 'L1']);
+    expect(header()).toEqual({
+      calcInput: hospital.calcInput,
+      technicalSpec: hospital.technicalSpec,
+      pricingBreakdown: hospital.pricingBreakdown,
+      updatedAt: expect.any(Date),
+    });
+  });
+
   it('answers a removal with the lines as they are after the resync, back at list', async () => {
     // Three lifts at negotiated shares; removing one resets the other two to
     // list. The reply must be those reset rows, not the ones read before.

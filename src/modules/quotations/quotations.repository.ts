@@ -446,7 +446,17 @@ export class QuotationsRepository {
           `lineIds must list each of the quotation's ${current.size} line(s) exactly once`,
         );
       }
-      return resequence(tx, quotationId, lineIds);
+      const reordered = await resequence(tx, quotationId, lineIds);
+      // Not a resync: the same lifts in another order are the same price,
+      // and its sign-off stands. Only which lift the header describes moves.
+      const spec = headerSpecOf(reordered);
+      if (spec) {
+        await tx
+          .update(quotations)
+          .set({ ...spec, updatedAt: new Date() })
+          .where(eq(quotations.id, quotationId));
+      }
+      return reordered;
     });
   }
 
@@ -711,6 +721,23 @@ const requireQuotation = async (
  * (client testing, 2026-10-23). A hand-entered line, with no calculator
  * price to return to, keeps what it says.
  */
+/**
+ * The header as the first lift. The technical proposal, the Word files and
+ * the warranty print the header's spec, so an edit made on the lines (a
+ * typed load or head count, 2026-10-29) must reach it. Null when the first
+ * line was typed by hand and has no calculator run to hand over.
+ */
+const headerSpecOf = (lines: readonly QuotationLineRecord[]) => {
+  const first = lines[0];
+  return first?.calcInput && first.technicalSpec && first.pricingBreakdown
+    ? {
+        calcInput: first.calcInput,
+        technicalSpec: first.technicalSpec,
+        pricingBreakdown: first.pricingBreakdown,
+      }
+    : null;
+};
+
 const resyncHeaderFromLines = async (
   tx: TenantTransaction,
   quotation: QuotationRecord,
@@ -772,6 +799,7 @@ const resyncHeaderFromLines = async (
       discountAmountEtb: null,
       discountPercent: null,
       discountApprovedByUserId: null,
+      ...headerSpecOf(lines),
       updatedAt: new Date(),
     })
     .where(eq(quotations.id, quotation.id));

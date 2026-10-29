@@ -8,7 +8,6 @@ import { formatNumber, sumEtb } from '@/lib/money';
 import {
   productName,
   type CalcInputPayload,
-  type CalcRequestPayload,
   type CalcResult,
   type ProductTypeRow,
 } from '@/lib/api';
@@ -38,51 +37,9 @@ type NumberKey =
   | 'stops'
   | 'travelHeightM'
   | 'speedMs'
-  | 'doorWidthMm';
-
-/** The request the API wants: shaft and floors for a standard lift, everything for the rest. */
-export const toRequest = (
-  form: CalcInputPayload,
-  products: readonly ProductTypeRow[] = [],
-): CalcRequestPayload => {
-  const {
-    shaftWidthMm,
-    shaftDepthMm,
-    floors,
-    capacityKg,
-    stops,
-    travelHeightM,
-    speedMs,
-    doorType,
-    doorWidthMm,
-    machineRoomType,
-    ...rest
-  } = form;
-  // An escalator has no machine room to send.
-  const common = hasMachineRoom(form.productType)
-    ? { ...rest, machineRoomType }
-    : rest;
-  const vehicle = VEHICLE_STANDARD[form.productType];
-  return isStandardLift(form.productType)
-    ? { ...common, shaftWidthMm, shaftDepthMm, floors }
-    : {
-        ...common,
-        // A vehicle product is quoted against the building's opening; an
-        // escalator against its width alone, and carries no rated load.
-        ...(vehicle
-          ? {
-              shaftWidthMm,
-              ...(vehicle.shaftDepthMm !== undefined ? { shaftDepthMm } : {}),
-            }
-          : {}),
-        ...(vehicle && !vehicle.ratedLoad ? {} : { capacityKg }),
-        stops,
-        // Travel is 3.5 m × stops on the API; only a rise-priced product sends it.
-        ...(usesRise(products, form.productType) ? { travelHeightM } : {}),
-        speedMs,
-        ...(hasDoor(form.productType) ? { doorType, doorWidthMm } : {}),
-      };
-};
+  | 'doorWidthMm'
+  | 'capacityKgOverride'
+  | 'capacityPersonsOverride';
 
 const doorLabel = (input: CalcInputPayload): string =>
   `${input.doorType === 'CENTER_OPEN' ? 'CO' : input.doorType === 'TELESCOPIC' ? '2S' : 'Side'} ${formatNumber(input.doorWidthMm)} × 2,100`;
@@ -116,7 +73,8 @@ export const LiftInputs = ({
   // here showed spinner arrows and could not be cleared to retype — the
   // client asked for typing, not arrows.
   const [drafts, setDrafts] = useState<Partial<Record<NumberKey, string>>>({});
-  const numberField = (key: NumberKey, text: string) => {
+  /** A field with a placeholder may be left blank: the calculator then works the figure out. */
+  const numberField = (key: NumberKey, text: string, placeholder?: string) => {
     // A draft is only shown while it still means the form's value; a Reset
     // or any other outside change to the form drops it.
     const draft = drafts[key];
@@ -130,9 +88,16 @@ export const LiftInputs = ({
         <NumberInput
           className={field}
           value={value}
+          placeholder={placeholder}
           onValueChange={(raw) => {
             setDrafts((prev) => ({ ...prev, [key]: raw }));
-            setForm((prev) => ({ ...prev, [key]: Number(raw) }));
+            setForm((prev) => ({
+              ...prev,
+              [key]:
+                placeholder !== undefined && raw.trim() === ''
+                  ? undefined
+                  : Number(raw),
+            }));
           }}
         />
       </label>
@@ -176,9 +141,13 @@ export const LiftInputs = ({
           {numberField('shaftWidthMm', 'Shaft width (mm)')}
           {numberField('shaftDepthMm', 'Shaft depth (mm)')}
           {numberField('floors', 'Number of floors')}
+          {numberField('capacityKgOverride', 'Rated load (kg)', 'From the table')}
+          {numberField('capacityPersonsOverride', 'Persons', 'From the load')}
           <p className="col-span-2 text-xs text-slate-500">
-            Persons, rated load, speed, car and door follow from the shaft and
-            the floors — the company&apos;s standard passenger table.
+            Speed, car and door follow from the shaft and the floors — the
+            company&apos;s standard passenger table. A rated load or persons
+            typed here prints instead of the table&apos;s; the price stays the
+            standard lift&apos;s. Blank takes the table&apos;s.
           </p>
         </div>
       ) : null}
@@ -197,9 +166,20 @@ export const LiftInputs = ({
             {VEHICLE_STANDARD[form.productType]?.shaftDepthMm !== undefined
               ? numberField('shaftDepthMm', 'Shaft depth (mm)')
               : null}
-            {VEHICLE_STANDARD[form.productType]?.ratedLoad === false
-              ? null
-              : numberField('capacityKg', 'Capacity (kg)')}
+            {VEHICLE_STANDARD[form.productType]?.ratedLoad === false ? null : (
+              <>
+                {numberField('capacityKg', 'Capacity (kg)')}
+                {numberField(
+                  'capacityPersonsOverride',
+                  'Persons',
+                  isVehicleProduct(form.productType) ||
+                    products.find((p) => p.code === form.productType)
+                      ?.liftGeometry === false
+                    ? 'None'
+                    : 'Load ÷ 75',
+                )}
+              </>
+            )}
             {numberField('stops', 'Stops')}
             {usesRise(products, form.productType)
               ? numberField('travelHeightM', 'Rise (m)')
@@ -339,13 +319,6 @@ export const LiftResult = ({
               </div>
             ))}
           </dl>
-          {result.notes.length > 0 ? (
-            <ul className="mt-4 space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              {result.notes.map((note) => (
-                <li key={note}>{note}</li>
-              ))}
-            </ul>
-          ) : null}
         </>
       ) : isVehicleProduct(result.technical.productType) ? (
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
@@ -353,6 +326,9 @@ export const LiftResult = ({
             [
               ...(result.input.capacityKg > 0
                 ? [['Rated load (kg)', formatNumber(result.input.capacityKg)] as const]
+                : []),
+              ...(result.technical.capacityPersons !== null
+                ? [['Persons', formatNumber(result.technical.capacityPersons)] as const]
                 : []),
               ['Speed (m/s)', String(result.input.speedMs)] as const,
               ...(result.technical.carWidthMm !== null
@@ -389,7 +365,7 @@ export const LiftResult = ({
             </div>
           ))}
         </dl>
-      ) : result.technical.capacityPersons === null ? (
+      ) : result.technical.carWidthMm === null ? (
         <p className="text-sm text-slate-500">
           {productName(products, result.technical.productType)} is priced as a
           flat product — the EN 81 shaft and machine calculations apply to
@@ -446,6 +422,13 @@ export const LiftResult = ({
           ))}
         </dl>
       )}
+      {result.notes.length > 0 ? (
+        <ul className="mt-4 space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {result.notes.map((note) => (
+            <li key={note}>{note}</li>
+          ))}
+        </ul>
+      ) : null}
     </section>
 
     <section className="rounded-2xl border border-slate-200 bg-white p-6">

@@ -63,6 +63,8 @@ const toDraft = (line: QuotationLine): LineDraft => {
     shaftWidthMm: str(calc?.shaftWidthMm, NEW_LINE.shaftWidthMm),
     shaftDepthMm: str(calc?.shaftDepthMm, NEW_LINE.shaftDepthMm),
     capacityKg: str(calc?.capacityKg, NEW_LINE.capacityKg),
+    capacityKgOverride: str(calc?.capacityKgOverride),
+    capacityPersonsOverride: str(calc?.capacityPersonsOverride),
     stops: str(calc?.stops, NEW_LINE.stops),
     travelHeightM: str(calc?.travelHeightM, NEW_LINE.travelHeightM),
     speedMs: str(calc?.speedMs, NEW_LINE.speedMs),
@@ -127,6 +129,11 @@ export const LinesEditor = ({
   const draftFor = (line: QuotationLine): LineDraft =>
     drafts[line.id] ?? toDraft(line);
 
+  /** A vehicle lift, or a product without lift geometry: no persons unless typed. */
+  const noDerivedPersons = (productType: string): boolean =>
+    isVehicleProduct(productType) ||
+    products.find((p) => p.code === productType)?.liftGeometry === false;
+
   const setField = <K extends keyof LineDraft>(
     line: QuotationLine,
     field: K,
@@ -165,7 +172,8 @@ export const LinesEditor = ({
         lines.length > 0 ? draftFor(lines[lines.length - 1]) : NEW_LINE;
       const created = await addQuotationLine(
         quotationId,
-        toPayload(seed, products),
+        // Its own description: the one above describes the lift above.
+        toPayload({ ...seed, specSummary: '' }, products),
       );
       onLinesChange([...lines, created]);
       setOpenId(created.id);
@@ -351,6 +359,9 @@ export const LinesEditor = ({
                           const next = {
                             ...current,
                             productType: e.target.value,
+                            // Typed for one product, they say nothing of another.
+                            capacityKgOverride: '',
+                            capacityPersonsOverride: '',
                           };
                           next.capacityKg = String(
                             startingCapacityKg(
@@ -423,7 +434,7 @@ export const LinesEditor = ({
                           hint={
                             line.calcInput?.floors !== undefined &&
                             line.technicalSpec
-                              ? `Standard lift: ${line.technicalSpec.capacityPersons ?? '—'} persons · ${line.calcInput.capacityKg} kg · ${line.calcInput.speedMs} m/s · door ${line.calcInput.doorWidthMm} mm.` +
+                              ? `Quoted: ${line.technicalSpec.capacityPersons ?? '—'} persons · ${line.calcInput.capacityKg} kg · ${line.calcInput.speedMs} m/s · door ${line.calcInput.doorWidthMm} mm.` +
                                 // What the calculator said when the line was
                                 // priced: a shaft no standard one fits, a
                                 // non-standard shaft, a capped speed.
@@ -439,6 +450,21 @@ export const LinesEditor = ({
                             value={draft.shaftDepthMm}
                             onValueChange={(v) =>
                               setField(line, 'shaftDepthMm', v)
+                            }
+                          />
+                        </Field>
+                        <Field
+                          label="Rated load (kg)"
+                          htmlFor={`load-${line.id}`}
+                          hint="Prints instead of the table's; the price stays the standard lift's. Blank takes the table's."
+                        >
+                          <NumberInput
+                            id={`load-${line.id}`}
+                            disabled={!editable}
+                            placeholder="From the table"
+                            value={draft.capacityKgOverride}
+                            onValueChange={(v) =>
+                              setField(line, 'capacityKgOverride', v)
                             }
                           />
                         </Field>
@@ -499,6 +525,28 @@ export const LinesEditor = ({
                           </Field>
                         )}
                       </>
+                    )}
+                    {VEHICLE_STANDARD[draft.productType]?.ratedLoad ===
+                    false ? null : (
+                      <Field
+                        label="Persons"
+                        htmlFor={`persons-${line.id}`}
+                        hint={`Blank ${noDerivedPersons(draft.productType) ? 'prints none' : 'works it out from the load, 75 kg a person'}. Printed, not priced.`}
+                      >
+                        <NumberInput
+                          id={`persons-${line.id}`}
+                          disabled={!editable}
+                          placeholder={
+                            noDerivedPersons(draft.productType)
+                              ? 'None'
+                              : 'From the load'
+                          }
+                          value={draft.capacityPersonsOverride}
+                          onValueChange={(v) =>
+                            setField(line, 'capacityPersonsOverride', v)
+                          }
+                        />
+                      </Field>
                     )}
 
                     <Field
