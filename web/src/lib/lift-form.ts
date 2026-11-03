@@ -343,3 +343,45 @@ export const offerPreviewEtb = (
   }
   return { netEtb, ...withVatEtb(netEtb, vatPercent) };
 };
+
+/** What Edit on the specifications types over; undefined goes back to the calculated figure. */
+export type CapacityEdit = Partial<
+  Pick<CalcInputPayload, 'capacityKgOverride' | 'capacityPersonsOverride'>
+>;
+
+/** The figures as the specification card shows them, or as typed over them. */
+export type CapacityFigures = { kg: string; persons: string };
+
+/**
+ * What a Save on the specification sends, or why it cannot: only a figure
+ * that was changed, so one left as shown keeps what it was (typed or
+ * calculated), and a cleared box goes back to the calculated figure. The
+ * load is typed over only on a standard lift; elsewhere it is the priced
+ * capacity, typed with the lift.
+ */
+export const capacityEdit = (
+  typed: CapacityFigures,
+  shown: CapacityFigures,
+  standardLift: boolean,
+): CapacityEdit | { error: string } => {
+  const value = (raw: string) => (raw.trim() === '' ? undefined : Number(raw));
+  // The API's own limits, said in words before its field names reach the screen.
+  const outside = (raw: string, min: number, max: number) => {
+    const v = value(raw);
+    return v !== undefined && (!Number.isInteger(v) || v < min || v > max);
+  };
+  if (standardLift && outside(typed.kg, 320, 5000)) {
+    return { error: 'Rated load is a whole number from 320 to 5,000 kg.' };
+  }
+  if (outside(typed.persons, 1, 100)) {
+    return { error: 'Persons is a whole number from 1 to 100.' };
+  }
+  return {
+    ...(standardLift && typed.kg !== shown.kg
+      ? { capacityKgOverride: value(typed.kg) }
+      : {}),
+    ...(typed.persons !== shown.persons
+      ? { capacityPersonsOverride: value(typed.persons) }
+      : {}),
+  };
+};

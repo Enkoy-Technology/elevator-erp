@@ -7,12 +7,10 @@ import { useRouter } from 'next/navigation';
 
 import { Sidebar } from '@/components/sidebar';
 import {
-  ApiError,
   calculateSpecs,
   listProductTypes,
   type ProductTypeRow,
   type CalcInputPayload,
-  type CalcResult,
   getAccessToken,
 } from '@/lib/api';
 import {
@@ -20,16 +18,15 @@ import {
   WORKED_EXAMPLE,
   type PassengerShaft,
 } from '@/lib/lift-form';
-import { LiftInputs, LiftResult } from './lift-calculator';
+import { LiftInputs, LiftResult, useLiveCalculation } from './lift-calculator';
 
 export default function CalculatorPage() {
   const router = useRouter();
   const [form, setForm] = useState<CalcInputPayload>(WORKED_EXAMPLE);
   const passengerShaft = useRef<PassengerShaft | null>(null);
   const [products, setProducts] = useState<ProductTypeRow[]>([]);
-  const [result, setResult] = useState<CalcResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const { calculated, setCalculated, error, updating, retry } =
+    useLiveCalculation(form, products);
 
   useEffect(() => {
     void listProductTypes()
@@ -47,21 +44,9 @@ export default function CalculatorPage() {
     }
   }, [router]);
 
-  const onSubmit = async (event: FormEvent) => {
+  const onSubmit = (event: FormEvent) => {
     event.preventDefault();
-    setError(null);
-    setSubmitting(true);
-    try {
-      const next = await calculateSpecs(toRequest(form, products));
-      setResult(next);
-    } catch (err) {
-      setResult(null);
-      setError(
-        err instanceof ApiError ? err.message : 'Calculation request failed',
-      );
-    } finally {
-      setSubmitting(false);
-    }
+    retry();
   };
 
   return (
@@ -79,7 +64,7 @@ export default function CalculatorPage() {
 
         <main className="grid flex-1 gap-8 px-8 py-8 xl:grid-cols-[minmax(0,22rem)_1fr]">
           <form
-            onSubmit={(event) => void onSubmit(event)}
+            onSubmit={onSubmit}
             className="h-fit space-y-4 rounded-2xl border border-slate-200 bg-white p-6"
           >
             <LiftInputs
@@ -101,18 +86,14 @@ export default function CalculatorPage() {
             <div className="flex gap-2">
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={updating}
                 className={`${btnPrimary} flex-1`}
               >
-                {submitting ? 'Calculating…' : 'Calculate'}
+                {updating ? 'Calculating…' : 'Calculate'}
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setForm(WORKED_EXAMPLE);
-                  setResult(null);
-                  setError(null);
-                }}
+                onClick={() => setForm(WORKED_EXAMPLE)}
                 className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
               >
                 Reset
@@ -121,14 +102,31 @@ export default function CalculatorPage() {
           </form>
 
           <div className="space-y-6">
-            {!result && (
+            {calculated ? (
+              // The last lift's figures stay, faded, until this one's arrive.
+              <div
+                className={`space-y-6 transition-opacity ${updating || error ? 'opacity-50' : ''}`}
+              >
+                <LiftResult
+                  result={calculated.result}
+                  products={products}
+                  onEditCapacity={async (edit) => {
+                    const next = { ...form, ...edit };
+                    const result = await calculateSpecs(
+                      toRequest(next, products),
+                    );
+                    // Left as it was if the lift was changed while this saved.
+                    setForm((prev) => (prev === form ? next : prev));
+                    setCalculated({ form: next, result });
+                  }}
+                />
+              </div>
+            ) : (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-16 text-center text-sm text-slate-500">
-                Enter the lift and calculate to see its technical specs and list
-                price.
+                Describe the lift; its technical specs and list price appear
+                here.
               </div>
             )}
-
-            {result && <LiftResult result={result} products={products} />}
           </div>
         </main>
       </div>

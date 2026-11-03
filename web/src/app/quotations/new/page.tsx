@@ -3,7 +3,11 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
-import { LiftInputs, LiftResult } from '@/app/calculator/lift-calculator';
+import {
+  LiftInputs,
+  LiftResult,
+  useLiveCalculation,
+} from '@/app/calculator/lift-calculator';
 import { btnPrimary, btnSecondary, fieldClass } from '@/components/form-styles';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
@@ -21,7 +25,6 @@ import {
   listProjects,
   optional,
   type CalcInputPayload,
-  type CalcResult,
   type ProductTypeRow,
   type Project,
   type SiteSurvey,
@@ -74,14 +77,17 @@ export default function NewQuotationPage() {
   const [products, setProducts] = useState<ProductTypeRow[]>([]);
   const [form, setForm] = useState<CalcInputPayload>(WORKED_EXAMPLE);
   const passengerShaft = useRef<PassengerShaft | null>(null);
-  // The result belongs to the figures it was calculated from: edit the lift
-  // after Calculate and it is gone, so Create can only save what is on
-  // screen (it saved the edited lift under the old price).
-  const [calculated, setCalculated] = useState<{
-    form: CalcInputPayload;
-    result: CalcResult;
-  } | null>(null);
-  const result = calculated?.form === form ? calculated.result : null;
+  const {
+    calculated,
+    setCalculated,
+    error: calcError,
+    updating,
+    retry,
+  } = useLiveCalculation(form, products);
+  // What is on screen, faded while the lift's own figures are on their way,
+  // and the result that is this lift's: Create saves only what is on screen.
+  const shown = calculated?.result ?? null;
+  const result = calculated?.form === form ? shown : null;
   const [vatApplies, setVatApplies] = useState(true);
   const [vatPercent, setVatPercent] = useState('15');
   const [offered, setOffered] = useState('');
@@ -89,7 +95,8 @@ export default function NewQuotationPage() {
   const [notes, setNotes] = useState('');
   const [survey, setSurvey] = useState<SiteSurvey | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [calculating, setCalculating] = useState(false);
+  // Open figures on the specification are saved or cancelled before Create.
+  const [editingCapacity, setEditingCapacity] = useState(false);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -125,8 +132,7 @@ export default function NewQuotationPage() {
 
   // The project chose the product when it was opened; changing the project
   // here follows it, with the figures the dropdown would start it at (a car
-  // lift project opened at 1.6 m/s, which Calculate refused), and the result
-  // is stale until recalculated.
+  // lift project opened at 1.6 m/s, which Calculate refused).
   useEffect(() => {
     const project = projects.find((p) => p.id === projectId);
     const productType =
@@ -141,7 +147,6 @@ export default function NewQuotationPage() {
           : withProduct(prev, productType, products, passengerShaft),
       );
     }
-    setCalculated(null);
   }, [projectId, projects, products]);
 
   // The sheet's figures over whatever the form holds; anything it left
@@ -168,7 +173,6 @@ export default function NewQuotationPage() {
         : {}),
       ...(machineRoomType ? { machineRoomType } : {}),
     }));
-    setCalculated(null);
   }, [survey, products]);
 
   // The survey's UNITS become the line's quantity once it is created; text
@@ -176,23 +180,9 @@ export default function NewQuotationPage() {
   const units =
     survey && survey.projectId === projectId ? surveyUnits(survey.units) : null;
 
-  const onCalculate = async (event: FormEvent) => {
+  const onCalculate = (event: FormEvent) => {
     event.preventDefault();
-    setError(null);
-    setCalculating(true);
-    try {
-      setCalculated({
-        form,
-        result: await calculateSpecs(toRequest(form, products)),
-      });
-    } catch (err) {
-      setCalculated(null);
-      setError(
-        err instanceof ApiError ? err.message : 'Calculation request failed',
-      );
-    } finally {
-      setCalculating(false);
-    }
+    retry();
   };
 
   const onCreate = async () => {
@@ -255,8 +245,8 @@ export default function NewQuotationPage() {
   // agreed figure is typed the way the customer hears it — inclusive when
   // VAT is on.
   const rate = vatApplies ? vatPercent : '0';
-  const preview = result
-    ? offerPreviewEtb(result.pricing, {
+  const preview = shown
+    ? offerPreviewEtb(shown.pricing, {
         marginPercent: form.marginPercent,
         quantity: units ?? 1,
         vatPercent: rate,
@@ -267,9 +257,7 @@ export default function NewQuotationPage() {
   const agreedGross = offered.trim() ? offered.trim() : listGross;
   // No figure typed means no price call, so the offer keeps the lines' own
   // split: show the preview's, not one divided down from its total.
-  const agreed = offered.trim()
-    ? splitGrossEtb(offered.trim(), rate)
-    : preview;
+  const agreed = offered.trim() ? splitGrossEtb(offered.trim(), rate) : preview;
 
   return (
     <div className="flex min-h-screen">
@@ -287,7 +275,7 @@ export default function NewQuotationPage() {
             <button
               type="button"
               onClick={() => void onCreate()}
-              disabled={!result || creating || calculating}
+              disabled={!result || creating || editingCapacity}
               className={btnPrimary}
             >
               {creating ? 'Creating…' : 'Create quotation'}
@@ -297,7 +285,7 @@ export default function NewQuotationPage() {
 
         <main className="grid flex-1 gap-8 bg-slate-50 px-4 py-6 sm:px-8 xl:grid-cols-[minmax(0,24rem)_1fr]">
           <form
-            onSubmit={(event) => void onCalculate(event)}
+            onSubmit={onCalculate}
             className="h-fit space-y-4 rounded-2xl border border-slate-200 bg-white p-6"
           >
             <label className="block">
@@ -328,7 +316,9 @@ export default function NewQuotationPage() {
                 figures, then calculate.
                 {units !== null && units > 1
                   ? ` The survey says ${units} units: the offer is made for ${units} lifts, and the price here is for all ${units}.`
-                  : units === null && survey.units && survey.units.trim() !== '1'
+                  : units === null &&
+                      survey.units &&
+                      survey.units.trim() !== '1'
                     ? ` The survey says ${survey.units} units: the price here is for one lift. Set the quantity on the offer.`
                     : ''}
               </p>
@@ -368,31 +358,29 @@ export default function NewQuotationPage() {
               </span>
             </label>
 
-            {error ? (
+            {(error ?? calcError) ? (
               <p
                 role="alert"
                 className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
               >
-                {error}
+                {error ?? calcError}
               </p>
             ) : null}
 
             <button
               type="submit"
-              disabled={calculating}
+              disabled={updating}
               className={`${btnSecondary} w-full`}
             >
-              {calculating
-                ? 'Calculating…'
-                : result
-                  ? 'Recalculate'
-                  : 'Calculate'}
+              {updating ? 'Calculating…' : result ? 'Recalculate' : 'Calculate'}
             </button>
           </form>
 
           <div className="space-y-6">
-            {result && listNet && listGross ? (
-              <>
+            {shown && listNet && listGross ? (
+              <div
+                className={`space-y-6 transition-opacity ${result ? '' : 'opacity-50'}`}
+              >
                 <section className="rounded-2xl border-2 border-gold-500/40 bg-white p-6">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
@@ -466,8 +454,22 @@ export default function NewQuotationPage() {
                     </span>
                   </label>
                 </section>
-                <LiftResult result={result} products={products} />
-              </>
+                <LiftResult
+                  result={shown}
+                  products={products}
+                  onEditingChange={setEditingCapacity}
+                  onEditCapacity={async (edit) => {
+                    const next = { ...form, ...edit };
+                    const recalculated = await calculateSpecs(
+                      toRequest(next, products),
+                    );
+                    // A lift changed while this saved keeps its change, and
+                    // this result, no longer its own, is not shown for it.
+                    setForm((prev) => (prev === form ? next : prev));
+                    setCalculated({ form: next, result: recalculated });
+                  }}
+                />
+              </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-16 text-center text-sm text-slate-500">
                 Describe the lift and calculate. The specs and the list price

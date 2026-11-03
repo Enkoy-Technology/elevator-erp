@@ -1,5 +1,6 @@
 import type { CalcInputPayload, ProductTypeRow } from './api';
 import {
+  capacityEdit,
   offerPreviewEtb,
   startingSpeedAndDoor,
   toRequest,
@@ -109,7 +110,11 @@ describe('withProduct', () => {
   it('drops a typed load and persons: each product starts at its own figures', () => {
     const memory = { current: null };
     const next = withProduct(
-      { ...WORKED_EXAMPLE, capacityKgOverride: 800, capacityPersonsOverride: 10 },
+      {
+        ...WORKED_EXAMPLE,
+        capacityKgOverride: 800,
+        capacityPersonsOverride: 10,
+      },
       'HOSPITAL',
       products,
       memory,
@@ -156,7 +161,11 @@ describe('toRequest', () => {
     expect(car).toMatchObject({ capacityKg: 3500, capacityPersonsOverride: 2 });
     expect(car).not.toHaveProperty('capacityKgOverride');
     const steps = toRequest(
-      { ...WORKED_EXAMPLE, productType: 'ESCALATOR', capacityPersonsOverride: 2 },
+      {
+        ...WORKED_EXAMPLE,
+        productType: 'ESCALATOR',
+        capacityPersonsOverride: 2,
+      },
       products,
     );
     expect(steps).not.toHaveProperty('capacityPersonsOverride');
@@ -260,6 +269,35 @@ describe('offerPreviewEtb', () => {
       netEtb: '14320000.00',
       taxEtb: '2148000.00',
       grossEtb: '16468000.00',
+    });
+  });
+});
+
+describe('capacityEdit', () => {
+  const shown = { kg: '630', persons: '8' };
+
+  it('sends only the figure that was changed', () => {
+    expect(capacityEdit({ kg: '630', persons: '10' }, shown, true)).toEqual({
+      capacityPersonsOverride: 10,
+    });
+    expect(capacityEdit(shown, shown, true)).toEqual({});
+  });
+
+  it('sends a cleared box as undefined, back to the calculated figure', () => {
+    const edit = capacityEdit({ kg: '', persons: '8' }, shown, true);
+    expect(edit).toHaveProperty('capacityKgOverride', undefined);
+  });
+
+  it('types the load over only on a standard lift', () => {
+    expect(capacityEdit({ kg: '800', persons: '8' }, shown, false)).toEqual({});
+  });
+
+  it('refuses what the API would, in words', () => {
+    expect(capacityEdit({ kg: '100', persons: '8' }, shown, true)).toEqual({
+      error: 'Rated load is a whole number from 320 to 5,000 kg.',
+    });
+    expect(capacityEdit({ kg: '630', persons: '1.5' }, shown, true)).toEqual({
+      error: 'Persons is a whole number from 1 to 100.',
     });
   });
 });
