@@ -1,4 +1,7 @@
-import type { DocumentTemplate } from './document-pdf.service';
+import type {
+  DocumentPdfService,
+  DocumentTemplate,
+} from './document-pdf.service';
 import zlib from 'node:zlib';
 
 import { TemplateNotImplementedError } from '../exceptions';
@@ -68,6 +71,11 @@ const extractZipEntry = (buf: Buffer, entryName: string): Buffer => {
   throw new Error(`zip entry not found: ${entryName}`);
 };
 
+// The watermark fade runs in Chromium; these tests carry no watermark.
+const pdf = {
+  fadeImage: jest.fn().mockResolvedValue(null),
+} as unknown as DocumentPdfService;
+
 describe('DocumentDocxService.renderDocumentDocx', () => {
   const branding: TenantBranding = {
     name: 'Enkoy Elevators PLC',
@@ -99,7 +107,7 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
   };
 
   it('throws TemplateNotImplementedError for a template with no registered builder yet', async () => {
-    const service = new DocumentDocxService();
+    const service = new DocumentDocxService(pdf);
     await expect(
       service.renderDocumentDocx(
         'not-a-template' as unknown as DocumentTemplate,
@@ -110,14 +118,15 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
   });
 
   it('names the rejected template in the error message', async () => {
-    const service = new DocumentDocxService();
+    const service = new DocumentDocxService(pdf);
+    // A report is read, not edited: PDF only, by design.
     await expect(
-      service.renderDocumentDocx('contract', {}, branding),
-    ).rejects.toThrow(/contract/);
+      service.renderDocumentDocx('aging-report', {}, branding),
+    ).rejects.toThrow(/aging-report/);
   });
 
   it('renders a quotation as a real docx (PK zip) Buffer', async () => {
-    const service = new DocumentDocxService();
+    const service = new DocumentDocxService(pdf);
     const buf = await service.renderDocumentDocx('quotation', data, branding);
 
     expect(Buffer.isBuffer(buf)).toBe(true);
@@ -143,7 +152,7 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
   });
 
   it('has a registered builder for "proforma" (Phase 3) — renders a real docx Buffer', async () => {
-    const service = new DocumentDocxService();
+    const service = new DocumentDocxService(pdf);
     const buf = await service.renderDocumentDocx(
       'proforma',
       {
@@ -159,7 +168,7 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
   });
 
   it('has a registered builder for "invoice" (Phase 4) — renders a real docx Buffer', async () => {
-    const service = new DocumentDocxService();
+    const service = new DocumentDocxService(pdf);
     const buf = await service.renderDocumentDocx(
       'invoice',
       {
@@ -181,21 +190,21 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
   });
 
   it('throws TemplateNotImplementedError for "aging-report" — PDF-only by design, no docx builder', async () => {
-    const service = new DocumentDocxService();
+    const service = new DocumentDocxService(pdf);
     await expect(
       service.renderDocumentDocx('aging-report', {}, branding),
     ).rejects.toBeInstanceOf(TemplateNotImplementedError);
   });
 
   it('throws TemplateNotImplementedError for "customer-statement" — PDF-only by design, no docx builder', async () => {
-    const service = new DocumentDocxService();
+    const service = new DocumentDocxService(pdf);
     await expect(
       service.renderDocumentDocx('customer-statement', {}, branding),
     ).rejects.toBeInstanceOf(TemplateNotImplementedError);
   });
 
   it('has a registered builder for "receipt" (Phase 4) — renders a real docx Buffer', async () => {
-    const service = new DocumentDocxService();
+    const service = new DocumentDocxService(pdf);
     const buf = await service.renderDocumentDocx(
       'receipt',
       {
@@ -211,5 +220,84 @@ describe('DocumentDocxService.renderDocumentDocx', () => {
     );
     expect(Buffer.isBuffer(buf)).toBe(true);
     expect(buf.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+  });
+});
+
+describe('DocumentDocxService: the contract, and the images it re-encodes', () => {
+  // A 1×1 PNG: what Chromium hands back from fadeImage.
+  const PNG_1PX =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  const WATERMARK = 'data:image/png;base64,d2F0ZXJtYXJr';
+  const SEAL = 'data:image/png;base64,c2VhbA==';
+  // The two columns DocumentBranding adds to TenantBranding.
+  const branding = {
+    name: 'Enkoy Elevators PLC',
+    slogan: '',
+    logoUrl: null,
+    address: 'Bole Road, Addis Ababa',
+    phones: [],
+    primaryColor: '#FB9D19',
+    watermarkUrl: WATERMARK,
+    stampUrl: SEAL,
+  } as TenantBranding;
+  const contract = {
+    contractNumber: 'CNT-FY2026-27-0001',
+    status: 'DRAFT',
+    customerName: 'Acme',
+    projectName: 'Bole Twin Towers',
+    contractValueEtb: '4500000.00',
+  };
+
+  it('renders a contract as a real docx (the client could not download one)', async () => {
+    const fadeImage = jest.fn().mockResolvedValue(PNG_1PX);
+    const service = new DocumentDocxService({
+      fadeImage,
+    } as unknown as DocumentPdfService);
+    const buf = await service.renderDocumentDocx(
+      'contract',
+      contract,
+      branding,
+    );
+    expect(buf.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+    const xml = extractZipEntry(buf, 'word/document.xml').toString('utf8');
+    expect(xml).toContain('CONTRACT DRAFT');
+    expect(xml).toContain('ARTICLE 1: DEFINITIONS');
+  });
+
+  it('fades the watermark to the PDF 20% and re-encodes the seal as it is', async () => {
+    const fadeImage = jest.fn().mockResolvedValue(PNG_1PX);
+    const service = new DocumentDocxService({
+      fadeImage,
+    } as unknown as DocumentPdfService);
+    await service.renderDocumentDocx('contract', contract, branding);
+    expect(fadeImage).toHaveBeenCalledWith(WATERMARK, 0.2);
+    expect(fadeImage).toHaveBeenCalledWith(SEAL, 1);
+  });
+
+  it('keeps a re-encoded image, so the next download does not redo it', async () => {
+    const fadeImage = jest.fn().mockResolvedValue(PNG_1PX);
+    const service = new DocumentDocxService({
+      fadeImage,
+    } as unknown as DocumentPdfService);
+    await service.renderDocumentDocx('contract', contract, branding);
+    await service.renderDocumentDocx('contract', contract, branding);
+    expect(fadeImage).toHaveBeenCalledTimes(2); // watermark + seal, once each
+  });
+
+  it('does not keep a failure: the next download tries again', async () => {
+    const fadeImage = jest.fn().mockResolvedValue(null);
+    const service = new DocumentDocxService({
+      fadeImage,
+    } as unknown as DocumentPdfService);
+    await service.renderDocumentDocx('contract', contract, branding);
+    await service.renderDocumentDocx('contract', contract, branding);
+    expect(fadeImage).toHaveBeenCalledTimes(4);
+  });
+
+  it('names Word, not PDF, when a report is asked for as Word', async () => {
+    const service = new DocumentDocxService(pdf);
+    await expect(
+      service.renderDocumentDocx('aging-report', {}, branding),
+    ).rejects.toThrow('No Word template is registered for "aging-report"');
   });
 });

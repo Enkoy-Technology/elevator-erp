@@ -47,7 +47,7 @@ describe('PaymentsController.list — customerId/method/date validation and form
   const controller = new PaymentsController(
     paymentsService as unknown as PaymentsService,
     pdfService as never,
-    docxService,
+    docxService as never,
     tenantBranding as never,
   );
   const res = { json: jest.fn() };
@@ -212,7 +212,7 @@ describe('PaymentsController.document — format routing, filenames, and xlsx re
   const controller = new PaymentsController(
     paymentsService as unknown as PaymentsService,
     pdfService as unknown as DocumentPdfService,
-    docxService,
+    docxService as never,
     tenantBranding as unknown as TenantBrandingProvider,
   );
 

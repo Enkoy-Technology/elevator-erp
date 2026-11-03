@@ -301,3 +301,31 @@ describe('DocumentPdfService — onModuleDestroy actually registers via Nest', (
     expect(browser.close).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('DocumentPdfService.fadeImage refuses before Chromium decodes anything', () => {
+  // A 43 KB PNG can claim 16384 × 16384 pixels: about 4 GB once decoded.
+  const pngClaiming = (width: number, height: number): string => {
+    const ihdr = Buffer.alloc(25);
+    ihdr.writeUInt32BE(13, 0);
+    ihdr.write('IHDR', 4, 'ascii');
+    ihdr.writeUInt32BE(width, 8);
+    ihdr.writeUInt32BE(height, 12);
+    const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    return `data:image/png;base64,${Buffer.concat([signature, ihdr]).toString('base64')}`;
+  };
+
+  it.each([
+    ['a decode bomb', pngClaiming(16384, 16384)],
+    ['an image with no size', pngClaiming(0, 10)],
+    ['bytes that are no image', 'data:image/png;base64,aGVsbG8gd29ybGQ='],
+    ['a remote image', 'https://cdn.example.com/mark.png'],
+  ])('%s', async (_name, uri) => {
+    const service = new DocumentPdfService();
+    const launch = jest.spyOn(
+      service as unknown as { getBrowser(): Promise<unknown> },
+      'getBrowser',
+    );
+    await expect(service.fadeImage(uri, 0.2)).resolves.toBeNull();
+    expect(launch).not.toHaveBeenCalled();
+  });
+});

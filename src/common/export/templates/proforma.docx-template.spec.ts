@@ -67,6 +67,8 @@ describe('buildProformaDocx', () => {
   // The Word proforma used to skip the Product row's format and print the
   // raw code; and a vehicle's platform is not a car, nor an escalator's
   // width a shaft.
+  // The PDF's own specification rows (specRows), so the Word file names
+  // each product's dimensions the way page 2 of the PDF does.
   it('names the product and labels a vehicle platform and an escalator width by name', () => {
     const stacking = text({
       ...data,
@@ -80,23 +82,28 @@ describe('buildProformaDocx', () => {
     });
     expect(stacking).toContain('Car stacking lift');
     expect(stacking).not.toContain('CAR_STACKING_LIFT');
-    expect(stacking).toContain('Platform width');
-    expect(stacking).toContain('Platform depth');
-    expect(stacking).not.toContain('Car width');
+    expect(stacking).toContain('Platform size (W x D)');
+    expect(stacking).toContain('W2800 x D5500 mm');
+    expect(stacking).not.toContain('Car size');
 
     const escalator = text({
       ...data,
       technicalSpec: { productType: 'ESCALATOR', shaftWidthMm: 1000 },
     });
     expect(escalator).toContain('"Width"');
-    expect(escalator).not.toContain('Shaft width');
+    expect(escalator).not.toContain('Shaft size');
 
     const passenger = text({
       ...data,
-      technicalSpec: { productType: 'PASSENGER', carWidthMm: 1400 },
+      technicalSpec: {
+        productType: 'PASSENGER',
+        carWidthMm: 1400,
+        carDepthMm: 1350,
+        carHeightMm: 2300,
+      },
     });
     expect(passenger).toContain('Passenger elevator');
-    expect(passenger).toContain('Car width');
+    expect(passenger).toContain('Car size (W x D x H)');
   });
 
   it('does not throw when branding is absent', () => {

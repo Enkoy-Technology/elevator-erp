@@ -2,6 +2,7 @@ import type { TenantBranding } from '../document-pdf.service';
 import {
   documentReferenceCode,
   renderCommercialBody,
+  type CommercialDocumentOptions,
   type CommercialTermsData,
   type DocumentAppendixContent,
   type DocumentLineData,
@@ -71,16 +72,11 @@ export interface ProformaTemplateData
   paymentTerms?: readonly PaymentTermData[];
 }
 
-/**
- * Build the branded proforma-invoice HTML document. Pure — no I/O. Same body
- * builder as the quotation (see the interface note above): the client's own
- * proforma is the document this whole layout was rebuilt from.
- */
-export const buildProformaHtml = (
-  data: object,
+/** What the proforma prints, for both formats (see quotationBody). */
+export const proformaBody = (
+  d: ProformaTemplateData,
   branding: TenantBranding | null,
-): string => {
-  const d = data as ProformaTemplateData;
+): CommercialDocumentOptions => {
   const exVatTotalEtb = d.subtotalEtb ?? '0.00';
   const lines =
     d.lines && d.lines.length > 0
@@ -89,8 +85,7 @@ export const buildProformaHtml = (
   // Already joined when the proforma was issued (ProformasRepository.issue);
   // the helper still runs so a hand-built or pre-join row prints the same.
   const reference = documentReferenceCode(d.salesName, d.referenceCode);
-
-  const bodyHtml = renderCommercialBody({
+  return {
     branding,
     plate: [
       { label: 'Proforma No.', value: d.proformaNumber },
@@ -110,13 +105,29 @@ export const buildProformaHtml = (
     boilerplate: d.boilerplate,
     components: d.components,
     notes: d.notes,
-  });
+  };
+};
 
+/** The proforma's cover lines and fine print, shared by both formats. */
+export const proformaFrame = (d: ProformaTemplateData) => ({
+  documentTitle: 'PROFORMA INVOICE',
+  coverLines: ['Project', d.projectName],
+  footerNote: `This proforma invoice is valid until ${fmtDate(d.validUntil)}. Prices in ETB.`,
+});
+
+/**
+ * Build the branded proforma-invoice HTML document. Pure — no I/O. Same body
+ * builder as the quotation (see the interface note above): the client's own
+ * proforma is the document this whole layout was rebuilt from.
+ */
+export const buildProformaHtml = (
+  data: object,
+  branding: TenantBranding | null,
+): string => {
+  const d = data as ProformaTemplateData;
   return renderLayout({
     branding,
-    documentTitle: 'PROFORMA INVOICE',
-    coverLines: ['Project', d.projectName],
-    bodyHtml,
-    footerNote: `This proforma invoice is valid until ${fmtDate(d.validUntil)}. Prices in ETB.`,
+    ...proformaFrame(d),
+    bodyHtml: renderCommercialBody(proformaBody(d, branding)),
   });
 };

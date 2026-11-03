@@ -279,6 +279,17 @@ export const monthsLabel = (months: number): string => {
   return `${months} ${months === 1 ? 'month' : 'months'}`;
 };
 
+/** Page 1's five cells for one line, as both the PDF and the Word file print them. */
+export const lineCells = (
+  line: DocumentLineData,
+): readonly [string, string, string, string, string] => [
+  productLabel(line.productType ?? line.technicalSpec?.productType) ?? '—',
+  line.specSummary ?? '—',
+  formatQuantity(line.quantity),
+  formatAmount(line.unitPriceEtb),
+  formatAmount(line.lineTotalEtb),
+];
+
 /**
  * Their page 1 table, with their column names. `specSummary` is the stored
  * sentence, not a re-derivation — an issued document must never re-render
@@ -286,15 +297,16 @@ export const monthsLabel = (months: number): string => {
  */
 const renderLineTable = (lines: readonly DocumentLineData[]): string => {
   const rows = lines
-    .map(
-      (line) => `<tr>
-        <td>${esc(productLabel(line.productType ?? line.technicalSpec?.productType) ?? '—')}</td>
-        <td>${esc(line.specSummary ?? '—')}</td>
-        <td class="num">${esc(formatQuantity(line.quantity))}</td>
-        <td class="num">${formatAmount(line.unitPriceEtb)}</td>
-        <td class="num">${formatAmount(line.lineTotalEtb)}</td>
-      </tr>`,
-    )
+    .map((line) => {
+      const [type, spec, quantity, unit, total] = lineCells(line);
+      return `<tr>
+        <td>${esc(type)}</td>
+        <td>${esc(spec)}</td>
+        <td class="num">${esc(quantity)}</td>
+        <td class="num">${unit}</td>
+        <td class="num">${total}</td>
+      </tr>`;
+    })
     .join('');
   return `<table class="lines">
     <thead><tr>
@@ -337,11 +349,12 @@ const renderPaymentTerms = (terms: readonly PaymentTermData[]): string => {
   return `<h2>Payment Terms</h2><ol class="terms-list">${items}</ol>`;
 };
 
-const renderCommercialTerms = (
+/** The Terms table's rows that have a value, as both formats print them. */
+export const commercialTermRows = (
   terms: CommercialTermsData | undefined,
-): string => {
+): ReadonlyArray<readonly [string, string]> => {
   if (!terms) {
-    return '';
+    return [];
   }
   const rows: ReadonlyArray<readonly [string, string | null]> = [
     [
@@ -370,8 +383,15 @@ const renderCommercialTerms = (
       terms.deliveryDays == null ? null : `${terms.deliveryDays} working days`,
     ],
   ];
-  const body = rows
-    .filter((row): row is readonly [string, string] => row[1] !== null)
+  return rows.filter(
+    (row): row is readonly [string, string] => row[1] !== null,
+  );
+};
+
+const renderCommercialTerms = (
+  terms: CommercialTermsData | undefined,
+): string => {
+  const body = commercialTermRows(terms)
     .map(
       ([label, value]) =>
         `<tr><td>${esc(label)}</td><td>${esc(value)}</td></tr>`,
@@ -390,7 +410,9 @@ const renderCommercialTerms = (
  * and the numbering is applied AFTER that filter so it always reads 1..n
  * with no holes.
  */
-const renderSpecTable = (line: DocumentLineData): string => {
+export const specRows = (
+  line: DocumentLineData,
+): ReadonlyArray<readonly [string, string]> => {
   const calc = line.calcInput ?? {};
   const tech = line.technicalSpec ?? {};
   const product = line.productType ?? tech.productType;
@@ -482,11 +504,15 @@ const renderSpecTable = (line: DocumentLineData): string => {
     // lift): neither row prints.
     [
       'Door size (W x H)',
-      calc.doorWidthMm ? dims(['W', 'H'], [calc.doorWidthMm, line.doorHeightMm]) : null,
+      calc.doorWidthMm
+        ? dims(['W', 'H'], [calc.doorWidthMm, line.doorHeightMm])
+        : null,
     ],
     [
       'Car opening type',
-      calc.doorWidthMm ? (DOOR_TYPE_LABELS[String(calc.doorType)] ?? null) : null,
+      calc.doorWidthMm
+        ? (DOOR_TYPE_LABELS[String(calc.doorType)] ?? null)
+        : null,
     ],
     ['Power supply', text(line.powerSupply)],
     ['Light supply', text(line.lightSupply)],
@@ -494,9 +520,13 @@ const renderSpecTable = (line: DocumentLineData): string => {
     ['Traction Machine', drive ? text(line.tractionMachineType) : null],
     ['Control System', drive ? text(line.controlSystem) : null],
   ];
+  return rows.filter(
+    (row): row is readonly [string, string] => row[1] !== null,
+  );
+};
 
-  const body = rows
-    .filter((row): row is readonly [string, string] => row[1] !== null)
+const renderSpecTable = (line: DocumentLineData): string => {
+  const body = specRows(line)
     .map(
       ([label, value], index) =>
         `<tr><td><span class="rowno">${index + 1}</span>${esc(label)}</td><td>${esc(value)}</td></tr>`,
@@ -507,19 +537,27 @@ const renderSpecTable = (line: DocumentLineData): string => {
     : '<p class="fineprint">No specification recorded for this line.</p>';
 };
 
+/** A line's page-2 heading: numbered and named once there is more than one. */
+export const specHeading = (
+  line: DocumentLineData,
+  index: number,
+  many: boolean,
+): string =>
+  many
+    ? `Specification — ${line.sequence ?? index + 1}. ${
+        productLabel(line.productType ?? line.technicalSpec?.productType) ??
+        'Item'
+      }`
+    : 'Specification';
+
 /** Page 2 proper: one titled spec table per line. */
 const renderSpecPage = (lines: readonly DocumentLineData[]): string => {
   const many = lines.length > 1;
   return lines
-    .map((line, index) => {
-      const heading = many
-        ? `Specification — ${line.sequence ?? index + 1}. ${
-            productLabel(line.productType ?? line.technicalSpec?.productType) ??
-            'Item'
-          }`
-        : 'Specification';
-      return `<h2>${esc(heading)}</h2>${renderSpecTable(line)}`;
-    })
+    .map(
+      (line, index) =>
+        `<h2>${esc(specHeading(line, index, many))}</h2>${renderSpecTable(line)}`,
+    )
     .join('');
 };
 

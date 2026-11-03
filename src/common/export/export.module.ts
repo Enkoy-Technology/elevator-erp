@@ -11,10 +11,10 @@ import { TenantBrandingProvider } from './tenant-branding.provider';
  * feature modules). DocumentPdfService is the exception: it owns the
  * Puppeteer browser's process lifecycle (lazy launch, onModuleDestroy
  * shutdown), so it needs Nest's module system to instantiate it once and
- * hook that lifecycle. DocumentDocxService has no such lifecycle (docx
- * builds a Document object in memory per call, nothing to launch or tear
- * down) but is registered alongside it for the same reason: it's the other
- * renderer over the same document-template contract. Phases 3/4 import this
+ * hook that lifecycle. DocumentDocxService builds each Word file in memory
+ * and borrows that browser only to re-encode the tenant's watermark and
+ * seal (DocumentPdfService.fadeImage); it's the other renderer over the
+ * same document-template contract. Phases 3/4 import this
  * module to get either service.
  *
  * TenantBrandingProvider lives here too (not in a feature module): it's the

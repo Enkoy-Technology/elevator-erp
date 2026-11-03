@@ -81,7 +81,8 @@ describe('buildQuotationDocx', () => {
         branding,
       ),
     );
-    expect(xml).toContain('1 x Car stacking lift');
+    // The offer table's Elevator Type cell, as the PDF prints it.
+    expect(xml).toContain('>Car stacking lift<');
     expect(xml).not.toContain('CAR_STACKING_LIFT');
   });
 
@@ -108,7 +109,8 @@ describe('buildQuotationDocx', () => {
   });
 
   // What the calculator stores: a vehicle lift's platform in
-  // carWidthMm/carDepthMm, the escalator's width in shaftWidthMm.
+  // carWidthMm/carDepthMm, the escalator's width in shaftWidthMm. The Word
+  // file prints the PDF's own specification rows (specRows).
   it('labels a passenger car and shaft, a vehicle platform, and an escalator width each by name', async () => {
     const tech = (spec: Record<string, unknown>): Promise<string> =>
       documentXml(
@@ -119,11 +121,14 @@ describe('buildQuotationDocx', () => {
       productType: 'PASSENGER',
       carWidthMm: 1400,
       carDepthMm: 1350,
+      carHeightMm: 2300,
       shaftWidthMm: 1900,
+      shaftDepthMm: 1750,
     });
-    expect(passenger).toContain('Car width');
-    expect(passenger).toContain('Shaft width');
-    expect(passenger).not.toContain('Platform width');
+    expect(passenger).toContain('Car size (W x D x H)');
+    expect(passenger).toContain('W1400 x D1350 x H2300 mm');
+    expect(passenger).toContain('Shaft size (W x D)');
+    expect(passenger).not.toContain('Platform size');
 
     for (const productType of [
       'CAR_LIFT',
@@ -135,12 +140,12 @@ describe('buildQuotationDocx', () => {
         carWidthMm: 2800,
         carDepthMm: 5600,
         shaftWidthMm: 3400,
+        shaftDepthMm: 6000,
       });
-      expect(xml).toContain('Platform width');
-      expect(xml).toContain('Platform depth');
-      expect(xml).toContain('Shaft width');
-      expect(xml).not.toContain('Car width');
-      expect(xml).not.toContain('Car depth');
+      expect(xml).toContain('Platform size (W x D)');
+      expect(xml).toContain('W2800 x D5600 mm');
+      expect(xml).toContain('Shaft size (W x D)');
+      expect(xml).not.toContain('Car size');
     }
 
     const escalator = await tech({
@@ -149,7 +154,7 @@ describe('buildQuotationDocx', () => {
     });
     expect(escalator).toContain('>Width<');
     expect(escalator).toContain('1000 mm');
-    expect(escalator).not.toContain('Shaft width');
+    expect(escalator).not.toContain('Shaft size');
   });
 
   it('does not throw when branding is absent (falls back to the default accent colour)', () => {

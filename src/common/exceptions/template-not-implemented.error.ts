@@ -11,7 +11,9 @@ export class TemplateNotImplementedError extends DomainError {
   readonly problemType = 'template-not-implemented';
   readonly title = 'Document template not implemented';
 
-  constructor(templateName: string) {
-    super(`No PDF template is registered for "${templateName}" yet.`);
+  // The format is named: a Word request that said "No PDF template" read as
+  // a PDF fault (client, 2026-10-30, downloading a contract as Word).
+  constructor(templateName: string, format: 'PDF' | 'Word' = 'PDF') {
+    super(`No ${format} template is registered for "${templateName}" yet.`);
   }
 }

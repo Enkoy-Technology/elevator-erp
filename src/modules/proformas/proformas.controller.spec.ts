@@ -4,6 +4,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
 import { ROLES_KEY } from '../../common/decorators';
+import type { DocumentDocxService } from '../../common/export/document-docx.service';
 import type { DocumentPdfService } from '../../common/export/document-pdf.service';
 import { setDownloadHeaders, singleRow, writeXlsx } from '../../common/export/tabular';
 import type { TenantBrandingProvider } from '../../common/export/tenant-branding.provider';
@@ -77,7 +78,7 @@ describe('ProformasController.document — format routing and filenames', () => 
   const controller = new ProformasController(
     proformasService as unknown as ProformasService,
     pdfService as unknown as DocumentPdfService,
-    docxService,
+    docxService as unknown as DocumentDocxService,
     tenantBranding as unknown as TenantBrandingProvider,
     documentContent as unknown as DocumentContentProvider,
   );

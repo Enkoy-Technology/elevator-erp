@@ -1,78 +1,64 @@
-import type { Document, Paragraph, Table } from 'docx';
+import type { Document } from 'docx';
 
 import type { TenantBranding } from '../document-pdf.service';
-import { amountInWords } from './amount-in-words';
 import {
   buildDocxDocument,
-  fullWidthTable,
-  grandRow,
+  dataTable,
+  fiscalNotice,
   heading,
+  notesBox,
+  paletteOf,
   partiesTable,
   plateTable,
-  row,
-  signatureTable,
-  textBlock,
+  signatureBlock,
+  totalsTable,
 } from './docx-layout';
-import { buildFiscalStatusParagraphs } from './invoice.docx-template';
+import { FISCAL_NOTICE_TEXT } from './invoice.template';
 import { formatEtb } from './money-format';
-import { fmtDate } from './quotation.template';
-import type { ReceiptTemplateData } from './receipt.template';
+import { receiptBody, type ReceiptTemplateData } from './receipt.template';
 
 export { formatEtb };
 
-const amountWordsFor = (amountEtb: string): string => {
-  const trimmed = amountEtb.trim();
-  const isNegative = trimmed.startsWith('-');
-  const magnitude = isNegative ? trimmed.slice(1) : trimmed;
-  const words = amountInWords(magnitude);
-  return isNegative ? `Negative ${words}` : words;
-};
-
 /**
- * Builds the payment receipt as a native docx `Document` — mirrors
- * receipt.template.ts's section shell (letterhead, reference plate, party
- * blocks, amount + words, allocations, compliance notice, signature,
- * footer). Always shows the plain compliance notice, never the mirror block
- * — see receipt.template.ts's own doc comment for why.
+ * The payment receipt in Word, section for section the PDF, read from the
+ * same receiptBody. Always the plain compliance notice, never the mirror
+ * block — see receipt.template.ts for why. As in buildInvoiceDocx, where
+ * two blocks meet only the larger gap is kept, as the PDF's margins
+ * collapse.
  */
-export const buildReceiptDocx = (data: object, branding: TenantBranding | null): Document => {
+export const buildReceiptDocx = (
+  data: object,
+  branding: TenantBranding | null,
+): Document => {
   const d = data as ReceiptTemplateData;
-  const primary = branding?.primaryColor ?? null;
-  const isReversal = Boolean(d.originalReceiptNumber);
-  const title = isReversal ? `REVERSAL OF RECEIPT ${d.originalReceiptNumber}` : 'PAYMENT RECEIPT';
-
-  const allocRows = d.allocations.map((a) => row(a.invoiceNumber, formatEtb(a.amountEtb)));
-
-  const children: (Paragraph | Table)[] = [
-    plateTable(
-      [
-        { label: 'Receipt No.', value: d.receiptNumber },
-        { label: 'Received', value: fmtDate(d.receivedAt) },
-        {
-          label: 'Method',
-          value: d.reference ? `${d.method} (${d.reference})` : d.method,
-        },
-      ],
-      primary,
-    ),
-    partiesTable(branding, { label: 'Received From', lines: [d.customerName] }),
-    heading('Amount', primary),
-    fullWidthTable([grandRow('Amount', formatEtb(d.amountEtb))]),
-    textBlock(amountWordsFor(d.amountEtb), true),
-    heading('Applied To', primary),
-    fullWidthTable([
-      ...(allocRows.length ? allocRows : [row('No invoices allocated', '—')]),
-      ...(d.hasOnAccount ? [row('On account', formatEtb(d.onAccountEtb))] : []),
-    ]),
-    ...buildFiscalStatusParagraphs(undefined, primary ?? ''),
-    signatureTable(branding, 'Received by'),
-  ];
+  const b = receiptBody(d);
+  const palette = paletteOf(branding);
 
   return buildDocxDocument({
     branding,
-    documentTitle: title,
-    footerNote:
-      'This is an acknowledgement of funds received, not a fiscal receipt. Prices in ETB.',
-    children,
+    documentTitle: b.documentTitle,
+    footerNote: b.footerNote,
+    children: [
+      ...plateTable(b.plate, palette),
+      ...partiesTable(branding, b.receivedFrom),
+      ...totalsTable([{ ...b.amount, grand: true }], palette),
+      ...notesBox(b.amountInWords, palette),
+      heading('Applied To', palette),
+      dataTable(
+        [
+          { header: 'Invoice', width: 60 },
+          { header: 'Amount Applied', width: 40, num: true },
+        ],
+        [
+          ...(b.allocations.length > 0
+            ? b.allocations.map((row) => [...row])
+            : [[b.noAllocations, '']]),
+          ...(b.onAccount ? [[...b.onAccount]] : []),
+        ],
+        palette,
+      ),
+      ...fiscalNotice(FISCAL_NOTICE_TEXT, palette),
+      ...signatureBlock(branding, b.signatureCaption),
+    ],
   });
 };

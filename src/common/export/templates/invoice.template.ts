@@ -77,23 +77,38 @@ export interface FiscalMirrorFields {
 }
 
 /**
+ * The notice-or-mirror decision itself, in plain text, for every format:
+ * null means the notice (FISCAL_NOTICE_TEXT) prints; otherwise these are
+ * the mirror block's lines, always ending "mirrored from the certified
+ * device". The PDF, the Word file and the xlsx cell all render this, so
+ * none of them can decide differently.
+ */
+export const fiscalMirrorLines = (
+  fiscal: FiscalMirrorFields | null | undefined,
+): string[] | null =>
+  fiscal?.fiscalReceiptNumber
+    ? [
+        `Fiscal receipt ${fiscal.fiscalReceiptNumber} issued ${fmtDate(fiscal.fiscalIssuedAt)} — device ${fiscal.fiscalDeviceSerial ?? '—'}`,
+        ...(fiscal.fiscalKind ? [fiscal.fiscalKind] : []),
+        ...(fiscal.fiscalNote ? [fiscal.fiscalNote] : []),
+        'mirrored from the certified device',
+      ]
+    : null;
+
+/**
  * Renders the notice (fiscalReceiptNumber null) or the mirror block
  * (populated) per the compliance rules above. `undefined`/`null` input is
  * the same as "no fiscal columns" — the notice branch — which is exactly
  * the case receipt.template.ts wants (payments have no fiscal columns to
  * ever populate).
  */
-export const buildFiscalStatusHtml = (fiscal: FiscalMirrorFields | null | undefined): string => {
-  if (!fiscal?.fiscalReceiptNumber) {
-    return `<div class="fiscal-notice">${esc(FISCAL_NOTICE_TEXT)}</div>`;
-  }
-  const lines = [
-    `Fiscal receipt ${esc(fiscal.fiscalReceiptNumber)} issued ${esc(fmtDate(fiscal.fiscalIssuedAt))} — device ${esc(fiscal.fiscalDeviceSerial ?? '—')}`,
-    ...(fiscal.fiscalKind ? [esc(fiscal.fiscalKind)] : []),
-    ...(fiscal.fiscalNote ? [esc(fiscal.fiscalNote)] : []),
-    'mirrored from the certified device',
-  ];
-  return `<div class="fiscal-mirror">${lines.join('<br/>')}</div>`;
+export const buildFiscalStatusHtml = (
+  fiscal: FiscalMirrorFields | null | undefined,
+): string => {
+  const lines = fiscalMirrorLines(fiscal);
+  return lines
+    ? `<div class="fiscal-mirror">${lines.map(esc).join('<br/>')}</div>`
+    : `<div class="fiscal-notice">${esc(FISCAL_NOTICE_TEXT)}</div>`;
 };
 
 /**
@@ -103,18 +118,9 @@ export const buildFiscalStatusHtml = (fiscal: FiscalMirrorFields | null | undefi
  * handler) — xlsx cells have no markup, so no `esc()`/no `<br/>`, just the
  * same words the HTML/DOCX formats show, joined with " — ".
  */
-export const buildFiscalStatusText = (fiscal: FiscalMirrorFields | null | undefined): string => {
-  if (!fiscal?.fiscalReceiptNumber) {
-    return FISCAL_NOTICE_TEXT;
-  }
-  const parts = [
-    `Fiscal receipt ${fiscal.fiscalReceiptNumber} issued ${fmtDate(fiscal.fiscalIssuedAt)} — device ${fiscal.fiscalDeviceSerial ?? '—'}`,
-    ...(fiscal.fiscalKind ? [fiscal.fiscalKind] : []),
-    ...(fiscal.fiscalNote ? [fiscal.fiscalNote] : []),
-    'mirrored from the certified device',
-  ];
-  return parts.join(' — ');
-};
+export const buildFiscalStatusText = (
+  fiscal: FiscalMirrorFields | null | undefined,
+): string => fiscalMirrorLines(fiscal)?.join(' — ') ?? FISCAL_NOTICE_TEXT;
 
 export interface InvoiceLineData {
   description: string;
@@ -155,34 +161,96 @@ export interface InvoiceTemplateData extends FiscalMirrorFields {
   netCashDueEtb: string;
 }
 
+/** One label/value row of a totals block, as both formats print it. */
+export interface TotalLine {
+  label: string;
+  value: string;
+}
+
+/**
+ * What the invoice prints, for both formats: buildInvoiceHtml and
+ * buildInvoiceDocx read this one object, so the plate, the parties, the
+ * items, the totals and the fine print cannot disagree between the PDF and
+ * the Word file.
+ */
+export const invoiceBody = (d: InvoiceTemplateData) => ({
+  documentTitle: 'INVOICE',
+  plate: [
+    { label: 'Invoice No.', value: d.invoiceNumber },
+    { label: 'Issued', value: fmtDate(d.issuedAt) },
+    { label: 'Due', value: fmtDate(d.dueDate) },
+    { label: 'Status', value: d.status },
+  ],
+  billedTo: {
+    label: 'Billed To',
+    lines: [
+      d.customerName,
+      ...(d.projectName ? [`Project: ${d.projectName}`] : []),
+    ],
+  },
+  /** Description, Qty, Unit Price, Line Total. */
+  items: d.lines.map(
+    (l) =>
+      [
+        l.description,
+        l.quantity,
+        formatEtb(l.unitPriceEtb),
+        formatEtb(l.lineTotalEtb),
+      ] as const,
+  ),
+  subtotal: {
+    label: 'Subtotal',
+    value: formatEtb(d.subtotalEtb),
+  } satisfies TotalLine,
+  vat: {
+    label: `VAT (${d.taxPercent ?? '0'}%)`,
+    value: formatEtb(d.vatEtb),
+  } satisfies TotalLine,
+  total: { label: 'Total', value: formatEtb(d.totalEtb) } satisfies TotalLine,
+  /** The two rows a withholding adds, both after Total; null without one. */
+  withholding: d.hasWithholding
+    ? {
+        deduction: {
+          label: `Withholding retained by customer (voucher ${d.whtVoucherRef ?? '—'})`,
+          value: formatEtb(d.whtDeductionEtb),
+        } satisfies TotalLine,
+        netCashDue: {
+          label: 'Net cash due',
+          value: formatEtb(d.netCashDueEtb),
+        } satisfies TotalLine,
+      }
+    : null,
+  footerNote: d.dueDate
+    ? `Payment due by ${fmtDate(d.dueDate)}. Prices in ETB.`
+    : 'Prices in ETB.',
+});
+
 /**
  * Build the branded invoice HTML document. Pure — no I/O. The compliance
  * notice/mirror block sits directly above the totals table ("above the
  * totals block" per §4) — deliberately NOT after Net cash due, so it is the
  * first thing a reader sees before any money figure.
  */
-export const buildInvoiceHtml = (data: object, branding: TenantBranding | null): string => {
+export const buildInvoiceHtml = (
+  data: object,
+  branding: TenantBranding | null,
+): string => {
   const d = data as InvoiceTemplateData;
+  const b = invoiceBody(d);
+  const row = (t: TotalLine, grand = false) =>
+    `<tr${grand ? ' class="grand"' : ''}><td>${esc(t.label)}</td><td class="num">${t.value}</td></tr>`;
 
-  const lineRows = d.lines
+  const lineRows = b.items
     .map(
-      (l) =>
-        `<tr><td>${esc(l.description)}</td><td class="num">${esc(l.quantity)}</td><td class="num">${formatEtb(l.unitPriceEtb)}</td><td class="num">${formatEtb(l.lineTotalEtb)}</td></tr>`,
+      ([description, quantity, unit, total]) =>
+        `<tr><td>${esc(description)}</td><td class="num">${esc(quantity)}</td><td class="num">${unit}</td><td class="num">${total}</td></tr>`,
     )
     .join('');
 
   const bodyHtml = `
-  ${renderReferencePlate([
-    { label: 'Invoice No.', value: d.invoiceNumber },
-    { label: 'Issued', value: fmtDate(d.issuedAt) },
-    { label: 'Due', value: fmtDate(d.dueDate) },
-    { label: 'Status', value: d.status },
-  ])}
+  ${renderReferencePlate(b.plate)}
 
-  ${renderParties(branding, {
-    label: 'Billed To',
-    lines: [d.customerName, ...(d.projectName ? [`Project: ${d.projectName}`] : [])],
-  })}
+  ${renderParties(branding, b.billedTo)}
 
   <h2>Items</h2>
   <table class="lines">
@@ -197,13 +265,13 @@ export const buildInvoiceHtml = (data: object, branding: TenantBranding | null):
   <div class="sum-block">
   <table class="totals">
     <tbody>
-    <tr><td>Subtotal</td><td class="num">${formatEtb(d.subtotalEtb)}</td></tr>
-    <tr><td>VAT (${esc(d.taxPercent ?? '0')}%)</td><td class="num">${formatEtb(d.vatEtb)}</td></tr>
-    <tr class="grand"><td>Total</td><td class="num">${formatEtb(d.totalEtb)}</td></tr>
+    ${row(b.subtotal)}
+    ${row(b.vat)}
+    ${row(b.total, true)}
     ${
-      d.hasWithholding
-        ? `<tr><td>Withholding retained by customer (voucher ${esc(d.whtVoucherRef ?? '—')})</td><td class="num">${formatEtb(d.whtDeductionEtb)}</td></tr>
-    <tr class="grand"><td>Net cash due</td><td class="num">${formatEtb(d.netCashDueEtb)}</td></tr>`
+      b.withholding
+        ? `${row(b.withholding.deduction)}
+    ${row(b.withholding.netCashDue, true)}`
         : ''
     }
     </tbody>
@@ -214,8 +282,8 @@ export const buildInvoiceHtml = (data: object, branding: TenantBranding | null):
 
   return renderLayout({
     branding,
-    documentTitle: 'INVOICE',
+    documentTitle: b.documentTitle,
     bodyHtml,
-    footerNote: d.dueDate ? `Payment due by ${fmtDate(d.dueDate)}. Prices in ETB.` : 'Prices in ETB.',
+    footerNote: b.footerNote,
   });
 };

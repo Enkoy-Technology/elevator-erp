@@ -52,59 +52,87 @@ const amountWordsFor = (amountEtb: string): string => {
 };
 
 /**
+ * What the receipt prints, for both formats: buildReceiptHtml and
+ * buildReceiptDocx read this one object, so the PDF and the Word file
+ * cannot disagree.
+ */
+export const receiptBody = (d: ReceiptTemplateData) => ({
+  documentTitle: d.originalReceiptNumber
+    ? `REVERSAL OF RECEIPT ${d.originalReceiptNumber}`
+    : 'PAYMENT RECEIPT',
+  plate: [
+    { label: 'Receipt No.', value: d.receiptNumber },
+    { label: 'Received', value: fmtDate(d.receivedAt) },
+    {
+      label: 'Method',
+      value: d.reference ? `${d.method} (${d.reference})` : d.method,
+    },
+  ],
+  receivedFrom: { label: 'Received From', lines: [d.customerName] },
+  amount: { label: 'Amount', value: formatEtb(d.amountEtb) },
+  amountInWords: amountWordsFor(d.amountEtb),
+  /** Invoice, Amount Applied. */
+  allocations: d.allocations.map(
+    (a) => [a.invoiceNumber, formatEtb(a.amountEtb)] as const,
+  ),
+  /** Printed across the table when nothing was allocated. */
+  noAllocations: 'No invoices allocated',
+  /** The unallocated remainder, after the allocations; null when there is none. */
+  onAccount: d.hasOnAccount
+    ? (['On account', formatEtb(d.onAccountEtb)] as const)
+    : null,
+  signatureCaption: 'Received by',
+  footerNote:
+    'This is an acknowledgement of funds received, not a fiscal receipt. Prices in ETB.',
+});
+
+/**
  * Build the branded payment-receipt HTML document. Pure — no I/O. Always
  * carries the compliance notice (never the mirror block — payments have no
  * fiscal columns to populate; see invoice.template.ts's compliance doc
  * comment, rule 4): a payment receipt from the ERP is an acknowledgement of
  * funds received, never a substitute for the customer's own fiscal receipt.
  */
-export const buildReceiptHtml = (data: object, branding: TenantBranding | null): string => {
+export const buildReceiptHtml = (
+  data: object,
+  branding: TenantBranding | null,
+): string => {
   const d = data as ReceiptTemplateData;
-  const isReversal = Boolean(d.originalReceiptNumber);
-  const title = isReversal ? `REVERSAL OF RECEIPT ${d.originalReceiptNumber}` : 'PAYMENT RECEIPT';
-
-  const allocRows = d.allocations
-    .map(
-      (a) =>
-        `<tr><td>${esc(a.invoiceNumber)}</td><td class="num">${formatEtb(a.amountEtb)}</td></tr>`,
-    )
-    .join('');
+  const b = receiptBody(d);
+  const appliedRow = ([label, value]: readonly [string, string]) =>
+    `<tr><td>${esc(label)}</td><td class="num">${value}</td></tr>`;
 
   const bodyHtml = `
-  ${renderReferencePlate([
-    { label: 'Receipt No.', value: d.receiptNumber },
-    { label: 'Received', value: fmtDate(d.receivedAt) },
-    { label: 'Method', value: d.reference ? `${d.method} (${d.reference})` : d.method },
-  ])}
+  ${renderReferencePlate(b.plate)}
 
-  ${renderParties(branding, { label: 'Received From', lines: [d.customerName] })}
+  ${renderParties(branding, b.receivedFrom)}
 
   <div class="sum-block">
   <table class="totals">
     <tbody>
-    <tr class="grand"><td>Amount</td><td class="num">${formatEtb(d.amountEtb)}</td></tr>
+    <tr class="grand"><td>${esc(b.amount.label)}</td><td class="num">${b.amount.value}</td></tr>
     </tbody>
   </table>
   </div>
-  <div class="notes">${esc(amountWordsFor(d.amountEtb))}</div>
+  <div class="notes">${esc(b.amountInWords)}</div>
 
   <h2>Applied To</h2>
   <table class="lines">
     <thead><tr><th>Invoice</th><th class="num">Amount Applied</th></tr></thead>
     <tbody>
-    ${allocRows || '<tr><td colspan="2">No invoices allocated</td></tr>'}
-    ${d.hasOnAccount ? `<tr><td>On account</td><td class="num">${formatEtb(d.onAccountEtb)}</td></tr>` : ''}
+    ${b.allocations.map(appliedRow).join('') || `<tr><td colspan="2">${esc(b.noAllocations)}</td></tr>`}
+    ${b.onAccount ? appliedRow(b.onAccount) : ''}
     </tbody>
   </table>
 
   ${buildFiscalStatusHtml(undefined)}
 
-  ${renderSignatureBlock(branding, 'Received by')}`;
+  ${renderSignatureBlock(branding, b.signatureCaption)}`;
 
   return renderLayout({
     branding,
-    documentTitle: title,
+    documentTitle: b.documentTitle,
     bodyHtml,
-    footerNote: 'This is an acknowledgement of funds received, not a fiscal receipt. Prices in ETB.',
+    footerNote: b.footerNote,
   });
 };

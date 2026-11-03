@@ -4,6 +4,7 @@ import {
   PRODUCT_LABELS,
   renderCommercialBody,
   specLabel,
+  type CommercialDocumentOptions,
   type CommercialTermsData,
   type DocumentAppendixContent,
   type DocumentLineData,
@@ -152,22 +153,18 @@ export const impliedLine = (
 });
 
 /**
- * Build the branded quotation HTML document, in the shape of the client's
- * own 8-page offer: page 1 commercial, page 2 specification, pages 3+ their
- * boilerplate and component table. Pure — no I/O — so it is unit testable
- * and Puppeteer just renders whatever string this returns. Every
- * interpolated data/branding field is HTML-escaped.
+ * What the quotation prints, page by page, for both formats: the PDF below
+ * and buildQuotationDocx read this one object, so they cannot disagree.
  *
  * The negotiated discount and the calculated-before-negotiation total are
  * deliberately absent: they are recorded on the quotation for the client's
  * own reporting, and printing either on the customer's copy would hand over
  * the negotiating position.
  */
-export const buildQuotationHtml = (
-  data: object,
+export const quotationBody = (
+  d: QuotationTemplateData,
   branding: TenantBranding | null,
-): string => {
-  const d = data as QuotationTemplateData;
+): CommercialDocumentOptions => {
   // total - VAT, so the three printed figures always add up to the cent (see
   // netOfTaxEtb) rather than being re-derived from the pre-margin subtotal.
   const exVatTotalEtb = netOfTaxEtb(d.totalPriceEtb, d.taxAmountEtb);
@@ -176,8 +173,7 @@ export const buildQuotationHtml = (
       ? d.lines
       : [impliedLine(d.technicalSpec, exVatTotalEtb)];
   const reference = documentReferenceCode(d.salesName, d.referenceCode);
-
-  const bodyHtml = renderCommercialBody({
+  return {
     branding,
     plate: [
       { label: 'Quote No.', value: d.quoteNumber },
@@ -197,13 +193,31 @@ export const buildQuotationHtml = (
     boilerplate: d.boilerplate,
     components: d.components,
     notes: d.notes,
-  });
+  };
+};
 
+/** The quotation's cover lines and fine print, shared by both formats. */
+export const quotationFrame = (d: QuotationTemplateData) => ({
+  documentTitle: 'QUOTATION',
+  coverLines: ['Project', d.projectName],
+  footerNote: `This quotation is valid until ${fmtDate(d.validUntil)}. Prices in ETB.`,
+});
+
+/**
+ * Build the branded quotation HTML document, in the shape of the client's
+ * own 8-page offer: page 1 commercial, page 2 specification, pages 3+ their
+ * boilerplate and component table. Pure — no I/O — so it is unit testable
+ * and Puppeteer just renders whatever string this returns. Every
+ * interpolated data/branding field is HTML-escaped.
+ */
+export const buildQuotationHtml = (
+  data: object,
+  branding: TenantBranding | null,
+): string => {
+  const d = data as QuotationTemplateData;
   return renderLayout({
     branding,
-    documentTitle: 'QUOTATION',
-    coverLines: ['Project', d.projectName],
-    bodyHtml,
-    footerNote: `This quotation is valid until ${fmtDate(d.validUntil)}. Prices in ETB.`,
+    ...quotationFrame(d),
+    bodyHtml: renderCommercialBody(quotationBody(d, branding)),
   });
 };

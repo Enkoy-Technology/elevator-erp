@@ -6,6 +6,7 @@ import { BlockList, isIP } from 'node:net';
 import type { Browser } from 'puppeteer';
 
 import { TemplateNotImplementedError } from '../exceptions';
+import { readInlineImage } from './inline-image';
 import { buildAgingReportHtml } from './templates/aging.template';
 import { buildCompletionCertificateHtml } from './templates/completion-certificate.template';
 import { buildContractHtml } from './templates/contract.template';
@@ -19,6 +20,13 @@ import { buildReceiptHtml } from './templates/receipt.template';
 import { buildCustomerStatementHtml } from './templates/statement.template';
 import { buildTechnicalProposalHtml } from './templates/technical-proposal.template';
 import { buildWarrantyCertificateHtml } from './templates/warranty-certificate.template';
+
+/** The largest image a tenant may hand the fade (layout.ts prints the mark 130mm wide). */
+const MAX_SOURCE_SIDE_PX = 4096;
+const MAX_SOURCE_PIXELS = 4096 * 4096;
+/** The faded copy's longest side: 130mm at about 300 dpi. */
+const MAX_FADED_PX = 1600;
+const FADE_TIMEOUT_MS = 15_000;
 
 /**
  * Every member here MUST have a builder in TEMPLATE_BUILDERS below. This
@@ -341,6 +349,116 @@ export class DocumentPdfService implements OnModuleDestroy {
       // above) must not replace a real render error from the try block with
       // a confusing "failed to close" one — swallow it.
       await page.close().catch(() => {});
+    }
+  }
+
+  /**
+   * The image drawn at `opacity` onto a transparent canvas and re-encoded
+   * as a PNG data: URI. It is how the Word file gets the PDF's 20%
+   * watermark (docx cannot set an image's transparency, and a viewer that
+   * ignores Word's own setting would print the mark full strength over the
+   * text). The seal goes through it at 1, so Word only ever embeds a PNG
+   * with no camera metadata. The PDF prints the same stored images.
+   *
+   * A tenant's bytes are a decode bomb waiting to happen: a 43 KB PNG can
+   * claim 16384 × 16384 pixels. So the type is read from the bytes, the
+   * pixel size from the header before Chromium decodes anything, and the
+   * canvas is never larger than MAX_FADED_PX. It waits its turn behind the
+   * PDF renders (one page at a time, see renderQueue), runs with no script
+   * and no network, and gives up after FADE_TIMEOUT_MS. Null when the image
+   * is refused or cannot be drawn; it never rejects.
+   */
+  fadeImage(dataUri: string, opacity: number): Promise<string | null> {
+    const image = readInlineImage(dataUri);
+    if (
+      !image ||
+      (image.type !== 'svg' &&
+        (image.width < 1 ||
+          image.height < 1 ||
+          image.width > MAX_SOURCE_SIDE_PX ||
+          image.height > MAX_SOURCE_SIDE_PX ||
+          image.width * image.height > MAX_SOURCE_PIXELS))
+    ) {
+      return Promise.resolve(null);
+    }
+    const run = this.renderQueue.then(() => this.fadeOne(dataUri, opacity));
+    this.renderQueue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async fadeOne(
+    dataUri: string,
+    opacity: number,
+  ): Promise<string | null> {
+    let page: Awaited<ReturnType<Browser['newPage']>> | null = null;
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      page = await (await this.getBrowser()).newPage();
+      await page.setJavaScriptEnabled(false);
+      await page.setRequestInterception(true);
+      page.on('request', (req) => {
+        if (req.url().startsWith('data:')) {
+          req.continue().catch(() => {});
+        } else {
+          req.abort().catch(() => {});
+        }
+      });
+      const timeout = new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), FADE_TIMEOUT_MS);
+      });
+      // Runs in the browser: no named function in here (see renderOne).
+      const faded = page.evaluate(
+        async (src, alpha, maxSide) => {
+          const g = globalThis as unknown as {
+            Image: new () => {
+              src: string;
+              naturalWidth: number;
+              naturalHeight: number;
+              decode(): Promise<void>;
+            };
+            document: {
+              createElement(tag: 'canvas'): {
+                width: number;
+                height: number;
+                getContext(kind: '2d'): {
+                  globalAlpha: number;
+                  drawImage(
+                    image: unknown,
+                    x: number,
+                    y: number,
+                    w: number,
+                    h: number,
+                  ): void;
+                };
+                toDataURL(type: string): string;
+              };
+            };
+          };
+          const image = new g.Image();
+          image.src = src;
+          await image.decode();
+          const scale = Math.min(
+            1,
+            maxSide / Math.max(image.naturalWidth, image.naturalHeight, 1),
+          );
+          const canvas = g.document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+          canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+          const context = canvas.getContext('2d');
+          context.globalAlpha = alpha;
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          return canvas.toDataURL('image/png');
+        },
+        dataUri,
+        opacity,
+        MAX_FADED_PX,
+      );
+      return await Promise.race([faded, timeout]);
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+      await page?.close().catch(() => {});
     }
   }
 

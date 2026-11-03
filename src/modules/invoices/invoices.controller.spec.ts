@@ -79,7 +79,7 @@ describe('InvoicesController.list — status validation and format routing', () 
   const controller = new InvoicesController(
     invoicesService as unknown as InvoicesService,
     pdfService as never,
-    docxService,
+    docxService as never,
     tenantBranding as never,
   );
   const res = { json: jest.fn() };
@@ -214,7 +214,7 @@ describe('InvoicesController.aging — format routing', () => {
   const controller = new InvoicesController(
     invoicesService as unknown as InvoicesService,
     pdfService as never,
-    docxService,
+    docxService as never,
     tenantBranding as never,
   );
   const res = { json: jest.fn(), end: jest.fn() };
@@ -333,7 +333,7 @@ describe('InvoicesController.document — format routing and filenames', () => {
   const controller = new InvoicesController(
     invoicesService as unknown as InvoicesService,
     pdfService as never,
-    docxService,
+    docxService as never,
     tenantBranding as never,
   );
 

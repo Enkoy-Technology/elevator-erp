@@ -7,6 +7,7 @@ import { ROLES_KEY } from '../../common/decorators';
 import { setDownloadHeaders, singleRow, writeXlsx } from '../../common/export/tabular';
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { QuotationsController } from './quotations.controller';
+import type { DocumentDocxService } from '../../common/export/document-docx.service';
 import type { DocumentPdfService } from '../../common/export/document-pdf.service';
 import type { TenantBrandingProvider } from '../../common/export/tenant-branding.provider';
 import type { QuotationsService } from './quotations.service';
@@ -90,7 +91,7 @@ describe('QuotationsController.document — format routing and filenames', () =>
   const controller = new QuotationsController(
     quotationsService as unknown as QuotationsService,
     pdfService as unknown as DocumentPdfService,
-    docxService,
+    docxService as unknown as DocumentDocxService,
     tenantBranding as unknown as TenantBrandingProvider,
     documentContent as unknown as DocumentContentProvider,
   );
@@ -231,7 +232,7 @@ describe('QuotationsController.technicalProposal', () => {
   const controller = new QuotationsController(
     quotationsService as unknown as QuotationsService,
     pdfService as unknown as DocumentPdfService,
-    docxService,
+    docxService as unknown as DocumentDocxService,
     tenantBranding as unknown as TenantBrandingProvider,
     documentContent as unknown as DocumentContentProvider,
   );

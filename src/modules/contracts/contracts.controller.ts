@@ -82,7 +82,14 @@ const CONTRACT_DOCUMENT_COLUMNS: ColumnDef[] = [
 @ApiTags('contracts')
 @ApiBearerAuth('access-token')
 @Controller()
-@Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'SALESPERSON', 'TECHNICAL_MANAGER', 'FINANCE_OFFICER', 'SECRETARY')
+@Roles(
+  'GENERAL_MANAGER',
+  'SALES_MANAGER',
+  'SALESPERSON',
+  'TECHNICAL_MANAGER',
+  'FINANCE_OFFICER',
+  'SECRETARY',
+)
 export class ContractsController {
   constructor(
     private readonly contractsService: ContractsService,
@@ -251,9 +258,7 @@ export class ContractsController {
       res.end(buf);
       return;
     }
-    // No docx builder for 'contract' yet — this answers with
-    // TemplateNotImplementedError until one is registered, the same
-    // behaviour every not-yet-wired template already has.
+    // The Word file is the PDF's twin, for the client to edit before signing.
     const buf = await this.docxService.renderDocumentDocx(
       'contract',
       data,
