@@ -853,13 +853,13 @@ describe('QuotationsService', () => {
       expect(values.totalPriceEtb).toBe('6582608.70');
     });
 
-    it("keeps the calculator's note on a line whose shaft no standard lift fits", async () => {
+    it("keeps the calculator's note on a line whose shaft no lift fits", async () => {
       // The line editor has no calculator screen: the note is what tells the
-      // salesperson the 5-person was quoted for a shaft below its own.
+      // salesperson the 4-person was quoted for a shaft below its own.
       await sheetService.addLine(user, draft.id, {
         productType: 'HOSPITAL',
-        shaftWidthMm: 1500,
-        shaftDepthMm: 1500,
+        shaftWidthMm: 1100,
+        shaftDepthMm: 1100,
         stops: 12,
         machineRoomType: 'MRL',
         buildingUsage: 'COMMERCIAL',
@@ -867,12 +867,12 @@ describe('QuotationsService', () => {
       } as never);
       const [, , values] = repo.addLine.mock.calls.at(-1)!;
       expect(values.technicalSpec).toMatchObject({
-        capacityPersons: 5,
-        notes: [
+        capacityPersons: 4,
+        notes: expect.arrayContaining([
           expect.stringMatching(
-            /No standard shaft fits inside 1500 × 1500 mm.*5-person.*manufacturer/,
+            /No shaft fits inside 1100 × 1100 mm.*4-person.*manufacturer/,
           ),
-        ],
+        ]),
       });
     });
 
@@ -880,8 +880,8 @@ describe('QuotationsService', () => {
       const standardLine = (extra: Record<string, unknown> = {}) =>
         ({
           productType: 'PASSENGER',
-          shaftWidthMm: 1835,
-          shaftDepthMm: 1750,
+          shaftWidthMm: 1600,
+          shaftDepthMm: 1850,
           stops: 12,
           machineRoomType: 'MRL',
           buildingUsage: 'COMMERCIAL',
@@ -929,8 +929,8 @@ describe('QuotationsService', () => {
       it('keeps them on the quotation a calculation starts', async () => {
         const values = await created({
           productType: 'PASSENGER',
-          shaftWidthMm: 1835,
-          shaftDepthMm: 1750,
+          shaftWidthMm: 1600,
+          shaftDepthMm: 1850,
           floors: 12,
           machineRoomType: 'MRL',
           buildingUsage: 'COMMERCIAL',

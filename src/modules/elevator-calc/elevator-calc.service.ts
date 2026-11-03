@@ -25,6 +25,7 @@ import { hasDoor, hasMachineRoom, VEHICLE_SPECS } from './vehicle-specs';
 import {
   PASSENGER_CAR_HEIGHT_MM,
   selectPassengerLift,
+  shaftLabel,
   speedForFloors,
   usesPassengerTable,
 } from './passenger-table';
@@ -226,17 +227,22 @@ const resolve = (
     const shaftWidthMm = request.shaftWidthMm!;
     const shaftDepthMm = request.shaftDepthMm!;
     const floors = request.floors!;
-    const { lift, exact, undersized } = selectPassengerLift(
+    const { lift, exact, undersized, largerThanRange } = selectPassengerLift(
       shaftWidthMm,
       shaftDepthMm,
     );
     if (undersized) {
       notes.push(
-        `No standard shaft fits inside ${shaftWidthMm} × ${shaftDepthMm} mm; it is quoted as the smallest standard lift, the ${lift.persons}-person ${lift.loadKg} kg (${lift.shaftWidthMm} × ${lift.shaftDepthMm} mm standard shaft), to be confirmed by the manufacturer's drawing.`,
+        `No shaft fits inside ${shaftWidthMm} × ${shaftDepthMm} mm; it is quoted as the smallest lift, the ${lift.persons}-person ${lift.loadKg} kg (${shaftLabel(lift)}), to be confirmed by the manufacturer's drawing.`,
       );
     } else if (!exact) {
       notes.push(
-        `${shaftWidthMm} × ${shaftDepthMm} mm is not a standard shaft; the biggest standard lift that fits is the ${lift.persons}-person (${lift.shaftWidthMm} × ${lift.shaftDepthMm} mm shaft).`,
+        `${shaftWidthMm} × ${shaftDepthMm} mm is not a standard shaft; the biggest lift that fits is the ${lift.persons}-person ${lift.loadKg} kg (${shaftLabel(lift)})${lift.range ? ", its car size to be confirmed by the manufacturer's drawing" : ''}.`,
+      );
+    }
+    if (largerThanRange) {
+      notes.push(
+        `${shaftWidthMm} × ${shaftDepthMm} mm is bigger than the ${largerThanRange} mm range for ${lift.loadKg} kg; ask the manufacturer whether a bigger lift fits.`,
       );
     }
     const bandSpeed = speedForFloors(floors);
@@ -295,7 +301,7 @@ const resolve = (
       // beside it rather than silently replacing it.
       shaftWidthMm,
       shaftDepthMm,
-      standardLift: `${asTable ? `${lift.persons}-person lift, ` : ''}${lift.shaftWidthMm} × ${lift.shaftDepthMm} mm standard shaft`,
+      standardLift: `${asTable ? `${lift.persons}-person lift, ` : ''}${shaftLabel(lift)}`,
     };
     return { input, technical, notes, pricedKg: lift.loadKg };
   }
