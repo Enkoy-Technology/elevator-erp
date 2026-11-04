@@ -366,7 +366,7 @@ shaftDepthMm mm EN 81-20 shaft depth = car_depth + wall_clearance + counterweigh
 | carDepthMm  | mm  | max(1400, floor(0.8 * sqrt(Q) + 300)) |     |
 | carHeightMm | mm  | 2300 + 50 if HOSPITAL                 |     |
 | pitDepthMm  | mm  | 1400 + (50 * N) + speed_adjustment    |     |
-overheadClearanceMm mm 4200 + (100 * N) + speed_adjustment - 1500 if MRL
+overheadClearanceMm mm 4500 for every lift (client, 2026-11-04)
 counterweightMassKg kg Q * (0.45 - 0.05 if v > 2.5 + 0.05 if INDUSTRIAL)
 motorPowerKw kW (Q * v * 9.81 * eff_factor) / (1000 * mech_efficiency)
 | guideRailSpec | string | T75-3/B to T140-3/B based on Q and v |     |
@@ -999,10 +999,7 @@ speed_adjustment = max(0, (v - 1.0) × 200) [mm]
 pit_depth = base_pit + speed_adjustment + (200 if v > 2.5 else 0) [mm]
 
 4.1.5 Overhead Clearance
-base_overhead = 4200 + (100 × N) [mm]
-speed_adjustment = max(0, (v - 1.0) × 300) [mm]
-overhead_clearance = base_overhead + speed_adjustment [mm]
-if MR/MRL = MRL: overhead_clearance = overhead_clearance - 1500 [mm]
+overhead_clearance = 4500 [mm], for every lift (client, 2026-11-04)
 4.1.6 Counterweight Mass
 counterweight_mass = Q × (0.45 - (0.05 if v > 2.5 else 0) + (0.05 if U = INDUSTRIAL else 0))
 [kg]

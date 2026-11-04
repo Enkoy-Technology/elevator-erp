@@ -51,11 +51,10 @@ pit_depth = base_pit + speed_adjustment + (200 if v > 2.5 else 0)   [mm]
 
 ## 4.1.5 Overhead Clearance
 
+One figure for every lift, whatever its size, speed or machine room (client, 2026-11-04). An escalator has none.
+
 ```text
-base_overhead = 4200 + (100 × N)                    [mm]
-speed_adjustment = max(0, (v - 1.0) × 300)          [mm]
-overhead_clearance = base_overhead + speed_adjustment              [mm]
-if MRL: overhead_clearance = overhead_clearance - 1500             [mm]
+overhead_clearance = 4500                            [mm]
 ```
 
 ## 4.1.6 Counterweight Mass

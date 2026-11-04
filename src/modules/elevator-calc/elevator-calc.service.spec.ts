@@ -558,7 +558,7 @@ describe('ElevatorCalcService', () => {
   });
 
   describe('boundary cases', () => {
-    it('handles minimum capacity and MRL overhead reduction', async () => {
+    it('handles minimum capacity on an MRL lift, whose overhead is no different', async () => {
       const result = await calc({
         ...WORKED_EXAMPLE,
         capacityKg: 320,
@@ -572,9 +572,7 @@ describe('ElevatorCalcService', () => {
       });
       expect(result.technical.capacityPersons).toBe(4);
       expect(result.technical.machineRoomWidthMm).toBeNull();
-      expect(result.technical.overheadClearanceMm).toBe(
-        4200 + 100 * 2 + 0 - 1500,
-      );
+      expect(result.technical.overheadClearanceMm).toBe(4500);
     });
 
     it('applies high-speed and INDUSTRIAL counterweight adjustments', async () => {
@@ -628,7 +626,6 @@ describe('ElevatorCalcService', () => {
           'capacityPersons',
           'carHeightMm',
           'pitDepthMm',
-          'overheadClearanceMm',
           'counterweightMassKg',
           'motorPowerKw',
           'guideRailSpec',
@@ -724,10 +721,11 @@ describe('ElevatorCalcService', () => {
       expect(result.input.capacityKg).toBe(1000);
       expect(result.input.doorWidthMm).toBe(900);
       expect(result.notes[0]).toMatch(
-        /biggest lift that fits is the 13-person 1000 kg \(1960 × 2000 to 2200 × 2200 mm shaft range\), its car size to be confirmed/,
+        /biggest lift that fits is the 13-person 1000 kg \(1960 × 2000 to 2200 × 2200 mm shaft range\), its load's standard car to be confirmed/,
       );
-      // The ranges give no car: none is printed rather than a guessed one.
-      expect(result.technical.carWidthMm).toBeNull();
+      // A range gives no car: its load's standard one stays (client, 2026-11-04).
+      expect(result.technical.carWidthMm).toBe(1600);
+      expect(result.technical.carDepthMm).toBe(1400);
       // The spec sheet says the building's shaft, and names the range beside it.
       expect(result.technical.shaftWidthMm).toBe(2000);
       expect(result.technical.shaftDepthMm).toBe(2200);
@@ -752,7 +750,7 @@ describe('ElevatorCalcService', () => {
       expect(selectPassengerLift(2600, 2100).lift.loadKg).toBe(1150);
     });
 
-    it('prefers a standard row to a shaft range of the same load, for its car', () => {
+    it('prefers a standard row to a shaft range of the same load', () => {
       // 1700 × 1900 holds the 8-person 2S's 1600 × 1850 and the 630 kg range's 1600 × 1600.
       expect(selectPassengerLift(1700, 1900).lift).toMatchObject({
         loadKg: 630,
@@ -787,6 +785,48 @@ describe('ElevatorCalcService', () => {
       expect(wrongFlag).toEqual([]);
     });
 
+    it('never gives a shaft a car that does not fit inside it', () => {
+      const tooBig: string[] = [];
+      for (let width = 1000; width <= 4200; width += 25) {
+        for (let depth = 1000; depth <= 4200; depth += 25) {
+          const { carWidthMm, carDepthMm } = selectPassengerLift(width, depth).lift;
+          if (carWidthMm !== null && (carWidthMm >= width || carDepthMm! >= depth)) {
+            tooBig.push(`${width} × ${depth}`);
+          }
+        }
+      }
+      expect(tooBig).toEqual([]);
+    });
+
+    it('keeps the standard table for car and speed on every load it has', () => {
+      for (const row of PASSENGER_SHAFT_RANGES) {
+        const first = PASSENGER_LIFTS.find((lift) => lift.loadKg === row.loadKg);
+        expect(row.carWidthMm).toBe(first?.carWidthMm ?? null);
+        expect(row.carDepthMm).toBe(first?.carDepthMm ?? null);
+        if (first) {
+          expect(row.maxSpeedMs).toBe(first.maxSpeedMs);
+        }
+      }
+    });
+
+    it('prints the same overhead on every lift, and none on an escalator', async () => {
+      const passenger = await standard({ shaftWidthMm: 3700, shaftDepthMm: 3100 });
+      expect(passenger.technical.overheadClearanceMm).toBe(4500);
+      const carLift = await calc({
+        ...WORKED_EXAMPLE,
+        ...forProduct('CAR_PLATFORM_LIFT'),
+        productType: 'CAR_PLATFORM_LIFT',
+        capacityKg: 3500,
+      });
+      expect(carLift.technical.overheadClearanceMm).toBe(4500);
+      const escalator = await calc({
+        ...WORKED_EXAMPLE,
+        ...forProduct('ESCALATOR'),
+        productType: 'ESCALATOR',
+      });
+      expect(escalator.technical.overheadClearanceMm).toBeNull();
+    });
+
     it('takes the biggest range for a shaft bigger than every one, and says it is bigger', async () => {
       const result = await standard({
         shaftWidthMm: 5000,
@@ -795,8 +835,10 @@ describe('ElevatorCalcService', () => {
       });
       expect(result.technical.capacityPersons).toBe(40);
       expect(result.input.capacityKg).toBe(3000);
-      // The 1800 kg and bigger lifts run to 2.5 m/s.
-      expect(result.input.speedMs).toBe(2.5);
+      // No standard car at 3000 kg, and the standard table's top speed.
+      expect(result.technical.carWidthMm).toBeNull();
+      expect(result.notes[0]).toMatch(/its car size to be confirmed/);
+      expect(result.input.speedMs).toBe(2.0);
       expect(result.notes).toContainEqual(
         expect.stringMatching(
           /bigger than the 3500 × 3000 to 4000 × 3300 mm range for 3000 kg/,
@@ -860,8 +902,8 @@ describe('ElevatorCalcService', () => {
       });
       expect(result.technical.capacityPersons).toBe(4);
       expect(result.input.capacityKg).toBe(320);
-      // The 320 kg home lift runs to 1.0 m/s, whatever the floors call for.
-      expect(result.input.speedMs).toBe(1);
+      // Not in the standard table, so it keeps the limit of its nearest load, 1.75 m/s.
+      expect(result.input.speedMs).toBe(1.5);
       expect(result.notes[0]).toMatch(
         /No shaft fits inside 1100 × 1100 mm.*4-person 320 kg.*manufacturer/,
       );

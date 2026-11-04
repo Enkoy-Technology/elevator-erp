@@ -126,21 +126,6 @@ export const computePitDepthMm = (stops: number, speedMs: number): number => {
   return base.plus(speedAdj).plus(highSpeedExtra).toDecimalPlaces(0).toNumber();
 };
 
-export const computeOverheadClearanceMm = (
-  stops: number,
-  speedMs: number,
-  machineRoomType: MachineRoomType,
-): number => {
-  const v = D(speedMs);
-  const base = D(4200).plus(D(100).mul(stops));
-  const speedAdj = Decimal.max(0, v.minus(1).mul(300));
-  let overhead = base.plus(speedAdj);
-  if (machineRoomType === 'MRL') {
-    overhead = overhead.minus(1500);
-  }
-  return overhead.toDecimalPlaces(0).toNumber();
-};
-
 export const computeCounterweightMassKg = (
   capacityKg: number,
   speedMs: number,

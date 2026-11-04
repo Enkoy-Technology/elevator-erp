@@ -11,7 +11,6 @@ import {
   computeCounterweightMassKg,
   computeMachineRoom,
   computeMotorPowerKw,
-  computeOverheadClearanceMm,
   computePitDepthMm,
   computeProductPrice,
   computeShaftDimensions,
@@ -205,8 +204,8 @@ type Resolved = {
  * carrying a shaft and floors) reads the company's table: the shaft picks the lift,
  * the floors give stops, travel (3.5 m a floor) and the speed band, capped
  * at what that lift allows. The technical block is then exactly what the
- * table says — car, door, shaft, persons — and nothing else. Classic mode
- * requires every figure and computes the EN 81 geometry as before.
+ * table says — car, door, shaft, persons — plus the overhead. Classic mode
+ * requires every figure and computes the EN 81 geometry.
  */
 const resolve = (
   request: CalcRequest,
@@ -237,7 +236,7 @@ const resolve = (
       );
     } else if (!exact) {
       notes.push(
-        `${shaftWidthMm} × ${shaftDepthMm} mm is not a standard shaft; the biggest lift that fits is the ${lift.persons}-person ${lift.loadKg} kg (${shaftLabel(lift)})${lift.range ? ", its car size to be confirmed by the manufacturer's drawing" : ''}.`,
+        `${shaftWidthMm} × ${shaftDepthMm} mm is not a standard shaft; the biggest lift that fits is the ${lift.persons}-person ${lift.loadKg} kg (${shaftLabel(lift)})${lift.range ? `, ${lift.carWidthMm === null ? 'its car size' : "its load's standard car"} to be confirmed by the manufacturer's drawing` : ''}.`,
       );
     }
     if (largerThanRange) {
@@ -296,6 +295,7 @@ const resolve = (
       carWidthMm: lift.carWidthMm,
       carDepthMm: lift.carDepthMm,
       carHeightMm: PASSENGER_CAR_HEIGHT_MM,
+      overheadClearanceMm: STANDARD_OVERHEAD_MM,
       // The building's shaft, as entered — what the salesperson typed must
       // be what the spec sheet says. The standard row it maps to is named
       // beside it rather than silently replacing it.
@@ -392,6 +392,9 @@ const resolve = (
       productType: input.productType,
       carWidthMm: vehicle.platformMm?.width ?? null,
       carDepthMm: vehicle.platformMm?.depth ?? null,
+      // An escalator has no shaft top to clear.
+      overheadClearanceMm:
+        request.productType === 'ESCALATOR' ? null : STANDARD_OVERHEAD_MM,
       // The building's opening, as entered; the document's clear shaft is
       // on the sheet beside it.
       shaftWidthMm: request.shaftWidthMm ?? null,
@@ -441,6 +444,9 @@ const withTypedPersons = (
 /** Floor pitch when only the floor count is known — the client's 3,500 mm per floor. */
 const FLOOR_HEIGHT_M = 3.5;
 
+/** One overhead for every lift, of any size or speed (client, 2026-11-04: "450", in cm). */
+const STANDARD_OVERHEAD_MM = 4500;
+
 /** The §4.1 EN 81 lift block, for every product with lift geometry on. */
 const computeLiftGeometry = (
   input: CalcInput,
@@ -471,11 +477,7 @@ const computeLiftGeometry = (
     shaftDepthMm: shaft.depthMm,
     standardLift: null,
     pitDepthMm: computePitDepthMm(input.stops, input.speedMs),
-    overheadClearanceMm: computeOverheadClearanceMm(
-      input.stops,
-      input.speedMs,
-      machineRoomType,
-    ),
+    overheadClearanceMm: STANDARD_OVERHEAD_MM,
     counterweightMassKg: qty2(counterweight),
     motorPowerKw: qty2(motorKw),
     guideRailSpec: selectGuideRail(input.capacityKg, input.speedMs),

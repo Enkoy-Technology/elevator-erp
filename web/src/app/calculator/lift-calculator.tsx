@@ -447,7 +447,9 @@ export const LiftResult = ({
                   ['Speed (m/s)', String(result.input.speedMs)],
                   [
                     'Car W×D×CH (mm)',
-                    `${formatNumber(result.technical.carWidthMm)} × ${formatNumber(result.technical.carDepthMm)} × ${formatNumber(result.technical.carHeightMm)}`,
+                    result.technical.carWidthMm === null
+                      ? 'To be confirmed'
+                      : `${formatNumber(result.technical.carWidthMm)} × ${formatNumber(result.technical.carDepthMm)} × ${formatNumber(result.technical.carHeightMm)}`,
                   ],
                   ['Door (mm)', doorLabel(result.input)],
                   [
@@ -459,6 +461,10 @@ export const LiftResult = ({
                   [
                     'Travel (mm)',
                     formatNumber(Math.round(result.input.travelHeightM * 1000)),
+                  ],
+                  [
+                    'Overhead (mm)',
+                    formatNumber(result.technical.overheadClearanceMm),
                   ],
                 ] as const
               ).map(cell)}
@@ -511,6 +517,14 @@ export const LiftResult = ({
                   : 'Travel (mm)',
                 formatNumber(Math.round(result.input.travelHeightM * 1000)),
               ] as const,
+              ...(result.technical.overheadClearanceMm !== null
+                ? [
+                    [
+                      'Overhead (mm)',
+                      formatNumber(result.technical.overheadClearanceMm),
+                    ] as const,
+                  ]
+                : []),
             ].map(cell)}
           </dl>
         ) : result.technical.carWidthMm === null ? (
