@@ -693,6 +693,77 @@ describe('QuotationsService', () => {
       );
     });
 
+    describe('a line edited after its travel was stored', () => {
+      const stored = (extra: Record<string, unknown> = {}) => {
+        repo.listLines.mockResolvedValue([
+          {
+            id: 'line-1',
+            quantity: 1,
+            calcInput: {
+              ...calcResultForLine.input,
+              shaftWidthMm: 1835,
+              shaftDepthMm: 1750,
+              floors: 8,
+              stops: 8,
+              travelHeightM: 28,
+              ...extra,
+            },
+          },
+        ]);
+        repo.updateLine.mockImplementation(async () => ({}));
+      };
+
+      it('follows the floors when nobody typed the stored travel', async () => {
+        stored();
+        await service.updateLine(user, draft.id, 'line-1', { stops: 13 });
+        const [, request] = calc.calculateSpecs.mock.calls.at(-1)!;
+        expect(request.travelHeightMOverride).toBeUndefined();
+      });
+
+      it('keeps a typed travel through an edit that does not touch it', async () => {
+        stored({ travelHeightMOverride: 30 });
+        await service.updateLine(user, draft.id, 'line-1', { stops: 13 });
+        const [, request] = calc.calculateSpecs.mock.calls.at(-1)!;
+        expect(request.travelHeightMOverride).toBe(30);
+      });
+
+      it('never hands a typed travel back as a rise, or a rise-priced product would price it', async () => {
+        stored({ travelHeightM: 30, travelHeightMOverride: 30 });
+        await service.updateLine(user, draft.id, 'line-1', { quantity: 2 });
+        const [, request] = calc.calculateSpecs.mock.calls.at(-1)!;
+        expect(request.travelHeightM).toBeUndefined();
+      });
+
+      it('keeps a rise sent with the edit, and a stored figure nobody typed', async () => {
+        stored({ travelHeightM: 30, travelHeightMOverride: 30 });
+        await service.updateLine(user, draft.id, 'line-1', {
+          travelHeightM: 10,
+        });
+        expect(calc.calculateSpecs.mock.calls.at(-1)![1].travelHeightM).toBe(10);
+        stored({ travelHeightM: 28 });
+        await service.updateLine(user, draft.id, 'line-1', { quantity: 2 });
+        expect(calc.calculateSpecs.mock.calls.at(-1)![1].travelHeightM).toBe(28);
+      });
+
+      it('drops a typed travel when the product changes', async () => {
+        stored({ travelHeightMOverride: 30 });
+        await service.updateLine(user, draft.id, 'line-1', {
+          productType: 'CAR_LIFT',
+        });
+        const [, request] = calc.calculateSpecs.mock.calls.at(-1)!;
+        expect(request.travelHeightMOverride).toBeUndefined();
+      });
+
+      it('lets go of a typed travel cleared with null', async () => {
+        stored({ travelHeightMOverride: 30 });
+        await service.updateLine(user, draft.id, 'line-1', {
+          travelHeightMOverride: null,
+        });
+        const [, request] = calc.calculateSpecs.mock.calls.at(-1)!;
+        expect(request.travelHeightMOverride).toBeNull();
+      });
+    });
+
     it('derives the page-1 cell and the compressed floor summary', async () => {
       await service.addLine(user, draft.id, lineDto as never);
       const [, , values] = repo.addLine.mock.calls[0]!;

@@ -18,15 +18,30 @@ import {
   WORKED_EXAMPLE,
   type PassengerShaft,
 } from '@/lib/lift-form';
-import { LiftInputs, LiftResult, useLiveCalculation } from './lift-calculator';
+import {
+  LiftInputs,
+  LiftResult,
+  StaleNote,
+  useCalculation,
+} from './lift-calculator';
 
 export default function CalculatorPage() {
   const router = useRouter();
   const [form, setForm] = useState<CalcInputPayload>(WORKED_EXAMPLE);
   const passengerShaft = useRef<PassengerShaft | null>(null);
   const [products, setProducts] = useState<ProductTypeRow[]>([]);
-  const { calculated, setCalculated, error, updating, retry } =
-    useLiveCalculation(form, products);
+  // Open figures on the specification are saved or cancelled before Calculate,
+  // whose new result would close them and lose what was typed.
+  const [editing, setEditing] = useState(false);
+  const {
+    calculated,
+    setCalculated,
+    error,
+    calculating,
+    calculate,
+    stale,
+    clear,
+  } = useCalculation(form, products);
 
   useEffect(() => {
     void listProductTypes()
@@ -46,7 +61,7 @@ export default function CalculatorPage() {
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
-    retry();
+    void calculate();
   };
 
   return (
@@ -86,14 +101,18 @@ export default function CalculatorPage() {
             <div className="flex gap-2">
               <button
                 type="submit"
-                disabled={updating}
+                disabled={calculating || editing}
                 className={`${btnPrimary} flex-1`}
               >
-                {updating ? 'Calculating…' : 'Calculate'}
+                {calculating ? 'Calculating…' : 'Calculate'}
               </button>
               <button
                 type="button"
-                onClick={() => setForm(WORKED_EXAMPLE)}
+                disabled={calculating}
+                onClick={() => {
+                  setForm(WORKED_EXAMPLE);
+                  clear();
+                }}
                 className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
               >
                 Reset
@@ -102,29 +121,35 @@ export default function CalculatorPage() {
           </form>
 
           <div className="space-y-6">
+            {stale ? <StaleNote /> : null}
             {calculated ? (
-              // The last lift's figures stay, faded, until this one's arrive.
+              // The last lift's figures stay, faded, until Calculate is pressed.
               <div
-                className={`space-y-6 transition-opacity ${updating || error ? 'opacity-50' : ''}`}
+                className={`space-y-6 transition-opacity ${stale ? 'opacity-50' : ''}`}
               >
                 <LiftResult
                   result={calculated.result}
                   products={products}
-                  onEditCapacity={async (edit) => {
-                    const next = { ...form, ...edit };
-                    const result = await calculateSpecs(
-                      toRequest(next, products),
-                    );
-                    // Left as it was if the lift was changed while this saved.
-                    setForm((prev) => (prev === form ? next : prev));
-                    setCalculated({ form: next, result });
-                  }}
+                  onEditingChange={setEditing}
+                  onEditCapacity={
+                    stale || calculating
+                      ? undefined
+                      : async (edit) => {
+                          const next = { ...form, ...edit };
+                          const result = await calculateSpecs(
+                            toRequest(next, products),
+                          );
+                          // Left as it was if the lift was changed while this saved.
+                          setForm((prev) => (prev === form ? next : prev));
+                          setCalculated({ form: next, result });
+                        }
+                  }
                 />
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-6 py-16 text-center text-sm text-slate-500">
-                Describe the lift; its technical specs and list price appear
-                here.
+                Enter the lift and calculate to see its technical specs and list
+                price.
               </div>
             )}
           </div>

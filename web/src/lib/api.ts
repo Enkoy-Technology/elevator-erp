@@ -312,6 +312,8 @@ export interface CalcInputPayload {
    */
   capacityKgOverride?: number | null;
   capacityPersonsOverride?: number | null;
+  /** The travel typed in place of 3.5 m × the floors: printed, never priced. Blank derives it. */
+  travelHeightMOverride?: number | null;
 }
 
 /**

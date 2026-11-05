@@ -66,6 +66,7 @@ const toDraft = (line: QuotationLine): LineDraft => {
     capacityKgOverride: str(calc?.capacityKgOverride),
     capacityPersonsOverride: str(calc?.capacityPersonsOverride),
     stops: str(calc?.stops, NEW_LINE.stops),
+    travelHeightMOverride: str(calc?.travelHeightMOverride),
     travelHeightM: str(calc?.travelHeightM, NEW_LINE.travelHeightM),
     speedMs: str(calc?.speedMs, NEW_LINE.speedMs),
     machineRoomType: calc?.machineRoomType ?? NEW_LINE.machineRoomType,
@@ -362,6 +363,7 @@ export const LinesEditor = ({
                             // Typed for one product, they say nothing of another.
                             capacityKgOverride: '',
                             capacityPersonsOverride: '',
+                            travelHeightMOverride: '',
                           };
                           next.capacityKg = String(
                             startingCapacityKg(
@@ -582,6 +584,23 @@ export const LinesEditor = ({
                         onValueChange={(v) => setField(line, 'stops', v)}
                       />
                     </Field>
+
+                    {usesRise(products, draft.productType) ? null : (
+                      <Field
+                        label="Travel height (m)"
+                        htmlFor={`travel-height-${line.id}`}
+                      >
+                        <NumberInput
+                          id={`travel-height-${line.id}`}
+                          disabled={!editable}
+                          value={draft.travelHeightMOverride}
+                          placeholder="3.5 m × stops"
+                          onValueChange={(v) =>
+                            setField(line, 'travelHeightMOverride', v)
+                          }
+                        />
+                      </Field>
+                    )}
 
                     {isStandardLift(draft) ? null : (
                       <>

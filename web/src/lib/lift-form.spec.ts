@@ -3,6 +3,7 @@ import {
   capacityEdit,
   offerPreviewEtb,
   startingSpeedAndDoor,
+  figure,
   toRequest,
   withProduct,
   WORKED_EXAMPLE,
@@ -169,6 +170,57 @@ describe('toRequest', () => {
       products,
     );
     expect(steps).not.toHaveProperty('capacityPersonsOverride');
+  });
+});
+
+describe('figure', () => {
+  it('reads a number, and a box with no number in it as blank', () => {
+    expect(figure('42.5')).toBe(42.5);
+    expect(figure('')).toBeUndefined();
+    expect(figure(' ')).toBeUndefined();
+    expect(figure('.')).toBeUndefined();
+  });
+});
+
+describe('withProduct travel height', () => {
+  it('drops a typed travel: a 42 m typed on a passenger lift printed on a 2-stop car lift', () => {
+    expect(
+      withProduct(
+        { ...WORKED_EXAMPLE, travelHeightMOverride: 42 },
+        'CAR_LIFT',
+        [],
+        { current: null },
+      ).travelHeightMOverride,
+    ).toBeUndefined();
+  });
+});
+
+describe('toRequest travel height', () => {
+  const rise = {
+    code: 'ESCALATOR',
+    effectiveFormula: 'Base price + (Rise − 6) × 500,000',
+  } as ProductTypeRow;
+  const typed = { ...WORKED_EXAMPLE, travelHeightMOverride: 30 };
+
+  it('sends what was typed on a passenger lift and on a car lift', () => {
+    expect(toRequest(typed).travelHeightMOverride).toBe(30);
+    expect(
+      toRequest({ ...typed, productType: 'CAR_LIFT' }).travelHeightMOverride,
+    ).toBe(30);
+  });
+
+  it('sends nothing when blank, whatever the form still holds as its old travel', () => {
+    const request = JSON.parse(
+      JSON.stringify(toRequest(WORKED_EXAMPLE)),
+    ) as Record<string, unknown>;
+    expect(request).not.toHaveProperty('travelHeightMOverride');
+    expect(request).not.toHaveProperty('travelHeightM');
+  });
+
+  it('sends a rise-priced product its rise, not a typed travel', () => {
+    const request = toRequest({ ...typed, productType: 'ESCALATOR' }, [rise]);
+    expect(request.travelHeightM).toBe(WORKED_EXAMPLE.travelHeightM);
+    expect(request.travelHeightMOverride).toBeUndefined();
   });
 });
 

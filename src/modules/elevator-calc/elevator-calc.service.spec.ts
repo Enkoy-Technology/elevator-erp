@@ -185,6 +185,75 @@ describe('ElevatorCalcService', () => {
       expect(result.input.travelHeightM).toBe(42);
     });
 
+    describe('a typed travel height (client, 2026-11-04)', () => {
+      const passenger: CalcRequest = {
+        productType: 'PASSENGER',
+        shaftWidthMm: 1835,
+        shaftDepthMm: 1750,
+        floors: 12,
+        marginPercent: 0,
+        taxPercent: 0,
+      };
+
+      it('prints in place of 3.5 m a floor and leaves the price alone', async () => {
+        const blank = await calc(passenger);
+        const typed = await calc({ ...passenger, travelHeightMOverride: 30.5 });
+        expect(blank.input.travelHeightM).toBe(42);
+        expect(blank.input).not.toHaveProperty('travelHeightMOverride');
+        expect(typed.input.travelHeightM).toBe(30.5);
+        expect(typed.input.travelHeightMOverride).toBe(30.5);
+        expect(typed.pricing).toEqual(blank.pricing);
+      });
+
+      it('says so to staff when it differs from 3.5 m a floor, and not when it is the same', async () => {
+        const typed = await calc({ ...passenger, travelHeightMOverride: 30.5 });
+        expect(typed.notes).toContain(
+          'Travel typed as 30.5 m; 3.5 m a floor would be 42 m. The list price stays the same.',
+        );
+        const same = await calc({ ...passenger, travelHeightMOverride: 42 });
+        expect(same.notes.join(' ')).not.toContain('Travel typed');
+      });
+
+      it('goes back to 3.5 m a floor when cleared with null', async () => {
+        const result = await calc({ ...passenger, travelHeightMOverride: null });
+        expect(result.input.travelHeightM).toBe(42);
+        expect(result.input).not.toHaveProperty('travelHeightMOverride');
+      });
+
+      it('works the same on a lift typed in full and on a car lift', async () => {
+        const classic = await calc({
+          ...WORKED_EXAMPLE,
+          travelHeightMOverride: 30,
+        });
+        expect(classic.input.travelHeightM).toBe(30);
+        const car = await calc({
+          ...WORKED_EXAMPLE,
+          productType: 'CAR_LIFT',
+          ...forProduct('CAR_LIFT'),
+          capacityKg: 3500,
+          stops: 5,
+          travelHeightMOverride: 12,
+        });
+        expect(car.input.travelHeightM).toBe(12);
+      });
+
+      it("never moves an escalator's price: its figure is its own rise", async () => {
+        const result = await calc({
+          ...WORKED_EXAMPLE,
+          productType: 'ESCALATOR',
+          ...forProduct('ESCALATOR'),
+          stops: 2,
+          travelHeightM: 10,
+          travelHeightMOverride: 50,
+          marginPercent: 0,
+          taxPercent: 0,
+        });
+        expect(result.input.travelHeightM).toBe(10);
+        expect(result.input).not.toHaveProperty('travelHeightMOverride');
+        expect(result.pricing.totalPrice).toBe('8000000.00');
+      });
+    });
+
     it('keeps a typed travel for a product whose formula prices the rise', async () => {
       (productTypes.pricingSettings as jest.Mock).mockResolvedValueOnce({
         formula: 'base + (travel - 35) * 10000',

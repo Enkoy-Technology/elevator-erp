@@ -150,6 +150,10 @@ LIST_PRICE = base(N)
   nothing** — no §4.1 formula references them, and their pricing terms were
   removed with the multiplier model. They are kept on the DTO because they
   belong on the quotation record and on any future rope/model output.
+- Travel prints as 3.5 m × the floors unless `travelHeightMOverride` is typed
+  (3–200 m), on any lift (client, 2026-11-04). It is printed, never priced. A
+  product whose formula uses `Rise`, such as the escalator, sends
+  `travelHeightM` instead and takes nothing from the override.
 
 > **Open with the product owner.** The tier wording was *"Above 20-30 floor
 > base 8,000,000 and above starting from 31 and above base 11,000,000"*. Two

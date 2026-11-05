@@ -356,9 +356,9 @@ export const evaluateFormula = (
 
 /**
  * Whether the formula prices the travel height — any name that reads as
- * `rise` (rise, travel, height, h). Only such a product keeps a travel the
- * salesperson typed; every other lift travels 3.5 m a stop (client,
- * 2026-10-23). Read off the tokens, so "heights" is not "height". False for
+ * `rise` (rise, travel, height, h). Only such a product is priced on the
+ * travel it is sent; on every other lift it travels 3.5 m a stop (client,
+ * 2026-10-23) or the travel typed, which prints and is never priced. Read off the tokens, so "heights" is not "height". False for
  * a formula that does not tokenize: evaluating it reports the problem.
  */
 export const formulaUsesRise = (formula: string): boolean => {

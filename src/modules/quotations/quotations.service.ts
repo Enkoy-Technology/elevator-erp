@@ -279,10 +279,21 @@ export class QuotationsService {
       entranceCount: line.entranceCount,
       ...definedOnly(dto),
     } as CreateQuotationLineDto;
-    // A load or head count typed for one product says nothing of another.
+    // A load, head count or travel typed for one product says nothing of another.
     if (dto.productType !== undefined && dto.productType !== line.productType) {
       merged.capacityKgOverride = dto.capacityKgOverride;
       merged.capacityPersonsOverride = dto.capacityPersonsOverride;
+      merged.travelHeightMOverride = dto.travelHeightMOverride;
+    }
+    // A typed travel is also stored as travelHeightM, to print. Merged back
+    // as that, a formula or product priced on its rise would price it, and a
+    // typed travel is never priced.
+    if (
+      (line.calcInput as Partial<CalcInput> | null)?.travelHeightMOverride !=
+        null &&
+      dto.travelHeightM === undefined
+    ) {
+      merged.travelHeightM = undefined;
     }
     // A description the system wrote follows the lift it describes, so a
     // typed load or head count reaches page 1; one typed by hand stays. Only
@@ -570,6 +581,7 @@ export class QuotationsService {
       buildingUsage: dto.buildingUsage,
       capacityKgOverride: dto.capacityKgOverride,
       capacityPersonsOverride: dto.capacityPersonsOverride,
+      travelHeightMOverride: dto.travelHeightMOverride,
       marginPercent: dto.marginPercent,
       // Same placeholder as createForProject: VAT is the statutory rate
       // already resolved onto the quotation header, applied below in

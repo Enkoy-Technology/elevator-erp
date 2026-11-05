@@ -5,6 +5,7 @@ import type {
 } from '../../../../lib/api';
 import {
   VEHICLE_STANDARD,
+  figure,
   hasDoor,
   hasMachineRoom,
   isStandardLift,
@@ -22,6 +23,8 @@ export interface LineDraft {
   capacityKgOverride: string;
   capacityPersonsOverride: string;
   stops: string;
+  /** Typed in place of 3.5 m × the stops; blank derives it. */
+  travelHeightMOverride: string;
   travelHeightM: string;
   speedMs: string;
   machineRoomType: 'MR' | 'MRL';
@@ -58,6 +61,7 @@ export const NEW_LINE: LineDraft = {
   capacityKgOverride: '',
   capacityPersonsOverride: '',
   stops: '12',
+  travelHeightMOverride: '',
   travelHeightM: '45',
   speedMs: '1.6',
   machineRoomType: 'MRL',
@@ -84,18 +88,6 @@ export const num = (value: string, fallback: number): number => {
   return Number.isFinite(parsed) && value.trim() !== '' ? parsed : fallback;
 };
 
-/**
- * A calculation box left blank is left out, not filled with the demo lift:
- * a cleared shaft width was saved as 1835 and quoted the 8-person lift
- * (2026-10-23). The server keeps the stored figure on an update and refuses
- * an add that lacks one.
- */
-const figure = (value: string): number | undefined => {
-  // Not a number at all ('.', '1..') is blank too: NaN would go out as null.
-  const parsed = Number(value);
-  return value.trim() === '' || !Number.isFinite(parsed) ? undefined : parsed;
-};
-
 /** Blank means "leave it alone": the API's validators reject null on every
  *  spec field, so an empty box omits the key instead of blanking it. */
 const text = (value: string): string | undefined =>
@@ -106,6 +98,10 @@ export const toPayload = (
   products: readonly ProductTypeRow[],
 ): CreateQuotationLinePayload => {
   const floorLabels = text(draft.floorLabels);
+  // A calculation box left blank is left out, not filled with the demo lift:
+  // a cleared shaft width was saved as 1835 and quoted the 8-person lift
+  // (2026-10-23). The server keeps the stored figure on an update and
+  // refuses an add that lacks one.
   return {
     productType: draft.productType,
     // Shaft and floors for a standard lift; the classic figures for the rest.
@@ -130,7 +126,8 @@ export const toPayload = (
           ...(VEHICLE_STANDARD[draft.productType]?.ratedLoad === false
             ? {}
             : { capacityKg: figure(draft.capacityKg) }),
-          // Travel is 3.5 m × stops on the API; only a rise-priced product (escalator) sends it.
+          // Only a rise-priced product (the escalator) sends this: its rise.
+          // Every other lift's typed travel goes as the override below.
           ...(usesRise(products, draft.productType)
             ? { travelHeightM: figure(draft.travelHeightM) }
             : {}),
@@ -152,6 +149,9 @@ export const toPayload = (
       VEHICLE_STANDARD[draft.productType]?.ratedLoad === false
         ? null
         : (figure(draft.capacityPersonsOverride) ?? null),
+    travelHeightMOverride: usesRise(products, draft.productType)
+      ? null
+      : (figure(draft.travelHeightMOverride) ?? null),
     ...(hasMachineRoom(draft.productType)
       ? { machineRoomType: draft.machineRoomType }
       : {}),

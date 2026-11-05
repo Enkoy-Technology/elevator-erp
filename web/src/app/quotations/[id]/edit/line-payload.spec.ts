@@ -96,6 +96,31 @@ describe('toPayload', () => {
     expect(payload.doorType).toBe(NEW_LINE.doorType);
   });
 
+  it('sends a typed travel, and null for a blank one so 3.5 m a floor comes back', () => {
+    expect(
+      sent({ ...NEW_LINE, travelHeightMOverride: '30.5' }),
+    ).toMatchObject({ travelHeightMOverride: 30.5 });
+    expect(sent(NEW_LINE).travelHeightMOverride).toBeNull();
+    // The stored 42 m is what a line carries back; it must never go out as typed.
+    expect(sent({ ...NEW_LINE, travelHeightM: '42' })).not.toHaveProperty(
+      'travelHeightM',
+    );
+  });
+
+  it('never sends a typed travel for a product priced on its rise', () => {
+    expect(
+      sent(
+        {
+          ...NEW_LINE,
+          productType: 'ESCALATOR',
+          travelHeightM: '10',
+          travelHeightMOverride: '50',
+        },
+        [escalator],
+      ),
+    ).toMatchObject({ travelHeightM: 10, travelHeightMOverride: null });
+  });
+
   it('leaves a blank rise out', () => {
     const payload = sent(
       { ...NEW_LINE, productType: 'ESCALATOR', travelHeightM: '' },

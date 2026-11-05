@@ -227,14 +227,24 @@ export const withProduct = (
     ...form,
     productType,
     capacityKg: startingCapacityKg(products, productType, form.capacityKg),
-    // A load or head count typed for one product says nothing of another.
+    // A load, head count or travel typed for one product says nothing of another.
     capacityKgOverride: undefined,
     capacityPersonsOverride: undefined,
+    travelHeightMOverride: undefined,
     ...startingSpeedAndDoor(productType, form, passengerShaft.current),
   };
 };
 
-/** Whether the product's price is its rise (an escalator) — the one product that still asks for it. */
+/**
+ * A box left blank is left out, not read as 0. Not a number at all ('.',
+ * '1..') is blank too: NaN would go out as null.
+ */
+export const figure = (value: string): number | undefined => {
+  const parsed = Number(value);
+  return value.trim() === '' || !Number.isFinite(parsed) ? undefined : parsed;
+};
+
+/** Whether the product's price is its rise (an escalator): it asks for its rise instead of a travel. */
 export const usesRise = (
   products: readonly ProductTypeRow[],
   productType: string,
@@ -261,6 +271,7 @@ export const toRequest = (
     machineRoomType,
     capacityKgOverride,
     capacityPersonsOverride,
+    travelHeightMOverride,
     ...rest
   } = form;
   // An escalator has no machine room to send.
@@ -277,6 +288,7 @@ export const toRequest = (
         // Typed over the table's: printed, the price staying the table lift's.
         capacityKgOverride,
         capacityPersonsOverride,
+        travelHeightMOverride,
       }
     : {
         ...common,
@@ -293,8 +305,11 @@ export const toRequest = (
           ? {}
           : { capacityKg, capacityPersonsOverride }),
         stops,
-        // Travel is 3.5 m × stops on the API; only a rise-priced product sends it.
-        ...(usesRise(products, form.productType) ? { travelHeightM } : {}),
+        // Travel is 3.5 m × stops on the API unless typed; a rise-priced
+        // product sends its rise instead.
+        ...(usesRise(products, form.productType)
+          ? { travelHeightM }
+          : { travelHeightMOverride }),
         speedMs,
         ...(hasDoor(form.productType) ? { doorType, doorWidthMm } : {}),
       };

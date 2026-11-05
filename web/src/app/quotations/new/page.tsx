@@ -6,7 +6,8 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   LiftInputs,
   LiftResult,
-  useLiveCalculation,
+  StaleNote,
+  useCalculation,
 } from '@/app/calculator/lift-calculator';
 import { btnPrimary, btnSecondary, fieldClass } from '@/components/form-styles';
 import { PageHeader } from '@/components/page-header';
@@ -81,11 +82,12 @@ export default function NewQuotationPage() {
     calculated,
     setCalculated,
     error: calcError,
-    updating,
-    retry,
-  } = useLiveCalculation(form, products);
-  // What is on screen, faded while the lift's own figures are on their way,
-  // and the result that is this lift's: Create saves only what is on screen.
+    calculating,
+    calculate,
+    stale,
+  } = useCalculation(form, products);
+  // What is on screen, faded once the lift has changed since Calculate, and
+  // the result that is this lift's: Create saves only what is on screen.
   const shown = calculated?.result ?? null;
   const result = calculated?.form === form ? shown : null;
   const [vatApplies, setVatApplies] = useState(true);
@@ -95,7 +97,8 @@ export default function NewQuotationPage() {
   const [notes, setNotes] = useState('');
   const [survey, setSurvey] = useState<SiteSurvey | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Open figures on the specification are saved or cancelled before Create.
+  // Open figures on the specification are saved or cancelled before Create
+  // or Calculate, whose new result would close them and lose what was typed.
   const [editingCapacity, setEditingCapacity] = useState(false);
   const [creating, setCreating] = useState(false);
 
@@ -182,7 +185,7 @@ export default function NewQuotationPage() {
 
   const onCalculate = (event: FormEvent) => {
     event.preventDefault();
-    retry();
+    void calculate();
   };
 
   const onCreate = async () => {
@@ -369,14 +372,19 @@ export default function NewQuotationPage() {
 
             <button
               type="submit"
-              disabled={updating}
+              disabled={calculating || editingCapacity}
               className={`${btnSecondary} w-full`}
             >
-              {updating ? 'Calculating…' : result ? 'Recalculate' : 'Calculate'}
+              {calculating
+                ? 'Calculating…'
+                : result
+                  ? 'Recalculate'
+                  : 'Calculate'}
             </button>
           </form>
 
           <div className="space-y-6">
+            {stale ? <StaleNote /> : null}
             {shown && listNet && listGross ? (
               <div
                 className={`space-y-6 transition-opacity ${result ? '' : 'opacity-50'}`}
@@ -458,16 +466,20 @@ export default function NewQuotationPage() {
                   result={shown}
                   products={products}
                   onEditingChange={setEditingCapacity}
-                  onEditCapacity={async (edit) => {
-                    const next = { ...form, ...edit };
-                    const recalculated = await calculateSpecs(
-                      toRequest(next, products),
-                    );
-                    // A lift changed while this saved keeps its change, and
-                    // this result, no longer its own, is not shown for it.
-                    setForm((prev) => (prev === form ? next : prev));
-                    setCalculated({ form: next, result: recalculated });
-                  }}
+                  onEditCapacity={
+                    stale || calculating
+                      ? undefined
+                      : async (edit) => {
+                          const next = { ...form, ...edit };
+                          const recalculated = await calculateSpecs(
+                            toRequest(next, products),
+                          );
+                          // A lift changed while this saved keeps its change,
+                          // and this result, no longer its own, shows faded.
+                          setForm((prev) => (prev === form ? next : prev));
+                          setCalculated({ form: next, result: recalculated });
+                        }
+                  }
                 />
               </div>
             ) : (

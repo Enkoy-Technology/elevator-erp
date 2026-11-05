@@ -51,6 +51,13 @@ export interface CalcInput {
    */
   capacityKgOverride?: number;
   capacityPersonsOverride?: number;
+  /**
+   * The travel typed in place of 3.5 m × the floors (client, 2026-11-04):
+   * printed, never priced. Kept apart from `travelHeightM`, which a stored
+   * line carries back on every edit: only this one says a person typed it,
+   * so a travel nobody typed still follows the floors.
+   */
+  travelHeightMOverride?: number;
 }
 
 /**
@@ -83,6 +90,7 @@ export type CalcRequest = Pick<
     /** Null clears a typed figure: how a line goes back to the derived one. */
     capacityKgOverride?: number | null;
     capacityPersonsOverride?: number | null;
+    travelHeightMOverride?: number | null;
   };
 
 /**

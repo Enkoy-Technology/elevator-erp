@@ -20,6 +20,7 @@ import {
   hasMachineRoom,
   isStandardLift,
   capacityEdit,
+  figure,
   isVehicleProduct,
   usesRise,
   withProduct,
@@ -33,57 +34,57 @@ import {
 export type Calculated = { form: CalcInputPayload; result: CalcResult };
 
 /**
- * Calculates the lift as it is described, half a second after the last
- * change, so the price and specs on screen follow the shaft (client,
- * 2026-10-30: a changed shaft kept the last one's price until Calculate).
- * A reply for figures changed since is dropped, so the last change wins
- * however many are made. `retry` asks again after a refusal.
+ * Calculates when Calculate is pressed, and only then. What comes back
+ * belongs to the figures it was calculated from: change the lift and it is
+ * `stale`, shown faded and kept off a quotation until Calculate is pressed
+ * again (client, 2026-10-30: a changed shaft kept the last one's price).
  */
-export const useLiveCalculation = (
+export const useCalculation = (
   form: CalcInputPayload,
   products: readonly ProductTypeRow[],
 ) => {
   const [calculated, setCalculated] = useState<Calculated | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
-  useEffect(() => {
-    // Wait for the products: a rise-priced one sends its rise only once known.
-    if (products.length === 0 || calculated?.form === form) {
-      return;
+  const [calculating, setCalculating] = useState(false);
+  const calculate = async () => {
+    setError(null);
+    setCalculating(true);
+    try {
+      setCalculated({
+        form,
+        result: await calculateSpecs(toRequest(form, products)),
+      });
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : 'Calculation request failed',
+      );
+    } finally {
+      setCalculating(false);
     }
-    let current = true;
-    const calculate = async () => {
-      try {
-        const result = await calculateSpecs(toRequest(form, products));
-        if (current) {
-          setCalculated({ form, result });
-          setError(null);
-        }
-      } catch (err) {
-        if (current) {
-          setError(
-            err instanceof ApiError
-              ? err.message
-              : 'Calculation request failed',
-          );
-        }
-      }
-    };
-    const timer = setTimeout(() => void calculate(), 500);
-    return () => {
-      current = false;
-      clearTimeout(timer);
-    };
-  }, [form, products, calculated, attempt]);
+  };
   return {
     calculated,
     setCalculated,
     error,
-    /** The figures on screen are not yet this lift's. */
-    updating: error === null && calculated?.form !== form,
-    retry: () => setAttempt((n) => n + 1),
+    calculating,
+    calculate,
+    stale: calculated !== null && calculated.form !== form,
+    clear: () => {
+      setCalculated(null);
+      setError(null);
+    },
   };
 };
+
+/** Said above faded figures, so a price that is out of date reads as one. */
+export const StaleNote = () => (
+  <p
+    role="status"
+    className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+  >
+    The lift has changed. Press Calculate to update these figures.
+  </p>
+);
 
 const field =
   'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm ' +
@@ -99,6 +100,7 @@ type NumberKey =
   | 'capacityKg'
   | 'stops'
   | 'travelHeightM'
+  | 'travelHeightMOverride'
   | 'speedMs'
   | 'doorWidthMm';
 
@@ -141,7 +143,7 @@ export const LiftInputs = ({
   // here showed spinner arrows and could not be cleared to retype — the
   // client asked for typing, not arrows.
   const [drafts, setDrafts] = useState<Partial<Record<NumberKey, string>>>({});
-  const numberField = (key: NumberKey, text: string) => {
+  const numberField = (key: NumberKey, text: string, placeholder?: string) => {
     // A draft is only shown while it still means the form's value; a Reset
     // or any other outside change to the form drops it.
     const draft = drafts[key];
@@ -155,11 +157,14 @@ export const LiftInputs = ({
         <NumberInput
           className={field}
           value={value}
+          placeholder={placeholder}
           onValueChange={(raw) => {
             setDrafts((prev) => ({ ...prev, [key]: raw }));
             setForm((prev) => ({
               ...prev,
-              [key]: Number(raw),
+              // The travel alone can stay blank: that is 3.5 m a floor.
+              [key]:
+                key === 'travelHeightMOverride' ? figure(raw) : Number(raw),
               ...(NAMES_THE_LIFT.includes(key)
                 ? {
                     capacityKgOverride: undefined,
@@ -173,6 +178,11 @@ export const LiftInputs = ({
     );
   };
   const standard = isStandardLift(form.productType);
+  const rise = usesRise(products, form.productType);
+  const travelField = (per: string) =>
+    rise
+      ? null
+      : numberField('travelHeightMOverride', 'Travel height (m)', per);
 
   return (
     <>
@@ -192,7 +202,7 @@ export const LiftInputs = ({
           ))}
         </select>
         {/* The escalator's rates are 0 too, but its rise moves the price. */}
-        {!usesRise(products, form.productType) &&
+        {!rise &&
           products.some(
             (p) =>
               p.code === form.productType &&
@@ -210,10 +220,13 @@ export const LiftInputs = ({
           {numberField('shaftWidthMm', 'Shaft width (mm)')}
           {numberField('shaftDepthMm', 'Shaft depth (mm)')}
           {numberField('floors', 'Number of floors')}
+          {travelField('3.5 m × floors')}
           <p className="col-span-2 text-xs text-slate-500">
             Persons, rated load, speed, car and door follow from the shaft and
             the floors — the company&apos;s standard passenger table. Edit on
-            the specifications changes the persons and load printed.
+            the specifications changes the persons and load printed. Travel
+            height can be typed, or left blank for 3.5 m a floor; it does not
+            change the list price.
           </p>
         </div>
       ) : null}
@@ -236,9 +249,8 @@ export const LiftInputs = ({
               ? null
               : numberField('capacityKg', 'Capacity (kg)')}
             {numberField('stops', 'Stops')}
-            {usesRise(products, form.productType)
-              ? numberField('travelHeightM', 'Rise (m)')
-              : null}
+            {rise ? numberField('travelHeightM', 'Rise (m)') : null}
+            {travelField('3.5 m × stops')}
             {numberField('speedMs', 'Speed (m/s)')}
             {hasDoor(form.productType)
               ? numberField('doorWidthMm', 'Door width (mm)')
@@ -318,7 +330,7 @@ export const LiftResult = ({
 }: {
   result: CalcResult;
   products: readonly ProductTypeRow[];
-  /** Recalculates with the edited figures, throwing if the API refuses them. Without it there is no Edit. */
+  /** Recalculates with the edited figures, throwing if the API refuses them. Without it there is no Edit: left off while the figures are out of date. */
   onEditCapacity?: (edit: CapacityEdit) => Promise<void>;
   /** Told while the figures are open for editing, so nothing saves the lift without them. */
   onEditingChange?: (editing: boolean) => void;
@@ -326,8 +338,9 @@ export const LiftResult = ({
   const [opened, setOpened] = useState<
     (CapacityFigures & { of: CalcResult }) | null
   >(null);
-  // Typed over the result it was opened on; a recalculation closes it.
-  const draft = opened?.of === result ? opened : null;
+  // Typed over the result it was opened on; a recalculation closes it, and
+  // so does a changed lift, whose page takes Edit away (see StaleNote).
+  const draft = onEditCapacity && opened?.of === result ? opened : null;
   const setDraft = (figures: CapacityFigures | null) =>
     setOpened(figures && { ...figures, of: result });
   const editing = draft !== null;

@@ -35,3 +35,28 @@ describe('UpdateQuotationLineDto typed load and persons', () => {
     ).toEqual(['capacityKgOverride', 'capacityPersonsOverride']);
   });
 });
+
+describe('UpdateQuotationLineDto typed travel', () => {
+  const errors = async (travelHeightMOverride: unknown) =>
+    (
+      await validate(
+        plainToInstance(UpdateQuotationLineDto, { travelHeightMOverride }),
+      )
+    ).flatMap((e) => Object.values(e.constraints ?? {}));
+
+  it('accepts null, which goes back to 3.5 m a floor, and a figure in range', async () => {
+    expect(await errors(null)).toEqual([]);
+    expect(await errors(3)).toEqual([]);
+    expect(await errors(42.25)).toEqual([]);
+    expect(await errors(200)).toEqual([]);
+  });
+
+  it('refuses a figure out of range, in words a salesperson can read', async () => {
+    // 42000 is what someone reading the specification in mm would type.
+    for (const typed of [2, 201, 42000, 42.123]) {
+      expect((await errors(typed))[0]).toBe(
+        'Travel height is from 3 to 200 m, to two decimals.',
+      );
+    }
+  });
+});

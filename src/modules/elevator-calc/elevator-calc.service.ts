@@ -78,9 +78,14 @@ export class ElevatorCalcService {
     }
 
     const applied = product.formula ?? formula;
-    const { input, technical, notes, pricedKg } = withTypedPersons(
+    const pricesOnRise = formulaUsesRise(applied);
+    const { input, technical, notes, pricedKg } = withTypedTravel(
       request,
-      resolve(request, product.liftGeometry, formulaUsesRise(applied)),
+      withTypedPersons(
+        request,
+        resolve(request, product.liftGeometry, pricesOnRise),
+      ),
+      pricesOnRise,
     );
     if (product.minCapacityKg !== null && pricedKg < product.minCapacityKg) {
       throw new BadRequestException(
@@ -349,9 +354,9 @@ const resolve = (
     // An escalator has no rated load; 0 keeps the price formula's C defined.
     capacityKg: vehicle && !vehicle.ratedLoad ? 0 : request.capacityKg!,
     stops: request.stops!,
-    // The client's rule for every lift: 3,500 mm per floor × the stops.
-    // Only a product priced on its rise (the escalator) keeps its own
-    // figure. Anything else sent here is stale — a line edit merges the
+    // The client's rule for every lift, unless a travel is typed (see
+    // withTypedTravel): 3,500 mm per floor × the stops. Only a product priced
+    // on its rise (the escalator) keeps its own figure here. Anything else sent here is stale — a line edit merges the
     // stored input, so a 2-stop car lift re-saved with 5 stops still
     // carried 7 m (client testing, 2026-10-23).
     travelHeightM:
@@ -438,6 +443,34 @@ const withTypedPersons = (
             `${persons} persons is more than ${input.capacityKg} kg carries at 75 kg a person (${carries}).`,
           ]
         : notes,
+  };
+};
+
+/**
+ * The travel typed in place of 3.5 m a floor (client, 2026-11-04), on any
+ * lift: printed as typed, never priced. A product priced on its rise has
+ * its own figure, `travelHeightM`, and takes nothing from this one.
+ */
+const withTypedTravel = (
+  request: CalcRequest,
+  resolved: Resolved,
+  pricesOnRise: boolean,
+): Resolved => {
+  const travel = request.travelHeightMOverride ?? undefined;
+  if (travel === undefined || pricesOnRise) {
+    return resolved;
+  }
+  const { input, notes } = resolved;
+  return {
+    ...resolved,
+    input: { ...input, travelHeightM: travel, travelHeightMOverride: travel },
+    notes:
+      travel === input.travelHeightM
+        ? notes
+        : [
+            ...notes,
+            `Travel typed as ${travel} m; 3.5 m a floor would be ${input.travelHeightM} m. The list price stays the same.`,
+          ],
   };
 };
 

@@ -20,6 +20,9 @@ import {
   type ProductType,
 } from '../types';
 
+/** Shown as it is: this box is typed by a salesperson, in metres. */
+const TRAVEL_RANGE = 'Travel height is from 3 to 200 m, to two decimals.';
+
 export class CalculateSpecsDto {
   @ApiProperty({
     example: 'PASSENGER',
@@ -155,6 +158,20 @@ export class CalculateSpecsDto {
   @Min(1)
   @Max(100)
   capacityPersonsOverride?: number | null;
+
+  @ApiPropertyOptional({
+    minimum: 3,
+    maximum: 200,
+    nullable: true,
+    example: 42,
+    description:
+      'The travel the specification prints in place of 3.5 m × the floors. Never priced; a product priced on its rise sends travelHeightM instead.',
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 }, { message: TRAVEL_RANGE })
+  @Min(3, { message: TRAVEL_RANGE })
+  @Max(200, { message: TRAVEL_RANGE })
+  travelHeightMOverride?: number | null;
 
   @ApiProperty({ minimum: 0, maximum: 100, example: 25 })
   @IsNumber({ maxDecimalPlaces: 2 })
