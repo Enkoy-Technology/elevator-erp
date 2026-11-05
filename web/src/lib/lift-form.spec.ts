@@ -1,7 +1,7 @@
 import type { CalcInputPayload, ProductTypeRow } from './api';
 import {
-  capacityEdit,
   offerPreviewEtb,
+  specEdit,
   startingSpeedAndDoor,
   figure,
   toRequest,
@@ -124,6 +124,25 @@ describe('withProduct', () => {
     expect(next.capacityPersonsOverride).toBeUndefined();
   });
 
+  it('drops a typed speed and car: they belong to the lift they were typed for', () => {
+    const next = withProduct(
+      {
+        ...WORKED_EXAMPLE,
+        speedMsOverride: 1.6,
+        carWidthMmOverride: 1200,
+        carDepthMmOverride: 1500,
+        carHeightMmOverride: 2300,
+      },
+      'HOSPITAL',
+      products,
+      { current: null },
+    );
+    expect(next.speedMsOverride).toBeUndefined();
+    expect(next.carWidthMmOverride).toBeUndefined();
+    expect(next.carDepthMmOverride).toBeUndefined();
+    expect(next.carHeightMmOverride).toBeUndefined();
+  });
+
   it('opens an escalator at its base rise', () => {
     const memory = { current: null };
     expect(
@@ -170,6 +189,33 @@ describe('toRequest', () => {
       products,
     );
     expect(steps).not.toHaveProperty('capacityPersonsOverride');
+  });
+});
+
+describe('toRequest typed speed and car', () => {
+  const typed = {
+    ...WORKED_EXAMPLE,
+    speedMsOverride: 1.6,
+    carWidthMmOverride: 1200,
+    carDepthMmOverride: 1500,
+    carHeightMmOverride: 2300,
+  };
+
+  it('sends them for a standard lift', () => {
+    expect(toRequest(typed)).toMatchObject({
+      speedMsOverride: 1.6,
+      carWidthMmOverride: 1200,
+      carDepthMmOverride: 1500,
+      carHeightMmOverride: 2300,
+    });
+  });
+
+  it('never for a lift outside the table, which has its own speed and platform', () => {
+    const car = toRequest({ ...typed, productType: 'CAR_LIFT' }, products);
+    expect(car).not.toHaveProperty('speedMsOverride');
+    expect(car).not.toHaveProperty('carWidthMmOverride');
+    expect(car).not.toHaveProperty('carDepthMmOverride');
+    expect(car).not.toHaveProperty('carHeightMmOverride');
   });
 });
 
@@ -325,30 +371,53 @@ describe('offerPreviewEtb', () => {
   });
 });
 
-describe('capacityEdit', () => {
-  const shown = { kg: '630', persons: '8' };
+describe('specEdit', () => {
+  const shown = {
+    kg: '630',
+    persons: '8',
+    speed: '1.5',
+    carWidth: '1100',
+    carDepth: '1400',
+    carHeight: '2400',
+  };
 
   it('sends only the figure that was changed', () => {
-    expect(capacityEdit({ kg: '630', persons: '10' }, shown, true)).toEqual({
+    expect(specEdit({ ...shown, persons: '10' }, shown, true)).toEqual({
       capacityPersonsOverride: 10,
     });
-    expect(capacityEdit(shown, shown, true)).toEqual({});
+    expect(specEdit({ ...shown, speed: '1.75' }, shown, true)).toEqual({
+      speedMsOverride: 1.75,
+    });
+    expect(
+      specEdit({ ...shown, carWidth: '1200', carHeight: '2300' }, shown, true),
+    ).toEqual({ carWidthMmOverride: 1200, carHeightMmOverride: 2300 });
+    expect(specEdit(shown, shown, true)).toEqual({});
   });
 
   it('sends a cleared box as undefined, back to the calculated figure', () => {
-    const edit = capacityEdit({ kg: '', persons: '8' }, shown, true);
-    expect(edit).toHaveProperty('capacityKgOverride', undefined);
+    const load = specEdit({ ...shown, kg: '' }, shown, true);
+    expect(load).toHaveProperty('capacityKgOverride', undefined);
+    const speed = specEdit({ ...shown, speed: ' ' }, shown, true);
+    expect(speed).toHaveProperty('speedMsOverride', undefined);
+    const car = specEdit({ ...shown, carDepth: '' }, shown, true);
+    expect(car).toHaveProperty('carDepthMmOverride', undefined);
   });
 
-  it('types the load over only on a standard lift', () => {
-    expect(capacityEdit({ kg: '800', persons: '8' }, shown, false)).toEqual({});
+  it('types the load, speed and car over only on a standard lift', () => {
+    expect(
+      specEdit(
+        { ...shown, kg: '800', speed: '1', carWidth: '1200' },
+        shown,
+        false,
+      ),
+    ).toEqual({});
   });
 
   it('refuses what the API would, in words', () => {
-    expect(capacityEdit({ kg: '100', persons: '8' }, shown, true)).toEqual({
+    expect(specEdit({ ...shown, kg: '100' }, shown, true)).toEqual({
       error: 'Rated load is a whole number from 320 to 5,000 kg.',
     });
-    expect(capacityEdit({ kg: '630', persons: '1.5' }, shown, true)).toEqual({
+    expect(specEdit({ ...shown, persons: '1.5' }, shown, true)).toEqual({
       error: 'Persons is a whole number from 1 to 100.',
     });
   });

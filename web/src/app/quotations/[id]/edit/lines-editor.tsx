@@ -37,7 +37,13 @@ import { formatEtb } from '@/lib/money';
 import { describeFloorPlan } from '../../floor-plan';
 import { FloorPicker } from '../../floor-picker';
 import { NumberInput } from '../../number-input';
-import { NEW_LINE, num, toPayload, type LineDraft } from './line-payload';
+import {
+  NEW_LINE,
+  num,
+  speedForDraft,
+  toPayload,
+  type LineDraft,
+} from './line-payload';
 
 /**
  * Page 1 of the client's proforma is a line table with a "No of Units"
@@ -67,8 +73,12 @@ const toDraft = (line: QuotationLine): LineDraft => {
     capacityPersonsOverride: str(calc?.capacityPersonsOverride),
     stops: str(calc?.stops, NEW_LINE.stops),
     travelHeightMOverride: str(calc?.travelHeightMOverride),
+    speedMsOverride: str(calc?.speedMsOverride),
+    carWidthMmOverride: str(calc?.carWidthMmOverride),
+    carDepthMmOverride: str(calc?.carDepthMmOverride),
+    carHeightMmOverride: str(calc?.carHeightMmOverride),
     travelHeightM: str(calc?.travelHeightM, NEW_LINE.travelHeightM),
-    speedMs: str(calc?.speedMs, NEW_LINE.speedMs),
+    speedMs: speedForDraft(calc),
     machineRoomType: calc?.machineRoomType ?? NEW_LINE.machineRoomType,
     doorType: calc?.doorType ?? NEW_LINE.doorType,
     doorWidthMm: str(calc?.doorWidthMm, NEW_LINE.doorWidthMm),
@@ -364,6 +374,10 @@ export const LinesEditor = ({
                             capacityKgOverride: '',
                             capacityPersonsOverride: '',
                             travelHeightMOverride: '',
+                            speedMsOverride: '',
+                            carWidthMmOverride: '',
+                            carDepthMmOverride: '',
+                            carHeightMmOverride: '',
                           };
                           next.capacityKg = String(
                             startingCapacityKg(
@@ -436,9 +450,9 @@ export const LinesEditor = ({
                           hint={
                             line.calcInput?.floors !== undefined &&
                             line.technicalSpec
-                              ? `Quoted: ${line.technicalSpec.capacityPersons ?? '—'} persons · ${line.calcInput.capacityKg} kg · ${line.calcInput.speedMs} m/s · door ${line.calcInput.doorWidthMm} mm.` +
+                              ? `Quoted: ${line.technicalSpec.capacityPersons ?? '—'} persons · ${line.calcInput.capacityKg} kg · ${line.calcInput.speedMs} m/s · car ${line.technicalSpec.carWidthMm === null ? 'to be confirmed' : `${line.technicalSpec.carWidthMm} × ${line.technicalSpec.carDepthMm} × ${line.technicalSpec.carHeightMm} mm`} · door ${line.calcInput.doorWidthMm} mm.` +
                                 // What the calculator said when the line was
-                                // priced: a shaft no standard one fits, a
+                                // priced: a shaft too small for its load, a
                                 // non-standard shaft, a capped speed.
                                 (line.technicalSpec.notes?.length
                                   ? ` ${line.technicalSpec.notes.join(' ')}`
@@ -602,7 +616,61 @@ export const LinesEditor = ({
                       </Field>
                     )}
 
-                    {isStandardLift(draft) ? null : (
+                    {isStandardLift(draft) ? (
+                      <>
+                        <Field
+                          label="Speed (m/s)"
+                          htmlFor={`speed-${line.id}`}
+                          hint="Prints instead of the table's. Not priced. Blank takes the table's."
+                        >
+                          <NumberInput
+                            id={`speed-${line.id}`}
+                            disabled={!editable}
+                            placeholder="From the table"
+                            value={draft.speedMsOverride}
+                            onValueChange={(v) =>
+                              setField(line, 'speedMsOverride', v)
+                            }
+                          />
+                        </Field>
+                        <Field
+                          label="Car W × D × CH (mm)"
+                          htmlFor={`car-width-${line.id}`}
+                          hint="Prints instead of the table's. Not priced. Blank takes the table's; where the table has no car, type the width and depth together."
+                        >
+                          <div className="grid grid-cols-3 gap-2">
+                            <NumberInput
+                              id={`car-width-${line.id}`}
+                              ariaLabel="Car width (mm)"
+                              disabled={!editable}
+                              placeholder="Width"
+                              value={draft.carWidthMmOverride}
+                              onValueChange={(v) =>
+                                setField(line, 'carWidthMmOverride', v)
+                              }
+                            />
+                            <NumberInput
+                              ariaLabel="Car depth (mm)"
+                              disabled={!editable}
+                              placeholder="Depth"
+                              value={draft.carDepthMmOverride}
+                              onValueChange={(v) =>
+                                setField(line, 'carDepthMmOverride', v)
+                              }
+                            />
+                            <NumberInput
+                              ariaLabel="Car height (mm)"
+                              disabled={!editable}
+                              placeholder="Height"
+                              value={draft.carHeightMmOverride}
+                              onValueChange={(v) =>
+                                setField(line, 'carHeightMmOverride', v)
+                              }
+                            />
+                          </div>
+                        </Field>
+                      </>
+                    ) : (
                       <>
                         {usesRise(products, draft.productType) ? (
                           <Field label="Rise (m)" htmlFor={`travel-${line.id}`}>

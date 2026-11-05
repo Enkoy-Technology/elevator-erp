@@ -104,9 +104,8 @@ const shaftText = ([w, d]: Shaft) => `${w} × ${d}`;
  * 320 and 1800–3000 kg, which that table lacks, have no car yet and keep the
  * speed limit of its nearest load. The range starts at its first shaft.
  * Some grow in width while they shrink in depth (1600 kg:
- * 2575 × 2400 to 2850 × 2000): those are two shapes of shaft, so either
- * one fits the load, and a shaft between them that holds neither (2600 ×
- * 2100) is not offered it.
+ * 2575 × 2400 to 2850 × 2000): those are two shapes of shaft, so a shaft
+ * fits the range by holding either one.
  */
 const range = (
   persons: number,
@@ -176,53 +175,75 @@ export const speedForFloors = (floors: number): number => {
 
 export interface PassengerSelection {
   lift: PassengerLift;
-  /** True when the shaft entered is exactly a standard shaft. */
+  /** The company formula's figures for this shaft, before rounding. */
+  formulaPersons: number;
+  formulaKg: number;
+  /** True when the shaft entered is exactly a standard shaft of the chosen load. */
   exact: boolean;
-  /** True when no shaft fits inside the one entered, so the smallest lift is quoted. */
+  /** True when no shaft of the load fits inside the one entered; it is quoted all the same. */
   undersized: boolean;
   /** The load's shaft range as written, when the shaft entered is bigger than it; null otherwise. */
   largerThanRange: string | null;
 }
 
+/**
+ * The shaft a person takes in the company's formula (2026-11-05): 0.33 m².
+ * It came as 0.35, then 0.36. In mm², so that a load exactly between two
+ * standard ones comes out exact.
+ */
+export const SHAFT_MM2_PER_PERSON = 330_000;
+const KG_PER_PERSON = 75;
+
 const ALL_LIFTS = [...PASSENGER_LIFTS, ...PASSENGER_SHAFT_RANGES];
 
-/** The smallest lift — the lightest, then the smaller shaft: the 4-person, 320 kg. */
-const SMALLEST_LIFT = [...ALL_LIFTS].sort(
-  (a, b) =>
-    a.loadKg - b.loadKg ||
-    a.shaftWidthMm * a.shaftDepthMm - b.shaftWidthMm * b.shaftDepthMm,
-)[0]!;
+/** The standard load nearest a figure; exactly between two, the lower. */
+const nearestStandardLoad = (kg: number): number =>
+  PASSENGER_SHAFT_RANGES.reduce(
+    (nearest, { loadKg }) =>
+      Math.abs(loadKg - kg) < Math.abs(nearest - kg) ? loadKg : nearest,
+    PASSENGER_SHAFT_RANGES[0]!.loadKg,
+  );
 
 /**
- * The lift for a shaft: the biggest whose shaft fits inside it, in width
- * and in depth, counting the start of each shaft range (client,
- * 2026-11-03). So a shaft inside a load's range gets that load, or the
- * bigger one where two ranges overlap, a shaft between ranges keeps the
- * load below, and a bigger shaft never gets a smaller lift. That includes a
- * standard shaft inside a heavier range: 1835 × 1750 is the 800 kg, no
- * longer the 630 kg standard row (client, 2026-11-03). Of two the same
- * load, a standard row wins (the shaft is its own), then the bigger shaft. A
- * 2000 × 2200 shaft is the 13-person 1000 kg, not the 15-person whose
- * 2430 mm wide standard shaft it cannot hold (client, 2026-10-22). A shaft
- * nothing fits (down to the 1000 × 1000 the form allows) is quoted as the
- * smallest lift, not refused (client, 2026-10-23).
+ * The lift for a shaft, by the company's formula (2026-11-05): W × D over
+ * `SHAFT_MM2_PER_PERSON` is the persons, × 75 is the load, and the load goes
+ * to the nearest standard one. Only the load is rounded: the persons come
+ * from its row, or 10 persons could print beside 630 kg. The formula sees the
+ * area and not the shape, so of the rows at that load the shaft takes the one
+ * that fits inside it, a standard row first, then the bigger shaft. If none
+ * fits it is flagged, not refused (client, 2026-10-23), on the first row
+ * whose car goes in the shaft: the documents print the two side by side.
  */
 export const selectPassengerLift = (
   shaftWidthMm: number,
   shaftDepthMm: number,
 ): PassengerSelection => {
-  const biggest = ALL_LIFTS.filter(
-    (lift) =>
-      lift.shaftWidthMm <= shaftWidthMm && lift.shaftDepthMm <= shaftDepthMm,
-  ).sort(
-    (a, b) =>
-      b.loadKg - a.loadKg ||
-      Number(a.range !== null) - Number(b.range !== null) ||
-      b.shaftWidthMm * b.shaftDepthMm - a.shaftWidthMm * a.shaftDepthMm,
-  )[0];
-  if (!biggest) {
+  const shaftMm2 = shaftWidthMm * shaftDepthMm;
+  const formulaPersons = shaftMm2 / SHAFT_MM2_PER_PERSON;
+  const formulaKg = (shaftMm2 * KG_PER_PERSON) / SHAFT_MM2_PER_PERSON;
+  const loadKg = nearestStandardLoad(formulaKg);
+  const rows = ALL_LIFTS.filter((lift) => lift.loadKg === loadKg);
+  const fitting = rows
+    .filter(
+      (lift) =>
+        lift.shaftWidthMm <= shaftWidthMm && lift.shaftDepthMm <= shaftDepthMm,
+    )
+    .sort(
+      (a, b) =>
+        Number(a.range !== null) - Number(b.range !== null) ||
+        b.shaftWidthMm * b.shaftDepthMm - a.shaftWidthMm * a.shaftDepthMm,
+    )[0];
+  if (!fitting) {
+    const carFits = rows.find(
+      (lift) =>
+        lift.carWidthMm !== null &&
+        lift.carWidthMm < shaftWidthMm &&
+        lift.carDepthMm! < shaftDepthMm,
+    );
     return {
-      lift: SMALLEST_LIFT,
+      lift: carFits ?? rows[0]!,
+      formulaPersons,
+      formulaKg,
       exact: false,
       undersized: true,
       largerThanRange: null,
@@ -230,16 +251,18 @@ export const selectPassengerLift = (
   }
   // A standard row names its own shaft in the note instead; several sit
   // outside their load's range, and would be flagged for a millimetre over.
-  const usual = biggest.range;
+  const usual = fitting.range;
   const larger =
     usual !== null &&
     (shaftWidthMm > usual.maxWidthMm || shaftDepthMm > usual.maxDepthMm);
   return {
-    lift: biggest,
+    lift: fitting,
+    formulaPersons,
+    formulaKg,
     exact:
       usual === null &&
-      biggest.shaftWidthMm === shaftWidthMm &&
-      biggest.shaftDepthMm === shaftDepthMm,
+      fitting.shaftWidthMm === shaftWidthMm &&
+      fitting.shaftDepthMm === shaftDepthMm,
     undersized: false,
     largerThanRange: larger ? usual.asWritten : null,
   };

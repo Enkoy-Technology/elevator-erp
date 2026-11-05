@@ -99,7 +99,7 @@ export default function NewQuotationPage() {
   const [error, setError] = useState<string | null>(null);
   // Open figures on the specification are saved or cancelled before Create
   // or Calculate, whose new result would close them and lose what was typed.
-  const [editingCapacity, setEditingCapacity] = useState(false);
+  const [editingSpecs, setEditingSpecs] = useState(false);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -278,7 +278,7 @@ export default function NewQuotationPage() {
             <button
               type="button"
               onClick={() => void onCreate()}
-              disabled={!result || creating || editingCapacity}
+              disabled={!result || creating || editingSpecs}
               className={btnPrimary}
             >
               {creating ? 'Creating…' : 'Create quotation'}
@@ -372,7 +372,7 @@ export default function NewQuotationPage() {
 
             <button
               type="submit"
-              disabled={calculating || editingCapacity}
+              disabled={calculating || editingSpecs}
               className={`${btnSecondary} w-full`}
             >
               {calculating
@@ -465,8 +465,8 @@ export default function NewQuotationPage() {
                 <LiftResult
                   result={shown}
                   products={products}
-                  onEditingChange={setEditingCapacity}
-                  onEditCapacity={
+                  onEditingChange={setEditingSpecs}
+                  onEditSpecs={
                     stale || calculating
                       ? undefined
                       : async (edit) => {

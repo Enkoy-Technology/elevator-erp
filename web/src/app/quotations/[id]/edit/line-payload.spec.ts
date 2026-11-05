@@ -1,5 +1,10 @@
 import type { ProductTypeRow } from '../../../../lib/api';
-import { NEW_LINE, toPayload, type LineDraft } from './line-payload';
+import {
+  NEW_LINE,
+  speedForDraft,
+  toPayload,
+  type LineDraft,
+} from './line-payload';
 
 /** What reaches the server: JSON drops a key left undefined. */
 const sent = (
@@ -15,6 +20,16 @@ const escalator = {
   code: 'ESCALATOR',
   effectiveFormula: 'Base price + (Rise − 6) × 500,000',
 } as ProductTypeRow;
+
+describe('speedForDraft', () => {
+  it("keeps a stored speed nobody typed, but never a typed one: it would go out as the next product's own", () => {
+    expect(speedForDraft({ speedMs: 1.5 })).toBe('1.5');
+    expect(speedForDraft({ speedMs: 6, speedMsOverride: 6 })).toBe(
+      NEW_LINE.speedMs,
+    );
+    expect(speedForDraft(null)).toBe(NEW_LINE.speedMs);
+  });
+});
 
 describe('toPayload', () => {
   it('sends a typed load and persons, and null for a blank one so the derived figure comes back', () => {
@@ -94,6 +109,40 @@ describe('toPayload', () => {
       expect(payload).not.toHaveProperty(key);
     }
     expect(payload.doorType).toBe(NEW_LINE.doorType);
+  });
+
+  it("sends a typed speed and car, and null for a blank one so the table's comes back", () => {
+    expect(
+      sent({
+        ...NEW_LINE,
+        speedMsOverride: '1.6',
+        carWidthMmOverride: '1200',
+        carDepthMmOverride: '1500',
+        carHeightMmOverride: '2300',
+      }),
+    ).toMatchObject({
+      speedMsOverride: 1.6,
+      carWidthMmOverride: 1200,
+      carDepthMmOverride: 1500,
+      carHeightMmOverride: 2300,
+    });
+    expect(sent(NEW_LINE)).toMatchObject({
+      speedMsOverride: null,
+      carWidthMmOverride: null,
+      carDepthMmOverride: null,
+      carHeightMmOverride: null,
+    });
+  });
+
+  it('sends null for them on a lift outside the table, whatever the draft still holds', () => {
+    expect(
+      sent({
+        ...NEW_LINE,
+        productType: 'CAR_LIFT',
+        speedMsOverride: '1.6',
+        carWidthMmOverride: '1200',
+      }),
+    ).toMatchObject({ speedMsOverride: null, carWidthMmOverride: null });
   });
 
   it('sends a typed travel, and null for a blank one so 3.5 m a floor comes back', () => {

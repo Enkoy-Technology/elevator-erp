@@ -754,6 +754,64 @@ describe('QuotationsService', () => {
         expect(request.travelHeightMOverride).toBeUndefined();
       });
 
+      const TYPED = {
+        speedMsOverride: 1.6,
+        carWidthMmOverride: 1200,
+        carDepthMmOverride: 1500,
+        carHeightMmOverride: 2300,
+      };
+
+      it('keeps a typed speed and car through an edit that does not touch them', async () => {
+        stored(TYPED);
+        await service.updateLine(user, draft.id, 'line-1', { stops: 13 });
+        expect(calc.calculateSpecs.mock.calls.at(-1)![1]).toMatchObject(TYPED);
+      });
+
+      it('drops a typed speed and car when the product changes', async () => {
+        stored(TYPED);
+        await service.updateLine(user, draft.id, 'line-1', {
+          productType: 'CAR_LIFT',
+        });
+        const [, request] = calc.calculateSpecs.mock.calls.at(-1)!;
+        for (const key of Object.keys(TYPED) as (keyof typeof TYPED)[]) {
+          expect(request[key]).toBeUndefined();
+        }
+      });
+
+      it('does not hand a typed speed to the next product as its real one', async () => {
+        stored({ ...TYPED, speedMs: 1.6 });
+        await service.updateLine(user, draft.id, 'line-1', {
+          productType: 'SERVICE_LIFT',
+        });
+        expect(calc.calculateSpecs.mock.calls.at(-1)![1].speedMs).toBeUndefined();
+      });
+
+      it('keeps a speed nobody typed, and one the edit states itself', async () => {
+        stored({ speedMs: 1.5 });
+        await service.updateLine(user, draft.id, 'line-1', {
+          productType: 'SERVICE_LIFT',
+        });
+        expect(calc.calculateSpecs.mock.calls.at(-1)![1].speedMs).toBe(1.5);
+        stored({ ...TYPED, speedMs: 1.6 });
+        await service.updateLine(user, draft.id, 'line-1', {
+          productType: 'SERVICE_LIFT',
+          speedMs: 1,
+        });
+        expect(calc.calculateSpecs.mock.calls.at(-1)![1].speedMs).toBe(1);
+      });
+
+      it('lets go of a typed speed and car cleared with null', async () => {
+        stored(TYPED);
+        const cleared = {
+          speedMsOverride: null,
+          carWidthMmOverride: null,
+          carDepthMmOverride: null,
+          carHeightMmOverride: null,
+        };
+        await service.updateLine(user, draft.id, 'line-1', cleared);
+        expect(calc.calculateSpecs.mock.calls.at(-1)![1]).toMatchObject(cleared);
+      });
+
       it('lets go of a typed travel cleared with null', async () => {
         stored({ travelHeightMOverride: 30 });
         await service.updateLine(user, draft.id, 'line-1', {
@@ -941,7 +999,7 @@ describe('QuotationsService', () => {
         capacityPersons: 4,
         notes: expect.arrayContaining([
           expect.stringMatching(
-            /No shaft fits inside 1100 × 1100 mm.*4-person.*manufacturer/,
+            /1100 × 1100 mm works out at.*no shaft for the 4-person.*manufacturer/,
           ),
         ]),
       });

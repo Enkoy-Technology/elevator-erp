@@ -314,6 +314,14 @@ export interface CalcInputPayload {
   capacityPersonsOverride?: number | null;
   /** The travel typed in place of 3.5 m × the floors: printed, never priced. Blank derives it. */
   travelHeightMOverride?: number | null;
+  /**
+   * Typed over a standard lift's table figures, or in place of a car the
+   * table does not have: printed, never priced. Null clears one on a stored line.
+   */
+  speedMsOverride?: number | null;
+  carWidthMmOverride?: number | null;
+  carDepthMmOverride?: number | null;
+  carHeightMmOverride?: number | null;
 }
 
 /**

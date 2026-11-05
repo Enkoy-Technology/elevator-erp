@@ -279,11 +279,15 @@ export class QuotationsService {
       entranceCount: line.entranceCount,
       ...definedOnly(dto),
     } as CreateQuotationLineDto;
-    // A load, head count or travel typed for one product says nothing of another.
+    // Figures typed for one product say nothing of another.
     if (dto.productType !== undefined && dto.productType !== line.productType) {
       merged.capacityKgOverride = dto.capacityKgOverride;
       merged.capacityPersonsOverride = dto.capacityPersonsOverride;
       merged.travelHeightMOverride = dto.travelHeightMOverride;
+      merged.speedMsOverride = dto.speedMsOverride;
+      merged.carWidthMmOverride = dto.carWidthMmOverride;
+      merged.carDepthMmOverride = dto.carDepthMmOverride;
+      merged.carHeightMmOverride = dto.carHeightMmOverride;
     }
     // A typed travel is also stored as travelHeightM, to print. Merged back
     // as that, a formula or product priced on its rise would price it, and a
@@ -294,6 +298,14 @@ export class QuotationsService {
       dto.travelHeightM === undefined
     ) {
       merged.travelHeightM = undefined;
+    }
+    // A typed speed is also stored as speedMs, to print. Merged back as that,
+    // a product outside the table would size its motor, rail and pit on it.
+    if (
+      (line.calcInput as Partial<CalcInput> | null)?.speedMsOverride != null &&
+      dto.speedMs === undefined
+    ) {
+      merged.speedMs = undefined;
     }
     // A description the system wrote follows the lift it describes, so a
     // typed load or head count reaches page 1; one typed by hand stays. Only
@@ -582,6 +594,10 @@ export class QuotationsService {
       capacityKgOverride: dto.capacityKgOverride,
       capacityPersonsOverride: dto.capacityPersonsOverride,
       travelHeightMOverride: dto.travelHeightMOverride,
+      speedMsOverride: dto.speedMsOverride,
+      carWidthMmOverride: dto.carWidthMmOverride,
+      carDepthMmOverride: dto.carDepthMmOverride,
+      carHeightMmOverride: dto.carHeightMmOverride,
       marginPercent: dto.marginPercent,
       // Same placeholder as createForProject: VAT is the statutory rate
       // already resolved onto the quotation header, applied below in

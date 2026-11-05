@@ -206,11 +206,12 @@ type Resolved = {
 
 /**
  * Complete the request. Standard-lift mode (a passenger-class request
- * carrying a shaft and floors) reads the company's table: the shaft picks the lift,
- * the floors give stops, travel (3.5 m a floor) and the speed band, capped
- * at what that lift allows. The technical block is then exactly what the
- * table says — car, door, shaft, persons — plus the overhead. Classic mode
- * requires every figure and computes the EN 81 geometry.
+ * carrying a shaft and floors) reads the company's table: the shaft's area
+ * picks the lift, the floors give stops, travel (3.5 m a floor) and the speed
+ * band, capped at what that lift allows. The technical block is then what the
+ * table says — car, door, shaft, persons — plus the overhead, unless a figure
+ * is typed over it. Classic mode requires every figure and computes the EN 81
+ * geometry.
  */
 const resolve = (
   request: CalcRequest,
@@ -231,17 +232,18 @@ const resolve = (
     const shaftWidthMm = request.shaftWidthMm!;
     const shaftDepthMm = request.shaftDepthMm!;
     const floors = request.floors!;
-    const { lift, exact, undersized, largerThanRange } = selectPassengerLift(
-      shaftWidthMm,
-      shaftDepthMm,
-    );
+    const { lift, formulaPersons, formulaKg, exact, undersized, largerThanRange } =
+      selectPassengerLift(shaftWidthMm, shaftDepthMm);
+    const carTyped =
+      request.carWidthMmOverride != null && request.carDepthMmOverride != null;
+    const workedOut = `${shaftWidthMm} × ${shaftDepthMm} mm works out at ${formulaPersons.toFixed(1)} persons, ${Number(formulaKg.toFixed(1))} kg`;
     if (undersized) {
       notes.push(
-        `No shaft fits inside ${shaftWidthMm} × ${shaftDepthMm} mm; it is quoted as the smallest lift, the ${lift.persons}-person ${lift.loadKg} kg (${shaftLabel(lift)}), to be confirmed by the manufacturer's drawing.`,
+        `${workedOut}, but no shaft for the ${lift.persons}-person ${lift.loadKg} kg fits inside it; to be confirmed by the manufacturer's drawing.`,
       );
     } else if (!exact) {
       notes.push(
-        `${shaftWidthMm} × ${shaftDepthMm} mm is not a standard shaft; the biggest lift that fits is the ${lift.persons}-person ${lift.loadKg} kg (${shaftLabel(lift)})${lift.range ? `, ${lift.carWidthMm === null ? 'its car size' : "its load's standard car"} to be confirmed by the manufacturer's drawing` : ''}.`,
+        `${workedOut}; the nearest standard lift is the ${lift.persons}-person ${lift.loadKg} kg (${shaftLabel(lift)})${lift.range && !carTyped ? `, ${lift.carWidthMm === null ? 'its car size' : "its load's standard car"} to be confirmed by the manufacturer's drawing` : ''}.`,
       );
     }
     if (largerThanRange) {
@@ -250,10 +252,49 @@ const resolve = (
       );
     }
     const bandSpeed = speedForFloors(floors);
-    const speedMs = Math.min(bandSpeed, lift.maxSpeedMs);
-    if (speedMs < bandSpeed) {
+    const tableSpeed = Math.min(bandSpeed, lift.maxSpeedMs);
+    // The speed and the car are typed over the table's on the specification
+    // (client, 2026-11-05). Neither is in any price formula.
+    const typedSpeed = request.speedMsOverride ?? undefined;
+    if ((typedSpeed ?? tableSpeed) === tableSpeed && tableSpeed < bandSpeed) {
       notes.push(
         `${floors} floors call for ${bandSpeed} m/s; this lift's maximum is ${lift.maxSpeedMs} m/s, so that is what is quoted.`,
+      );
+    }
+    if (typedSpeed !== undefined && typedSpeed !== tableSpeed) {
+      notes.push(
+        `Speed typed as ${typedSpeed} m/s; the table gives this lift ${tableSpeed} m/s. The list price stays the same.`,
+      );
+    }
+    const carWidthMm = request.carWidthMmOverride ?? lift.carWidthMm;
+    const carDepthMm = request.carDepthMmOverride ?? lift.carDepthMm;
+    const carHeightMm = request.carHeightMmOverride ?? PASSENGER_CAR_HEIGHT_MM;
+    // The documents leave out a car with a size missing, so half of one
+    // would vanish from the offer while the screen showed it.
+    if (
+      (carWidthMm === null) !== (carDepthMm === null) ||
+      (carWidthMm === null && request.carHeightMmOverride != null)
+    ) {
+      throw new BadRequestException(
+        `The table has no car for ${lift.loadKg} kg: type its width and depth together.`,
+      );
+    }
+    const typedCar = `${carWidthMm} × ${carDepthMm} × ${carHeightMm} mm`;
+    const tableCar = `${lift.carWidthMm} × ${lift.carDepthMm} × ${PASSENGER_CAR_HEIGHT_MM} mm`;
+    if (carWidthMm !== null && carDepthMm !== null && typedCar !== tableCar) {
+      notes.push(
+        `Car typed as ${typedCar}; the table's is ${lift.carWidthMm === null ? 'still to be confirmed' : tableCar}. The list price stays the same.`,
+      );
+    }
+    // Said, not refused, as with a vehicle's opening (client, 2026-10-23). The
+    // table's own car can miss too: the formula sees a shaft's area, not its shape.
+    if (
+      carWidthMm !== null &&
+      carDepthMm !== null &&
+      (carWidthMm >= shaftWidthMm || carDepthMm >= shaftDepthMm)
+    ) {
+      notes.push(
+        `A ${carWidthMm} × ${carDepthMm} mm car does not fit a ${shaftWidthMm} × ${shaftDepthMm} mm shaft; to be confirmed by the manufacturer's drawing.`,
       );
     }
     // A typed load prints in place of the table's (client, 2026-10-29); the
@@ -279,7 +320,7 @@ const resolve = (
       stops: floors,
       // The client's rule: 3,500 mm per floor, times the floor count.
       travelHeightM: Number((floors * FLOOR_HEIGHT_M).toFixed(2)),
-      speedMs,
+      speedMs: typedSpeed ?? tableSpeed,
       machineRoomType,
       doorType: lift.door === 'CO' ? 'CENTER_OPEN' : 'TELESCOPIC',
       doorWidthMm: lift.doorWidthMm,
@@ -290,6 +331,10 @@ const resolve = (
       shaftDepthMm,
       floors,
       ...(typedKg === undefined ? {} : { capacityKgOverride: typedKg }),
+      speedMsOverride: typedSpeed,
+      carWidthMmOverride: request.carWidthMmOverride ?? undefined,
+      carDepthMmOverride: request.carDepthMmOverride ?? undefined,
+      carHeightMmOverride: request.carHeightMmOverride ?? undefined,
     };
     const technical: TechnicalSpecs = {
       ...EMPTY_GEOMETRY,
@@ -297,9 +342,9 @@ const resolve = (
       // withTypedPersons puts a typed head count in its place.
       capacityPersons:
         typedKg === undefined ? lift.persons : passengerCapacity(capacityKg),
-      carWidthMm: lift.carWidthMm,
-      carDepthMm: lift.carDepthMm,
-      carHeightMm: PASSENGER_CAR_HEIGHT_MM,
+      carWidthMm,
+      carDepthMm,
+      carHeightMm,
       overheadClearanceMm: STANDARD_OVERHEAD_MM,
       // The building's shaft, as entered — what the salesperson typed must
       // be what the spec sheet says. The standard row it maps to is named

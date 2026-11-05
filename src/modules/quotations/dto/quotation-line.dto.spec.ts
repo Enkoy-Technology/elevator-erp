@@ -60,3 +60,48 @@ describe('UpdateQuotationLineDto typed travel', () => {
     }
   });
 });
+
+describe('UpdateQuotationLineDto typed speed and car', () => {
+  const errors = async (body: Record<string, unknown>) =>
+    (await validate(plainToInstance(UpdateQuotationLineDto, body))).flatMap(
+      (e) => Object.values(e.constraints ?? {}),
+    );
+
+  it('accepts null, which goes back to the table, and a figure in range', async () => {
+    expect(
+      await errors({
+        speedMsOverride: null,
+        carWidthMmOverride: null,
+        carDepthMmOverride: null,
+        carHeightMmOverride: null,
+      }),
+    ).toEqual([]);
+    expect(
+      await errors({
+        speedMsOverride: 1.75,
+        carWidthMmOverride: 1350,
+        carDepthMmOverride: 1400,
+        carHeightMmOverride: 2400,
+      }),
+    ).toEqual([]);
+  });
+
+  it('refuses a figure out of range, in words a salesperson can read', async () => {
+    for (const speedMsOverride of [0.01, 11, 1.755]) {
+      expect((await errors({ speedMsOverride }))[0]).toBe(
+        'Speed is from 0.05 to 10 m/s, to two decimals.',
+      );
+    }
+    for (const key of [
+      'carWidthMmOverride',
+      'carDepthMmOverride',
+      'carHeightMmOverride',
+    ]) {
+      for (const typed of [499, 10001, 1350.5]) {
+        expect((await errors({ [key]: typed }))[0]).toBe(
+          'Car size is a whole number from 500 to 10,000 mm.',
+        );
+      }
+    }
+  });
+});

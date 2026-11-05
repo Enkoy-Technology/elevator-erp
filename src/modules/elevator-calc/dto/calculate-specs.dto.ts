@@ -22,6 +22,8 @@ import {
 
 /** Shown as it is: this box is typed by a salesperson, in metres. */
 const TRAVEL_RANGE = 'Travel height is from 3 to 200 m, to two decimals.';
+const SPEED_RANGE = 'Speed is from 0.05 to 10 m/s, to two decimals.';
+const CAR_RANGE = 'Car size is a whole number from 500 to 10,000 mm.';
 
 export class CalculateSpecsDto {
   @ApiProperty({
@@ -172,6 +174,60 @@ export class CalculateSpecsDto {
   @Min(3, { message: TRAVEL_RANGE })
   @Max(200, { message: TRAVEL_RANGE })
   travelHeightMOverride?: number | null;
+
+  @ApiPropertyOptional({
+    minimum: 0.05,
+    maximum: 10,
+    nullable: true,
+    example: 1.6,
+    description:
+      "Standard passenger lift: the speed to print in place of the table's. Never priced. Ignored outside the table, whose speed is speedMs.",
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 }, { message: SPEED_RANGE })
+  @Min(0.05, { message: SPEED_RANGE })
+  @Max(10, { message: SPEED_RANGE })
+  speedMsOverride?: number | null;
+
+  @ApiPropertyOptional({
+    minimum: 500,
+    maximum: 10000,
+    nullable: true,
+    example: 1350,
+    description:
+      "Standard passenger lift: the car width to print in place of the table's. Never priced. Where the table has no car, send it with carDepthMmOverride.",
+  })
+  @IsOptional()
+  @IsInt({ message: CAR_RANGE })
+  @Min(500, { message: CAR_RANGE })
+  @Max(10000, { message: CAR_RANGE })
+  carWidthMmOverride?: number | null;
+
+  @ApiPropertyOptional({
+    minimum: 500,
+    maximum: 10000,
+    nullable: true,
+    example: 1400,
+    description: 'As carWidthMmOverride, for the car depth.',
+  })
+  @IsOptional()
+  @IsInt({ message: CAR_RANGE })
+  @Min(500, { message: CAR_RANGE })
+  @Max(10000, { message: CAR_RANGE })
+  carDepthMmOverride?: number | null;
+
+  @ApiPropertyOptional({
+    minimum: 500,
+    maximum: 10000,
+    nullable: true,
+    example: 2400,
+    description: "The car height to print in place of the table's 2,400 mm.",
+  })
+  @IsOptional()
+  @IsInt({ message: CAR_RANGE })
+  @Min(500, { message: CAR_RANGE })
+  @Max(10000, { message: CAR_RANGE })
+  carHeightMmOverride?: number | null;
 
   @ApiProperty({ minimum: 0, maximum: 100, example: 25 })
   @IsNumber({ maxDecimalPlaces: 2 })

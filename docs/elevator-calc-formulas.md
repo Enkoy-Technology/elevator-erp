@@ -154,6 +154,24 @@ LIST_PRICE = base(N)
   (3–200 m), on any lift (client, 2026-11-04). It is printed, never priced. A
   product whose formula uses `Rise`, such as the escalator, sends
   `travelHeightM` instead and takes nothing from the override.
+- A standard lift's load comes from the company's formula (2026-11-05):
+  `persons = shaft_width_m × shaft_depth_m ÷ 0.33`, `load = persons × 75`, taken
+  to the nearest of the 14 standard loads (320 to 3,000 kg); exactly between
+  two, the lower. Only the load is rounded: the persons, car, door and speed
+  limit come from that load's row, so 1650 × 1850 (694 kg) is 8 persons, 630 kg.
+  The figure is `SHAFT_MM2_PER_PERSON` in `passenger-table.ts`, set at 0.33
+  (it came as 0.35, then 0.36). The shaft takes the row of that load that fits inside
+  it; if none does, the first row whose car fits is quoted, with a note, and a
+  car that still does not fit gets a note of its own.
+- A standard lift's speed and car print as the table gives them unless typed:
+  `speedMsOverride` (0.05–10 m/s) and `carWidthMmOverride`,
+  `carDepthMmOverride`, `carHeightMmOverride` (500–10,000 mm), each on its own
+  (client, 2026-11-05). They are printed, never priced. Where the table has no
+  car, the width and depth are typed together: half a car, or a height alone,
+  is refused, because the documents leave out a car with a size missing. A
+  typed car that does not fit the shaft is quoted, with a note. Other products
+  ignore all four; they have their own `speedMs` and platform, and a typed
+  speed does not follow a line to one.
 
 > **Open with the product owner.** The tier wording was *"Above 20-30 floor
 > base 8,000,000 and above starting from 31 and above base 11,000,000"*. Two

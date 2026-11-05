@@ -58,6 +58,15 @@ export interface CalcInput {
    * so a travel nobody typed still follows the floors.
    */
   travelHeightMOverride?: number;
+  /**
+   * The speed and the car typed over a standard lift's table figures, or in
+   * place of a car the table does not have (client, 2026-11-05): printed,
+   * never priced. A lift outside the table types its speed as `speedMs`.
+   */
+  speedMsOverride?: number;
+  carWidthMmOverride?: number;
+  carDepthMmOverride?: number;
+  carHeightMmOverride?: number;
 }
 
 /**
@@ -91,6 +100,10 @@ export type CalcRequest = Pick<
     capacityKgOverride?: number | null;
     capacityPersonsOverride?: number | null;
     travelHeightMOverride?: number | null;
+    speedMsOverride?: number | null;
+    carWidthMmOverride?: number | null;
+    carDepthMmOverride?: number | null;
+    carHeightMmOverride?: number | null;
   };
 
 /**
@@ -124,8 +137,8 @@ export interface TechnicalSpecs {
   machineRoomDepthMm: number | null;
   machineRoomHeightMm: number | null;
   /**
-   * What the calculator told the salesperson about this lift (a shaft no
-   * standard one fits, a non-standard shaft, a capped speed), kept with a
+   * What the calculator told the salesperson about this lift (a shaft too
+   * small for its load, a non-standard shaft, a capped speed), kept with a
    * stored line so the line editor, which has no calculator screen, still
    * shows it. Never printed; absent when there was nothing to say.
    */

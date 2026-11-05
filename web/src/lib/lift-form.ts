@@ -227,12 +227,21 @@ export const withProduct = (
     ...form,
     productType,
     capacityKg: startingCapacityKg(products, productType, form.capacityKg),
-    // A load, head count or travel typed for one product says nothing of another.
-    capacityKgOverride: undefined,
-    capacityPersonsOverride: undefined,
+    // Figures typed for one product say nothing of another.
+    ...NO_TYPED_SPECS,
     travelHeightMOverride: undefined,
     ...startingSpeedAndDoor(productType, form, passengerShaft.current),
   };
+};
+
+/** What Edit types over on one lift's specification, gone once it is another lift. */
+export const NO_TYPED_SPECS = {
+  capacityKgOverride: undefined,
+  capacityPersonsOverride: undefined,
+  speedMsOverride: undefined,
+  carWidthMmOverride: undefined,
+  carDepthMmOverride: undefined,
+  carHeightMmOverride: undefined,
 };
 
 /**
@@ -272,6 +281,10 @@ export const toRequest = (
     capacityKgOverride,
     capacityPersonsOverride,
     travelHeightMOverride,
+    speedMsOverride,
+    carWidthMmOverride,
+    carDepthMmOverride,
+    carHeightMmOverride,
     ...rest
   } = form;
   // An escalator has no machine room to send.
@@ -289,6 +302,10 @@ export const toRequest = (
         capacityKgOverride,
         capacityPersonsOverride,
         travelHeightMOverride,
+        speedMsOverride,
+        carWidthMmOverride,
+        carDepthMmOverride,
+        carHeightMmOverride,
       }
     : {
         ...common,
@@ -360,25 +377,32 @@ export const offerPreviewEtb = (
 };
 
 /** What Edit on the specifications types over; undefined goes back to the calculated figure. */
-export type CapacityEdit = Partial<
-  Pick<CalcInputPayload, 'capacityKgOverride' | 'capacityPersonsOverride'>
+export type SpecEdit = Partial<
+  Pick<CalcInputPayload, keyof typeof NO_TYPED_SPECS>
 >;
 
 /** The figures as the specification card shows them, or as typed over them. */
-export type CapacityFigures = { kg: string; persons: string };
+export type SpecFigures = {
+  kg: string;
+  persons: string;
+  speed: string;
+  carWidth: string;
+  carDepth: string;
+  carHeight: string;
+};
 
 /**
  * What a Save on the specification sends, or why it cannot: only a figure
  * that was changed, so one left as shown keeps what it was (typed or
  * calculated), and a cleared box goes back to the calculated figure. The
- * load is typed over only on a standard lift; elsewhere it is the priced
- * capacity, typed with the lift.
+ * load, speed and car are typed over only on a standard lift; elsewhere the
+ * load is the priced capacity and the speed the lift's own, typed with it.
  */
-export const capacityEdit = (
-  typed: CapacityFigures,
-  shown: CapacityFigures,
+export const specEdit = (
+  typed: SpecFigures,
+  shown: SpecFigures,
   standardLift: boolean,
-): CapacityEdit | { error: string } => {
+): SpecEdit | { error: string } => {
   const value = (raw: string) => (raw.trim() === '' ? undefined : Number(raw));
   // The API's own limits, said in words before its field names reach the screen.
   const outside = (raw: string, min: number, max: number) => {
@@ -391,12 +415,18 @@ export const capacityEdit = (
   if (outside(typed.persons, 1, 100)) {
     return { error: 'Persons is a whole number from 1 to 100.' };
   }
+  const changed = (name: keyof SpecFigures, key: keyof SpecEdit): SpecEdit =>
+    typed[name] === shown[name] ? {} : { [key]: figure(typed[name]) };
   return {
-    ...(standardLift && typed.kg !== shown.kg
-      ? { capacityKgOverride: value(typed.kg) }
-      : {}),
-    ...(typed.persons !== shown.persons
-      ? { capacityPersonsOverride: value(typed.persons) }
+    ...changed('persons', 'capacityPersonsOverride'),
+    ...(standardLift
+      ? {
+          ...changed('kg', 'capacityKgOverride'),
+          ...changed('speed', 'speedMsOverride'),
+          ...changed('carWidth', 'carWidthMmOverride'),
+          ...changed('carDepth', 'carDepthMmOverride'),
+          ...changed('carHeight', 'carHeightMmOverride'),
+        }
       : {}),
   };
 };

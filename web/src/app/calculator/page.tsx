@@ -131,7 +131,7 @@ export default function CalculatorPage() {
                   result={calculated.result}
                   products={products}
                   onEditingChange={setEditing}
-                  onEditCapacity={
+                  onEditSpecs={
                     stale || calculating
                       ? undefined
                       : async (edit) => {

@@ -15,18 +15,19 @@ import {
   type ProductTypeRow,
 } from '@/lib/api';
 import {
+  NO_TYPED_SPECS,
   VEHICLE_STANDARD,
   hasDoor,
   hasMachineRoom,
   isStandardLift,
-  capacityEdit,
+  specEdit,
   figure,
   isVehicleProduct,
   usesRise,
   withProduct,
-  type CapacityEdit,
-  type CapacityFigures,
   type PassengerShaft,
+  type SpecEdit,
+  type SpecFigures,
   toRequest,
 } from '@/lib/lift-form';
 
@@ -104,12 +105,19 @@ type NumberKey =
   | 'speedMs'
   | 'doorWidthMm';
 
-/** A load or head count typed on the specification belongs to the lift it was typed for. */
+/** A figure typed on the specification belongs to the lift it was typed for. */
 const NAMES_THE_LIFT: readonly NumberKey[] = [
   'shaftWidthMm',
   'shaftDepthMm',
   'capacityKg',
 ];
+
+const CAR_LABEL = 'Car W×D×CH (mm)';
+const CAR_BOXES = [
+  ['carWidth', 'Car width (mm)', 'Width'],
+  ['carDepth', 'Car depth (mm)', 'Depth'],
+  ['carHeight', 'Car height (mm)', 'Height'],
+] as const;
 
 const doorLabel = (input: CalcInputPayload): string =>
   `${input.doorType === 'CENTER_OPEN' ? 'CO' : input.doorType === 'TELESCOPIC' ? '2S' : 'Side'} ${formatNumber(input.doorWidthMm)} × 2,100`;
@@ -165,12 +173,7 @@ export const LiftInputs = ({
               // The travel alone can stay blank: that is 3.5 m a floor.
               [key]:
                 key === 'travelHeightMOverride' ? figure(raw) : Number(raw),
-              ...(NAMES_THE_LIFT.includes(key)
-                ? {
-                    capacityKgOverride: undefined,
-                    capacityPersonsOverride: undefined,
-                  }
-                : {}),
+              ...(NAMES_THE_LIFT.includes(key) ? NO_TYPED_SPECS : {}),
             }));
           }}
         />
@@ -224,9 +227,9 @@ export const LiftInputs = ({
           <p className="col-span-2 text-xs text-slate-500">
             Persons, rated load, speed, car and door follow from the shaft and
             the floors — the company&apos;s standard passenger table. Edit on
-            the specifications changes the persons and load printed. Travel
-            height can be typed, or left blank for 3.5 m a floor; it does not
-            change the list price.
+            the specifications changes the persons, load, speed and car
+            printed. Travel height can be typed, or left blank for 3.5 m a
+            floor; it does not change the list price.
           </p>
         </div>
       ) : null}
@@ -325,23 +328,23 @@ export const LiftInputs = ({
 export const LiftResult = ({
   result,
   products,
-  onEditCapacity,
+  onEditSpecs,
   onEditingChange,
 }: {
   result: CalcResult;
   products: readonly ProductTypeRow[];
   /** Recalculates with the edited figures, throwing if the API refuses them. Without it there is no Edit: left off while the figures are out of date. */
-  onEditCapacity?: (edit: CapacityEdit) => Promise<void>;
+  onEditSpecs?: (edit: SpecEdit) => Promise<void>;
   /** Told while the figures are open for editing, so nothing saves the lift without them. */
   onEditingChange?: (editing: boolean) => void;
 }) => {
   const [opened, setOpened] = useState<
-    (CapacityFigures & { of: CalcResult }) | null
+    (SpecFigures & { of: CalcResult }) | null
   >(null);
   // Typed over the result it was opened on; a recalculation closes it, and
   // so does a changed lift, whose page takes Edit away (see StaleNote).
-  const draft = onEditCapacity && opened?.of === result ? opened : null;
-  const setDraft = (figures: CapacityFigures | null) =>
+  const draft = onEditSpecs && opened?.of === result ? opened : null;
+  const setDraft = (figures: SpecFigures | null) =>
     setOpened(figures && { ...figures, of: result });
   const editing = draft !== null;
   useEffect(() => {
@@ -354,21 +357,26 @@ export const LiftResult = ({
   const shown = {
     kg: String(result.input.capacityKg),
     persons: String(result.technical.capacityPersons ?? ''),
+    speed: String(result.input.speedMs),
+    carWidth: String(result.technical.carWidthMm ?? ''),
+    carDepth: String(result.technical.carDepthMm ?? ''),
+    carHeight: String(result.technical.carHeightMm ?? ''),
   };
-  // A standard lift's load is printed over the table's and never priced;
-  // anywhere else the load is the priced capacity, typed with the lift.
-  const editable: Partial<Record<string, 'kg' | 'persons'>> = standard
-    ? { Persons: 'persons', 'Rated load (kg)': 'kg' }
+  // A standard lift's load, speed and car are printed over the table's and
+  // never priced; anywhere else the load is the priced capacity and the speed
+  // the lift's own, typed with the lift.
+  const editable: Partial<Record<string, keyof SpecFigures>> = standard
+    ? { Persons: 'persons', 'Rated load (kg)': 'kg', 'Speed (m/s)': 'speed' }
     : { Persons: 'persons' };
   const canEdit =
-    onEditCapacity !== undefined &&
+    onEditSpecs !== undefined &&
     result.input.capacityKg > 0 &&
     (standard ||
       isVehicleProduct(result.technical.productType) ||
       result.technical.carWidthMm !== null);
 
-  const save = async (typed: CapacityFigures) => {
-    const edit = capacityEdit(typed, shown, standard);
+  const save = async (typed: SpecFigures) => {
+    const edit = specEdit(typed, shown, standard);
     if ('error' in edit) {
       setEditError(edit.error);
       return;
@@ -376,7 +384,7 @@ export const LiftResult = ({
     setSaving(true);
     setEditError(null);
     try {
-      await onEditCapacity?.(edit);
+      await onEditSpecs?.(edit);
       setDraft(null);
     } catch (err) {
       setEditError(
@@ -387,20 +395,32 @@ export const LiftResult = ({
     }
   };
 
+  const box = (key: keyof SpecFigures, name: string, placeholder: string) =>
+    draft && (
+      <NumberInput
+        key={key}
+        className={field}
+        ariaLabel={name}
+        value={draft[key]}
+        placeholder={placeholder}
+        onValueChange={(raw) => setDraft({ ...draft, [key]: raw })}
+      />
+    );
+
   const cell = ([k, v]: readonly [string, string]) => {
     const key = editable[k];
+    // Three boxes want the whole row: a third of a cell cannot show 1,350.
+    const car = draft !== null && standard && k === CAR_LABEL;
     return (
-      <div key={k}>
+      <div key={k} className={car ? 'col-span-full' : undefined}>
         <dt className="text-xs text-slate-500">{k}</dt>
         <dd className="font-medium text-slate-900">
-          {draft && key ? (
-            <NumberInput
-              className={field}
-              ariaLabel={k}
-              value={draft[key]}
-              placeholder="Calculated"
-              onValueChange={(raw) => setDraft({ ...draft, [key]: raw })}
-            />
+          {car ? (
+            <div className="grid grid-cols-3 gap-2">
+              {CAR_BOXES.map(([name, text, hint]) => box(name, text, hint))}
+            </div>
+          ) : draft && key ? (
+            box(key, k, 'Calculated')
           ) : (
             v
           )}
@@ -459,7 +479,7 @@ export const LiftResult = ({
                   ['Rated load (kg)', formatNumber(result.input.capacityKg)],
                   ['Speed (m/s)', String(result.input.speedMs)],
                   [
-                    'Car W×D×CH (mm)',
+                    CAR_LABEL,
                     result.technical.carWidthMm === null
                       ? 'To be confirmed'
                       : `${formatNumber(result.technical.carWidthMm)} × ${formatNumber(result.technical.carDepthMm)} × ${formatNumber(result.technical.carHeightMm)}`,

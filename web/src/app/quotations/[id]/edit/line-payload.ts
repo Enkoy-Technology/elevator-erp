@@ -1,4 +1,5 @@
 import type {
+  CalcInputPayload,
   CreateQuotationLinePayload,
   ProductType,
   ProductTypeRow,
@@ -25,6 +26,11 @@ export interface LineDraft {
   stops: string;
   /** Typed in place of 3.5 m × the stops; blank derives it. */
   travelHeightMOverride: string;
+  /** Typed over the standard table's speed and car; blank takes the table's. */
+  speedMsOverride: string;
+  carWidthMmOverride: string;
+  carDepthMmOverride: string;
+  carHeightMmOverride: string;
   travelHeightM: string;
   speedMs: string;
   machineRoomType: 'MR' | 'MRL';
@@ -62,6 +68,10 @@ export const NEW_LINE: LineDraft = {
   capacityPersonsOverride: '',
   stops: '12',
   travelHeightMOverride: '',
+  speedMsOverride: '',
+  carWidthMmOverride: '',
+  carDepthMmOverride: '',
+  carHeightMmOverride: '',
   travelHeightM: '45',
   speedMs: '1.6',
   machineRoomType: 'MRL',
@@ -83,6 +93,18 @@ export const NEW_LINE: LineDraft = {
   specSummary: '',
 };
 
+/**
+ * The speed a line's draft holds for a lift outside the table. A typed one
+ * prints on the lift it was typed for; kept here, a move to another product
+ * would send it as that product's own speed, which sizes its motor and rail.
+ */
+export const speedForDraft = (
+  calc: Partial<Pick<CalcInputPayload, 'speedMs' | 'speedMsOverride'>> | null,
+): string =>
+  calc?.speedMs == null || calc.speedMsOverride != null
+    ? NEW_LINE.speedMs
+    : String(calc.speedMs);
+
 export const num = (value: string, fallback: number): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && value.trim() !== '' ? parsed : fallback;
@@ -98,6 +120,8 @@ export const toPayload = (
   products: readonly ProductTypeRow[],
 ): CreateQuotationLinePayload => {
   const floorLabels = text(draft.floorLabels);
+  const overTheTable = (value: string): number | null =>
+    isStandardLift(draft.productType) ? (figure(value) ?? null) : null;
   // A calculation box left blank is left out, not filled with the demo lift:
   // a cleared shaft width was saved as 1835 and quoted the 8-person lift
   // (2026-10-23). The server keeps the stored figure on an update and
@@ -152,6 +176,10 @@ export const toPayload = (
     travelHeightMOverride: usesRise(products, draft.productType)
       ? null
       : (figure(draft.travelHeightMOverride) ?? null),
+    speedMsOverride: overTheTable(draft.speedMsOverride),
+    carWidthMmOverride: overTheTable(draft.carWidthMmOverride),
+    carDepthMmOverride: overTheTable(draft.carDepthMmOverride),
+    carHeightMmOverride: overTheTable(draft.carHeightMmOverride),
     ...(hasMachineRoom(draft.productType)
       ? { machineRoomType: draft.machineRoomType }
       : {}),
