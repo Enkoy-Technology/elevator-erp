@@ -1,14 +1,21 @@
 import type { AssetChecklistItem, ChecklistMark } from './api';
 import {
+  caseStateText,
   caseTick,
+  detailKey,
   hasRowSaving,
   hasSaveFailure,
+  landedCases,
+  landedRows,
   packingListItems,
+  partsHeadline,
   partsNotArrived,
   restoreRows,
   summariseCases,
   withCaseMark,
+  withCaseNo,
   withMark,
+  withoutCaseNo,
   withoutFailures,
   withSaveState,
 } from './asset-checklist';
@@ -192,5 +199,124 @@ describe('the packing list on the register form', () => {
     const items = withMark(packingListItems(rows), '5/F3', 'MISSING');
 
     expect(partsNotArrived(items)).toEqual(['5/F3']);
+  });
+});
+
+describe('caseStateText', () => {
+  const summary = (total: number, short: number) => ({
+    caseNo: 4,
+    boxNames: ['Electrical parts'],
+    total,
+    arrived: total - short,
+    short,
+  });
+
+  it('says a whole case arrived, in the words a row uses', () => {
+    expect(caseStateText(summary(48, 0))).toBe('All 48 arrived');
+  });
+
+  it('says how many of a case are missing', () => {
+    expect(caseStateText(summary(48, 2))).toBe('2 of 48 missing');
+  });
+
+  it('says when a whole case is missing', () => {
+    expect(caseStateText(summary(48, 48))).toBe('All 48 missing');
+  });
+
+  it('does not say "all 1" for a case holding one part', () => {
+    expect(caseStateText(summary(1, 0))).toBe('Arrived');
+    expect(caseStateText(summary(1, 1))).toBe('Missing');
+  });
+});
+
+describe('partsHeadline', () => {
+  it('leads with the good news when nothing is missing', () => {
+    expect(partsHeadline(134, 0)).toBe('All 134 parts arrived');
+  });
+
+  it('counts what is missing', () => {
+    expect(partsHeadline(134, 1)).toBe('1 part missing');
+    expect(partsHeadline(134, 2)).toBe('2 parts missing');
+  });
+});
+
+describe('withCaseNo and withoutCaseNo', () => {
+  it('adds and removes a case without touching the set it was given', () => {
+    const before: ReadonlySet<number> = new Set([1]);
+
+    const added = withCaseNo(before, 2);
+    const removed = withoutCaseNo(added, 1);
+
+    expect([...added]).toEqual([1, 2]);
+    expect([...removed]).toEqual([2]);
+    expect([...before]).toEqual([1]);
+  });
+});
+
+describe('a quantity or note saved beside a tap', () => {
+  const items = [row('a', 1, 'OK')];
+
+  it('counts as a failure of its row', () => {
+    expect(hasSaveFailure(items, { [detailKey('a')]: 'failed' })).toBe(true);
+  });
+
+  it('counts as its row saving', () => {
+    expect(hasRowSaving(items, { [detailKey('a')]: 'saving' })).toBe(true);
+  });
+
+  it('keeps its own state when the tap on the same row changes', () => {
+    const failedTap = withSaveState({}, 'a', 'failed');
+    const both = withSaveState(failedTap, detailKey('a'), 'saving');
+
+    expect(withSaveState(both, detailKey('a'), null)).toEqual({ a: 'failed' });
+    expect(withSaveState(both, 'a', null)).toEqual({
+      [detailKey('a')]: 'saving',
+    });
+  });
+
+  it('survives a case save, which settles taps and not typed details', () => {
+    const states = {
+      a: 'failed',
+      [detailKey('a')]: 'failed',
+    } as const;
+
+    expect(withoutFailures(states, ['a'])).toEqual({
+      [detailKey('a')]: 'failed',
+    });
+  });
+});
+
+describe('landedRows', () => {
+  it('finds a failed tap the server holds anyway, so only its reply was lost', () => {
+    const items = [row('a', 1, 'MISSING'), row('b', 1, 'OK')];
+    const wanted = new Map<string, ChecklistMark>([
+      ['a', 'MISSING'],
+      ['b', 'MISSING'],
+    ]);
+
+    expect(landedRows(items, wanted)).toEqual(['a']);
+  });
+});
+
+describe('landedCases', () => {
+  it('finds a failed case only when every part of it holds the mark', () => {
+    const items = [
+      row('a', 1, 'MISSING'),
+      row('b', 1, 'MISSING'),
+      row('c', 2, 'MISSING'),
+      row('d', 2, 'OK'),
+    ];
+    const wanted = new Map<number, ChecklistMark>([
+      [1, 'MISSING'],
+      [2, 'MISSING'],
+    ]);
+
+    expect(landedCases(items, wanted)).toEqual([1]);
+  });
+
+  it('does not count a case with no rows as landed', () => {
+    const wanted = new Map<number, ChecklistMark>([[9, 'OK']]);
+
+    expect(landedCases([row('a', 1, 'OK')], wanted)).toEqual([]);
   });
 });

@@ -213,25 +213,6 @@ export default function NewAssetPage() {
         </Field>
       </FormSection>
 
-      {startingPoint === 'FROM_FACTORY' &&
-      category === 'ELEVATOR' &&
-      usePackingList &&
-      parts.length > 0 ? (
-        <FormSection title="Parts">
-          <div className="min-w-0 sm:col-span-2">
-            <PartsChecklist
-              items={parts}
-              canMark
-              editableDetails={false}
-              onSave={tickPart}
-              onCase={(caseNo, mark) =>
-                setParts((rows) => withCaseMark(rows, caseNo, mark))
-              }
-            />
-          </div>
-        </FormSection>
-      ) : null}
-
       <FormSection title="Location">
         <Field
           label="Specification"
@@ -276,6 +257,25 @@ export default function NewAssetPage() {
           />
         </Field>
       </FormSection>
+
+      {startingPoint === 'FROM_FACTORY' &&
+      category === 'ELEVATOR' &&
+      usePackingList &&
+      parts.length > 0 ? (
+        <FormSection title="Parts">
+          <div className="-mx-4 min-w-0 sm:col-span-2 sm:mx-0">
+            <PartsChecklist
+              items={parts}
+              canMark
+              editableDetails={false}
+              onSave={tickPart}
+              onCase={(caseNo, mark) =>
+                setParts((rows) => withCaseMark(rows, caseNo, mark))
+              }
+            />
+          </div>
+        </FormSection>
+      ) : null}
     </FormPage>
   );
 }

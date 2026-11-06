@@ -13,8 +13,8 @@ Design: `docs/superpowers/specs/2026-11-06-lift-arrival-tracking-design.md`.
 - Register from the factory (On order, in stock, with the packing list) or
   already installed (In service, customer required, no checklist)
 - Update basic fields; status and sold-to change only through their own actions
-- Parts per lift: every part starts ticked as arrived, and people untick what
-  did not come, one part or a whole case, when registering or updating a lift
+- Parts per lift: every part starts as arrived, and people tap what did not
+  come, one part or a whole case, when registering or updating a lift
 - Status steps with who may press each, General Manager correction, history
 - Soft delete
 

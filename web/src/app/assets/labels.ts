@@ -41,6 +41,25 @@ export const assetMoveLabel = (from: AssetStatus, to: AssetStatus): string => {
   return 'Decommission';
 };
 
+/** What the next step asks of the person, in the button's own words. */
+export const assetNextStepHint = (
+  status: AssetStatus,
+  hasParts: boolean,
+): string | null => {
+  if (status === 'ON_ORDER') {
+    return 'When the lift arrives, press Start checking.';
+  }
+  if (status === 'CHECKING') {
+    return hasParts
+      ? 'Open each case and tap any part that did not come. Then press Finish check.'
+      : 'Check what came, then press Finish check.';
+  }
+  if (status === 'IN_STORE') {
+    return 'Checked and in the store. Press Send to site when it leaves.';
+  }
+  return null;
+};
+
 /** Mirrors @Roles on the checklist routes; CEO and ADMIN pass every check. */
 export const canMarkParts = (role: UserRole | null): boolean =>
   role === 'STORE_KEEPER' ||

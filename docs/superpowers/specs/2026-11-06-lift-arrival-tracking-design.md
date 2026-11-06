@@ -9,6 +9,14 @@ untick is Missing, a whole case can be ticked or unticked, and the list shows on
 the register and edit forms as well as the lift's page. All OK, Damaged and Not
 in this lift are gone from the screens.
 
+**Redesigned after the user found that screen confusing for store keepers:** a
+case does one thing, open, and shows its number large, like the label on the
+crate. A part does one thing, flip between Arrived and Missing, with the word on
+the row. Quantity and note sit behind Details, so a tap never moves a row. The
+whole-case action is a button inside the open case. The lift page shows the
+stages from On order to In service with one sentence on what to do now, and on a
+phone the next step stays in a bar at the bottom.
+
 ## Why
 
 Assets today only describes a lift that is already sold and installed. Every

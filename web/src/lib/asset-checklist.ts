@@ -53,6 +53,12 @@ export const restoreRows = (
 export type RowSaveState = 'saving' | 'failed';
 export type RowSaveStates = Readonly<Record<string, RowSaveState>>;
 
+/**
+ * Where a row's quantity or note keeps its state. Apart from its tap, because
+ * they retry differently and one saving must not hide that the other failed.
+ */
+export const detailKey = (itemId: string): string => `${itemId}:details`;
+
 export const withSaveState = (
   states: RowSaveStates,
   itemId: string,
@@ -75,12 +81,40 @@ export const withoutFailures = (
 export const hasRowSaving = (
   items: readonly AssetChecklistItem[],
   states: RowSaveStates,
-): boolean => items.some((item) => states[item.id] === 'saving');
+): boolean =>
+  items.some(
+    (item) =>
+      states[item.id] === 'saving' || states[detailKey(item.id)] === 'saving',
+  );
 
 export const hasSaveFailure = (
   items: readonly AssetChecklistItem[],
   states: RowSaveStates,
-): boolean => items.some((item) => states[item.id] === 'failed');
+): boolean =>
+  items.some(
+    (item) =>
+      states[item.id] === 'failed' || states[detailKey(item.id)] === 'failed',
+  );
+
+/** Failed taps the server holds anyway: the save landed and only its reply was lost. */
+export const landedRows = (
+  items: readonly AssetChecklistItem[],
+  wanted: ReadonlyMap<string, ChecklistMark>,
+): string[] =>
+  items
+    .filter((item) => wanted.get(item.id) === item.mark)
+    .map((item) => item.id);
+
+export const landedCases = (
+  items: readonly AssetChecklistItem[],
+  wanted: ReadonlyMap<number, ChecklistMark>,
+): number[] =>
+  [...wanted]
+    .filter(([caseNo, mark]) => {
+      const rows = items.filter((item) => item.caseNo === caseNo);
+      return rows.length > 0 && rows.every((item) => item.mark === mark);
+    })
+    .map(([caseNo]) => caseNo);
 
 /** The box at the head of a case: ticked, half ticked, or empty. */
 export const caseTick = ({
@@ -95,6 +129,36 @@ export const withCaseMark = (
   mark: ChecklistMark,
 ): AssetChecklistItem[] =>
   items.map((item) => (item.caseNo === caseNo ? { ...item, mark } : item));
+
+/** What a case holds, in the same two words a part uses. */
+export const caseStateText = ({ total, arrived, short }: CaseSummary): string => {
+  if (short === 0) {
+    return total === 1 ? 'Arrived' : `All ${total} arrived`;
+  }
+  if (arrived === 0) {
+    return total === 1 ? 'Missing' : `All ${total} missing`;
+  }
+  return `${short} of ${total} missing`;
+};
+
+export const partsHeadline = (total: number, missing: number): string =>
+  missing === 0
+    ? `All ${total} parts arrived`
+    : `${missing} ${missing === 1 ? 'part' : 'parts'} missing`;
+
+export const withCaseNo = (
+  cases: ReadonlySet<number>,
+  caseNo: number,
+): ReadonlySet<number> => new Set(cases).add(caseNo);
+
+export const withoutCaseNo = (
+  cases: ReadonlySet<number>,
+  caseNo: number,
+): ReadonlySet<number> => {
+  const next = new Set(cases);
+  next.delete(caseNo);
+  return next;
+};
 
 /** The register form's list, before there is a lift to save it on. */
 export const packingListItems = (

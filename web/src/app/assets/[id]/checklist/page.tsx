@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 import { btnPrimary, btnSecondary, fieldClass } from '@/components/form-styles';
-import { StatusPill } from '@/components/list-toolbar';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
 import { useConfirm } from '@/components/use-confirm';
@@ -28,10 +27,11 @@ import {
 import { formatDateTime } from '@/lib/datetime';
 import {
   ASSET_STATUS_LABEL,
-  ASSET_STATUS_TONE,
   assetMoveLabel,
+  assetNextStepHint,
   canMarkParts,
 } from '../../labels';
+import { LiftJourney } from '../../lift-journey';
 import { PartsChecklist } from '../../parts-checklist';
 import { useAssetParts } from '../../use-asset-parts';
 
@@ -117,6 +117,8 @@ export default function AssetChecklistPage() {
       await reload();
     } catch (err) {
       setError(failureText(err, fallback));
+      // The action may have landed and only its reply been lost.
+      await reload().catch(() => undefined);
     } finally {
       setBusy(false);
     }
@@ -150,7 +152,11 @@ export default function AssetChecklistPage() {
 
   const { asset, events, nextMoves } = tracking;
   const { items } = parts;
-  const missing = items.filter((item) => item.mark !== 'OK').length;
+  const arrived = items.filter((item) => item.mark === 'OK').length;
+  const hint =
+    nextMoves.length > 0
+      ? assetNextStepHint(asset.status, items.length > 0)
+      : null;
 
   const press = async (to: AssetStatus) => {
     if (
@@ -188,6 +194,19 @@ export default function AssetChecklistPage() {
     setCorrectTo('');
   };
 
+  const moveButtons = (size = '') =>
+    nextMoves.map((to, index) => (
+      <button
+        key={to}
+        type="button"
+        disabled={busy}
+        onClick={() => void press(to)}
+        className={`${index === 0 ? btnPrimary : btnSecondary} ${size}`}
+      >
+        {assetMoveLabel(asset.status, to)}
+      </button>
+    ));
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
@@ -199,17 +218,11 @@ export default function AssetChecklistPage() {
           description={asset.serialNumber ?? undefined}
           backHref="/assets"
           backLabel="Assets"
-          actions={nextMoves.map((to, index) => (
-            <button
-              key={to}
-              type="button"
-              disabled={busy}
-              onClick={() => void press(to)}
-              className={index === 0 ? btnPrimary : btnSecondary}
-            >
-              {assetMoveLabel(asset.status, to)}
-            </button>
-          ))}
+          actions={
+            nextMoves.length > 0 ? (
+              <div className="hidden flex-wrap gap-2 sm:flex">{moveButtons()}</div>
+            ) : undefined
+          }
         />
 
         <main className="flex-1 space-y-6 bg-slate-50 p-4 sm:p-8">
@@ -222,28 +235,17 @@ export default function AssetChecklistPage() {
             </p>
           ) : null}
 
-          <section className="flex flex-wrap items-end gap-x-8 gap-y-4 rounded-xl border border-slate-200 bg-white p-4">
-            {/* Room for the missing pill, so it cannot push the list down mid-tap. */}
-            <div className="min-w-48">
-              <p className="text-xs font-semibold text-slate-500">
-                Where it is
-              </p>
-              <p className="mt-1 flex flex-wrap gap-1">
-                <StatusPill
-                  label={ASSET_STATUS_LABEL[asset.status]}
-                  tone={ASSET_STATUS_TONE[asset.status]}
-                />
-                {missing > 0 ? (
-                  <StatusPill label={`${missing} missing`} tone="warn" />
-                ) : null}
-              </p>
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-500">Sold to</p>
-              <p className="mt-1 text-sm font-medium text-slate-900">
-                {asset.customerName ?? 'In stock'}
-              </p>
-            </div>
+          <section className="max-w-3xl space-y-4 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
+            <LiftJourney status={asset.status} />
+            {hint ? (
+              <p className="text-base font-medium text-slate-900">{hint}</p>
+            ) : null}
+            <p className="text-sm text-slate-600">
+              Sold to{' '}
+              <span className="font-semibold text-slate-900">
+                {asset.customerName ?? 'nobody yet, in stock'}
+              </span>
+            </p>
             {canSell ? (
               <div className="flex flex-wrap items-center gap-2">
                 <select
@@ -277,19 +279,17 @@ export default function AssetChecklistPage() {
           </section>
 
           {items.length > 0 ? (
-            <section aria-label="Parts">
-              <h2 className="mb-2 text-sm font-semibold text-slate-900">
-                Parts
-              </h2>
+            <section aria-label="Parts" className="-mx-4 max-w-3xl sm:mx-0">
               <PartsChecklist
                 items={items}
                 canMark={canMarkParts(role)}
                 savingCases={parts.savingCases}
+                failedCases={parts.failedCases}
                 saveStates={parts.saveStates}
                 onSave={parts.saveItem}
                 onCase={(caseNo, mark) => void parts.markCase(caseNo, mark)}
               />
-              <p className="mt-2 text-xs text-slate-500">
+              <p className="mt-3 px-4 text-sm text-slate-500 sm:px-0">
                 Quantities start from a 7-floor 450 kg lift. Correct them from
                 the paper list that came with this lift.
               </p>
@@ -360,6 +360,24 @@ export default function AssetChecklistPage() {
             </section>
           ) : null}
         </main>
+
+        {/* On a phone the next step stays under the thumb, however far down the list. */}
+        {nextMoves.length > 0 || items.length > 0 ? (
+          <div className="sticky bottom-0 z-20 flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white px-4 py-3 sm:hidden">
+            {/* The message at the top of the page may be far off the screen. */}
+            {error ? (
+              <p className="w-full text-sm font-semibold text-red-700">
+                {error}
+              </p>
+            ) : null}
+            {items.length > 0 ? (
+              <p className="min-w-0 flex-1 text-sm font-semibold tabular-nums text-slate-900">
+                {arrived} of {items.length} arrived
+              </p>
+            ) : null}
+            {moveButtons('px-5 py-3 text-base')}
+          </div>
+        ) : null}
       </div>
     </div>
   );

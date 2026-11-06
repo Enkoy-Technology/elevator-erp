@@ -1044,6 +1044,7 @@ export const getAssetTracking = (
 
 export const moveAsset = (id: string, to: AssetStatus): Promise<Asset> =>
   apiFetch<Asset>(`/assets/${id}/status`, {
+    signal: AbortSignal.timeout(15_000),
     method: 'POST',
     body: JSON.stringify({ to }),
   });

@@ -168,21 +168,6 @@ export default function EditAssetPage() {
         </Field>
       </FormSection>
 
-      {parts.items.length > 0 ? (
-        <FormSection title="Parts">
-          <div className="min-w-0 sm:col-span-2">
-            <PartsChecklist
-              items={parts.items}
-              canMark={canMarkParts(role)}
-              savingCases={parts.savingCases}
-              saveStates={parts.saveStates}
-              onSave={parts.saveItem}
-              onCase={(caseNo, mark) => void parts.markCase(caseNo, mark)}
-            />
-          </div>
-        </FormSection>
-      ) : null}
-
       <FormSection title="Location">
         <Field
           label="Specification"
@@ -227,6 +212,22 @@ export default function EditAssetPage() {
           />
         </Field>
       </FormSection>
+
+      {parts.items.length > 0 ? (
+        <FormSection title="Parts">
+          <div className="-mx-4 min-w-0 sm:col-span-2 sm:mx-0">
+            <PartsChecklist
+              items={parts.items}
+              canMark={canMarkParts(role)}
+              savingCases={parts.savingCases}
+              failedCases={parts.failedCases}
+              saveStates={parts.saveStates}
+              onSave={parts.saveItem}
+              onCase={(caseNo, mark) => void parts.markCase(caseNo, mark)}
+            />
+          </div>
+        </FormSection>
+      ) : null}
     </FormPage>
   );
 }
