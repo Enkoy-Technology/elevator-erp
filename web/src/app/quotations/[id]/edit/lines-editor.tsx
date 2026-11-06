@@ -36,6 +36,7 @@ import { formatEtb } from '@/lib/money';
 
 import { describeFloorPlan } from '../../floor-plan';
 import { FloorPicker } from '../../floor-picker';
+import { CarSizeInput } from '../../car-size-input';
 import { NumberInput } from '../../number-input';
 import {
   NEW_LINE,
@@ -638,36 +639,18 @@ export const LinesEditor = ({
                           htmlFor={`car-width-${line.id}`}
                           hint="Prints instead of the table's. Not priced. Blank takes the table's; where the table has no car, type the width and depth together."
                         >
-                          <div className="grid grid-cols-3 gap-2">
-                            <NumberInput
-                              id={`car-width-${line.id}`}
-                              ariaLabel="Car width (mm)"
-                              disabled={!editable}
-                              placeholder="Width"
-                              value={draft.carWidthMmOverride}
-                              onValueChange={(v) =>
-                                setField(line, 'carWidthMmOverride', v)
-                              }
-                            />
-                            <NumberInput
-                              ariaLabel="Car depth (mm)"
-                              disabled={!editable}
-                              placeholder="Depth"
-                              value={draft.carDepthMmOverride}
-                              onValueChange={(v) =>
-                                setField(line, 'carDepthMmOverride', v)
-                              }
-                            />
-                            <NumberInput
-                              ariaLabel="Car height (mm)"
-                              disabled={!editable}
-                              placeholder="Height"
-                              value={draft.carHeightMmOverride}
-                              onValueChange={(v) =>
-                                setField(line, 'carHeightMmOverride', v)
-                              }
-                            />
-                          </div>
+                          <CarSizeInput
+                            id={`car-width-${line.id}`}
+                            disabled={!editable}
+                            value={{
+                              Width: draft.carWidthMmOverride,
+                              Depth: draft.carDepthMmOverride,
+                              Height: draft.carHeightMmOverride,
+                            }}
+                            onChange={(part, raw) =>
+                              setField(line, `car${part}MmOverride`, raw)
+                            }
+                          />
                         </Field>
                       </>
                     ) : (

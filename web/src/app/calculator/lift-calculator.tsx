@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 
+import { CarSizeInput } from '@/app/quotations/car-size-input';
 import { NumberInput } from '@/app/quotations/number-input';
 import { btnGhost, btnPrimary, btnSecondary } from '@/components/form-styles';
 
@@ -113,11 +114,6 @@ const NAMES_THE_LIFT: readonly NumberKey[] = [
 ];
 
 const CAR_LABEL = 'Car W×D×CH (mm)';
-const CAR_BOXES = [
-  ['carWidth', 'Car width (mm)', 'Width'],
-  ['carDepth', 'Car depth (mm)', 'Depth'],
-  ['carHeight', 'Car height (mm)', 'Height'],
-] as const;
 
 const doorLabel = (input: CalcInputPayload): string =>
   `${input.doorType === 'CENTER_OPEN' ? 'CO' : input.doorType === 'TELESCOPIC' ? '2S' : 'Side'} ${formatNumber(input.doorWidthMm)} × 2,100`;
@@ -409,16 +405,23 @@ export const LiftResult = ({
 
   const cell = ([k, v]: readonly [string, string]) => {
     const key = editable[k];
-    // Three boxes want the whole row: a third of a cell cannot show 1,350.
+    // Three figures want two cells: one cannot show 1,350 three times.
     const car = draft !== null && standard && k === CAR_LABEL;
     return (
-      <div key={k} className={car ? 'col-span-full' : undefined}>
+      <div key={k} className={car ? 'col-span-2' : undefined}>
         <dt className="text-xs text-slate-500">{k}</dt>
         <dd className="font-medium text-slate-900">
           {car ? (
-            <div className="grid grid-cols-3 gap-2">
-              {CAR_BOXES.map(([name, text, hint]) => box(name, text, hint))}
-            </div>
+            <CarSizeInput
+              value={{
+                Width: draft.carWidth,
+                Depth: draft.carDepth,
+                Height: draft.carHeight,
+              }}
+              onChange={(part, raw) =>
+                setDraft({ ...draft, [`car${part}`]: raw })
+              }
+            />
           ) : draft && key ? (
             box(key, k, 'Calculated')
           ) : (
