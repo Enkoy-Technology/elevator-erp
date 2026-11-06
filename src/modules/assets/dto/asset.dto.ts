@@ -1,7 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsOptional,
   IsString,
   IsUUID,
@@ -26,12 +29,7 @@ export const ASSET_STATUSES = [
   'DECOMMISSIONED',
 ] as const;
 export const ASSET_STARTING_POINTS = ['FROM_FACTORY', 'INSTALLED'] as const;
-export const ASSET_CHECKLIST_MARKS = [
-  'OK',
-  'MISSING',
-  'DAMAGED',
-  'NOT_INCLUDED',
-] as const;
+export const ASSET_CHECKLIST_MARKS = ['OK', 'MISSING'] as const;
 
 export type AssetCategory = (typeof ASSET_CATEGORIES)[number];
 export type AssetStatus = (typeof ASSET_STATUSES)[number];
@@ -53,6 +51,17 @@ export class CreateAssetDto {
   @IsOptional()
   @IsBoolean()
   usePackingList?: boolean;
+
+  @ApiPropertyOptional({
+    example: ['1/2', '5/F3'],
+    description: 'The parts that did not arrive, as case/item. Every other part starts ticked.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  @MaxLength(20, { each: true })
+  missingParts?: string[];
 
   @ApiPropertyOptional({
     format: 'uuid',
@@ -208,4 +217,10 @@ export class UpdateChecklistItemDto {
   @IsString()
   @MaxLength(500)
   note?: string | null;
+}
+
+export class MarkChecklistCaseDto {
+  @ApiProperty({ enum: ASSET_CHECKLIST_MARKS })
+  @IsIn(ASSET_CHECKLIST_MARKS)
+  mark!: AssetChecklistMark;
 }

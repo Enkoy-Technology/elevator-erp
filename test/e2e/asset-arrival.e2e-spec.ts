@@ -12,7 +12,10 @@ import { Pool } from 'pg';
 
 import * as schema from '../../src/database/schema';
 import { TenantDbService } from '../../src/database/tenant-db.service';
-import { ARRIVAL_CHECKLIST } from '../../src/modules/assets/arrival-checklist';
+import {
+  ARRIVAL_CHECKLIST,
+  withArrivedMarks,
+} from '../../src/modules/assets/arrival-checklist';
 import { AssetTrackingRepository } from '../../src/modules/assets/asset-tracking.repository';
 import { AssetsRepository } from '../../src/modules/assets/assets.repository';
 
@@ -56,12 +59,16 @@ describe('Lift arrival check', () => {
       )
     ).rows[0]!.id;
 
-  const registerLift = (name: string, tenant = tenantId) =>
+  const registerLift = (
+    name: string,
+    tenant = tenantId,
+    missingParts: readonly string[] = [],
+  ) =>
     assetsRepo.create(
       tenant,
       userId,
       { category: 'ELEVATOR', name, startingPoint: 'FROM_FACTORY' },
-      { status: 'ON_ORDER', checklist: ARRIVAL_CHECKLIST },
+      { status: 'ON_ORDER', checklist: withArrivedMarks(missingParts) },
     );
 
   beforeAll(async () => {
@@ -125,7 +132,8 @@ describe('Lift arrival check', () => {
     expect(items.map((item) => item.position)).toEqual(
       ARRIVAL_CHECKLIST.map((_, index) => index),
     );
-    expect(items.every((item) => item.mark === null)).toBe(true);
+    expect(items.every((item) => item.mark === 'OK')).toBe(true);
+    expect(items.every((item) => item.checkedByUserId === userId)).toBe(true);
     const events = await tracking.listEvents(tenantId, lift.id);
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
@@ -135,36 +143,33 @@ describe('Lift arrival check', () => {
     });
   });
 
-  it('All OK leaves a Missing alone, and the list counts it as short', async () => {
+  it('counts the parts left unticked at registration as short', async () => {
     if (!available) return;
-    const lift = await registerLift('Lift B');
+    const lift = await registerLift('Lift B', tenantId, ['1/2', '5/F3']);
+
     const items = await tracking.listItems(tenantId, lift.id);
-    const row = items.find((item) => item.caseNo === 4)!;
-    await tracking.updateItem(
-      tenantId,
-      lift.id,
-      row.id,
-      { mark: 'MISSING', note: 'Two short' },
-      userId,
-    );
-
-    await expect(
-      tracking.markCaseOk(tenantId, lift.id, 4, userId),
-    ).resolves.toBe(47);
-
-    const after = await tracking.listItems(tenantId, lift.id);
-    expect(after.find((item) => item.id === row.id)).toMatchObject({
-      mark: 'MISSING',
-      note: 'Two short',
-      checkedByUserId: userId,
-    });
-    await expect(tracking.countUnmarked(tenantId, lift.id)).resolves.toBe(86);
+    expect(items.filter((item) => item.mark === 'MISSING')).toHaveLength(2);
     const page = await assetsRepo.list(tenantId, { search: 'Lift B' });
     expect(page.items[0]).toMatchObject({
       name: 'Lift B',
       customerName: null,
-      shortParts: 1,
+      shortParts: 2,
     });
+  });
+
+  it('unticks and ticks a whole case, and only that case', async () => {
+    if (!available) return;
+    const lift = await registerLift('Lift J');
+
+    await expect(
+      tracking.markCase(tenantId, lift.id, 4, 'MISSING', userId),
+    ).resolves.toBe(48);
+    let page = await assetsRepo.list(tenantId, { search: 'Lift J' });
+    expect(page.items[0]?.shortParts).toBe(48);
+
+    await tracking.markCase(tenantId, lift.id, 4, 'OK', userId);
+    page = await assetsRepo.list(tenantId, { search: 'Lift J' });
+    expect(page.items[0]?.shortParts).toBe(0);
   });
 
   it('a second press of the same step changes nothing', async () => {
@@ -193,11 +198,17 @@ describe('Lift arrival check', () => {
     const [otherRow] = await tracking.listItems(tenantId, other.id);
 
     await expect(
-      tracking.updateItem(tenantId, mine.id, otherRow!.id, { mark: 'OK' }, userId),
+      tracking.updateItem(
+        tenantId,
+        mine.id,
+        otherRow!.id,
+        { mark: 'MISSING' },
+        userId,
+      ),
     ).resolves.toBeNull();
 
     const [unchanged] = await tracking.listItems(tenantId, other.id);
-    expect(unchanged?.mark).toBeNull();
+    expect(unchanged?.mark).toBe('OK');
   });
 
   it('keeps another tenant out of the checklist and history', async () => {
@@ -207,7 +218,7 @@ describe('Lift arrival check', () => {
     await expect(tracking.listItems(otherTenantId, lift.id)).resolves.toEqual([]);
     await expect(tracking.listEvents(otherTenantId, lift.id)).resolves.toEqual([]);
     await expect(
-      tracking.markCaseOk(otherTenantId, lift.id, 1, userId),
+      tracking.markCase(otherTenantId, lift.id, 1, 'MISSING', userId),
     ).resolves.toBe(0);
   });
 

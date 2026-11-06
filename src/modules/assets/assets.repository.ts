@@ -32,6 +32,7 @@ import { TenantDbService } from '../../database/tenant-db.service';
 import type { ArrivalChecklistRow } from './arrival-checklist';
 import type {
   AssetCategory,
+  AssetChecklistMark,
   AssetStatus,
   CreateAssetDto,
   UpdateAssetDto,
@@ -41,7 +42,7 @@ export type AssetRecord = typeof assets.$inferSelect;
 
 export type AssetListRow = AssetRecord & {
   customerName: string | null;
-  /** Checklist rows marked Missing or Damaged. */
+  /** Parts unticked as not arrived. */
   shortParts: number;
 };
 
@@ -112,7 +113,7 @@ export class AssetsRepository {
             select count(*)::int from ${assetChecklistItems}
             where ${assetChecklistItems.tenantId} = ${assets.tenantId}
               and ${assetChecklistItems.assetId} = ${assets.id}
-              and ${assetChecklistItems.mark} in ('MISSING', 'DAMAGED')
+              and ${assetChecklistItems.mark} = 'MISSING'
           )`,
         })
         .from(assets)
@@ -198,7 +199,7 @@ export class AssetsRepository {
     dto: CreateAssetDto,
     start: {
       status: AssetStatus;
-      checklist: readonly ArrivalChecklistRow[];
+      checklist: readonly (ArrivalChecklistRow & { mark: AssetChecklistMark })[];
     },
   ): Promise<AssetRecord> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
@@ -259,6 +260,8 @@ export class AssetsRepository {
             tenantId,
             assetId: row.id,
             position,
+            checkedByUserId: createdByUserId,
+            checkedAt: row.createdAt,
           })),
         );
       }

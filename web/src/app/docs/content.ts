@@ -958,7 +958,7 @@ export const DOC_GROUPS: DocGroup[] = [
         body: [
           'An asset is a physical machine: an elevator, an escalator, stairs or other equipment. It is the anchor a maintenance contract, its visits and its breakdown tickets all attach to.',
           'A lift from the factory is registered with its packing list and no customer, so it starts in stock. It moves through on order, checking, in store and at site to in service, then out of service or decommissioned. Each step has its own button and role, and every step is recorded. The General Manager can correct a wrong status, with a reason.',
-          'When a lift arrives, the store keeper marks each row of its packing list OK, missing, damaged or not in this lift, or passes a whole case with All OK. The check can finish with parts short, and the lift stays flagged until they are marked OK. Who a lift is sold to is separate from where it is, because a lift can be sold while still in the store.',
+          'A lift comes with its parts, so every part on its packing list starts ticked as arrived. The store keeper unticks what did not come, a part or a whole case, on the register form, the edit form or the lift\'s own page. The check can finish with parts missing, and the lift stays flagged until they are ticked. Who a lift is sold to is separate from where it is, because a lift can be sold while still in the store.',
           'A lift already installed is registered with its customer and goes straight in service, with no checklist. A decommissioned machine keeps its whole service history — the record outlives the equipment.',
         ],
         endpoints: [
@@ -998,6 +998,12 @@ export const DOC_GROUPS: DocGroup[] = [
           },
           {
             method: 'GET',
+            path: '/assets/packing-list',
+            roles: 'Same as list',
+            note: 'The parts a new lift starts with, all arrived.',
+          },
+          {
+            method: 'GET',
             path: '/assets/:id/tracking',
             roles: 'Same as list',
             note: 'The lift, its checklist, its history and the steps this person may press.',
@@ -1024,13 +1030,13 @@ export const DOC_GROUPS: DocGroup[] = [
             method: 'PATCH',
             path: '/assets/:id/checklist/:itemId',
             roles: 'TECHNICAL_MANAGER, STORE_KEEPER',
-            note: 'Mark one row, or correct its quantity or note.',
+            note: 'Tick or untick one part, or correct its quantity or note.',
           },
           {
             method: 'POST',
-            path: '/assets/:id/checklist/cases/:caseNo/all-ok',
+            path: '/assets/:id/checklist/cases/:caseNo/mark',
             roles: 'TECHNICAL_MANAGER, STORE_KEEPER',
-            note: 'Mark the unmarked rows of one case as OK.',
+            note: 'Tick or untick every part of one case.',
           },
         ],
       },

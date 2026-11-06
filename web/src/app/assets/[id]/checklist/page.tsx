@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 import { btnPrimary, btnSecondary, fieldClass } from '@/components/form-styles';
@@ -16,31 +16,24 @@ import {
   getAssetTracking,
   getCurrentRole,
   listCustomers,
-  markChecklistCaseOk,
   moveAsset,
   optional,
   setAssetSoldTo,
-  updateChecklistItem,
   type AssetEvent,
   type AssetStatus,
   type AssetTracking,
   type Customer,
   type UserRole,
 } from '@/lib/api';
-import {
-  summariseCases,
-  withMark,
-  withoutFailures,
-  withSaveState,
-  type RowSaveStates,
-} from '@/lib/asset-checklist';
 import { formatDateTime } from '@/lib/datetime';
 import {
   ASSET_STATUS_LABEL,
   ASSET_STATUS_TONE,
   assetMoveLabel,
+  canMarkParts,
 } from '../../labels';
-import { CaseSection, type SaveItem } from './case-section';
+import { PartsChecklist } from '../../parts-checklist';
+import { useAssetParts } from '../../use-asset-parts';
 
 const MANAGERS: readonly UserRole[] = ['GENERAL_MANAGER', 'CEO', 'ADMIN'];
 
@@ -75,19 +68,17 @@ export default function AssetChecklistPage() {
   const [role, setRole] = useState<UserRole | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  /** Kept here because closing a case unmounts its rows, and a failure must outlive that. */
-  const [saveStates, setSaveStates] = useState<RowSaveStates>({});
-  /** Rows with a mark on its way, so a second tap cannot race the first. */
-  const marking = useRef(new Set<string>());
+  const parts = useAssetParts(id);
+  const { setItems } = parts;
 
   const isManager = role !== null && MANAGERS.includes(role);
-  const canMark = isManager || role === 'STORE_KEEPER' || role === 'TECHNICAL_MANAGER';
   const canSell = isManager || role === 'SALES_MANAGER';
 
   const reload = useCallback(async () => {
     const next = await getAssetTracking(id);
     setTracking(next);
     setSoldToDraft(next.asset.customerId ?? '');
+    return next;
   }, [id]);
 
   useEffect(() => {
@@ -97,11 +88,16 @@ export default function AssetChecklistPage() {
     }
     const currentRole = getCurrentRole();
     setRole(currentRole);
-    void reload().catch((err: unknown) => {
-      setError(
-        failureText(err, 'This lift could not be loaded. It may have been deleted.'),
-      );
-    });
+    void reload()
+      .then((next) => setItems(next.items))
+      .catch((err: unknown) => {
+        setError(
+          failureText(
+            err,
+            'This lift could not be loaded. It may have been deleted.',
+          ),
+        );
+      });
     if (
       currentRole === 'SALES_MANAGER' ||
       (currentRole && MANAGERS.includes(currentRole))
@@ -110,12 +106,7 @@ export default function AssetChecklistPage() {
         setCustomers(result.items),
       );
     }
-  }, [router, reload]);
-
-  const cases = useMemo(
-    () => summariseCases(tracking?.items ?? []),
-    [tracking?.items],
-  );
+  }, [router, reload, setItems]);
 
   /** Runs one action that changes the lift, then shows what the server now holds. */
   const run = async (action: () => Promise<unknown>, fallback: string) => {
@@ -124,53 +115,10 @@ export default function AssetChecklistPage() {
     try {
       await action();
       await reload();
-      setSaveStates(withoutFailures);
     } catch (err) {
       setError(failureText(err, fallback));
     } finally {
       setBusy(false);
-    }
-  };
-
-  /** Shows a mark at once and saves it alone, so a power cut loses one tick at most. */
-  const saveItem: SaveItem = async (item, patch) => {
-    if (patch.mark) {
-      if (marking.current.has(item.id)) {
-        return true;
-      }
-      marking.current.add(item.id);
-    }
-    setError(null);
-    setSaveStates((states) => withSaveState(states, item.id, 'saving'));
-    const setItems = (
-      change: (items: AssetTracking['items']) => AssetTracking['items'],
-    ) =>
-      setTracking(
-        (current) => current && { ...current, items: change(current.items) },
-      );
-    if (patch.mark) {
-      setItems((rows) => withMark(rows, item.id, patch.mark ?? null));
-    }
-    try {
-      await updateChecklistItem(id, item.id, patch);
-      setItems((rows) =>
-        rows.map((row) => (row.id === item.id ? { ...row, ...patch } : row)),
-      );
-      setSaveStates((states) => withSaveState(states, item.id, null));
-      return true;
-    } catch {
-      if (patch.mark) {
-        setItems((rows) => withMark(rows, item.id, item.mark));
-      }
-      setSaveStates((states) => withSaveState(states, item.id, 'failed'));
-      // The save may have landed and only its reply been lost: show what the
-      // server holds, if it can be reached at all.
-      void reload().catch(() => undefined);
-      return false;
-    } finally {
-      if (patch.mark) {
-        marking.current.delete(item.id);
-      }
     }
   };
 
@@ -185,7 +133,10 @@ export default function AssetChecklistPage() {
               className="max-w-2xl rounded-xl border-l-2 border-red-600 bg-red-50 px-4 py-3 text-sm text-red-800"
             >
               {error}{' '}
-              <a href="/assets" className="font-semibold underline underline-offset-2">
+              <a
+                href="/assets"
+                className="font-semibold underline underline-offset-2"
+              >
                 Back to assets
               </a>
             </p>
@@ -197,9 +148,9 @@ export default function AssetChecklistPage() {
     );
   }
 
-  const { asset, items, events, nextMoves } = tracking;
-  const short = cases.reduce((sum, entry) => sum + entry.short, 0);
-  const marked = cases.reduce((sum, entry) => sum + entry.marked, 0);
+  const { asset, events, nextMoves } = tracking;
+  const { items } = parts;
+  const missing = items.filter((item) => item.mark !== 'OK').length;
 
   const press = async (to: AssetStatus) => {
     if (
@@ -222,7 +173,8 @@ export default function AssetChecklistPage() {
     }
     const reason = await confirm({
       title: `Correct status to ${ASSET_STATUS_LABEL[correctTo]}?`,
-      description: 'This skips the normal steps and is recorded in the history.',
+      description:
+        'This skips the normal steps and is recorded in the history.',
       confirmLabel: 'Correct status',
       input: { label: 'Reason', minLength: 3 },
     });
@@ -261,25 +213,28 @@ export default function AssetChecklistPage() {
         />
 
         <main className="flex-1 space-y-6 bg-slate-50 p-4 sm:p-8">
-          {error ? (
+          {error || parts.error ? (
             <p
               role="alert"
               className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
             >
-              {error}
+              {error ?? parts.error}
             </p>
           ) : null}
 
           <section className="flex flex-wrap items-end gap-x-8 gap-y-4 rounded-xl border border-slate-200 bg-white p-4">
-            <div>
-              <p className="text-xs font-semibold text-slate-500">Where it is</p>
+            {/* Room for the missing pill, so it cannot push the list down mid-tap. */}
+            <div className="min-w-48">
+              <p className="text-xs font-semibold text-slate-500">
+                Where it is
+              </p>
               <p className="mt-1 flex flex-wrap gap-1">
                 <StatusPill
                   label={ASSET_STATUS_LABEL[asset.status]}
                   tone={ASSET_STATUS_TONE[asset.status]}
                 />
-                {short > 0 ? (
-                  <StatusPill label={`${short} short`} tone="warn" />
+                {missing > 0 ? (
+                  <StatusPill label={`${missing} missing`} tone="warn" />
                 ) : null}
               </p>
             </div>
@@ -322,49 +277,39 @@ export default function AssetChecklistPage() {
           </section>
 
           {items.length > 0 ? (
-            <section aria-label="Packing list">
-              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Packing list
-                </h2>
-                <p className="text-xs tabular-nums text-slate-500">
-                  {marked} of {items.length} marked
-                </p>
-              </div>
-              <p className="mb-3 text-xs text-slate-500">
+            <section aria-label="Parts">
+              <h2 className="mb-2 text-sm font-semibold text-slate-900">
+                Parts
+              </h2>
+              <PartsChecklist
+                items={items}
+                canMark={canMarkParts(role)}
+                savingCases={parts.savingCases}
+                saveStates={parts.saveStates}
+                onSave={parts.saveItem}
+                onCase={(caseNo, mark) => void parts.markCase(caseNo, mark)}
+              />
+              <p className="mt-2 text-xs text-slate-500">
                 Quantities start from a 7-floor 450 kg lift. Correct them from
                 the paper list that came with this lift.
               </p>
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                {cases.map((entry) => (
-                  <CaseSection
-                    key={entry.caseNo}
-                    summary={entry}
-                    items={items.filter((item) => item.caseNo === entry.caseNo)}
-                    canMark={canMark}
-                    busy={busy}
-                    saveStates={saveStates}
-                    onSave={saveItem}
-                    onAllOk={(caseNo) =>
-                      void run(
-                        () => markChecklistCaseOk(id, caseNo),
-                        'That case could not be marked.',
-                      )
-                    }
-                  />
-                ))}
-              </div>
             </section>
           ) : (
-            <p className="text-sm text-slate-500">This lift has no packing list.</p>
+            <p className="text-sm text-slate-500">
+              This lift has no parts list.
+            </p>
           )}
 
           <section aria-label="History">
-            <h2 className="mb-2 text-sm font-semibold text-slate-900">History</h2>
+            <h2 className="mb-2 text-sm font-semibold text-slate-900">
+              History
+            </h2>
             <ol className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
               {events.map((event) => (
                 <li key={event.id} className="px-4 py-2.5">
-                  <p className="text-sm text-slate-900">{describeEvent(event)}</p>
+                  <p className="text-sm text-slate-900">
+                    {describeEvent(event)}
+                  </p>
                   {event.note ? (
                     <p className="text-sm text-slate-600">{event.note}</p>
                   ) : null}
@@ -383,7 +328,10 @@ export default function AssetChecklistPage() {
           </section>
 
           {isManager ? (
-            <section aria-label="Correct status" className="flex flex-wrap items-center gap-2">
+            <section
+              aria-label="Correct status"
+              className="flex flex-wrap items-center gap-2"
+            >
               <select
                 aria-label="Correct status to"
                 className={`${fieldClass} w-56 max-w-full`}

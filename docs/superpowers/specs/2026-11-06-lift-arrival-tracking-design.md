@@ -1,6 +1,13 @@
 # Lift arrival check and tracking
 
-Status: approved by the user on 2026-11-06 and built on the working tree, not yet committed.
+Status: approved by the user on 2026-11-06 and live since `60a25e6`.
+
+**Changed by the user the same day:** the parts must be there by default and all
+arrived, and people check or uncheck them while creating or updating the asset.
+This replaces the marks in "The checklist" below. Every row starts ticked, an
+untick is Missing, a whole case can be ticked or unticked, and the list shows on
+the register and edit forms as well as the lift's page. All OK, Damaged and Not
+in this lift are gone from the screens.
 
 ## Why
 

@@ -24,6 +24,7 @@ import { CurrentUser, Roles } from '../../common/decorators';
 import { parseExportFormat } from '../../common/export/export-query.dto';
 import { type ColumnDef, writeCsv, writeXlsx } from '../../common/export/tabular';
 import type { AuthenticatedUser } from '../../types/auth.types';
+import { ARRIVAL_CHECKLIST } from './arrival-checklist';
 import { AssetsService } from './assets.service';
 import {
   ASSET_CATEGORIES,
@@ -106,6 +107,12 @@ export class AssetsController {
     } else {
       await writeXlsx(res, filename, ASSETS_EXPORT_COLUMNS, rows);
     }
+  }
+
+  @Get('packing-list')
+  @ApiOperation({ summary: 'The parts a new lift starts with, all arrived' })
+  packingList() {
+    return ARRIVAL_CHECKLIST;
   }
 
   @Get(':id')

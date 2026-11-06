@@ -17,6 +17,7 @@ import type { AuthenticatedUser } from '../../types/auth.types';
 import { AssetTrackingService } from './asset-tracking.service';
 import {
   CorrectAssetStatusDto,
+  MarkChecklistCaseDto,
   MoveAssetDto,
   SetSoldToDto,
   UpdateChecklistItemDto,
@@ -99,15 +100,16 @@ export class AssetTrackingController {
     return this.trackingService.updateItem(user, id, itemId, dto);
   }
 
-  @Post('checklist/cases/:caseNo/all-ok')
+  @Post('checklist/cases/:caseNo/mark')
   @HttpCode(200)
   @Roles('GENERAL_MANAGER', 'TECHNICAL_MANAGER', 'STORE_KEEPER')
-  @ApiOperation({ summary: 'Mark every unmarked row of one case as OK' })
-  markCaseOk(
+  @ApiOperation({ summary: 'Tick or untick every row of one case' })
+  markCase(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('caseNo', ParseIntPipe) caseNo: number,
+    @Body() dto: MarkChecklistCaseDto,
   ) {
-    return this.trackingService.markCaseOk(user, id, caseNo);
+    return this.trackingService.markCase(user, id, caseNo, dto);
   }
 }

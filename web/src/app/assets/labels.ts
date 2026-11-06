@@ -1,4 +1,4 @@
-import type { AssetCategory, AssetStatus, ChecklistMark } from '@/lib/api';
+import type { AssetCategory, AssetStatus, UserRole } from '@/lib/api';
 
 /** Display names for the asset enums — shared by the list and both forms. */
 export const ASSET_CATEGORY_LABEL: Record<AssetCategory, string> = {
@@ -41,9 +41,10 @@ export const assetMoveLabel = (from: AssetStatus, to: AssetStatus): string => {
   return 'Decommission';
 };
 
-export const CHECKLIST_MARK_LABEL: Record<ChecklistMark, string> = {
-  OK: 'OK',
-  MISSING: 'Missing',
-  DAMAGED: 'Damaged',
-  NOT_INCLUDED: 'Not in this lift',
-};
+/** Mirrors @Roles on the checklist routes; CEO and ADMIN pass every check. */
+export const canMarkParts = (role: UserRole | null): boolean =>
+  role === 'STORE_KEEPER' ||
+  role === 'TECHNICAL_MANAGER' ||
+  role === 'GENERAL_MANAGER' ||
+  role === 'CEO' ||
+  role === 'ADMIN';

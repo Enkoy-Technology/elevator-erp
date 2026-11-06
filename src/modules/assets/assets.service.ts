@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 
 import type { AuthenticatedUser } from '../../types/auth.types';
-import { ARRIVAL_CHECKLIST } from './arrival-checklist';
+import { withArrivedMarks } from './arrival-checklist';
 import {
   AssetsRepository,
   type AssetExportRow,
@@ -51,7 +51,7 @@ export class AssetsService {
         dto.category === 'ELEVATOR' && dto.usePackingList !== false;
       return this.assetsRepository.create(user.tenantId, user.userId, dto, {
         status: 'ON_ORDER',
-        checklist: usesList ? ARRIVAL_CHECKLIST : [],
+        checklist: usesList ? withArrivedMarks(dto.missingParts) : [],
       });
     }
     if (user.role === 'STORE_KEEPER') {

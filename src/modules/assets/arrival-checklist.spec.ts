@@ -1,4 +1,4 @@
-import { ARRIVAL_CHECKLIST } from './arrival-checklist';
+import { ARRIVAL_CHECKLIST, withArrivedMarks } from './arrival-checklist';
 
 const inCase = (caseNo: number) =>
   ARRIVAL_CHECKLIST.filter((row) => row.caseNo === caseNo);
@@ -38,5 +38,20 @@ describe('ARRIVAL_CHECKLIST', () => {
     expect(row(12, '1')?.quantity).toBe('4M=12, 2.5M=2');
     expect(row(1, '5')?.quantity).toBeNull();
     expect(row(5, '17')?.quantity).toBe('0');
+  });
+
+  describe('withArrivedMarks', () => {
+    it('ticks every part as arrived when nothing is named', () => {
+      const rows = withArrivedMarks();
+
+      expect(rows).toHaveLength(134);
+      expect(rows.every((row) => row.mark === 'OK')).toBe(true);
+    });
+
+    it('ignores a key that is not on the list', () => {
+      const rows = withArrivedMarks(['99/1']);
+
+      expect(rows.every((row) => row.mark === 'OK')).toBe(true);
+    });
   });
 });

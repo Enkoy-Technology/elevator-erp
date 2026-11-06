@@ -89,6 +89,7 @@ export const assetStatusEnum = pgEnum('asset_status', [
   'DECOMMISSIONED',
 ]);
 
+/** Only OK and MISSING are used. Postgres cannot remove the other two. */
 export const assetChecklistMarkEnum = pgEnum('asset_checklist_mark', [
   'OK',
   'MISSING',

@@ -1367,3 +1367,18 @@ export const ARRIVAL_CHECKLIST: readonly ArrivalChecklistRow[] = [
     quantity: '1',
   },
 ];
+
+/**
+ * The list as a new lift gets it. A lift comes with its parts, so every row
+ * starts ticked as arrived; `missingParts` names the exceptions as "case/item",
+ * like "5/F3".
+ */
+export const withArrivedMarks = (missingParts: readonly string[] = []) => {
+  const missing = new Set(missingParts);
+  return ARRIVAL_CHECKLIST.map((row) => ({
+    ...row,
+    mark: missing.has(`${row.caseNo}/${row.itemNo}`)
+      ? ('MISSING' as const)
+      : ('OK' as const),
+  }));
+};

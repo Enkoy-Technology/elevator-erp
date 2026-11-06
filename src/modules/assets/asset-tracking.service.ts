@@ -18,6 +18,7 @@ import {
 import type {
   AssetStatus,
   CorrectAssetStatusDto,
+  MarkChecklistCaseDto,
   MoveAssetDto,
   SetSoldToDto,
   UpdateChecklistItemDto,
@@ -55,14 +56,6 @@ export class AssetTrackingService {
       throw new WorkflowTransitionError(
         `Cannot move this lift from ${asset.status} to ${dto.to}`,
       );
-    }
-    if (asset.status === 'CHECKING' && dto.to === 'IN_STORE') {
-      const unmarked = await this.repository.countUnmarked(user.tenantId, id);
-      if (unmarked > 0) {
-        throw new WorkflowTransitionError(
-          `${unmarked} ${unmarked === 1 ? 'part is' : 'parts are'} not marked yet`,
-        );
-      }
     }
     if (dto.to === 'AT_SITE' && !asset.customerId) {
       throw new WorkflowTransitionError(
@@ -182,12 +175,18 @@ export class AssetTrackingService {
     return item;
   }
 
-  async markCaseOk(user: AuthenticatedUser, id: string, caseNo: number) {
+  async markCase(
+    user: AuthenticatedUser,
+    id: string,
+    caseNo: number,
+    dto: MarkChecklistCaseDto,
+  ) {
     await this.requireAsset(user, id);
-    const marked = await this.repository.markCaseOk(
+    const marked = await this.repository.markCase(
       user.tenantId,
       id,
       caseNo,
+      dto.mark,
       user.userId,
     );
     return { marked };

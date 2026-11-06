@@ -20,14 +20,13 @@ describe('AssetTrackingService', () => {
     findAsset: jest.fn(),
     listItems: jest.fn(),
     listEvents: jest.fn(),
-    countUnmarked: jest.fn(),
     moveStatus: jest.fn(),
     hasMaintenanceRecords: jest.fn(),
     findCustomer: jest.fn(),
     findProject: jest.fn(),
     setSoldTo: jest.fn(),
     updateItem: jest.fn(),
-    markCaseOk: jest.fn(),
+    markCase: jest.fn(),
   };
   const service = new AssetTrackingService(
     repository as unknown as AssetTrackingRepository,
@@ -43,7 +42,6 @@ describe('AssetTrackingService', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     repository.moveStatus.mockResolvedValue(true);
-    repository.countUnmarked.mockResolvedValue(0);
     repository.hasMaintenanceRecords.mockResolvedValue(false);
     repository.findCustomer.mockResolvedValue({ id: CUSTOMER_ID });
     repository.findProject.mockResolvedValue({
@@ -97,17 +95,7 @@ describe('AssetTrackingService', () => {
       expect(repository.moveStatus).not.toHaveBeenCalled();
     });
 
-    it('refuses to finish the check with rows unmarked, and says how many', async () => {
-      liftAt('CHECKING', null);
-      repository.countUnmarked.mockResolvedValue(3);
-
-      await expect(
-        service.move(userWith('STORE_KEEPER'), ASSET_ID, { to: 'IN_STORE' }),
-      ).rejects.toThrow('3 parts are not marked yet');
-      expect(repository.moveStatus).not.toHaveBeenCalled();
-    });
-
-    it('lets the check finish with parts short once every row is marked', async () => {
+    it('lets the check finish with parts missing', async () => {
       liftAt('CHECKING', null);
       repository.findAsset
         .mockResolvedValueOnce({
@@ -133,17 +121,6 @@ describe('AssetTrackingService', () => {
         }),
       );
       expect(result.status).toBe('IN_STORE');
-    });
-
-    it('does not count unmarked rows on the way back from site', async () => {
-      liftAt('AT_SITE');
-      repository.countUnmarked.mockResolvedValue(3);
-
-      await service.move(userWith('STORE_KEEPER'), ASSET_ID, {
-        to: 'IN_STORE',
-      });
-
-      expect(repository.moveStatus).toHaveBeenCalled();
     });
 
     it('refuses to send a lift to site with no customer', async () => {
@@ -175,7 +152,6 @@ describe('AssetTrackingService', () => {
   describe('correct', () => {
     it('moves to any status, skips the rules and records the reason', async () => {
       liftAt('ACTIVE', null);
-      repository.countUnmarked.mockResolvedValue(3);
 
       await service.correct(userWith('GENERAL_MANAGER'), ASSET_ID, {
         to: 'AT_SITE',
@@ -303,13 +279,29 @@ describe('AssetTrackingService', () => {
       expect(repository.updateItem).not.toHaveBeenCalled();
     });
 
-    it('reports how many rows All OK marked', async () => {
+    it('ticks or unticks a whole case and reports how many rows', async () => {
+      const user = userWith('STORE_KEEPER');
       liftAt('CHECKING');
-      repository.markCaseOk.mockResolvedValue(47);
+      repository.markCase.mockResolvedValue(48);
 
       await expect(
-        service.markCaseOk(userWith('STORE_KEEPER'), ASSET_ID, 4),
-      ).resolves.toEqual({ marked: 47 });
+        service.markCase(user, ASSET_ID, 4, { mark: 'MISSING' }),
+      ).resolves.toEqual({ marked: 48 });
+      expect(repository.markCase).toHaveBeenCalledWith(
+        user.tenantId,
+        ASSET_ID,
+        4,
+        'MISSING',
+        user.userId,
+      );
+    });
+
+    it('gives 404 for a case on a deleted lift', async () => {
+      repository.findAsset.mockResolvedValue(null);
+
+      await expect(
+        service.markCase(userWith('STORE_KEEPER'), ASSET_ID, 4, { mark: 'OK' }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

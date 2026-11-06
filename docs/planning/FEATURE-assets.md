@@ -13,7 +13,8 @@ Design: `docs/superpowers/specs/2026-11-06-lift-arrival-tracking-design.md`.
 - Register from the factory (On order, in stock, with the packing list) or
   already installed (In service, customer required, no checklist)
 - Update basic fields; status and sold-to change only through their own actions
-- Arrival checklist per lift: OK, Missing, Damaged or Not in this lift
+- Parts per lift: every part starts ticked as arrived, and people untick what
+  did not come, one part or a whole case, when registering or updating a lift
 - Status steps with who may press each, General Manager correction, history
 - Soft delete
 
@@ -37,13 +38,15 @@ Design: `docs/superpowers/specs/2026-11-06-lift-arrival-tracking-design.md`.
 - `POST /v1/assets/:id/status/correct`: General Manager, reason required
 - `PUT /v1/assets/:id/sold-to`: Sales Manager, General Manager
 - `PATCH /v1/assets/:id/checklist/:itemId`: mark, quantity, note
-- `POST /v1/assets/:id/checklist/cases/:caseNo/all-ok`: unmarked rows only
+- `POST /v1/assets/:id/checklist/cases/:caseNo/mark`: tick or untick a case
+- `GET /v1/assets/packing-list`: the parts a new lift starts with
 
 Roles: see `docs/planning/ROLE-ACCESS-MATRIX.md` (CEO/ADMIN always allowed).
 
 ## UI
 `/assets` list, `/assets/new`, `/assets/[id]/edit`, and
-`/assets/[id]/checklist` for the check, status, sold-to and history.
+`/assets/[id]/checklist` for parts, status, sold-to and history. Parts also
+show on the register and edit forms.
 
 ## Exit criteria
 - [x] Can register an elevator under a customer

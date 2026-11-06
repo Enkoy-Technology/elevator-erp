@@ -895,13 +895,8 @@ export const ASSET_STATUSES = [
 ] as const;
 export type AssetStatus = (typeof ASSET_STATUSES)[number];
 
-export const CHECKLIST_MARKS = [
-  'OK',
-  'MISSING',
-  'DAMAGED',
-  'NOT_INCLUDED',
-] as const;
-export type ChecklistMark = (typeof CHECKLIST_MARKS)[number];
+/** OK is a part ticked as arrived, MISSING a part unticked. */
+export type ChecklistMark = 'OK' | 'MISSING';
 
 export interface Asset {
   id: string;
@@ -924,12 +919,11 @@ export interface Asset {
 
 export interface AssetListItem extends Asset {
   customerName: string | null;
-  /** Checklist rows marked Missing or Damaged. */
+  /** Parts unticked as not arrived. */
   shortParts: number;
 }
 
-export interface AssetChecklistItem {
-  id: string;
+export interface PackingListRow {
   caseNo: number;
   boxName: string;
   itemNo: string;
@@ -938,7 +932,11 @@ export interface AssetChecklistItem {
   specification: string | null;
   unit: string | null;
   quantity: string | null;
-  mark: ChecklistMark | null;
+}
+
+export interface AssetChecklistItem extends PackingListRow {
+  id: string;
+  mark: ChecklistMark;
   note: string | null;
 }
 
@@ -963,6 +961,8 @@ export interface AssetTracking {
 export interface CreateAssetPayload {
   startingPoint: 'FROM_FACTORY' | 'INSTALLED';
   usePackingList?: boolean;
+  /** Keys of the parts that did not arrive. Every other part starts ticked. */
+  missingParts?: string[];
   customerId?: string;
   projectId?: string;
   category: AssetCategory;
@@ -1036,8 +1036,11 @@ export const updateAsset = (
     body: JSON.stringify(payload),
   });
 
-export const getAssetTracking = (id: string): Promise<AssetTracking> =>
-  apiFetch<AssetTracking>(`/assets/${id}/tracking`);
+export const getAssetTracking = (
+  id: string,
+  signal?: AbortSignal,
+): Promise<AssetTracking> =>
+  apiFetch<AssetTracking>(`/assets/${id}/tracking`, { signal });
 
 export const moveAsset = (id: string, to: AssetStatus): Promise<Asset> =>
   apiFetch<Asset>(`/assets/${id}/status`, {
@@ -1080,14 +1083,22 @@ export const updateChecklistItem = (
     signal: AbortSignal.timeout(15_000),
   });
 
-export const markChecklistCaseOk = (
+export const markChecklistCase = (
   assetId: string,
   caseNo: number,
+  mark: ChecklistMark,
 ): Promise<{ marked: number }> =>
   apiFetch<{ marked: number }>(
-    `/assets/${assetId}/checklist/cases/${caseNo}/all-ok`,
-    { method: 'POST' },
+    `/assets/${assetId}/checklist/cases/${caseNo}/mark`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ mark }),
+      signal: AbortSignal.timeout(15_000),
+    },
   );
+
+export const getPackingList = (): Promise<PackingListRow[]> =>
+  apiFetch<PackingListRow[]>('/assets/packing-list');
 
 /**
  * One row of the company's own SITE COLLECTION FORM — the sheet a

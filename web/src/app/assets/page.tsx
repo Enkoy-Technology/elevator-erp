@@ -318,7 +318,10 @@ export default function AssetsPage() {
             tone={ASSET_STATUS_TONE[row.original.status]}
           />
           {row.original.shortParts > 0 ? (
-            <StatusPill label={`${row.original.shortParts} short`} tone="warn" />
+            <StatusPill
+              label={`${row.original.shortParts} missing`}
+              tone="warn"
+            />
           ) : null}
         </span>
       ),
@@ -353,7 +356,7 @@ export default function AssetsPage() {
           <div className="flex items-center justify-end gap-0.5">
             <RowAction
               icon={ClipboardCheck}
-              label={`Check parts and track ${asset.name}`}
+              label={`Parts and status of ${asset.name}`}
               onClick={() => router.push(`/assets/${asset.id}/checklist`)}
             />
             {canWrite ? (

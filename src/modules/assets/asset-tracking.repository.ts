@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import {
   and,
   asc,
-  count,
   desc,
   eq,
   getTableColumns,
@@ -105,21 +104,6 @@ export class AssetTrackingRepository {
         .where(eq(assetEvents.assetId, assetId))
         .orderBy(desc(assetEvents.createdAt)),
     );
-  }
-
-  async countUnmarked(tenantId: string, assetId: string): Promise<number> {
-    return this.tenantDb.withTenant(tenantId, async (tx) => {
-      const [row] = await tx
-        .select({ value: count() })
-        .from(assetChecklistItems)
-        .where(
-          and(
-            eq(assetChecklistItems.assetId, assetId),
-            isNull(assetChecklistItems.mark),
-          ),
-        );
-      return Number(row?.value ?? 0);
-    });
   }
 
   /**
@@ -260,28 +244,23 @@ export class AssetTrackingRepository {
     });
   }
 
-  /** Touches only unmarked rows, so a Missing marked meanwhile is never lost. */
-  async markCaseOk(
+  /** Ticks or unticks every row of one case. */
+  async markCase(
     tenantId: string,
     assetId: string,
     caseNo: number,
+    mark: AssetChecklistMark,
     userId: string,
   ): Promise<number> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
       const now = new Date();
       const rows = await tx
         .update(assetChecklistItems)
-        .set({
-          mark: 'OK',
-          checkedByUserId: userId,
-          checkedAt: now,
-          updatedAt: now,
-        })
+        .set({ mark, checkedByUserId: userId, checkedAt: now, updatedAt: now })
         .where(
           and(
             eq(assetChecklistItems.assetId, assetId),
             eq(assetChecklistItems.caseNo, caseNo),
-            isNull(assetChecklistItems.mark),
           ),
         )
         .returning({ id: assetChecklistItems.id });

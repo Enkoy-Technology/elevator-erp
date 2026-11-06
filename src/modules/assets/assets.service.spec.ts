@@ -23,15 +23,36 @@ describe('AssetsService.create', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-  it('starts a lift from the factory on order, in stock, with the packing list', async () => {
+  it('starts a lift from the factory on order, in stock, with every part ticked as arrived', async () => {
     await service.create(user, { ...lift, startingPoint: 'FROM_FACTORY' });
 
     expect(repository.create).toHaveBeenCalledWith(
       user.tenantId,
       user.userId,
       expect.objectContaining({ startingPoint: 'FROM_FACTORY' }),
-      { status: 'ON_ORDER', checklist: ARRIVAL_CHECKLIST },
+      {
+        status: 'ON_ORDER',
+        checklist: ARRIVAL_CHECKLIST.map((row) => ({ ...row, mark: 'OK' })),
+      },
     );
+  });
+
+  it('leaves unticked only the parts named as not arrived', async () => {
+    await service.create(user, {
+      ...lift,
+      startingPoint: 'FROM_FACTORY',
+      missingParts: ['1/2', '5/F3'],
+    });
+
+    const { checklist } = repository.create.mock.calls[0]?.[3] as {
+      checklist: { caseNo: number; itemNo: string; mark: string }[];
+    };
+    expect(checklist).toHaveLength(134);
+    expect(
+      checklist
+        .filter((row) => row.mark === 'MISSING')
+        .map((row) => `${row.caseNo}/${row.itemNo}`),
+    ).toEqual(['1/2', '5/F3']);
   });
 
   it('refuses a customer on a lift from the factory: Sales records the sale', async () => {

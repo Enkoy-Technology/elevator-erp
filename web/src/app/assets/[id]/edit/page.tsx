@@ -8,14 +8,17 @@ import { btnSecondary, fieldClass } from '@/components/form-styles';
 import { Sidebar } from '@/components/sidebar';
 import {
   ApiError,
-  apiFetch,
   ASSET_CATEGORIES,
   getAccessToken,
+  getAssetTracking,
+  getCurrentRole,
   updateAsset,
-  type Asset,
   type AssetCategory,
+  type UserRole,
 } from '@/lib/api';
-import { ASSET_CATEGORY_LABEL } from '../../labels';
+import { ASSET_CATEGORY_LABEL, canMarkParts } from '../../labels';
+import { PartsChecklist } from '../../parts-checklist';
+import { useAssetParts } from '../../use-asset-parts';
 
 export default function EditAssetPage() {
   const router = useRouter();
@@ -32,15 +35,20 @@ export default function EditAssetPage() {
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [role, setRole] = useState<UserRole | null>(null);
+  const parts = useAssetParts(id);
+  const { setItems } = parts;
 
   useEffect(() => {
     if (!getAccessToken()) {
       router.replace('/login');
       return;
     }
+    setRole(getCurrentRole());
     void (async () => {
       try {
-        const asset = await apiFetch<Asset>(`/assets/${id}`);
+        const { asset, items } = await getAssetTracking(id);
+        setItems(items);
         setCategory(asset.category);
         setName(asset.name);
         setBuildingName(asset.buildingName ?? '');
@@ -57,7 +65,7 @@ export default function EditAssetPage() {
         );
       }
     })();
-  }, [router, id]);
+  }, [router, id, setItems]);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -108,16 +116,16 @@ export default function EditAssetPage() {
     <FormPage
       eyebrow="Operations"
       title="Edit asset"
-      description="Status and who it is sold to are changed under Check parts."
+      description="Status and who it is sold to are changed under Status and history."
       backHref="/assets"
       backLabel="Assets"
-      error={error}
+      error={error ?? parts.error}
       submitting={submitting}
       submitLabel="Save changes"
       onSubmit={(event) => void onSubmit(event)}
       secondaryAction={
         <a href={`/assets/${id}/checklist`} className={btnSecondary}>
-          Check parts
+          Status and history
         </a>
       }
     >
@@ -159,6 +167,21 @@ export default function EditAssetPage() {
           />
         </Field>
       </FormSection>
+
+      {parts.items.length > 0 ? (
+        <FormSection title="Parts">
+          <div className="min-w-0 sm:col-span-2">
+            <PartsChecklist
+              items={parts.items}
+              canMark={canMarkParts(role)}
+              savingCases={parts.savingCases}
+              saveStates={parts.saveStates}
+              onSave={parts.saveItem}
+              onCase={(caseNo, mark) => void parts.markCase(caseNo, mark)}
+            />
+          </div>
+        </FormSection>
+      ) : null}
 
       <FormSection title="Location">
         <Field

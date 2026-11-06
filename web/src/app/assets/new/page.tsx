@@ -11,19 +11,29 @@ import {
   createAsset,
   getAccessToken,
   getCurrentRole,
+  getPackingList,
   listCustomers,
   optional,
   type AssetCategory,
+  type AssetChecklistItem,
   type CreateAssetPayload,
   type Customer,
 } from '@/lib/api';
+import {
+  packingListItems,
+  partsNotArrived,
+  withCaseMark,
+  withMark,
+} from '@/lib/asset-checklist';
 import { ASSET_CATEGORY_LABEL } from '../labels';
+import { PartsChecklist, type SaveItem } from '../parts-checklist';
 
 export default function NewAssetPage() {
   const router = useRouter();
   const [startingPoint, setStartingPoint] =
     useState<CreateAssetPayload['startingPoint']>('FROM_FACTORY');
   const [usePackingList, setUsePackingList] = useState(true);
+  const [parts, setParts] = useState<AssetChecklistItem[]>([]);
   /** Store Keeper cannot read customers, so cannot register an installed lift. */
   const [canChooseStart, setCanChooseStart] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -44,11 +54,21 @@ export default function NewAssetPage() {
       return;
     }
     setCanChooseStart(getCurrentRole() !== 'STORE_KEEPER');
+    void getPackingList()
+      .then((rows) => setParts(packingListItems(rows)))
+      // The server still gives the lift its full list, all arrived.
+      .catch(() => undefined);
     void optional(listCustomers({ page: 1, pageSize: 100 })).then((result) => {
       setCustomers(result.items);
       setCustomerId((prev) => prev || result.items[0]?.id || '');
     });
   }, [router]);
+
+  /** Nothing to save yet: the unticked parts go with Register. */
+  const tickPart: SaveItem = (item, patch) => {
+    setParts((rows) => withMark(rows, item.id, patch.mark ?? item.mark));
+    return Promise.resolve(true);
+  };
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -65,6 +85,7 @@ export default function NewAssetPage() {
       const asset = await createAsset({
         startingPoint,
         usePackingList: fromFactory ? hasChecklist : undefined,
+        missingParts: hasChecklist ? partsNotArrived(parts) : undefined,
         customerId: fromFactory ? undefined : customerId,
         category,
         name,
@@ -191,6 +212,25 @@ export default function NewAssetPage() {
           />
         </Field>
       </FormSection>
+
+      {startingPoint === 'FROM_FACTORY' &&
+      category === 'ELEVATOR' &&
+      usePackingList &&
+      parts.length > 0 ? (
+        <FormSection title="Parts">
+          <div className="min-w-0 sm:col-span-2">
+            <PartsChecklist
+              items={parts}
+              canMark
+              editableDetails={false}
+              onSave={tickPart}
+              onCase={(caseNo, mark) =>
+                setParts((rows) => withCaseMark(rows, caseNo, mark))
+              }
+            />
+          </div>
+        </FormSection>
+      ) : null}
 
       <FormSection title="Location">
         <Field

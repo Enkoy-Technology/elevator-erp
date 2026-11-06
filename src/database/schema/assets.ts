@@ -102,8 +102,8 @@ export const assetChecklistItems = pgTable(
     unit: text('unit'),
     quantity: text('quantity'),
     position: integer('position').notNull(),
-    /** Blank until the store keeper has looked at it. */
-    mark: assetChecklistMarkEnum('mark'),
+    /** OK is ticked as arrived, MISSING is unticked. Every part starts OK. */
+    mark: assetChecklistMarkEnum('mark').notNull(),
     note: text('note'),
     checkedByUserId: uuid('checked_by_user_id'),
     checkedAt: timestamp('checked_at', { withTimezone: true }),
