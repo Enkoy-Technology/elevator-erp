@@ -4,20 +4,18 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 import { Field, FormPage, FormSection } from '@/components/form-page';
-import { fieldClass } from '@/components/form-styles';
+import { btnSecondary, fieldClass } from '@/components/form-styles';
 import { Sidebar } from '@/components/sidebar';
 import {
   ApiError,
   apiFetch,
   ASSET_CATEGORIES,
-  ASSET_STATUSES,
   getAccessToken,
   updateAsset,
   type Asset,
   type AssetCategory,
-  type AssetStatus,
 } from '@/lib/api';
-import { ASSET_CATEGORY_LABEL, ASSET_STATUS_LABEL } from '../../labels';
+import { ASSET_CATEGORY_LABEL } from '../../labels';
 
 export default function EditAssetPage() {
   const router = useRouter();
@@ -31,7 +29,6 @@ export default function EditAssetPage() {
   const [serialNumber, setSerialNumber] = useState('');
   const [specSummary, setSpecSummary] = useState('');
   const [locationNotes, setLocationNotes] = useState('');
-  const [status, setStatus] = useState<AssetStatus>('ACTIVE');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -50,7 +47,6 @@ export default function EditAssetPage() {
         setSerialNumber(asset.serialNumber ?? '');
         setSpecSummary(asset.specSummary ?? '');
         setLocationNotes(asset.locationNotes ?? '');
-        setStatus(asset.status);
         setNotes(asset.notes ?? '');
         setLoaded(true);
       } catch (err) {
@@ -75,7 +71,6 @@ export default function EditAssetPage() {
         serialNumber: serialNumber || null,
         specSummary: specSummary || null,
         locationNotes: locationNotes || null,
-        status,
         notes: notes || null,
       });
       router.push('/assets');
@@ -113,13 +108,18 @@ export default function EditAssetPage() {
     <FormPage
       eyebrow="Operations"
       title="Edit asset"
-      description="Link equipment to a customer. Categories: elevator, stairs, or other."
+      description="Status and who it is sold to are changed under Check parts."
       backHref="/assets"
       backLabel="Assets"
       error={error}
       submitting={submitting}
       submitLabel="Save changes"
       onSubmit={(event) => void onSubmit(event)}
+      secondaryAction={
+        <a href={`/assets/${id}/checklist`} className={btnSecondary}>
+          Check parts
+        </a>
+      }
     >
       <FormSection title="Equipment">
         <Field label="Category" htmlFor="category">
@@ -132,21 +132,6 @@ export default function EditAssetPage() {
             {ASSET_CATEGORIES.map((value) => (
               <option key={value} value={value}>
                 {ASSET_CATEGORY_LABEL[value]}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <Field label="Status" htmlFor="status">
-          <select
-            id="status"
-            className={fieldClass}
-            value={status}
-            onChange={(e) => setStatus(e.target.value as AssetStatus)}
-          >
-            {ASSET_STATUSES.map((value) => (
-              <option key={value} value={value}>
-                {ASSET_STATUS_LABEL[value]}
               </option>
             ))}
           </select>
@@ -165,7 +150,7 @@ export default function EditAssetPage() {
           />
         </Field>
 
-        <Field label="Serial number" htmlFor="serialNumber">
+        <Field label="Factory or serial number" htmlFor="serialNumber">
           <input
             id="serialNumber"
             className={fieldClass}

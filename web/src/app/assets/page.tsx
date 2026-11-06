@@ -15,7 +15,7 @@ import {
   SearchField,
   StatusPill,
 } from '@/components/list-toolbar';
-import { Check, Pencil, Trash2, X } from 'lucide-react';
+import { Check, ClipboardCheck, Pencil, Trash2, X } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
 import { useConfirm } from '@/components/use-confirm';
@@ -24,13 +24,15 @@ import {
   ApiError,
   apiFetch,
   ASSET_CATEGORIES,
+  ASSET_STATUSES,
   getAccessToken,
   getCurrentRole,
   listAssets,
   listCustomers,
   optional,
-  type Asset,
   type AssetCategory,
+  type AssetListItem,
+  type AssetStatus,
   type UserRole,
 } from '@/lib/api';
 import {
@@ -55,11 +57,18 @@ const canWriteAssets = (role: UserRole | null): boolean =>
   role === 'GENERAL_MANAGER' ||
   role === 'ADMIN';
 
+type SoldFilter = 'sold' | 'stock';
+
+const SOLD_FILTER_LABEL: Record<SoldFilter, string> = {
+  sold: 'Sold',
+  stock: 'In stock',
+};
+
 const CSV_HEADERS = [
   'Name',
   'Serial number',
   'Category',
-  'Customer',
+  'Sold to',
   'Building',
   'Status',
 ] as const;
@@ -67,7 +76,7 @@ const CSV_HEADERS = [
 export default function AssetsPage() {
   const router = useRouter();
   const { confirm, confirmDialog } = useConfirm();
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [assets, setAssets] = useState<AssetListItem[]>([]);
   const [customerMap, setCustomerMap] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -76,6 +85,8 @@ export default function AssetsPage() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<AssetCategory | ''>('');
+  const [statusFilter, setStatusFilter] = useState<AssetStatus | ''>('');
+  const [soldFilter, setSoldFilter] = useState<SoldFilter | ''>('');
   /** `?customerId=` — "View all" from a customer's page. `null` until the URL
    *  has been read in an effect; the first load waits for it rather than
    *  fetching every asset and replacing the list a moment later. */
@@ -96,6 +107,8 @@ export default function AssetsPage() {
       q: string,
       categoryValue: AssetCategory | '',
       customerId: string,
+      statusValue: AssetStatus | '',
+      soldValue: SoldFilter | '',
     ) => {
       setLoading(true);
       setError(null);
@@ -105,6 +118,8 @@ export default function AssetsPage() {
             q,
             category: categoryValue || undefined,
             customerId: customerId || undefined,
+            status: statusValue || undefined,
+            sold: soldValue ? soldValue === 'sold' : undefined,
             page: nextPage,
             pageSize: size,
           }),
@@ -149,8 +164,26 @@ export default function AssetsPage() {
     if (customerFilter === null) {
       return;
     }
-    void refresh(page, pageSize, search, categoryFilter, customerFilter);
-  }, [router, refresh, page, pageSize, search, categoryFilter, customerFilter]);
+    void refresh(
+      page,
+      pageSize,
+      search,
+      categoryFilter,
+      customerFilter,
+      statusFilter,
+      soldFilter,
+    );
+  }, [
+    router,
+    refresh,
+    page,
+    pageSize,
+    search,
+    categoryFilter,
+    customerFilter,
+    statusFilter,
+    soldFilter,
+  ]);
 
   const onSearch = () => {
     setPage(1);
@@ -163,7 +196,7 @@ export default function AssetsPage() {
     router.replace('/assets', { scroll: false });
   };
 
-  const onDelete = async (asset: Asset) => {
+  const onDelete = async (asset: AssetListItem) => {
     setBusy(true);
     setError(null);
     try {
@@ -175,6 +208,8 @@ export default function AssetsPage() {
         search,
         categoryFilter,
         customerFilter ?? '',
+        statusFilter,
+        soldFilter,
       );
     } catch (err) {
       setError(
@@ -206,7 +241,15 @@ export default function AssetsPage() {
     const results = await Promise.allSettled(ids.map((id) => deleteAsset(id)));
     const failed = results.filter((r) => r.status === 'rejected').length;
     setBusy(false);
-    await refresh(page, pageSize, search, categoryFilter, customerFilter ?? '');
+    await refresh(
+      page,
+      pageSize,
+      search,
+      categoryFilter,
+      customerFilter ?? '',
+      statusFilter,
+      soldFilter,
+    );
     if (failed > 0) {
       setError(
         `Deleted ${ids.length - failed} of ${ids.length}. ${failed} could not be deleted.`,
@@ -224,7 +267,7 @@ export default function AssetsPage() {
           a.name,
           a.serialNumber ?? '',
           ASSET_CATEGORY_LABEL[a.category],
-          customerMap[a.customerId] ?? '',
+          a.customerName ?? 'In stock',
           a.buildingName ?? '',
           ASSET_STATUS_LABEL[a.status],
         ]),
@@ -232,7 +275,7 @@ export default function AssetsPage() {
     );
   };
 
-  const columns: ColumnDef<Asset, unknown>[] = [
+  const columns: ColumnDef<AssetListItem, unknown>[] = [
     {
       accessorKey: 'name',
       header: 'Name',
@@ -257,8 +300,8 @@ export default function AssetsPage() {
     },
     {
       id: 'customer',
-      header: 'Customer',
-      cell: ({ row }) => customerMap[row.original.customerId] ?? '—',
+      header: 'Sold to',
+      cell: ({ row }) => row.original.customerName ?? 'In stock',
     },
     {
       id: 'building',
@@ -269,60 +312,69 @@ export default function AssetsPage() {
       id: 'status',
       header: 'Status',
       cell: ({ row }) => (
-        <StatusPill
-          label={ASSET_STATUS_LABEL[row.original.status]}
-          tone={ASSET_STATUS_TONE[row.original.status]}
-        />
+        <span className="flex flex-wrap gap-1">
+          <StatusPill
+            label={ASSET_STATUS_LABEL[row.original.status]}
+            tone={ASSET_STATUS_TONE[row.original.status]}
+          />
+          {row.original.shortParts > 0 ? (
+            <StatusPill label={`${row.original.shortParts} short`} tone="warn" />
+          ) : null}
+        </span>
       ),
     },
-    updatedColumn<Asset>((row) => row.updatedAt),
-    ...(canWrite
-      ? ([
-          {
-            id: 'actions',
-            header: '',
-            meta: { align: 'right' },
-            cell: ({ row }) => {
-              const asset = row.original;
-              return (
-                <div className="flex items-center justify-end gap-0.5">
-                  {confirmingId === asset.id ? (
-                    <>
-                      <RowAction
-                        icon={Check}
-                        tone="danger"
-                        disabled={busy}
-                        label={`Confirm deleting ${asset.name}`}
-                        onClick={() => void onDelete(asset)}
-                      />
-                      <RowAction
-                        icon={X}
-                        disabled={busy}
-                        label={`Keep ${asset.name}`}
-                        onClick={() => setConfirmingId(null)}
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <RowAction
-                        icon={Pencil}
-                        label={`Edit ${asset.name}`}
-                        onClick={() => router.push(`/assets/${asset.id}/edit`)}
-                      />
-                      <RowAction
-                        icon={Trash2}
-                        tone="danger"
-                        label={`Delete ${asset.name}`}
-                        onClick={() => setConfirmingId(asset.id)}
-                      />
-                    </>
-                  )}
-                </div>
-              );
-            },
-          },
-        ] satisfies ColumnDef<Asset, unknown>[])
-      : []),
+    updatedColumn<AssetListItem>((row) => row.updatedAt),
+    {
+      id: 'actions',
+      header: '',
+      meta: { align: 'right' },
+      cell: ({ row }) => {
+        const asset = row.original;
+        if (confirmingId === asset.id) {
+          return (
+            <div className="flex items-center justify-end gap-0.5">
+              <RowAction
+                icon={Check}
+                tone="danger"
+                disabled={busy}
+                label={`Confirm deleting ${asset.name}`}
+                onClick={() => void onDelete(asset)}
+              />
+              <RowAction
+                icon={X}
+                disabled={busy}
+                label={`Keep ${asset.name}`}
+                onClick={() => setConfirmingId(null)}
+              />
+            </div>
+          );
+        }
+        return (
+          <div className="flex items-center justify-end gap-0.5">
+            <RowAction
+              icon={ClipboardCheck}
+              label={`Check parts and track ${asset.name}`}
+              onClick={() => router.push(`/assets/${asset.id}/checklist`)}
+            />
+            {canWrite ? (
+              <>
+                <RowAction
+                  icon={Pencil}
+                  label={`Edit ${asset.name}`}
+                  onClick={() => router.push(`/assets/${asset.id}/edit`)}
+                />
+                <RowAction
+                  icon={Trash2}
+                  tone="danger"
+                  label={`Delete ${asset.name}`}
+                  onClick={() => setConfirmingId(asset.id)}
+                />
+              </>
+            ) : null}
+          </div>
+        );
+      },
+    },
   ];
 
   return (
@@ -333,7 +385,7 @@ export default function AssetsPage() {
         <PageHeader
           eyebrow="Operations"
           title="Assets"
-          description="Every elevator, escalator and machine under contract, registered against the customer that owns it."
+          description="Every elevator, escalator and machine: where it is, and who it is sold to."
           actions={
             <button
               type="button"
@@ -375,6 +427,32 @@ export default function AssetsPage() {
                     label: ASSET_CATEGORY_LABEL[value],
                   }))}
                   allLabel="All categories"
+                />
+                <FilterSelect
+                  label="Status"
+                  value={statusFilter}
+                  onChange={(value) => {
+                    setPage(1);
+                    setStatusFilter(value);
+                  }}
+                  options={ASSET_STATUSES.map((value) => ({
+                    value,
+                    label: ASSET_STATUS_LABEL[value],
+                  }))}
+                  allLabel="All statuses"
+                />
+                <FilterSelect
+                  label="Sold to"
+                  value={soldFilter}
+                  onChange={(value) => {
+                    setPage(1);
+                    setSoldFilter(value);
+                  }}
+                  options={(['sold', 'stock'] as const).map((value) => ({
+                    value,
+                    label: SOLD_FILTER_LABEL[value],
+                  }))}
+                  allLabel="Sold and in stock"
                 />
                 {customerFilter ? (
                   <FilterNotice
@@ -434,10 +512,10 @@ export default function AssetsPage() {
               },
             }}
             empty={
-              search || categoryFilter ? (
+              search || categoryFilter || statusFilter || soldFilter ? (
                 <>
                   No asset matches these filters. Clear the search and set
-                  Category to All categories.
+                  each filter back to All.
                 </>
               ) : (
                 <>

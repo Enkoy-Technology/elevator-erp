@@ -62,7 +62,7 @@ export default function NewMaintenanceContractPage() {
       return;
     }
     void listTechnicians().then(setTechnicians).catch(() => setTechnicians([]));
-    void optional(listAssets({ page: 1, pageSize: 100 })).then((result) => {
+    void optional(listAssets({ sold: true, page: 1, pageSize: 100 })).then((result) => {
       setAssets(result.items);
       setAssetId((prev) => prev || result.items[0]?.id || '');
     });

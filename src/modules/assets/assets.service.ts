@@ -1,12 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import type { AuthenticatedUser } from '../../types/auth.types';
-import { AssetsRepository, type AssetExportRow } from './assets.repository';
-import type {
-  AssetCategory,
-  CreateAssetDto,
-  UpdateAssetDto,
-} from './dto/asset.dto';
+import { ARRIVAL_CHECKLIST } from './arrival-checklist';
+import {
+  AssetsRepository,
+  type AssetExportRow,
+  type AssetFilters,
+} from './assets.repository';
+import type { CreateAssetDto, UpdateAssetDto } from './dto/asset.dto';
 
 @Injectable()
 export class AssetsService {
@@ -14,20 +20,14 @@ export class AssetsService {
 
   list(
     user: AuthenticatedUser,
-    options: {
-      search?: string;
-      category?: AssetCategory;
-      customerId?: string;
-      page?: string;
-      pageSize?: string;
-    },
+    options: AssetFilters & { page?: string; pageSize?: string },
   ) {
     return this.assetsRepository.list(user.tenantId, options);
   }
 
   streamAll(
     user: AuthenticatedUser,
-    options: { search?: string; category?: AssetCategory; customerId?: string },
+    options: AssetFilters,
   ): AsyncGenerator<AssetExportRow> {
     return this.assetsRepository.streamAll(user.tenantId, options);
   }
@@ -40,8 +40,34 @@ export class AssetsService {
     return asset;
   }
 
-  create(user: AuthenticatedUser, dto: CreateAssetDto) {
-    return this.assetsRepository.create(user.tenantId, user.userId, dto);
+  async create(user: AuthenticatedUser, dto: CreateAssetDto) {
+    if (dto.startingPoint === 'FROM_FACTORY') {
+      if (dto.customerId || dto.projectId) {
+        throw new BadRequestException(
+          'A lift from the factory starts in stock. Sales records the sale afterwards.',
+        );
+      }
+      const usesList =
+        dto.category === 'ELEVATOR' && dto.usePackingList !== false;
+      return this.assetsRepository.create(user.tenantId, user.userId, dto, {
+        status: 'ON_ORDER',
+        checklist: usesList ? ARRIVAL_CHECKLIST : [],
+      });
+    }
+    if (user.role === 'STORE_KEEPER') {
+      throw new ForbiddenException(
+        'A Store Keeper registers lifts from the factory only.',
+      );
+    }
+    if (!dto.customerId) {
+      throw new BadRequestException(
+        'Choose the customer for an installed lift.',
+      );
+    }
+    return this.assetsRepository.create(user.tenantId, user.userId, dto, {
+      status: 'ACTIVE',
+      checklist: [],
+    });
   }
 
   update(user: AuthenticatedUser, id: string, dto: UpdateAssetDto) {
@@ -49,6 +75,6 @@ export class AssetsService {
   }
 
   softDelete(user: AuthenticatedUser, id: string) {
-    return this.assetsRepository.softDelete(user.tenantId, id);
+    return this.assetsRepository.softDelete(user.tenantId, id, user.userId);
   }
 }

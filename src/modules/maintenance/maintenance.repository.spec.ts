@@ -276,3 +276,40 @@ describe('MaintenanceRepository.listContracts — customerId filter', () => {
     expect(columns).toContain('status');
   });
 });
+
+describe('MaintenanceRepository — a lift still in stock', () => {
+  const stockLift = { id: 'lift-1', customerId: null };
+  const makeRepo = () => {
+    const chain: Record<string, jest.Mock> = {};
+    chain.from = jest.fn(() => chain);
+    chain.where = jest.fn(() => chain);
+    chain.limit = jest.fn(() => Promise.resolve([stockLift]));
+    const insert = jest.fn();
+    const withTenant = jest.fn(
+      async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ select: jest.fn(() => chain), insert }),
+    );
+    return {
+      repo: new MaintenanceRepository({ withTenant } as never),
+      insert,
+    };
+  };
+
+  it('refuses a contract with a clear reason, before the database does', async () => {
+    const { repo, insert } = makeRepo();
+
+    await expect(
+      repo.createContract(TENANT_ID, USER_ID, { assetId: 'lift-1' } as never),
+    ).rejects.toThrow('This lift has no customer yet. Mark who it is sold to first.');
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('refuses a breakdown the same way', async () => {
+    const { repo, insert } = makeRepo();
+
+    await expect(
+      repo.createBreakdown(TENANT_ID, USER_ID, { assetId: 'lift-1' } as never),
+    ).rejects.toThrow('This lift has no customer yet. Mark who it is sold to first.');
+    expect(insert).not.toHaveBeenCalled();
+  });
+});

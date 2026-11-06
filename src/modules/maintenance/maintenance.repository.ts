@@ -111,6 +111,9 @@ const contractListFilters = (options: {
   return filters;
 };
 
+const NO_CUSTOMER_YET =
+  'This lift has no customer yet. Mark who it is sold to first.';
+
 @Injectable()
 export class MaintenanceRepository {
   constructor(private readonly tenantDb: TenantDbService) {}
@@ -230,12 +233,16 @@ export class MaintenanceRepository {
       if (!asset) {
         throw new BadRequestException('Asset not found');
       }
+      const customerId = asset.customerId;
+      if (!customerId) {
+        throw new BadRequestException(NO_CUSTOMER_YET);
+      }
       const [row] = await tx
         .insert(maintenanceContracts)
         .values({
           tenantId,
           assetId: asset.id,
-          customerId: asset.customerId,
+          customerId,
           recurrence: dto.recurrence ?? 'MONTHLY',
           startDate: dto.startDate,
           nextServiceAt: dto.nextServiceAt,
@@ -700,13 +707,17 @@ export class MaintenanceRepository {
       if (!asset) {
         throw new BadRequestException('Asset not found');
       }
+      const customerId = asset.customerId;
+      if (!customerId) {
+        throw new BadRequestException(NO_CUSTOMER_YET);
+      }
       const status = dto.assignedUserId ? 'ASSIGNED' : 'OPEN';
       const [row] = await tx
         .insert(breakdowns)
         .values({
           tenantId,
           assetId: asset.id,
-          customerId: asset.customerId,
+          customerId,
           title: dto.title,
           description: dto.description,
           severity: dto.severity ?? 'MEDIUM',

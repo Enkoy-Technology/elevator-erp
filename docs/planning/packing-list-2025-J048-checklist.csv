@@ -1,0 +1,140 @@
+﻿case_no,packing,box_name,item_no,factory_name,suggested_name,specification,unit,quantity,comment,flag
+1,wooden case,Elevator wall,1,Carriage door,Car door,700,Piece,1,,
+1,wooden case,Elevator wall,2,Floor door,Landing door,700,Piece,7,7 piece,
+1,wooden case,Elevator wall,3,door frame,Landing door frame,700,Piece,7,7 piece,
+1,wooden case,Elevator wall,4,Palanquin Wall,Car wall panel,,Piece,12,,
+1,wooden case,Elevator wall,5,trunking,Cable trunking,2000mm,Piece,--,,CONFIRM: no quantity on the list
+1,wooden case,Elevator wall,6,Slot joint,Trunking joint,,Piece,--,,CONFIRM: no quantity on the list
+1,wooden case,Elevator wall,7,Curtain,Door light curtain,,Piece,1,,
+1,wooden case,Elevator wall,8,Eraser,"Rubber pad, small",,Piece,18,small,Name is my reading of the translation
+1,wooden case,Elevator wall,9,Eraser,"Rubber pad, big",,Piece,2,big,Name is my reading of the translation
+1,wooden case,Elevator wall,11,Control box,Car control panel (COP),,Piece,---,COP-2101,CONFIRM: no quantity on the list; case 4 lists it with quantity 1
+1,wooden case,Elevator wall,12,Door sleeve connector,Door frame connector,,Piece,4,,
+2,wooden case,Traction machine,1,MONA200A-450,Traction machine,4-φ8-12,Piece,1,4.2 kW,
+3,wooden case,Floor door device,1,Door Machine,Car door operator,NINGBOOLING,Piece,1,700 mm,
+3,wooden case,Floor door device,2,Upper ridge,Landing door header,NINGBOOLING,Piece,7,700 mm,Name is my reading of the translation
+4,wooden case,Electrical parts,1,Buffer,Buffer,ZDH-A-27,Piece,2,,
+4,wooden case,Electrical parts,2,Bistable magnetic strip inductor,Bistable magnetic switch,With a magnet,Piece,--,,CONFIRM: no quantity on the list; item 50 says 2
+4,wooden case,Electrical parts,3,Monostable magnetic strip inductor,Monostable magnetic switch,With a magnet,Piece,--,,CONFIRM: no quantity on the list; item 51 says 2
+4,wooden case,Electrical parts,4,Magnet,Magnet,Monostable state,Piece,--,,CONFIRM: no quantity on the list; item 52 says 8
+4,wooden case,Electrical parts,5,"Lamp shade, lamp holder",Lamp shade and holder,,Piece,5,,
+4,wooden case,Electrical parts,6,lamp bulb,Lamp bulb,,Piece,5,,
+4,wooden case,Electrical parts,7,Engine oil,Machine oil,,Piece,1,,
+4,wooden case,Electrical parts,8,cable marker,Cable marker,,M,1,,
+4,wooden case,Electrical parts,9,The paint,Paint,Red、Yellow,Piece,1,,
+4,wooden case,Electrical parts,10,The paint,Paint,Black,Piece,1,,
+4,wooden case,Electrical parts,11,brush,Brush,,Piece,2,,
+4,wooden case,Electrical parts,13,Wire rope chuck,Wire rope clamp,8mm/3mm,Piece,6/12,,
+4,wooden case,Electrical parts,15,Black tape,Black tape,,Piece,2,,
+4,wooden case,Electrical parts,16,Nylon cable tie,Nylon cable tie,,Piece,120,,
+4,wooden case,Electrical parts,17,Line pressing cap,Cable clip,,Piece,100,,Name is my reading of the translation
+4,wooden case,Electrical parts,18,Plastic tube expanding,Plastic wall plug,8mm,Piece,60,,Name is my reading of the translation
+4,wooden case,Electrical parts,19,Self-tapping screw,Self-tapping screw,4x40,Piece,60,,
+4,wooden case,Electrical parts,20,U-bolt,U-bolt,,Piece,1,,
+4,wooden case,Electrical parts,21,Wedge type wire rack (yellow),"Wedge cable rack, yellow",,Piece,3,,
+4,wooden case,Electrical parts,22,Palankeen overload,Car overload device,,Piece,1,,Name is my reading of the translation
+4,wooden case,Electrical parts,23,Capsules guide shoe,Car guide shoe,OX-029,Piece,4,10mm,
+4,wooden case,Electrical parts,24,Square oil cup,"Oil cup, counterweight",To reuse,Piece,2,,Name is my reading of the translation
+4,wooden case,Electrical parts,25,Square oil cup,"Oil cup, car",Capsules with,Piece,2,,Name is my reading of the translation
+4,wooden case,Electrical parts,26,Grease cup,Grease cup,,Piece,4,,
+4,wooden case,Electrical parts,27,UKS switch,UKS switch,,Piece,1,,
+4,wooden case,Electrical parts,28,Villa ladder small fan,Home lift small fan,BPT-120,Piece,1,,Name is my reading of the translation
+4,wooden case,Electrical parts,29,Power Box,Power box,,Piece,--,,CONFIRM: no quantity on the list
+4,wooden case,Electrical parts,30,1370 Normally closed,1370 normally closed switch,,Piece,1,,Name is my reading of the translation
+4,wooden case,Electrical parts,31,Metal hose,Metal hose,φ12,M,5,,
+4,wooden case,Electrical parts,32,hose connector,Hose connector,φ12,Piece,5,,
+4,wooden case,Electrical parts,33,Emergency stop button,Emergency stop button,,Piece,--,,CONFIRM: no quantity on the list
+4,wooden case,Electrical parts,32b,Cement steel nails,Concrete nails,,Piece,1,Printed as a second item 32,
+4,wooden case,Electrical parts,32c,Control box,Car control panel (COP),,Piece,1,COP-2101; printed as a third item 32,
+4,wooden case,Electrical parts,33b,Call box,Landing call box,,Piece,7,Printed as a second item 33,
+4,wooden case,Electrical parts,36,Traveling cable,Traveling cable,,M,31,,
+4,wooden case,Electrical parts,37,The power line,Power cable,,M,10,,
+4,wooden case,Electrical parts,38,Shaft cable,Shaft cable,,M,30,,
+4,wooden case,Electrical parts,39,Three core,3-core cable,,M,50,,
+4,wooden case,Electrical parts,40,Fou rcore,4-core cable,,M,51,,
+4,wooden case,Electrical parts,41,Handrail,Handrail,JG-H02,Piece,1,,
+4,wooden case,Electrical parts,42,Capsules guide shoe,Car guide shoe,10mm,Piece,/,OX-310H,CONFIRM: no quantity on the list
+4,wooden case,Electrical parts,43,Brake resistance,Brake resistor,,Piece,0,,CONFIRM: quantity is 0; item 53 says 1
+4,wooden case,Electrical parts,44,Welding electrode,Welding electrode,,Piece,2,,
+4,wooden case,Electrical parts,45,overrunning governor,Overspeed governor,OX-218C 1.0m/s,Piece,1,,
+4,wooden case,Electrical parts,46,TENSIONER,Governor rope tensioner,OX-100FC,Piece,1,,
+4,wooden case,Electrical parts,47,Rope end stick,Rope end rod,8 mm,Piece,8,,Name is my reading of the translation
+4,wooden case,Electrical parts,48,Control Cabinet,Control cabinet,TJJ450/1,Piece,1,Monarch,
+4,wooden case,Electrical parts,49,ARD,Automatic rescue device (ARD),,Piece,1,,
+4,wooden case,Electrical parts,50,Bistable magnetic strip inductor,Bistable magnetic switch,With a magnet,Piece,2,,
+4,wooden case,Electrical parts,51,Monostable magnetic strip inductor,Monostable magnetic switch,With a magnet,Piece,2,,
+4,wooden case,Electrical parts,52,Magnet,Magnet,Monostable state,Piece,8,,
+4,wooden case,Electrical parts,53,Braking resistor,Brake resistor,,Piece,1,,
+5,wooden case,Mechanical parts box,1,Main rail suppor,Car rail bracket,,Piece,16,,
+5,wooden case,Mechanical parts box,2,Subguideway support,Counterweight rail bracket,,Piece,16,,
+5,wooden case,Mechanical parts box,3,Upper beam,Upper beam,1176,Piece,1,,
+5,wooden case,Mechanical parts box,4,Lower beam,Lower beam,1176,Piece,1,,
+5,wooden case,Mechanical parts box,5,wheel device,Pulley,,Piece,1,φ200-4-8-12,Name is my reading of the translation
+5,wooden case,Mechanical parts box,6,搁机梁,Machine support beam,,Piece,1,,CONFIRM: in the file but prints blank
+5,wooden case,Mechanical parts box,7,Small Rammer,Small cam (striker),,Piece,2,,Name is my reading of the translation
+5,wooden case,Mechanical parts box,8,Limit Switch bracket-new type,"Limit switch bracket, new type",,Piece,1,,
+5,wooden case,Mechanical parts box,9,Induction Switch bracket-new type,"Induction switch bracket, new type",,Piece,2,,
+5,wooden case,Mechanical parts box,10,Lower boot mounting bracket,Lower guide shoe bracket,,Piece,2,,Name is my reading of the translation
+5,wooden case,Mechanical parts box,11,Deck support,Deck support,,Piece,0,,CONFIRM: quantity is 0
+5,wooden case,Mechanical parts box,12,Brace for small impact bow,Brace for small cam,,Piece,2,,Name is my reading of the translation
+5,wooden case,Mechanical parts box,13,Guide gasket,Rail shim,mm+mm,Piece,148+148,,Name is my reading of the translation
+5,wooden case,Mechanical parts box,14,Through wall screw,Through-wall bolt,M12,Piece,10,,
+5,wooden case,Mechanical parts box,15,Speed limiter base,Governor base,,Piece,1,,
+5,wooden case,Mechanical parts box,16,On the heavy wheel device,Counterweight pulley,,Piece,1,φ320-4-8-12,Name is my reading of the translation
+5,wooden case,Mechanical parts box,17,Buffer base,Buffer base,,Piece,0,,CONFIRM: quantity is 0
+5,wooden case,Mechanical parts box,18,Screw through the wall iron sheet,Through-wall bolt plate,,Piece,10,,Name is my reading of the translation
+5,wooden case,Mechanical parts box,19,绳头梁,Rope hitch beam,4 holes,Piece,1,,CONFIRM: in the file but prints blank
+5,wooden case,Mechanical parts box,20,Straight beam clamp plate,Upright clamp plate,,Piece,1,2 Piece,"CONFIRM: quantity says 1, comment says 2"
+5,wooden case,Mechanical parts box,21,Cab floor sill support,Car sill support,,Piece,1,,
+5,wooden case,Mechanical parts box,22,Landing door sill support,Landing door sill support,,Piece,7,,
+5,wooden case,Mechanical parts box,23,Cow-leg bracket,Cow-leg bracket,,Piece,21,,
+5,wooden case,Mechanical parts box,25,Fasteners,Bolt pack,,Piece,1,Detail in the Fasteners rows below,
+5,wooden case,Mechanical parts box,26,Bottom pit ladder,Pit ladder,,Piece,1,,
+6,wooden case,Car bottom,1,The bottom,Car floor,1000×1170×2400,Piece,1,,
+7,In bulk,Counterweight frame,1,Counterweight frame,Counterweight frame,DBG 680,Piece,1,Straight beam is high 2900,
+8,In bulk,Lifting beam,1,Lifting beam,Lifting beam,,Piece,1,,
+9,wooden case,Straight beams,1,Straight beams,Uprights,,Piece,2,,Name is my reading of the translation
+9,wooden case,Straight beams,2,Safety pliers pull rod,Safety gear pull rod,,Piece,2,,
+10,In bulk,Heavy iron,1,Heavy iron,Counterweight block,160x620x40,Piece,9,26 KG each,
+10,In bulk,Heavy iron,2,对重铁（合成）,"Counterweight block, composite",160x620x80,Piece,22,26 KG each,CONFIRM: in the file but prints blank; may repeat case 11
+11,In bulk,Heavy iron,1,Heavy iron,Counterweight block,160x620x80,Piece,22,26 KG each,
+12,In bulk,Guide,1,Capsules guide,Car guide rail,T75,M,"4M=12, 2.5M=2",,
+12,In bulk,Guide,2,For heavy rail,Counterweight guide rail,T75,M,"4M=12, 2.5M=2",,
+12,In bulk,Guide,3,Main rail connecting plate,Car rail fishplate,T75,Piece,12,,
+12,In bulk,Guide,4,Auxiliary guide rail connecting plate,Counterweight rail fishplate,T75,Piece,12,,
+13,wooden case,Ceiling box,1,Ceiling,Car ceiling,,Piece,1,,
+13,wooden case,Ceiling box,2,the top,Car roof,1000×1170×2400,Piece,1,,
+14,In bulk,stringer beam,1,stringer beam,Stringer beam,,Piece,1,,
+15,In bulk,Steel wire rope,1,Traction wire rope,Traction rope,8 mm,M,252,58 kg; test column 63 M,
+15,In bulk,Steel wire rope,2,Governor rope,Governor rope,6 mm,M,54,13 kg,
+15,In bulk,Steel wire rope,3,Steel wire rope,Steel wire rope,3 mm,M,31,,
+16,,random file,1,random file,Documents shipped with the lift,,Piece,1,No contents listed,Name is my reading of the translation
+5,wooden case,Fasteners (bolt pack),F1,主机固定,Machine fixing,外六角 hex bolt 16 × 80,,8,"8 flat, 8 spring",
+5,wooden case,Fasteners (bolt pack),F2,龙门架、拉杆,"Car frame, tie rods",外六角 hex bolt 16 × 45,,,,CONFIRM: no quantity on the list
+5,wooden case,Fasteners (bolt pack),F3,导靴固定,Guide shoe fixing,外六角 hex bolt 16 × 50,,8,"8 flat, 8 spring, 8 nuts",
+5,wooden case,Fasteners (bolt pack),F4,导轨压导板,Rail clips,T75,,30,,
+5,wooden case,Fasteners (bolt pack),F5,弹簧销,Spring pin,10 × 40,,8,,
+5,wooden case,Fasteners (bolt pack),F6,导轨接导板,Rail fishplate bolts,外六角 hex bolt 12 × 40,,202,"202 flat, 202 spring, 202 nuts",
+5,wooden case,Fasteners (bolt pack),F7,支架、轿底,"Brackets, car floor",外六角 hex bolt 12 × 30,,30,"30 flat, 30 spring, 30 nuts",
+5,wooden case,Fasteners (bolt pack),F8,撞弓安装,Cam mounting,外六角 hex bolt 10 × 30,,94,"94 flat, 94 spring, 94 nuts",
+5,wooden case,Fasteners (bolt pack),F9,备用,Spare,外六角 hex bolt 10 × 30,,,,CONFIRM: no quantity on the list
+5,wooden case,Fasteners (bolt pack),F10,门套连接,Door frame joints,外六角 hex bolt 8 × 20,,94,"94 flat, 94 spring, 94 nuts",
+5,wooden case,Fasteners (bolt pack),F11,轿顶护栏,Car top guardrail,外六角 hex bolt 8 × 25,,,,CONFIRM: no quantity on the list
+5,wooden case,Fasteners (bolt pack),F12,对重护栏,Counterweight guard,外六角 hex bolt 8 × 25,,24,"24 flat, 24 spring, 24 nuts",
+5,wooden case,Fasteners (bolt pack),F13,限位安装,Limit switch mounting,外六角 hex bolt 6 × 20,,18,"18 flat, 18 spring, 18 nuts",
+5,wooden case,Fasteners (bolt pack),F14,轿壁拼接,Car wall joining,外六角 hex bolt 6 × 16,,80,"80 flat, 80 spring, 80 nuts",
+5,wooden case,Fasteners (bolt pack),F15,轿壁与轿顶轿底拼接,Car wall to roof and floor,外六角 hex bolt 6 × 25,,40,"40 flat, 40 spring, 40 nuts",
+5,wooden case,Fasteners (bolt pack),F16,护板固定,Cover plate fixing,平机 flat machine screw 6 × 20,,25,"25 flat, 25 spring, 25 nuts",
+5,wooden case,Fasteners (bolt pack),F17,灯罩固定,Lamp shade fixing,圆机 round machine screw 4 × 20,,30,"30 flat, 30 spring, 30 nuts",
+5,wooden case,Fasteners (bolt pack),F18,支架固定,Bracket fixing,铁膨胀 expansion anchor 12 × 100,,30,Part of 234 12mm anchors,
+5,wooden case,Fasteners (bolt pack),F19,缓冲器固定,Buffer fixing,铁膨胀 expansion anchor 12 × 100,,8,Part of 234 12mm anchors,
+5,wooden case,Fasteners (bolt pack),F20,地坎固定,Sill fixing,铁膨胀 expansion anchor 12 × 100,,66,Part of 234 12mm anchors,
+5,wooden case,Fasteners (bolt pack),F21,挂线架 爬梯固定,"Cable rack, pit ladder fixing",铁膨胀 expansion anchor 12 × 100,,10,Part of 234 12mm anchors,
+5,wooden case,Fasteners (bolt pack),F22,无圈梁槽钢、底码,"Channel steel, base brackets",铁膨胀 expansion anchor 12 × 100,,120,Part of 234 12mm anchors,
+5,wooden case,Fasteners (bolt pack),F23,门套固定,Door frame fixing,铁膨胀 expansion anchor 8 mm,,,,CONFIRM: no quantity on the list
+5,wooden case,Fasteners (bolt pack),F24,绳轮固定,Rope pulley fixing,U型螺丝 U-bolt 16 mm,,,,CONFIRM: no quantity on the list
+5,wooden case,Fasteners (bolt pack),F25,配重铁固定,Counterweight fixing,外六角 hex bolt 10 × 100,,,,CONFIRM: no quantity on the list
+5,wooden case,Fasteners (bolt pack),F26,压导板,Rail clips,马叉螺丝 fork bolt 12×45,,30,"30 flat, 30 spring, 30 nuts",
+5,wooden case,Fasteners (bolt pack),F27,,Self-tapping screw,自攻螺丝 4×12,,50,,
+5,wooden case,Fasteners (bolt pack),F28,,Machine screw,圆机螺丝 4x40,,10,"10 flat, 10 spring, 10 nuts",
+5,wooden case,Fasteners (bolt pack),F29,放样钢丝,Plumb wire,,,1 roll,,

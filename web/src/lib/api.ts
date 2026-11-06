@@ -884,13 +884,30 @@ export const ASSET_CATEGORIES = [
 ] as const;
 export type AssetCategory = (typeof ASSET_CATEGORIES)[number];
 
-export const ASSET_STATUSES = ['ACTIVE', 'INACTIVE', 'DECOMMISSIONED'] as const;
+export const ASSET_STATUSES = [
+  'ON_ORDER',
+  'CHECKING',
+  'IN_STORE',
+  'AT_SITE',
+  'ACTIVE',
+  'INACTIVE',
+  'DECOMMISSIONED',
+] as const;
 export type AssetStatus = (typeof ASSET_STATUSES)[number];
+
+export const CHECKLIST_MARKS = [
+  'OK',
+  'MISSING',
+  'DAMAGED',
+  'NOT_INCLUDED',
+] as const;
+export type ChecklistMark = (typeof CHECKLIST_MARKS)[number];
 
 export interface Asset {
   id: string;
   tenantId: string;
-  customerId: string;
+  /** Who it is sold to. Null means the lift is still in stock. */
+  customerId: string | null;
   projectId: string | null;
   category: AssetCategory;
   name: string;
@@ -905,8 +922,48 @@ export interface Asset {
   updatedAt: string;
 }
 
+export interface AssetListItem extends Asset {
+  customerName: string | null;
+  /** Checklist rows marked Missing or Damaged. */
+  shortParts: number;
+}
+
+export interface AssetChecklistItem {
+  id: string;
+  caseNo: number;
+  boxName: string;
+  itemNo: string;
+  name: string;
+  factoryName: string;
+  specification: string | null;
+  unit: string | null;
+  quantity: string | null;
+  mark: ChecklistMark | null;
+  note: string | null;
+}
+
+export interface AssetEvent {
+  id: string;
+  kind: 'REGISTERED' | 'STATUS' | 'CORRECTED' | 'SOLD_TO';
+  fromStatus: AssetStatus | null;
+  toStatus: AssetStatus | null;
+  customerName: string | null;
+  note: string | null;
+  createdAt: string;
+  createdByName: string | null;
+}
+
+export interface AssetTracking {
+  asset: Asset & { customerName: string | null };
+  items: AssetChecklistItem[];
+  events: AssetEvent[];
+  nextMoves: AssetStatus[];
+}
+
 export interface CreateAssetPayload {
-  customerId: string;
+  startingPoint: 'FROM_FACTORY' | 'INSTALLED';
+  usePackingList?: boolean;
+  customerId?: string;
   projectId?: string;
   category: AssetCategory;
   name: string;
@@ -921,9 +978,12 @@ export const listAssets = (options?: {
   q?: string;
   category?: AssetCategory;
   customerId?: string;
+  status?: AssetStatus;
+  /** True for lifts with a customer, false for lifts in stock. */
+  sold?: boolean;
   page?: number;
   pageSize?: number;
-}): Promise<Paginated<Asset>> => {
+}): Promise<Paginated<AssetListItem>> => {
   const params = new URLSearchParams();
   if (options?.q) {
     params.set('q', options.q);
@@ -934,6 +994,12 @@ export const listAssets = (options?: {
   if (options?.customerId) {
     params.set('customerId', options.customerId);
   }
+  if (options?.status) {
+    params.set('status', options.status);
+  }
+  if (options?.sold !== undefined) {
+    params.set('sold', String(options.sold));
+  }
   if (options?.page) {
     params.set('page', String(options.page));
   }
@@ -941,7 +1007,9 @@ export const listAssets = (options?: {
     params.set('pageSize', String(options.pageSize));
   }
   const query = params.toString();
-  return apiFetch<Paginated<Asset>>(`/assets${query ? `?${query}` : ''}`);
+  return apiFetch<Paginated<AssetListItem>>(
+    `/assets${query ? `?${query}` : ''}`,
+  );
 };
 
 export const createAsset = (payload: CreateAssetPayload): Promise<Asset> =>
@@ -960,7 +1028,6 @@ export const updateAsset = (
     serialNumber?: string | null;
     specSummary?: string | null;
     locationNotes?: string | null;
-    status?: AssetStatus;
     notes?: string | null;
   },
 ): Promise<Asset> =>
@@ -968,6 +1035,59 @@ export const updateAsset = (
     method: 'PATCH',
     body: JSON.stringify(payload),
   });
+
+export const getAssetTracking = (id: string): Promise<AssetTracking> =>
+  apiFetch<AssetTracking>(`/assets/${id}/tracking`);
+
+export const moveAsset = (id: string, to: AssetStatus): Promise<Asset> =>
+  apiFetch<Asset>(`/assets/${id}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ to }),
+  });
+
+export const correctAssetStatus = (
+  id: string,
+  to: AssetStatus,
+  reason: string,
+): Promise<Asset> =>
+  apiFetch<Asset>(`/assets/${id}/status/correct`, {
+    method: 'POST',
+    body: JSON.stringify({ to, reason }),
+  });
+
+export const setAssetSoldTo = (
+  id: string,
+  customerId: string | null,
+): Promise<Asset> =>
+  apiFetch<Asset>(`/assets/${id}/sold-to`, {
+    method: 'PUT',
+    body: JSON.stringify({ customerId }),
+  });
+
+export const updateChecklistItem = (
+  assetId: string,
+  itemId: string,
+  patch: {
+    mark?: ChecklistMark;
+    quantity?: string | null;
+    note?: string | null;
+  },
+): Promise<AssetChecklistItem> =>
+  apiFetch<AssetChecklistItem>(`/assets/${assetId}/checklist/${itemId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+    // On a dead connection the row must say so, not wait on the browser's limit.
+    signal: AbortSignal.timeout(15_000),
+  });
+
+export const markChecklistCaseOk = (
+  assetId: string,
+  caseNo: number,
+): Promise<{ marked: number }> =>
+  apiFetch<{ marked: number }>(
+    `/assets/${assetId}/checklist/cases/${caseNo}/all-ok`,
+    { method: 'POST' },
+  );
 
 /**
  * One row of the company's own SITE COLLECTION FORM — the sheet a

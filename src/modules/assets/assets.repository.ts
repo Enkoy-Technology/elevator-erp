@@ -3,22 +3,81 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, count, desc, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  isNotNull,
+  isNull,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 
 import {
   normalizePageQuery,
   toPaginatedResult,
   type PaginatedResult,
 } from '../../common/pagination';
-import { assets, customers, projects } from '../../database/schema';
+import {
+  assetChecklistItems,
+  assetEvents,
+  assets,
+  customers,
+  projects,
+} from '../../database/schema';
 import { TenantDbService } from '../../database/tenant-db.service';
+import type { ArrivalChecklistRow } from './arrival-checklist';
 import type {
   AssetCategory,
+  AssetStatus,
   CreateAssetDto,
   UpdateAssetDto,
 } from './dto/asset.dto';
 
 export type AssetRecord = typeof assets.$inferSelect;
+
+export type AssetListRow = AssetRecord & {
+  customerName: string | null;
+  /** Checklist rows marked Missing or Damaged. */
+  shortParts: number;
+};
+
+export interface AssetFilters {
+  search?: string;
+  category?: AssetCategory;
+  customerId?: string;
+  status?: AssetStatus;
+  /** True for lifts with a customer, false for lifts in stock. */
+  sold?: boolean;
+}
+
+const assetFilterConditions = (options: AssetFilters): SQL[] => {
+  const filters = [isNull(assets.deletedAt)];
+  if (options.category) {
+    filters.push(eq(assets.category, options.category));
+  }
+  if (options.customerId) {
+    filters.push(eq(assets.customerId, options.customerId));
+  }
+  if (options.status) {
+    filters.push(eq(assets.status, options.status));
+  }
+  if (options.sold !== undefined) {
+    filters.push(
+      options.sold ? isNotNull(assets.customerId) : isNull(assets.customerId),
+    );
+  }
+  if (options.search && options.search.trim().length > 0) {
+    const pattern = `%${options.search.trim().toLowerCase()}%`;
+    filters.push(
+      sql`(lower(${assets.name}) like ${pattern} or lower(coalesce(${assets.serialNumber}, '')) like ${pattern} or lower(coalesce(${assets.buildingName}, '')) like ${pattern})`,
+    );
+  }
+  return filters;
+};
 
 /** `streamAll()`'s row shape: the raw `customerId` FK is replaced (not
  * appended) with the joined customer's display name — see REC 5. */
@@ -32,41 +91,38 @@ export class AssetsRepository {
 
   async list(
     tenantId: string,
-    options: {
-      search?: string;
-      category?: AssetCategory;
-      customerId?: string;
-      page?: string;
-      pageSize?: string;
-    },
-  ): Promise<PaginatedResult<AssetRecord>> {
+    options: AssetFilters & { page?: string; pageSize?: string },
+  ): Promise<PaginatedResult<AssetListRow>> {
     const { page, pageSize, offset } = normalizePageQuery(
       options.page,
       options.pageSize,
     );
     return this.tenantDb.withTenant(tenantId, async (tx) => {
-      const filters = [isNull(assets.deletedAt)];
-      if (options.category) {
-        filters.push(eq(assets.category, options.category));
-      }
-      if (options.customerId) {
-        filters.push(eq(assets.customerId, options.customerId));
-      }
-      if (options.search && options.search.trim().length > 0) {
-        const pattern = `%${options.search.trim().toLowerCase()}%`;
-        filters.push(
-          sql`(lower(${assets.name}) like ${pattern} or lower(coalesce(${assets.serialNumber}, '')) like ${pattern} or lower(coalesce(${assets.buildingName}, '')) like ${pattern})`,
-        );
-      }
-      const where = and(...filters);
+      const where = and(...assetFilterConditions(options));
       const [totalRow] = await tx
         .select({ value: count() })
         .from(assets)
         .where(where);
       const total = Number(totalRow?.value ?? 0);
       const items = await tx
-        .select()
+        .select({
+          ...getTableColumns(assets),
+          customerName: customers.name,
+          shortParts: sql<number>`(
+            select count(*)::int from ${assetChecklistItems}
+            where ${assetChecklistItems.tenantId} = ${assets.tenantId}
+              and ${assetChecklistItems.assetId} = ${assets.id}
+              and ${assetChecklistItems.mark} in ('MISSING', 'DAMAGED')
+          )`,
+        })
         .from(assets)
+        .leftJoin(
+          customers,
+          and(
+            eq(assets.tenantId, customers.tenantId),
+            eq(assets.customerId, customers.id),
+          ),
+        )
         .where(where)
         .orderBy(desc(assets.createdAt))
         .limit(pageSize)
@@ -92,7 +148,7 @@ export class AssetsRepository {
    */
   async *streamAll(
     tenantId: string,
-    options: { search?: string; category?: AssetCategory; customerId?: string },
+    options: AssetFilters,
   ): AsyncGenerator<AssetExportRow> {
     const BATCH_SIZE = 500;
     let offset = 0;
@@ -100,19 +156,6 @@ export class AssetsRepository {
       getTableColumns(assets);
     for (;;) {
       const batch = await this.tenantDb.withTenant(tenantId, (tx) => {
-        const filters = [isNull(assets.deletedAt)];
-        if (options.category) {
-          filters.push(eq(assets.category, options.category));
-        }
-        if (options.customerId) {
-          filters.push(eq(assets.customerId, options.customerId));
-        }
-        if (options.search && options.search.trim().length > 0) {
-          const pattern = `%${options.search.trim().toLowerCase()}%`;
-          filters.push(
-            sql`(lower(${assets.name}) like ${pattern} or lower(coalesce(${assets.serialNumber}, '')) like ${pattern} or lower(coalesce(${assets.buildingName}, '')) like ${pattern})`,
-          );
-        }
         return tx
           .select({ ...assetColumns, customerName: customers.name })
           .from(assets)
@@ -123,7 +166,7 @@ export class AssetsRepository {
               eq(assets.customerId, customers.id),
             ),
           )
-          .where(and(...filters))
+          .where(and(...assetFilterConditions(options)))
           .orderBy(desc(assets.createdAt), asc(assets.id))
           .limit(BATCH_SIZE)
           .offset(offset);
@@ -153,17 +196,23 @@ export class AssetsRepository {
     tenantId: string,
     createdByUserId: string,
     dto: CreateAssetDto,
+    start: {
+      status: AssetStatus;
+      checklist: readonly ArrivalChecklistRow[];
+    },
   ): Promise<AssetRecord> {
     return this.tenantDb.withTenant(tenantId, async (tx) => {
-      const customerRows = await tx
-        .select({ id: customers.id })
-        .from(customers)
-        .where(
-          and(eq(customers.id, dto.customerId), isNull(customers.deletedAt)),
-        )
-        .limit(1);
-      if (!customerRows[0]) {
-        throw new BadRequestException('Customer not found');
+      if (dto.customerId) {
+        const customerRows = await tx
+          .select({ id: customers.id })
+          .from(customers)
+          .where(
+            and(eq(customers.id, dto.customerId), isNull(customers.deletedAt)),
+          )
+          .limit(1);
+        if (!customerRows[0]) {
+          throw new BadRequestException('Customer not found');
+        }
       }
       if (dto.projectId) {
         const projectRows = await tx
@@ -195,6 +244,7 @@ export class AssetsRepository {
           serialNumber: dto.serialNumber,
           specSummary: dto.specSummary,
           locationNotes: dto.locationNotes,
+          status: start.status,
           notes: dto.notes,
           createdByUserId,
         })
@@ -202,6 +252,24 @@ export class AssetsRepository {
       if (!row) {
         throw new Error('Failed to create asset');
       }
+      if (start.checklist.length > 0) {
+        await tx.insert(assetChecklistItems).values(
+          start.checklist.map((item, position) => ({
+            ...item,
+            tenantId,
+            assetId: row.id,
+            position,
+          })),
+        );
+      }
+      await tx.insert(assetEvents).values({
+        tenantId,
+        assetId: row.id,
+        kind: 'REGISTERED',
+        toStatus: start.status,
+        customerId: dto.customerId,
+        createdByUserId,
+      });
       return row;
     });
   }
@@ -221,28 +289,9 @@ export class AssetsRepository {
       if (!current) {
         throw new NotFoundException('Asset not found');
       }
-      if (dto.projectId) {
-        const projectRows = await tx
-          .select({ id: projects.id, customerId: projects.customerId })
-          .from(projects)
-          .where(
-            and(eq(projects.id, dto.projectId), isNull(projects.deletedAt)),
-          )
-          .limit(1);
-        const project = projectRows[0];
-        if (!project) {
-          throw new BadRequestException('Project not found');
-        }
-        if (project.customerId !== current.customerId) {
-          throw new BadRequestException(
-            'Project does not belong to this asset\'s customer',
-          );
-        }
-      }
       const [row] = await tx
         .update(assets)
         .set({
-          ...(dto.projectId !== undefined ? { projectId: dto.projectId } : {}),
           ...(dto.category !== undefined ? { category: dto.category } : {}),
           ...(dto.name !== undefined ? { name: dto.name } : {}),
           ...(dto.buildingName !== undefined
@@ -257,7 +306,6 @@ export class AssetsRepository {
           ...(dto.locationNotes !== undefined
             ? { locationNotes: dto.locationNotes }
             : {}),
-          ...(dto.status !== undefined ? { status: dto.status } : {}),
           ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
           updatedAt: new Date(),
         })
@@ -270,7 +318,11 @@ export class AssetsRepository {
     });
   }
 
-  async softDelete(tenantId: string, id: string): Promise<void> {
+  async softDelete(
+    tenantId: string,
+    id: string,
+    deletedByUserId: string,
+  ): Promise<void> {
     await this.tenantDb.withTenant(tenantId, async (tx) => {
       const [row] = await tx
         .update(assets)
@@ -280,6 +332,12 @@ export class AssetsRepository {
       if (!row) {
         throw new NotFoundException('Asset not found');
       }
+      await tx.insert(assetEvents).values({
+        tenantId,
+        assetId: id,
+        kind: 'DELETED',
+        createdByUserId: deletedByUserId,
+      });
     });
   }
 }

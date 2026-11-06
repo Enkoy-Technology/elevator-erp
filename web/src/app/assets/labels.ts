@@ -1,4 +1,4 @@
-import type { AssetCategory, AssetStatus } from '@/lib/api';
+import type { AssetCategory, AssetStatus, ChecklistMark } from '@/lib/api';
 
 /** Display names for the asset enums — shared by the list and both forms. */
 export const ASSET_CATEGORY_LABEL: Record<AssetCategory, string> = {
@@ -9,8 +9,12 @@ export const ASSET_CATEGORY_LABEL: Record<AssetCategory, string> = {
 };
 
 export const ASSET_STATUS_LABEL: Record<AssetStatus, string> = {
-  ACTIVE: 'Active',
-  INACTIVE: 'Inactive',
+  ON_ORDER: 'On order',
+  CHECKING: 'Checking',
+  IN_STORE: 'In store',
+  AT_SITE: 'At site',
+  ACTIVE: 'In service',
+  INACTIVE: 'Out of service',
   DECOMMISSIONED: 'Decommissioned',
 };
 
@@ -18,7 +22,28 @@ export const ASSET_STATUS_TONE: Record<
   AssetStatus,
   'neutral' | 'active' | 'good' | 'warn' | 'danger'
 > = {
+  ON_ORDER: 'neutral',
+  CHECKING: 'warn',
+  IN_STORE: 'active',
+  AT_SITE: 'active',
   ACTIVE: 'good',
   INACTIVE: 'neutral',
   DECOMMISSIONED: 'danger',
+};
+
+/** The words on the next-step button, which depend on where the lift is coming from. */
+export const assetMoveLabel = (from: AssetStatus, to: AssetStatus): string => {
+  if (to === 'CHECKING') return 'Start checking';
+  if (to === 'IN_STORE') return from === 'AT_SITE' ? 'Back to store' : 'Finish check';
+  if (to === 'AT_SITE') return 'Send to site';
+  if (to === 'ACTIVE') return from === 'INACTIVE' ? 'Back in service' : 'Mark in service';
+  if (to === 'INACTIVE') return 'Out of service';
+  return 'Decommission';
+};
+
+export const CHECKLIST_MARK_LABEL: Record<ChecklistMark, string> = {
+  OK: 'OK',
+  MISSING: 'Missing',
+  DAMAGED: 'Damaged',
+  NOT_INCLUDED: 'Not in this lift',
 };

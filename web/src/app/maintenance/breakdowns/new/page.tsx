@@ -36,7 +36,7 @@ export default function NewBreakdownPage() {
       return;
     }
     void Promise.all([
-      optional(listAssets({ page: 1, pageSize: 100 })),
+      optional(listAssets({ sold: true, page: 1, pageSize: 100 })),
       listTechnicians().catch(() => [] as Technician[]),
     ]).then(([assetPage, employeePage]) => {
       setAssets(assetPage.items);

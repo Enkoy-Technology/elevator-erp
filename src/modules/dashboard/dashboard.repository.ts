@@ -1,5 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { and, count, eq, gte, isNull, lt, lte, ne, sql, sum } from 'drizzle-orm';
+import {
+  and,
+  count,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  ne,
+  sql,
+  sum,
+} from 'drizzle-orm';
 
 import { BUSINESS_TIMEZONE, todayIso } from '../../common/business-time';
 import {
@@ -499,7 +511,12 @@ export class DashboardRepository {
     const [assetTotal] = await tx
       .select({ count: count() })
       .from(assets)
-      .where(isNull(assets.deletedAt));
+      .where(
+        and(
+          isNull(assets.deletedAt),
+          inArray(assets.status, ['ACTIVE', 'INACTIVE']),
+        ),
+      );
 
     const [employeeTotal] = await tx
       .select({ count: count() })

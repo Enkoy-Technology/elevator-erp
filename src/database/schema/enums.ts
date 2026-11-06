@@ -78,10 +78,30 @@ export const assetCategoryEnum = pgEnum('asset_category', [
   'OTHER',
 ]);
 
+/** Where a lift is. ACTIVE and INACTIVE show as In service and Out of service. */
 export const assetStatusEnum = pgEnum('asset_status', [
+  'ON_ORDER',
+  'CHECKING',
+  'IN_STORE',
+  'AT_SITE',
   'ACTIVE',
   'INACTIVE',
   'DECOMMISSIONED',
+]);
+
+export const assetChecklistMarkEnum = pgEnum('asset_checklist_mark', [
+  'OK',
+  'MISSING',
+  'DAMAGED',
+  'NOT_INCLUDED',
+]);
+
+export const assetEventKindEnum = pgEnum('asset_event_kind', [
+  'REGISTERED',
+  'STATUS',
+  'CORRECTED',
+  'SOLD_TO',
+  'DELETED',
 ]);
 
 export const notificationTypeEnum = pgEnum('notification_type', [

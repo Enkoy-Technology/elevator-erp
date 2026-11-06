@@ -1,11 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsEnum,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 export const ASSET_CATEGORIES = [
@@ -15,18 +17,50 @@ export const ASSET_CATEGORIES = [
   'OTHER',
 ] as const;
 export const ASSET_STATUSES = [
+  'ON_ORDER',
+  'CHECKING',
+  'IN_STORE',
+  'AT_SITE',
   'ACTIVE',
   'INACTIVE',
   'DECOMMISSIONED',
 ] as const;
+export const ASSET_STARTING_POINTS = ['FROM_FACTORY', 'INSTALLED'] as const;
+export const ASSET_CHECKLIST_MARKS = [
+  'OK',
+  'MISSING',
+  'DAMAGED',
+  'NOT_INCLUDED',
+] as const;
 
 export type AssetCategory = (typeof ASSET_CATEGORIES)[number];
 export type AssetStatus = (typeof ASSET_STATUSES)[number];
+export type AssetStartingPoint = (typeof ASSET_STARTING_POINTS)[number];
+export type AssetChecklistMark = (typeof ASSET_CHECKLIST_MARKS)[number];
 
 export class CreateAssetDto {
-  @ApiProperty({ format: 'uuid' })
+  @ApiPropertyOptional({
+    enum: ASSET_STARTING_POINTS,
+    description: 'Omitted means INSTALLED.',
+  })
+  @IsOptional()
+  @IsEnum(ASSET_STARTING_POINTS)
+  startingPoint?: AssetStartingPoint;
+
+  @ApiPropertyOptional({
+    description: 'False gives a lift from the factory no checklist, as for a car lift.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  usePackingList?: boolean;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description: 'Required on an installed lift, refused on one from the factory.',
+  })
+  @IsOptional()
   @IsUUID()
-  customerId!: string;
+  customerId?: string;
 
   @ApiPropertyOptional({ format: 'uuid' })
   @IsOptional()
@@ -78,11 +112,6 @@ export class CreateAssetDto {
 }
 
 export class UpdateAssetDto {
-  @ApiPropertyOptional({ format: 'uuid' })
-  @IsOptional()
-  @IsUUID()
-  projectId?: string | null;
-
   @ApiPropertyOptional({ enum: ASSET_CATEGORIES })
   @IsOptional()
   @IsEnum(ASSET_CATEGORIES)
@@ -119,14 +148,64 @@ export class UpdateAssetDto {
   @MaxLength(500)
   locationNotes?: string | null;
 
-  @ApiPropertyOptional({ enum: ASSET_STATUSES })
-  @IsOptional()
-  @IsEnum(ASSET_STATUSES)
-  status?: AssetStatus;
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   @MaxLength(2000)
   notes?: string | null;
+}
+
+export class MoveAssetDto {
+  @ApiProperty({ enum: ASSET_STATUSES })
+  @IsEnum(ASSET_STATUSES)
+  to!: AssetStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+}
+
+export class CorrectAssetStatusDto {
+  @ApiProperty({ enum: ASSET_STATUSES })
+  @IsEnum(ASSET_STATUSES)
+  to!: AssetStatus;
+
+  @ApiProperty({ example: 'Pressed In service by mistake' })
+  @IsString()
+  @MinLength(3)
+  @MaxLength(500)
+  reason!: string;
+}
+
+export class SetSoldToDto {
+  @ApiProperty({ format: 'uuid', nullable: true, type: String })
+  @ValidateIf((dto: SetSoldToDto) => dto.customerId !== null)
+  @IsUUID()
+  customerId!: string | null;
+
+  @ApiPropertyOptional({ format: 'uuid', nullable: true, type: String })
+  @IsOptional()
+  @IsUUID()
+  projectId?: string | null;
+}
+
+export class UpdateChecklistItemDto {
+  @ApiPropertyOptional({ enum: ASSET_CHECKLIST_MARKS })
+  @ValidateIf((dto: UpdateChecklistItemDto) => dto.mark !== undefined)
+  @IsEnum(ASSET_CHECKLIST_MARKS)
+  mark?: AssetChecklistMark;
+
+  @ApiPropertyOptional({ example: '4M=12, 2.5M=2', nullable: true, type: String })
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  quantity?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, type: String })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string | null;
 }

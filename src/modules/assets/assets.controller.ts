@@ -27,9 +27,11 @@ import type { AuthenticatedUser } from '../../types/auth.types';
 import { AssetsService } from './assets.service';
 import {
   ASSET_CATEGORIES,
+  ASSET_STATUSES,
   CreateAssetDto,
   UpdateAssetDto,
   type AssetCategory,
+  type AssetStatus,
 } from './dto/asset.dto';
 
 export const ASSETS_EXPORT_COLUMNS: ColumnDef[] = [
@@ -69,29 +71,35 @@ export class AssetsController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('format') formatRaw?: string,
+    @Query('status') status?: string,
+    @Query('sold') sold?: string,
   ): Promise<void> {
     const parsedCategory =
       category &&
       (ASSET_CATEGORIES as readonly string[]).includes(category)
         ? (category as AssetCategory)
         : undefined;
+    const filters = {
+      search,
+      category: parsedCategory,
+      customerId,
+      status:
+        status && (ASSET_STATUSES as readonly string[]).includes(status)
+          ? (status as AssetStatus)
+          : undefined,
+      sold: sold === 'true' ? true : sold === 'false' ? false : undefined,
+    };
     const format = parseExportFormat(formatRaw);
     if (!format) {
       const result = await this.assetsService.list(user, {
-        search,
-        category: parsedCategory,
-        customerId,
+        ...filters,
         page,
         pageSize,
       });
       res.json(result);
       return;
     }
-    const rows = this.assetsService.streamAll(user, {
-      search,
-      category: parsedCategory,
-      customerId,
-    });
+    const rows = this.assetsService.streamAll(user, filters);
     const filename = `assets-${todayIso()}`;
     if (format === 'csv') {
       await writeCsv(res, filename, ASSETS_EXPORT_COLUMNS, rows);
@@ -111,7 +119,7 @@ export class AssetsController {
 
   @Post()
   @Roles('GENERAL_MANAGER', 'SALES_MANAGER', 'TECHNICAL_MANAGER', 'MAINTENANCE_ENGINEER', 'STORE_KEEPER')
-  @ApiOperation({ summary: 'Register asset under a customer' })
+  @ApiOperation({ summary: 'Register a lift from the factory, or one already installed' })
   create(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateAssetDto,
