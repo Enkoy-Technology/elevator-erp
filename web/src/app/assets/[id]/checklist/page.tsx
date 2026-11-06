@@ -30,6 +30,7 @@ import {
   canAssignCustomer,
   canMarkParts,
   moveWaitsForCustomer,
+  noCustomerText,
 } from '../../labels';
 import { LiftJourney } from '../../lift-journey';
 import { MissingParts, PartsChecklist } from '../../parts-checklist';
@@ -50,7 +51,7 @@ const describeEvent = (event: AssetEvent): string => {
     case 'SOLD_TO':
       return event.customerName
         ? `Sold to ${event.customerName}`
-        : 'Back in stock';
+        : 'Customer removed';
   }
 };
 
@@ -141,7 +142,7 @@ export default function AssetChecklistPage() {
   const { asset, events, nextMoves } = tracking;
   const { items } = parts;
   const arrived = items.filter((item) => item.mark === 'OK').length;
-  const canAssign = canAssignCustomer(role, asset.status);
+  const canAssign = canAssignCustomer(role);
   const hint =
     nextMoves.length > 0
       ? assetNextStepHint(asset.status, {
@@ -164,6 +165,23 @@ export default function AssetChecklistPage() {
       return;
     }
     await run(() => moveAsset(id, to), 'The lift could not be moved.');
+  };
+
+  const removeCustomer = async () => {
+    if (
+      (await confirm({
+        title: `Remove ${asset.customerName ?? 'the customer'}?`,
+        description: `${asset.name} will have no customer until one is assigned.`,
+        confirmLabel: 'Remove customer',
+        tone: 'danger',
+      })) === null
+    ) {
+      return;
+    }
+    await run(
+      () => setAssetSoldTo(id, null),
+      'The customer could not be removed.',
+    );
   };
 
   const correct = async () => {
@@ -207,15 +225,12 @@ export default function AssetChecklistPage() {
       {assigning ? (
         <AssignCustomerDialog
           liftName={asset.name}
-          hasCustomer={asset.customerId !== null}
+          currentId={asset.customerId}
           onPick={(customerId) => {
             setAssigning(false);
-            if (customerId === asset.customerId) {
-              return;
-            }
             void run(
               () => setAssetSoldTo(id, customerId),
-              'The customer could not be assigned.',
+              'The customer could not be saved.',
             );
           }}
           onClose={() => setAssigning(false)}
@@ -255,9 +270,9 @@ export default function AssetChecklistPage() {
               ) : null}
               <div className="flex flex-wrap items-center gap-3">
                 <p className="text-sm text-slate-600">
-                  Sold to{' '}
+                  Sold to:{' '}
                   <span className="font-semibold text-slate-900">
-                    {asset.customerName ?? 'nobody yet, in stock'}
+                    {asset.customerName ?? noCustomerText(asset.status)}
                   </span>
                 </p>
                 {canAssign ? (
@@ -268,6 +283,16 @@ export default function AssetChecklistPage() {
                     className={asset.customerId ? btnSecondary : btnPrimary}
                   >
                     {asset.customerId ? 'Change customer' : 'Assign customer'}
+                  </button>
+                ) : null}
+                {canAssign && asset.customerId ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void removeCustomer()}
+                    className={`${btnSecondary} text-red-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700`}
+                  >
+                    Remove customer
                   </button>
                 ) : null}
               </div>

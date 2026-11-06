@@ -3,6 +3,7 @@ import {
   canAssignCustomer,
   forwardMove,
   moveWaitsForCustomer,
+  noCustomerText,
 } from './labels';
 
 describe('forwardMove', () => {
@@ -24,20 +25,29 @@ describe('forwardMove', () => {
 });
 
 describe('canAssignCustomer', () => {
-  it('lets Sales assign a customer until the lift leaves the store', () => {
-    expect(canAssignCustomer('SALES_MANAGER', 'IN_STORE')).toBe(true);
-    expect(canAssignCustomer('SALES_MANAGER', 'AT_SITE')).toBe(false);
-  });
-
-  it('lets managers assign one at any status', () => {
-    expect(canAssignCustomer('GENERAL_MANAGER', 'ACTIVE')).toBe(true);
-    expect(canAssignCustomer('CEO', 'ACTIVE')).toBe(true);
-    expect(canAssignCustomer('ADMIN', 'ACTIVE')).toBe(true);
+  it('lets Sales and managers assign, change or remove a customer', () => {
+    expect(canAssignCustomer('SALES_MANAGER')).toBe(true);
+    expect(canAssignCustomer('GENERAL_MANAGER')).toBe(true);
+    expect(canAssignCustomer('CEO')).toBe(true);
+    expect(canAssignCustomer('ADMIN')).toBe(true);
   });
 
   it('keeps it from the store keeper, who cannot read customers', () => {
-    expect(canAssignCustomer('STORE_KEEPER', 'IN_STORE')).toBe(false);
-    expect(canAssignCustomer(null, 'IN_STORE')).toBe(false);
+    expect(canAssignCustomer('STORE_KEEPER')).toBe(false);
+    expect(canAssignCustomer(null)).toBe(false);
+  });
+});
+
+describe('noCustomerText', () => {
+  it('calls a lift with no customer in stock while it is with us', () => {
+    expect(noCustomerText('ON_ORDER')).toBe('In stock');
+    expect(noCustomerText('IN_STORE')).toBe('In stock');
+  });
+
+  it('does not call a lift in stock once it has left the store', () => {
+    expect(noCustomerText('AT_SITE')).toBe('No customer');
+    expect(noCustomerText('ACTIVE')).toBe('No customer');
+    expect(noCustomerText('INACTIVE')).toBe('No customer');
   });
 });
 

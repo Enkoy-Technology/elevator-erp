@@ -29,13 +29,6 @@ export const ASSET_STATUS_MOVES: Readonly<
   DECOMMISSIONED: [],
 };
 
-/** Before the lift leaves the store, Sales can still change who it is sold to. */
-export const PRE_SITE_STATUSES: readonly AssetStatus[] = [
-  'ON_ORDER',
-  'CHECKING',
-  'IN_STORE',
-];
-
 const ASSET_OVERRIDE_ROLES: readonly UserRole[] = [
   'CEO',
   'ADMIN',

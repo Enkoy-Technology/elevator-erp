@@ -73,17 +73,20 @@ export const moveWaitsForCustomer = (
   customerId: string | null,
 ): boolean => to === 'AT_SITE' && !customerId;
 
-/** Mirrors the sold-to route: Sales until it leaves the store, managers always. */
-export const canAssignCustomer = (
-  role: UserRole | null,
-  status: AssetStatus,
-): boolean =>
+/** Mirrors the sold-to route. Whoever assigns a customer can always change or remove it. */
+export const canAssignCustomer = (role: UserRole | null): boolean =>
+  role === 'SALES_MANAGER' ||
   role === 'GENERAL_MANAGER' ||
   role === 'CEO' ||
-  role === 'ADMIN' ||
-  (role === 'SALES_MANAGER' &&
-    ASSET_JOURNEY.indexOf(status) >= 0 &&
-    ASSET_JOURNEY.indexOf(status) <= ASSET_JOURNEY.indexOf('IN_STORE'));
+  role === 'ADMIN';
+
+/** A lift that has left the store is not in stock, whoever it belongs to. */
+export const noCustomerText = (status: AssetStatus): string => {
+  const at = ASSET_JOURNEY.indexOf(status);
+  return at >= 0 && at <= ASSET_JOURNEY.indexOf('IN_STORE')
+    ? 'In stock'
+    : 'No customer';
+};
 
 /** What the next step asks of the person, in the button's own words. */
 export const assetNextStepHint = (

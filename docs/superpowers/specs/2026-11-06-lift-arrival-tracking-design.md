@@ -120,8 +120,9 @@ optional project link. Blank shows as "In stock".
 
 - Set by Sales Manager or General Manager, on its own action. Registering an
   installed lift with its customer also counts, and is recorded.
-- Sales Manager can change or clear it until the lift goes to At site, and again
-  if the lift returns to In store. General Manager can change it at any status.
+- Sales Manager and General Manager can change or remove it at any status, with
+  Change and Remove beside the customer wherever it can be assigned. The user
+  set this after it went live; it first stopped Sales once a lift left the store.
 - Refused for everyone while the lift has a maintenance contract or a breakdown,
   because those records hold their own copy of the customer. Maintenance records
   are never rewritten.

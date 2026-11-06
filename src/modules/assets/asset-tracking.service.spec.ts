@@ -193,20 +193,27 @@ describe('AssetTrackingService', () => {
       expect(repository.setSoldTo).not.toHaveBeenCalled();
     });
 
-    it('stops the Sales Manager once the lift has gone to site', async () => {
+    it.each(['ON_ORDER', 'IN_STORE', 'AT_SITE', 'ACTIVE'] as const)(
+      'lets the Sales Manager change it at %s',
+      async (status) => {
+        liftAt(status);
+
+        await service.setSoldTo(userWith('SALES_MANAGER'), ASSET_ID, sale);
+
+        expect(repository.setSoldTo).toHaveBeenCalled();
+      },
+    );
+
+    it('lets the customer be removed after the lift has gone to site', async () => {
       liftAt('AT_SITE');
 
-      await expect(
-        service.setSoldTo(userWith('SALES_MANAGER'), ASSET_ID, sale),
-      ).rejects.toThrow(WorkflowTransitionError);
-    });
+      await service.setSoldTo(userWith('SALES_MANAGER'), ASSET_ID, {
+        customerId: null,
+      });
 
-    it('lets the Sales Manager change it again after a return to store', async () => {
-      liftAt('IN_STORE');
-
-      await service.setSoldTo(userWith('SALES_MANAGER'), ASSET_ID, sale);
-
-      expect(repository.setSoldTo).toHaveBeenCalled();
+      expect(repository.setSoldTo).toHaveBeenCalledWith(
+        expect.objectContaining({ customerId: null, projectId: null }),
+      );
     });
 
     it('lets the General Manager change it at any status', async () => {

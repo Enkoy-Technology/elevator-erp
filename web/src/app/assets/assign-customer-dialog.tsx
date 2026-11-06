@@ -15,14 +15,14 @@ const rowClass =
  */
 export const AssignCustomerDialog = ({
   liftName,
-  hasCustomer,
+  currentId,
   onPick,
   onClose,
 }: {
   liftName: string;
-  hasCustomer: boolean;
-  /** Null puts the lift back in stock. */
-  onPick: (customerId: string | null) => void;
+  /** The lift's customer now, which the list marks and picking it leaves alone. */
+  currentId: string | null;
+  onPick: (customerId: string) => void;
   onClose: () => void;
 }) => {
   const [search, setSearch] = useState('');
@@ -58,7 +58,7 @@ export const AssignCustomerDialog = ({
   return (
     <Dialog
       open
-      title="Assign customer"
+      title={currentId ? 'Change customer' : 'Assign customer'}
       description={`Who is ${liftName} sold to?`}
       onClose={onClose}
       footer={
@@ -91,22 +91,20 @@ export const AssignCustomerDialog = ({
             <button
               key={customer.id}
               type="button"
-              onClick={() => onPick(customer.id)}
+              onClick={() =>
+                customer.id === currentId ? onClose() : onPick(customer.id)
+              }
               className={rowClass}
             >
               {customer.name}
+              {customer.id === currentId ? (
+                <span className="ml-2 text-xs font-normal text-slate-500">
+                  Current customer
+                </span>
+              ) : null}
             </button>
           ))
         )}
-        {hasCustomer ? (
-          <button
-            type="button"
-            onClick={() => onPick(null)}
-            className={`${rowClass} text-slate-600`}
-          >
-            Back in stock, no customer
-          </button>
-        ) : null}
       </div>
     </Dialog>
   );

@@ -6,11 +6,7 @@ import {
 
 import { WorkflowTransitionError } from '../../common/exceptions';
 import type { AuthenticatedUser } from '../../types/auth.types';
-import {
-  allowedAssetMoves,
-  canSkipAssetRules,
-  PRE_SITE_STATUSES,
-} from './asset-status';
+import { allowedAssetMoves } from './asset-status';
 import {
   AssetTrackingRepository,
   type StatusMove,
@@ -110,15 +106,7 @@ export class AssetTrackingService {
   }
 
   async setSoldTo(user: AuthenticatedUser, id: string, dto: SetSoldToDto) {
-    const asset = await this.requireAsset(user, id);
-    if (
-      !canSkipAssetRules(user.role) &&
-      !PRE_SITE_STATUSES.includes(asset.status)
-    ) {
-      throw new WorkflowTransitionError(
-        'This lift has left the store. Ask the General Manager to change who it is sold to.',
-      );
-    }
+    await this.requireAsset(user, id);
     // Contracts and breakdowns hold their own copy of the customer, and
     // maintenance records are never rewritten.
     if (await this.repository.hasMaintenanceRecords(user.tenantId, id)) {

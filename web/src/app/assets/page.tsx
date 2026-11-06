@@ -46,6 +46,7 @@ import {
   canAssignCustomer,
   forwardMove,
   moveWaitsForCustomer,
+  noCustomerText,
 } from './labels';
 
 /** DELETE /assets/:id — a soft delete on the server, the only other real
@@ -278,11 +279,28 @@ export default function AssetsPage() {
     await changeLift(() => moveAsset(asset.id, to), `${label} did not work.`);
   };
 
-  const onAssign = async (asset: AssetListItem, customerId: string | null) => {
+  const onAssign = async (asset: AssetListItem, customerId: string) => {
     setAssigning(null);
     await changeLift(
       () => setAssetSoldTo(asset.id, customerId),
-      'The customer could not be assigned.',
+      'The customer could not be saved.',
+    );
+  };
+
+  const onRemoveCustomer = async (asset: AssetListItem) => {
+    if (
+      (await confirm({
+        title: `Remove ${asset.customerName ?? 'the customer'}?`,
+        description: `${asset.name} will have no customer until one is assigned.`,
+        confirmLabel: 'Remove customer',
+        tone: 'danger',
+      })) === null
+    ) {
+      return;
+    }
+    await changeLift(
+      () => setAssetSoldTo(asset.id, null),
+      'The customer could not be removed.',
     );
   };
 
@@ -331,7 +349,7 @@ export default function AssetsPage() {
           a.name,
           a.serialNumber ?? '',
           ASSET_CATEGORY_LABEL[a.category],
-          a.customerName ?? 'In stock',
+          a.customerName ?? noCustomerText(a.status),
           a.buildingName ?? '',
           ASSET_STATUS_LABEL[a.status],
         ]),
@@ -346,7 +364,7 @@ export default function AssetsPage() {
       return null;
     }
     if (moveWaitsForCustomer(to, asset.customerId)) {
-      return canAssignCustomer(role, asset.status) ? (
+      return canAssignCustomer(role) ? (
         <span className="text-xs font-semibold text-amber-700">
           Assign a customer first
         </span>
@@ -371,6 +389,48 @@ export default function AssetsPage() {
     );
   };
 
+  /** Assign, or change and remove: a pick can always be put right. */
+  const customerActions = (asset: AssetListItem) => {
+    if (!canAssignCustomer(role)) {
+      return null;
+    }
+    const small = `${btnSecondary} whitespace-nowrap px-2.5 py-1 text-xs`;
+    if (!asset.customerId) {
+      return (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => setAssigning(asset)}
+          className={small}
+        >
+          Assign customer
+        </button>
+      );
+    }
+    return (
+      <>
+        <button
+          type="button"
+          disabled={busy}
+          aria-label={`Change customer of ${asset.name}`}
+          onClick={() => setAssigning(asset)}
+          className={small}
+        >
+          Change
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          aria-label={`Remove customer of ${asset.name}`}
+          onClick={() => void onRemoveCustomer(asset)}
+          className={`${small} text-red-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700`}
+        >
+          Remove
+        </button>
+      </>
+    );
+  };
+
   const columns: ColumnDef<AssetListItem, unknown>[] = [
     {
       accessorKey: 'name',
@@ -387,8 +447,17 @@ export default function AssetsPage() {
             </span>
           ) : null}
           {/* On a phone the table scrolls sideways, which would hide the column. */}
-          <span className="mt-2 block empty:hidden sm:hidden">
+          <span className="mt-2 flex flex-col items-start gap-2 empty:hidden sm:hidden">
             {nextStep(row.original)}
+            {canAssignCustomer(role) ? (
+              <span className="flex flex-wrap items-center gap-1.5 text-sm font-normal text-slate-600">
+                <span className="w-full">
+                  {row.original.customerName ??
+                    noCustomerText(row.original.status)}
+                </span>
+                {customerActions(row.original)}
+              </span>
+            ) : null}
           </span>
         </>
       ),
@@ -423,27 +492,14 @@ export default function AssetsPage() {
     {
       id: 'customer',
       header: 'Sold to',
-      cell: ({ row }) => {
-        const asset = row.original;
-        if (asset.customerName) {
-          return asset.customerName;
-        }
-        return canAssignCustomer(role, asset.status) ? (
-          <span className="flex flex-wrap items-center gap-2">
-            In stock
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => setAssigning(asset)}
-              className={`${btnSecondary} whitespace-nowrap px-2.5 py-1 text-xs`}
-            >
-              Assign customer
-            </button>
+      cell: ({ row }) => (
+        <>
+          {row.original.customerName ?? noCustomerText(row.original.status)}
+          <span className="mt-1.5 hidden gap-1.5 empty:hidden sm:flex">
+            {customerActions(row.original)}
           </span>
-        ) : (
-          'In stock'
-        );
-      },
+        </>
+      ),
     },
     {
       id: 'category',
@@ -516,7 +572,7 @@ export default function AssetsPage() {
       {assigning ? (
         <AssignCustomerDialog
           liftName={assigning.name}
-          hasCustomer={false}
+          currentId={assigning.customerId}
           onPick={(customerId) => void onAssign(assigning, customerId)}
           onClose={() => setAssigning(null)}
         />
