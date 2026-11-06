@@ -17,6 +17,12 @@ whole-case action is a button inside the open case. The lift page shows the
 stages from On order to In service with one sentence on what to do now, and on a
 phone the next step stays in a bar at the bottom.
 
+**After the user got stuck on Send to site:** the rule stands that a lift needs a
+customer to go to site and only a Sales Manager or General Manager assigns one,
+but the screens now say so. The Assets table shows each lift's next forward step
+as a button, confirmed before it runs, or who it is waiting for. Assign customer
+is a search dialog, used from the table and the lift page.
+
 ## Why
 
 Assets today only describes a lift that is already sold and installed. Every

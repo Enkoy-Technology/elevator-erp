@@ -919,8 +919,10 @@ export interface Asset {
 
 export interface AssetListItem extends Asset {
   customerName: string | null;
-  /** Parts unticked as not arrived. */
+  /** Parts marked as not arrived. */
   shortParts: number;
+  /** The steps this person may press on this lift, decided by the server. */
+  nextMoves: AssetStatus[];
 }
 
 export interface PackingListRow {

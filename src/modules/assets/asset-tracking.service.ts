@@ -59,7 +59,7 @@ export class AssetTrackingService {
     }
     if (dto.to === 'AT_SITE' && !asset.customerId) {
       throw new WorkflowTransitionError(
-        'Mark who this lift is sold to before it goes to site',
+        'Assign a customer before this lift goes to site. A Sales Manager or General Manager can do this.',
       );
     }
     return this.applyMove(user, id, asset.status, dto.to, 'STATUS', dto.note);

@@ -15,7 +15,9 @@ Design: `docs/superpowers/specs/2026-11-06-lift-arrival-tracking-design.md`.
 - Update basic fields; status and sold-to change only through their own actions
 - Parts per lift: every part starts as arrived, and people tap what did not
   come, one part or a whole case, when registering or updating a lift
-- Status steps with who may press each, General Manager correction, history
+- Status steps with who may press each, General Manager correction, history.
+  The next forward step is a button in the Assets table, and Assign customer
+  sits beside "In stock" for Sales Manager and General Manager
 - Soft delete
 
 ## Out of scope (later)

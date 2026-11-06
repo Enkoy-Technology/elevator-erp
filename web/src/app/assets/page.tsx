@@ -29,16 +29,23 @@ import {
   getCurrentRole,
   listAssets,
   listCustomers,
+  moveAsset,
   optional,
+  setAssetSoldTo,
   type AssetCategory,
   type AssetListItem,
   type AssetStatus,
   type UserRole,
 } from '@/lib/api';
+import { AssignCustomerDialog } from './assign-customer-dialog';
 import {
   ASSET_CATEGORY_LABEL,
   ASSET_STATUS_LABEL,
   ASSET_STATUS_TONE,
+  assetMoveLabel,
+  canAssignCustomer,
+  forwardMove,
+  moveWaitsForCustomer,
 } from './labels';
 
 /** DELETE /assets/:id — a soft delete on the server, the only other real
@@ -98,6 +105,8 @@ export default function AssetsPage() {
   /** The row whose Delete is armed. Confirm swaps the icons in place. */
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** The lift whose Assign customer is open. */
+  const [assigning, setAssigning] = useState<AssetListItem | null>(null);
   const canWrite = canWriteAssets(role);
 
   const refresh = useCallback(
@@ -222,6 +231,61 @@ export default function AssetsPage() {
     }
   };
 
+  /** Runs one change to a lift, then shows what the server now holds. */
+  const changeLift = async (
+    change: () => Promise<unknown>,
+    fallback: string,
+  ) => {
+    setBusy(true);
+    setError(null);
+    let problem: string | null = null;
+    try {
+      await change();
+    } catch (err) {
+      problem = err instanceof ApiError ? err.message : fallback;
+    }
+    await refresh(
+      page,
+      pageSize,
+      search,
+      categoryFilter,
+      customerFilter ?? '',
+      statusFilter,
+      soldFilter,
+    );
+    if (problem) {
+      setError(problem);
+    }
+    setBusy(false);
+  };
+
+  const onMove = async (asset: AssetListItem, to: AssetStatus) => {
+    const label = assetMoveLabel(asset.status, to);
+    const short = asset.shortParts;
+    // A store keeper cannot undo a step, and a table is an easy place to mis-tap.
+    if (
+      (await confirm({
+        title: `${label}?`,
+        description:
+          short > 0
+            ? `${asset.name} still has ${short} ${short === 1 ? 'part' : 'parts'} missing.`
+            : asset.name,
+        confirmLabel: label,
+      })) === null
+    ) {
+      return;
+    }
+    await changeLift(() => moveAsset(asset.id, to), `${label} did not work.`);
+  };
+
+  const onAssign = async (asset: AssetListItem, customerId: string | null) => {
+    setAssigning(null);
+    await changeLift(
+      () => setAssetSoldTo(asset.id, customerId),
+      'The customer could not be assigned.',
+    );
+  };
+
   const onBulkDelete = async () => {
     const ids = [...selected];
     if (
@@ -275,6 +339,38 @@ export default function AssetsPage() {
     );
   };
 
+  /** The one thing to do next on a lift, or who it is waiting for. */
+  const nextStep = (asset: AssetListItem) => {
+    const to = forwardMove(asset.status, asset.nextMoves);
+    if (!to) {
+      return null;
+    }
+    if (moveWaitsForCustomer(to, asset.customerId)) {
+      return canAssignCustomer(role, asset.status) ? (
+        <span className="text-xs font-semibold text-amber-700">
+          Assign a customer first
+        </span>
+      ) : (
+        <span className="block max-w-44 text-xs text-slate-600">
+          <span className="block font-semibold text-amber-700">
+            Waiting for a customer
+          </span>
+          Sales or the General Manager assigns it
+        </span>
+      );
+    }
+    return (
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void onMove(asset, to)}
+        className={`${btnPrimary} whitespace-nowrap px-3 py-1.5`}
+      >
+        {assetMoveLabel(asset.status, to)}
+      </button>
+    );
+  };
+
   const columns: ColumnDef<AssetListItem, unknown>[] = [
     {
       accessorKey: 'name',
@@ -290,23 +386,12 @@ export default function AssetsPage() {
               {row.original.serialNumber}
             </span>
           ) : null}
+          {/* On a phone the table scrolls sideways, which would hide the column. */}
+          <span className="mt-2 block empty:hidden sm:hidden">
+            {nextStep(row.original)}
+          </span>
         </>
       ),
-    },
-    {
-      id: 'category',
-      header: 'Category',
-      cell: ({ row }) => ASSET_CATEGORY_LABEL[row.original.category],
-    },
-    {
-      id: 'customer',
-      header: 'Sold to',
-      cell: ({ row }) => row.original.customerName ?? 'In stock',
-    },
-    {
-      id: 'building',
-      header: 'Building',
-      cell: ({ row }) => row.original.buildingName ?? '—',
     },
     {
       id: 'status',
@@ -325,6 +410,50 @@ export default function AssetsPage() {
           ) : null}
         </span>
       ),
+    },
+    {
+      id: 'nextStep',
+      header: 'Next step',
+      cell: ({ row }) => (
+        <span className="hidden sm:block">
+          {nextStep(row.original) ?? <span className="text-slate-400">—</span>}
+        </span>
+      ),
+    },
+    {
+      id: 'customer',
+      header: 'Sold to',
+      cell: ({ row }) => {
+        const asset = row.original;
+        if (asset.customerName) {
+          return asset.customerName;
+        }
+        return canAssignCustomer(role, asset.status) ? (
+          <span className="flex flex-wrap items-center gap-2">
+            In stock
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setAssigning(asset)}
+              className={`${btnSecondary} whitespace-nowrap px-2.5 py-1 text-xs`}
+            >
+              Assign customer
+            </button>
+          </span>
+        ) : (
+          'In stock'
+        );
+      },
+    },
+    {
+      id: 'category',
+      header: 'Category',
+      cell: ({ row }) => ASSET_CATEGORY_LABEL[row.original.category],
+    },
+    {
+      id: 'building',
+      header: 'Building',
+      cell: ({ row }) => row.original.buildingName ?? '—',
     },
     updatedColumn<AssetListItem>((row) => row.updatedAt),
     {
@@ -384,6 +513,14 @@ export default function AssetsPage() {
     <div className="flex min-h-screen">
       <Sidebar />
       {confirmDialog}
+      {assigning ? (
+        <AssignCustomerDialog
+          liftName={assigning.name}
+          hasCustomer={false}
+          onPick={(customerId) => void onAssign(assigning, customerId)}
+          onClose={() => setAssigning(null)}
+        />
+      ) : null}
       <div className="flex min-w-0 flex-1 flex-col">
         <PageHeader
           eyebrow="Operations"
@@ -517,8 +654,8 @@ export default function AssetsPage() {
             empty={
               search || categoryFilter || statusFilter || soldFilter ? (
                 <>
-                  No asset matches these filters. Clear the search and set
-                  each filter back to All.
+                  No asset matches these filters. Clear the search and set each
+                  filter back to All.
                 </>
               ) : (
                 <>

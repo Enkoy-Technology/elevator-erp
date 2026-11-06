@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 import { btnPrimary, btnSecondary, fieldClass } from '@/components/form-styles';
+import { AssignCustomerDialog } from '../../assign-customer-dialog';
 import { PageHeader } from '@/components/page-header';
 import { Sidebar } from '@/components/sidebar';
 import { useConfirm } from '@/components/use-confirm';
@@ -14,14 +15,11 @@ import {
   getAccessToken,
   getAssetTracking,
   getCurrentRole,
-  listCustomers,
   moveAsset,
-  optional,
   setAssetSoldTo,
   type AssetEvent,
   type AssetStatus,
   type AssetTracking,
-  type Customer,
   type UserRole,
 } from '@/lib/api';
 import { formatDateTime } from '@/lib/datetime';
@@ -29,7 +27,9 @@ import {
   ASSET_STATUS_LABEL,
   assetMoveLabel,
   assetNextStepHint,
+  canAssignCustomer,
   canMarkParts,
+  moveWaitsForCustomer,
 } from '../../labels';
 import { LiftJourney } from '../../lift-journey';
 import { MissingParts, PartsChecklist } from '../../parts-checklist';
@@ -62,8 +62,7 @@ export default function AssetChecklistPage() {
   const { id } = useParams<{ id: string }>();
   const { confirm, confirmDialog } = useConfirm();
   const [tracking, setTracking] = useState<AssetTracking | null>(null);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [soldToDraft, setSoldToDraft] = useState('');
+  const [assigning, setAssigning] = useState(false);
   const [correctTo, setCorrectTo] = useState<AssetStatus | ''>('');
   const [role, setRole] = useState<UserRole | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,12 +71,10 @@ export default function AssetChecklistPage() {
   const { setItems } = parts;
 
   const isManager = role !== null && MANAGERS.includes(role);
-  const canSell = isManager || role === 'SALES_MANAGER';
 
   const reload = useCallback(async () => {
     const next = await getAssetTracking(id);
     setTracking(next);
-    setSoldToDraft(next.asset.customerId ?? '');
     return next;
   }, [id]);
 
@@ -86,8 +83,7 @@ export default function AssetChecklistPage() {
       router.replace('/login');
       return;
     }
-    const currentRole = getCurrentRole();
-    setRole(currentRole);
+    setRole(getCurrentRole());
     void reload()
       .then((next) => setItems(next.items))
       .catch((err: unknown) => {
@@ -98,14 +94,6 @@ export default function AssetChecklistPage() {
           ),
         );
       });
-    if (
-      currentRole === 'SALES_MANAGER' ||
-      (currentRole && MANAGERS.includes(currentRole))
-    ) {
-      void optional(listCustomers({ page: 1, pageSize: 100 })).then((result) =>
-        setCustomers(result.items),
-      );
-    }
   }, [router, reload, setItems]);
 
   /** Runs one action that changes the lift, then shows what the server now holds. */
@@ -153,9 +141,14 @@ export default function AssetChecklistPage() {
   const { asset, events, nextMoves } = tracking;
   const { items } = parts;
   const arrived = items.filter((item) => item.mark === 'OK').length;
+  const canAssign = canAssignCustomer(role, asset.status);
   const hint =
     nextMoves.length > 0
-      ? assetNextStepHint(asset.status, items.length > 0)
+      ? assetNextStepHint(asset.status, {
+          hasParts: items.length > 0,
+          hasCustomer: asset.customerId !== null,
+          canAssign,
+        })
       : null;
 
   const press = async (to: AssetStatus) => {
@@ -199,7 +192,7 @@ export default function AssetChecklistPage() {
       <button
         key={to}
         type="button"
-        disabled={busy}
+        disabled={busy || moveWaitsForCustomer(to, asset.customerId)}
         onClick={() => void press(to)}
         className={`${index === 0 ? btnPrimary : btnSecondary} ${size}`}
       >
@@ -211,6 +204,23 @@ export default function AssetChecklistPage() {
     <div className="flex min-h-screen">
       <Sidebar />
       {confirmDialog}
+      {assigning ? (
+        <AssignCustomerDialog
+          liftName={asset.name}
+          hasCustomer={asset.customerId !== null}
+          onPick={(customerId) => {
+            setAssigning(false);
+            if (customerId === asset.customerId) {
+              return;
+            }
+            void run(
+              () => setAssetSoldTo(id, customerId),
+              'The customer could not be assigned.',
+            );
+          }}
+          onClose={() => setAssigning(false)}
+        />
+      ) : null}
       <div className="flex min-w-0 flex-1 flex-col">
         <PageHeader
           eyebrow="Operations"
@@ -239,49 +249,29 @@ export default function AssetChecklistPage() {
 
           <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
             <LiftJourney status={asset.status} />
-            <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-2">
               {hint ? (
                 <p className="text-base font-medium text-slate-900">{hint}</p>
               ) : null}
-              <p className="text-sm text-slate-600">
-                Sold to{' '}
-                <span className="font-semibold text-slate-900">
-                  {asset.customerName ?? 'nobody yet, in stock'}
-                </span>
-              </p>
-            </div>
-            {canSell ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="w-64 max-w-full">
-                  <select
-                    aria-label="Who this lift is sold to"
-                    className={fieldClass}
-                    value={soldToDraft}
-                    onChange={(event) => setSoldToDraft(event.target.value)}
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-sm text-slate-600">
+                  Sold to{' '}
+                  <span className="font-semibold text-slate-900">
+                    {asset.customerName ?? 'nobody yet, in stock'}
+                  </span>
+                </p>
+                {canAssign ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setAssigning(true)}
+                    className={asset.customerId ? btnSecondary : btnPrimary}
                   >
-                    <option value="">In stock</option>
-                    {customers.map((customer) => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  disabled={busy || soldToDraft === (asset.customerId ?? '')}
-                  onClick={() =>
-                    void run(
-                      () => setAssetSoldTo(id, soldToDraft || null),
-                      'Who it is sold to could not be saved.',
-                    )
-                  }
-                  className={btnSecondary}
-                >
-                  Save sold to
-                </button>
+                    {asset.customerId ? 'Change customer' : 'Assign customer'}
+                  </button>
+                ) : null}
               </div>
-            ) : null}
+            </div>
           </section>
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)] xl:items-start">

@@ -7,6 +7,7 @@ import {
 
 import type { AuthenticatedUser } from '../../types/auth.types';
 import { withArrivedMarks } from './arrival-checklist';
+import { allowedAssetMoves } from './asset-status';
 import {
   AssetsRepository,
   type AssetExportRow,
@@ -18,11 +19,18 @@ import type { CreateAssetDto, UpdateAssetDto } from './dto/asset.dto';
 export class AssetsService {
   constructor(private readonly assetsRepository: AssetsRepository) {}
 
-  list(
+  async list(
     user: AuthenticatedUser,
     options: AssetFilters & { page?: string; pageSize?: string },
   ) {
-    return this.assetsRepository.list(user.tenantId, options);
+    const result = await this.assetsRepository.list(user.tenantId, options);
+    return {
+      ...result,
+      items: result.items.map((asset) => ({
+        ...asset,
+        nextMoves: allowedAssetMoves(asset.status, user.role),
+      })),
+    };
   }
 
   streamAll(

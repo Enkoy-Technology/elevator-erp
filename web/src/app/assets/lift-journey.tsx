@@ -2,19 +2,11 @@ import { Check } from 'lucide-react';
 
 import { StatusPill } from '@/components/list-toolbar';
 import type { AssetStatus } from '@/lib/api';
-import { ASSET_STATUS_LABEL, ASSET_STATUS_TONE } from './labels';
-
-const JOURNEY: readonly AssetStatus[] = [
-  'ON_ORDER',
-  'CHECKING',
-  'IN_STORE',
-  'AT_SITE',
-  'ACTIVE',
-];
+import { ASSET_JOURNEY, ASSET_STATUS_LABEL, ASSET_STATUS_TONE } from './labels';
 
 /** The road from the factory to the building, and where this lift is on it. */
 export const LiftJourney = ({ status }: { status: AssetStatus }) => {
-  const at = JOURNEY.indexOf(status);
+  const at = ASSET_JOURNEY.indexOf(status);
   if (at < 0) {
     return (
       <StatusPill
@@ -25,7 +17,7 @@ export const LiftJourney = ({ status }: { status: AssetStatus }) => {
   }
   return (
     <ol className="flex">
-      {JOURNEY.map((step, position) => {
+      {ASSET_JOURNEY.map((step, position) => {
         const done = position < at;
         const here = position === at;
         return (
@@ -34,7 +26,7 @@ export const LiftJourney = ({ status }: { status: AssetStatus }) => {
             aria-current={here ? 'step' : undefined}
             className="relative min-w-0 flex-1 text-center"
           >
-            {position < JOURNEY.length - 1 ? (
+            {position < ASSET_JOURNEY.length - 1 ? (
               <span
                 aria-hidden
                 className={`absolute left-1/2 top-3 h-0.5 w-full -translate-y-1/2 ${done ? 'bg-navy-900' : 'bg-slate-300'}`}

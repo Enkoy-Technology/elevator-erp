@@ -128,7 +128,7 @@ describe('AssetTrackingService', () => {
 
       await expect(
         service.move(userWith('STORE_KEEPER'), ASSET_ID, { to: 'AT_SITE' }),
-      ).rejects.toThrow('Mark who this lift is sold to before it goes to site');
+      ).rejects.toThrow('Assign a customer before this lift goes to site');
     });
 
     it('sends a sold lift to site', async () => {

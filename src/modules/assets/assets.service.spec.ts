@@ -17,7 +17,7 @@ describe('AssetsService.create', () => {
     ...user,
     role: 'TECHNICAL_MANAGER',
   };
-  const repository = { create: jest.fn() };
+  const repository = { create: jest.fn(), list: jest.fn() };
   const service = new AssetsService(repository as unknown as AssetsRepository);
   const lift = { category: 'ELEVATOR', name: 'Lift A' } as const;
 
@@ -133,5 +133,28 @@ describe('AssetsService.create', () => {
       BadRequestException,
     );
     expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it('gives each listed lift the next steps this person may press', async () => {
+    repository.list.mockResolvedValue({
+      items: [{ id: 'a', status: 'IN_STORE' }],
+      page: 1,
+      pageSize: 10,
+      total: 1,
+      totalPages: 1,
+    });
+
+    const keeper = await service.list(
+      { ...user, role: 'STORE_KEEPER' },
+      {},
+    );
+    const sales = await service.list(
+      { ...user, role: 'SALES_MANAGER' },
+      {},
+    );
+
+    expect(keeper.items[0]?.nextMoves).toEqual(['AT_SITE']);
+    expect(sales.items[0]?.nextMoves).toEqual([]);
+    expect(keeper.total).toBe(1);
   });
 });
