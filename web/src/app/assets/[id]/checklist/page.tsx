@@ -32,7 +32,7 @@ import {
   canMarkParts,
 } from '../../labels';
 import { LiftJourney } from '../../lift-journey';
-import { PartsChecklist } from '../../parts-checklist';
+import { MissingParts, PartsChecklist } from '../../parts-checklist';
 import { useAssetParts } from '../../use-asset-parts';
 
 const MANAGERS: readonly UserRole[] = ['GENERAL_MANAGER', 'CEO', 'ADMIN'];
@@ -220,7 +220,9 @@ export default function AssetChecklistPage() {
           backLabel="Assets"
           actions={
             nextMoves.length > 0 ? (
-              <div className="hidden flex-wrap gap-2 sm:flex">{moveButtons()}</div>
+              <div className="hidden flex-wrap gap-2 sm:flex">
+                {moveButtons()}
+              </div>
             ) : undefined
           }
         />
@@ -235,32 +237,36 @@ export default function AssetChecklistPage() {
             </p>
           ) : null}
 
-          <section className="max-w-3xl space-y-4 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
+          <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
             <LiftJourney status={asset.status} />
-            {hint ? (
-              <p className="text-base font-medium text-slate-900">{hint}</p>
-            ) : null}
-            <p className="text-sm text-slate-600">
-              Sold to{' '}
-              <span className="font-semibold text-slate-900">
-                {asset.customerName ?? 'nobody yet, in stock'}
-              </span>
-            </p>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2">
+              {hint ? (
+                <p className="text-base font-medium text-slate-900">{hint}</p>
+              ) : null}
+              <p className="text-sm text-slate-600">
+                Sold to{' '}
+                <span className="font-semibold text-slate-900">
+                  {asset.customerName ?? 'nobody yet, in stock'}
+                </span>
+              </p>
+            </div>
             {canSell ? (
               <div className="flex flex-wrap items-center gap-2">
-                <select
-                  aria-label="Who this lift is sold to"
-                  className={`${fieldClass} w-56 max-w-full`}
-                  value={soldToDraft}
-                  onChange={(event) => setSoldToDraft(event.target.value)}
-                >
-                  <option value="">In stock</option>
-                  {customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="w-64 max-w-full">
+                  <select
+                    aria-label="Who this lift is sold to"
+                    className={fieldClass}
+                    value={soldToDraft}
+                    onChange={(event) => setSoldToDraft(event.target.value)}
+                  >
+                    <option value="">In stock</option>
+                    {customers.map((customer) => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <button
                   type="button"
                   disabled={busy || soldToDraft === (asset.customerId ?? '')}
@@ -278,87 +284,93 @@ export default function AssetChecklistPage() {
             ) : null}
           </section>
 
-          {items.length > 0 ? (
-            <section aria-label="Parts" className="-mx-4 max-w-3xl sm:mx-0">
-              <PartsChecklist
-                items={items}
-                canMark={canMarkParts(role)}
-                savingCases={parts.savingCases}
-                failedCases={parts.failedCases}
-                saveStates={parts.saveStates}
-                onSave={parts.saveItem}
-                onCase={(caseNo, mark) => void parts.markCase(caseNo, mark)}
-              />
-              <p className="mt-3 px-4 text-sm text-slate-500 sm:px-0">
-                Quantities start from a 7-floor 450 kg lift. Correct them from
-                the paper list that came with this lift.
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)] xl:items-start">
+            {items.length > 0 ? (
+              <section aria-label="Parts" className="-mx-4 min-w-0 sm:mx-0">
+                <PartsChecklist
+                  items={items}
+                  canMark={canMarkParts(role)}
+                  savingCases={parts.savingCases}
+                  failedCases={parts.failedCases}
+                  saveStates={parts.saveStates}
+                  onSave={parts.saveItem}
+                  onCase={(caseNo, mark) => void parts.markCase(caseNo, mark)}
+                />
+                <p className="mt-3 px-4 text-sm text-slate-500 sm:px-0">
+                  Quantities start from a 7-floor 450 kg lift. Correct them from
+                  the paper list that came with this lift.
+                </p>
+              </section>
+            ) : (
+              <p className="text-sm text-slate-500">
+                This lift has no parts list.
               </p>
-            </section>
-          ) : (
-            <p className="text-sm text-slate-500">
-              This lift has no parts list.
-            </p>
-          )}
+            )}
 
-          <section aria-label="History">
-            <h2 className="mb-2 text-sm font-semibold text-slate-900">
-              History
-            </h2>
-            <ol className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
-              {events.map((event) => (
-                <li key={event.id} className="px-4 py-2.5">
-                  <p className="text-sm text-slate-900">
-                    {describeEvent(event)}
-                  </p>
-                  {event.note ? (
-                    <p className="text-sm text-slate-600">{event.note}</p>
+            <div className="min-w-0 space-y-6">
+              <MissingParts items={items} />
+
+              <section aria-label="History">
+                <h2 className="mb-2 text-sm font-semibold text-slate-900">
+                  History
+                </h2>
+                <ol className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
+                  {events.map((event) => (
+                    <li key={event.id} className="px-4 py-2.5">
+                      <p className="text-sm text-slate-900">
+                        {describeEvent(event)}
+                      </p>
+                      {event.note ? (
+                        <p className="text-sm text-slate-600">{event.note}</p>
+                      ) : null}
+                      <p className="text-xs text-slate-500">
+                        {event.createdByName ?? 'Unknown'},{' '}
+                        {formatDateTime(event.createdAt)}
+                      </p>
+                    </li>
+                  ))}
+                  {events.length === 0 ? (
+                    <li className="px-4 py-2.5 text-sm text-slate-500">
+                      Nothing recorded yet.
+                    </li>
                   ) : null}
-                  <p className="text-xs text-slate-500">
-                    {event.createdByName ?? 'Unknown'},{' '}
-                    {formatDateTime(event.createdAt)}
-                  </p>
-                </li>
-              ))}
-              {events.length === 0 ? (
-                <li className="px-4 py-2.5 text-sm text-slate-500">
-                  Nothing recorded yet.
-                </li>
-              ) : null}
-            </ol>
-          </section>
+                </ol>
+              </section>
 
-          {isManager ? (
-            <section
-              aria-label="Correct status"
-              className="flex flex-wrap items-center gap-2"
-            >
-              <select
-                aria-label="Correct status to"
-                className={`${fieldClass} w-56 max-w-full`}
-                value={correctTo}
-                onChange={(event) =>
-                  setCorrectTo(event.target.value as AssetStatus | '')
-                }
-              >
-                <option value="">Choose a status</option>
-                {ASSET_STATUSES.filter((value) => value !== asset.status).map(
-                  (value) => (
-                    <option key={value} value={value}>
-                      {ASSET_STATUS_LABEL[value]}
-                    </option>
-                  ),
-                )}
-              </select>
-              <button
-                type="button"
-                disabled={busy || !correctTo}
-                onClick={() => void correct()}
-                className={btnSecondary}
-              >
-                Correct status
-              </button>
-            </section>
-          ) : null}
+              {isManager ? (
+                <section
+                  aria-label="Correct status"
+                  className="flex flex-wrap items-center gap-2"
+                >
+                  <select
+                    aria-label="Correct status to"
+                    className={`${fieldClass} w-56 max-w-full`}
+                    value={correctTo}
+                    onChange={(event) =>
+                      setCorrectTo(event.target.value as AssetStatus | '')
+                    }
+                  >
+                    <option value="">Choose a status</option>
+                    {ASSET_STATUSES.filter(
+                      (value) => value !== asset.status,
+                    ).map((value) => (
+                      <option key={value} value={value}>
+                        {ASSET_STATUS_LABEL[value]}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={busy || !correctTo}
+                    onClick={() => void correct()}
+                    className={btnSecondary}
+                  >
+                    Correct status
+                  </button>
+                </section>
+              ) : null}
+            </div>
+          </div>
         </main>
 
         {/* On a phone the next step stays under the thumb, however far down the list. */}

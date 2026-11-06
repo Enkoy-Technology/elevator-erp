@@ -26,7 +26,7 @@ import {
   withMark,
 } from '@/lib/asset-checklist';
 import { ASSET_CATEGORY_LABEL } from '../labels';
-import { PartsChecklist, type SaveItem } from '../parts-checklist';
+import { MissingParts, PartsChecklist, type SaveItem } from '../parts-checklist';
 
 export default function NewAssetPage() {
   const router = useRouter();
@@ -263,7 +263,8 @@ export default function NewAssetPage() {
       usePackingList &&
       parts.length > 0 ? (
         <FormSection title="Parts">
-          <div className="-mx-4 min-w-0 sm:col-span-2 sm:mx-0">
+          <div className="min-w-0 space-y-4 sm:col-span-2">
+            <div className="-mx-4 sm:mx-0">
             <PartsChecklist
               items={parts}
               canMark
@@ -273,6 +274,8 @@ export default function NewAssetPage() {
                 setParts((rows) => withCaseMark(rows, caseNo, mark))
               }
             />
+            </div>
+            <MissingParts items={parts} />
           </div>
         </FormSection>
       ) : null}

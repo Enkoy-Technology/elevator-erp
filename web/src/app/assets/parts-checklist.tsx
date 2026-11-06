@@ -214,7 +214,9 @@ const PartRow = ({
                   placeholder="What is wrong, how many are short"
                   value={noteDraft ?? item.note ?? ''}
                   onChange={(event) => setNoteDraft(event.target.value)}
-                  onBlur={() => void saveDetail('note', noteDraft, setNoteDraft)}
+                  onBlur={() =>
+                    void saveDetail('note', noteDraft, setNoteDraft)
+                  }
                 />
               </label>
             </>
@@ -470,22 +472,40 @@ export const PartsChecklist = ({
           />
         ))}
       </div>
-
-      {/* Below the cases: above them, each new line would push the list down mid-tap. */}
-      {missing.length > 0 ? (
-        <div className="mt-4 px-4 sm:px-0">
-          <h3 className="text-base font-semibold text-slate-900">
-            What is missing
-          </h3>
-          <ul className="mt-1 space-y-1 text-sm text-slate-700">
-            {missing.map((item) => (
-              <li key={item.id}>
-                Case {item.caseNo}: {item.name}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
     </div>
+  );
+};
+
+/**
+ * The result of the check, to read or pass on. Never above the cases: each new
+ * line would push the list down under a thumb.
+ */
+export const MissingParts = ({
+  items,
+}: {
+  items: readonly AssetChecklistItem[];
+}) => {
+  const missing = items.filter((item) => item.mark !== 'OK');
+  if (missing.length === 0) {
+    return null;
+  }
+  return (
+    <section aria-label="What is missing">
+      <h2 className="mb-2 text-sm font-semibold text-slate-900">
+        What is missing
+      </h2>
+      <ul className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
+        {missing.map((item) => (
+          <li key={item.id} className="flex gap-3 px-4 py-2 text-sm">
+            <span className="w-14 shrink-0 font-semibold text-red-700">
+              Case {item.caseNo}
+            </span>
+            <span className="min-w-0 break-words text-slate-900">
+              {item.name}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 };

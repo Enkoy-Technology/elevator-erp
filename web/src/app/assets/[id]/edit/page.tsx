@@ -17,7 +17,7 @@ import {
   type UserRole,
 } from '@/lib/api';
 import { ASSET_CATEGORY_LABEL, canMarkParts } from '../../labels';
-import { PartsChecklist } from '../../parts-checklist';
+import { MissingParts, PartsChecklist } from '../../parts-checklist';
 import { useAssetParts } from '../../use-asset-parts';
 
 export default function EditAssetPage() {
@@ -215,7 +215,8 @@ export default function EditAssetPage() {
 
       {parts.items.length > 0 ? (
         <FormSection title="Parts">
-          <div className="-mx-4 min-w-0 sm:col-span-2 sm:mx-0">
+          <div className="min-w-0 space-y-4 sm:col-span-2">
+            <div className="-mx-4 sm:mx-0">
             <PartsChecklist
               items={parts.items}
               canMark={canMarkParts(role)}
@@ -225,6 +226,8 @@ export default function EditAssetPage() {
               onSave={parts.saveItem}
               onCase={(caseNo, mark) => void parts.markCase(caseNo, mark)}
             />
+            </div>
+            <MissingParts items={parts.items} />
           </div>
         </FormSection>
       ) : null}
