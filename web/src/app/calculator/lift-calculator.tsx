@@ -116,7 +116,7 @@ const NAMES_THE_LIFT: readonly NumberKey[] = [
 const CAR_LABEL = 'Car W×D×CH (mm)';
 
 const doorLabel = (input: CalcInputPayload): string =>
-  `${input.doorType === 'CENTER_OPEN' ? 'CO' : input.doorType === 'TELESCOPIC' ? '2S' : 'Side'} ${formatNumber(input.doorWidthMm)} × 2,100`;
+  `${input.doorType === 'CENTER_OPEN' ? 'CO' : input.doorType === 'TELESCOPIC' ? '2S' : 'SO'} ${formatNumber(input.doorWidthMm)} × 2,100`;
 
 export const formatMoney = (value: string): string =>
   new Intl.NumberFormat('en-ET', {

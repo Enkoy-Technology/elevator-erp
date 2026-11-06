@@ -22,6 +22,7 @@ import {
 } from './calc-math';
 import { hasDoor, hasMachineRoom, VEHICLE_SPECS } from './vehicle-specs';
 import {
+  doorForShaft,
   PASSENGER_CAR_HEIGHT_MM,
   selectPassengerLift,
   shaftLabel,
@@ -209,9 +210,9 @@ type Resolved = {
  * carrying a shaft and floors) reads the company's table: the shaft's area
  * picks the lift, the floors give stops, travel (3.5 m a floor) and the speed
  * band, capped at what that lift allows. The technical block is then what the
- * table says — car, door, shaft, persons — plus the overhead, unless a figure
- * is typed over it. Classic mode requires every figure and computes the EN 81
- * geometry.
+ * table says — car, shaft, persons — plus the overhead, unless a figure is
+ * typed over it, and the shaft's width gives the door. Classic mode requires
+ * every figure and computes the EN 81 geometry.
  */
 const resolve = (
   request: CalcRequest,
@@ -297,6 +298,12 @@ const resolve = (
         `A ${carWidthMm} × ${carDepthMm} mm car does not fit a ${shaftWidthMm} × ${shaftDepthMm} mm shaft; to be confirmed by the manufacturer's drawing.`,
       );
     }
+    const door = doorForShaft(shaftWidthMm, lift);
+    if (carWidthMm !== null && door.doorWidthMm > carWidthMm) {
+      notes.push(
+        `A ${door.doorWidthMm} mm door is wider than the ${carWidthMm} mm car; to be confirmed by the manufacturer's drawing.`,
+      );
+    }
     // A typed load prints in place of the table's (client, 2026-10-29); the
     // shaft still names the machine, and that is what is priced. Pricing the
     // typed load let a lower one cut the price past the discount sign-off
@@ -322,8 +329,7 @@ const resolve = (
       travelHeightM: Number((floors * FLOOR_HEIGHT_M).toFixed(2)),
       speedMs: typedSpeed ?? tableSpeed,
       machineRoomType,
-      doorType: lift.door === 'CO' ? 'CENTER_OPEN' : 'TELESCOPIC',
-      doorWidthMm: lift.doorWidthMm,
+      ...door,
       buildingUsage,
       marginPercent: request.marginPercent,
       taxPercent: request.taxPercent,

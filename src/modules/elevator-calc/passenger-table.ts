@@ -4,8 +4,9 @@
  * serves; everything else about the lift follows from those two numbers.
  *
  * `CH` in the client's table is the car height, fixed at 2400 mm. Door is
- * "CO" (centre opening) or "2S" (two-speed side opening, our TELESCOPIC),
- * then width × height.
+ * "CO" (centre opening) or "2S" (two-speed side opening), then width × height.
+ * The shaft's width now decides the door: see `doorForShaft`. The rows keep
+ * the client's own door, and a side-opening door takes its width from them.
  */
 export const PASSENGER_CAR_HEIGHT_MM = 2400;
 
@@ -160,6 +161,26 @@ export const shaftLabel = (lift: PassengerLift): string =>
   lift.range
     ? `${lift.range.asWritten} mm shaft range`
     : `${lift.shaftWidthMm} × ${lift.shaftDepthMm} mm standard shaft`;
+
+/** A shaft wider than this takes a centre-opening door; 1.55 m itself does not. */
+export const CENTER_OPENING_ABOVE_MM = 1550;
+
+/**
+ * The door follows the shaft's width, over what the table's row says (client,
+ * 2026-11-06): centre opening above 1.55 m, (W - 200) / 2 wide, in whole
+ * millimetres, rounded down so the opening still fits. At 1.55 m or less it is
+ * side opening, at the table's width, which the client's rule leaves alone.
+ */
+export const doorForShaft = (
+  shaftWidthMm: number,
+  lift: PassengerLift,
+): { doorType: 'CENTER_OPEN' | 'SWING'; doorWidthMm: number } =>
+  shaftWidthMm > CENTER_OPENING_ABOVE_MM
+    ? {
+        doorType: 'CENTER_OPEN',
+        doorWidthMm: Math.floor((shaftWidthMm - 200) / 2),
+      }
+    : { doorType: 'SWING', doorWidthMm: lift.doorWidthMm };
 
 /**
  * Rated speed by floors served. The client's bands overlap at 10 and 20;

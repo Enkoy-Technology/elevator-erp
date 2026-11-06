@@ -178,7 +178,7 @@ export const startingSpeedAndDoor = (
   return {
     speedMs: fromVehicle ? WORKED_EXAMPLE.speedMs : current.speedMs,
     doorWidthMm:
-      current.doorWidthMm >= 2400
+      current.doorWidthMm >= 2400 || current.doorWidthMm < 700
         ? WORKED_EXAMPLE.doorWidthMm
         : current.doorWidthMm,
     ...(isVehicleProduct(current.productType)

@@ -19,7 +19,7 @@ All calculations MUST use arbitrary-precision decimal arithmetic (`decimal.js` /
 | Rated Speed | v | m/s | 0.4 ≤ v ≤ 10.0 |
 | Machine Room Type | MR/MRL | enum | MR = Machine Room, MRL = Machine Room Less |
 | Door Type | D | enum | CENTER_OPEN, TELESCOPIC, SWING |
-| Door Width | Wd | mm | 700 ≤ Wd ≤ 1400 |
+| Door Width | Wd | mm | Typed: 700 ≤ Wd ≤ 4000. A standard lift's comes from the shaft, uncapped |
 | Building Usage | U | enum | RESIDENTIAL, COMMERCIAL, HOSPITAL, INDUSTRIAL |
 
 Also: `marginPercent` 0–100, `taxPercent` 0–50.
@@ -157,12 +157,18 @@ LIST_PRICE = base(N)
 - A standard lift's load comes from the company's formula (2026-11-05):
   `persons = shaft_width_m × shaft_depth_m ÷ 0.33`, `load = persons × 75`, taken
   to the nearest of the 14 standard loads (320 to 3,000 kg); exactly between
-  two, the lower. Only the load is rounded: the persons, car, door and speed
-  limit come from that load's row, so 1650 × 1850 (694 kg) is 8 persons, 630 kg.
+  two, the lower. Only the load is rounded: the persons, car and speed limit
+  come from that load's row, so 1650 × 1850 (694 kg) is 8 persons, 630 kg.
   The figure is `SHAFT_MM2_PER_PERSON` in `passenger-table.ts`, set at 0.33
   (it came as 0.35, then 0.36). The shaft takes the row of that load that fits inside
   it; if none does, the first row whose car fits is quoted, with a note, and a
   car that still does not fit gets a note of its own.
+- A standard lift's door comes from the shaft width W, over what the table's row
+  says (client, 2026-11-06). Above 1,550 mm it is centre opening,
+  `door_width = (W - 200) / 2`, in whole millimetres rounded down, so 2200 is
+  1000 mm and 1835 is 817 mm. At 1,550 mm or less it is side opening, at the
+  table's width. There is no cap, and the width is printed, never priced. A door
+  wider than the car is kept, with a note. `doorForShaft` in `passenger-table.ts`.
 - A standard lift's speed and car print as the table gives them unless typed:
   `speedMsOverride` (0.05–10 m/s) and `carWidthMmOverride`,
   `carDepthMmOverride`, `carHeightMmOverride` (500–10,000 mm), each on its own

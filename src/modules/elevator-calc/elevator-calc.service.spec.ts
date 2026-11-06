@@ -803,8 +803,8 @@ describe('ElevatorCalcService', () => {
         stops: 8,
         travelHeightM: 28, // 8 floors × 3.5 m — the client's rule
         speedMs: 1.0,
-        doorType: 'TELESCOPIC',
-        doorWidthMm: 800,
+        doorType: 'CENTER_OPEN',
+        doorWidthMm: 700, // (1600 - 200) / 2
         floors: 8,
       });
       expect(result.technical).toMatchObject({
@@ -847,7 +847,7 @@ describe('ElevatorCalcService', () => {
       const result = await standard({ shaftWidthMm: 2000, shaftDepthMm: 2200 });
       expect(result.technical.capacityPersons).toBe(13);
       expect(result.input.capacityKg).toBe(1000);
-      expect(result.input.doorWidthMm).toBe(900);
+      expect(result.input.doorWidthMm).toBe(900); // (2000 - 200) / 2
       expect(result.notes[0]).toMatch(
         /nearest standard lift is the 13-person 1000 kg \(1960 × 2000 to 2200 × 2200 mm shaft range\), its load's standard car to be confirmed/,
       );
@@ -860,6 +860,52 @@ describe('ElevatorCalcService', () => {
       expect(result.technical.standardLift).toBe(
         '13-person lift, 1960 × 2000 to 2200 × 2200 mm shaft range',
       );
+    });
+
+    describe('door, from the shaft width (client, 2026-11-06)', () => {
+      const door = async (shaftWidthMm: number, shaftDepthMm = 2000) => {
+        const { input } = await standard({ shaftWidthMm, shaftDepthMm });
+        return [input.doorType, input.doorWidthMm];
+      };
+
+      it('makes a shaft above 1.55 m centre opening, (W - 200) / 2 wide', async () => {
+        expect(await door(2200)).toEqual(['CENTER_OPEN', 1000]);
+        expect(await door(1650)).toEqual(['CENTER_OPEN', 725]);
+        expect(await door(2700)).toEqual(['CENTER_OPEN', 1250]);
+      });
+
+      it('takes a whole millimetre, rounding down so the opening still fits', async () => {
+        expect(await door(1835)).toEqual(['CENTER_OPEN', 817]);
+      });
+
+      it('makes a shaft of 1.55 m or less side opening, with the table door', async () => {
+        expect(await door(1550, 1600)).toEqual(['SWING', 800]);
+        expect(await door(1500, 1500)).toEqual(['SWING', 700]);
+        expect(await door(1400, 1800)).toEqual(['SWING', 800]);
+        expect(await door(1200, 1200)).toEqual(['SWING', 600]);
+      });
+
+      it('starts centre opening one millimetre above 1.55 m, even below the 700 mm a typed door needs', async () => {
+        expect(await door(1551, 1600)).toEqual(['CENTER_OPEN', 675]);
+      });
+
+      it("overrides the table's side-opening rows above 1.55 m", async () => {
+        expect(selectPassengerLift(1650, 1850).lift.door).toBe('2S');
+        expect(await door(1650, 1850)).toEqual(['CENTER_OPEN', 725]);
+      });
+
+      it('says so when the formula gives a door wider than the car', async () => {
+        const result = await standard({
+          shaftWidthMm: 2200,
+          shaftDepthMm: 1750,
+          carWidthMmOverride: 900,
+          carDepthMmOverride: 1400,
+        });
+        expect(result.input.doorWidthMm).toBe(1000);
+        expect(result.notes.join(' ')).toMatch(
+          /1000 mm door is wider than the 900 mm car/,
+        );
+      });
     });
 
     it('prefers a standard row to a shaft range of the same load', () => {
@@ -1088,9 +1134,9 @@ describe('ElevatorCalcService', () => {
         capacityKgOverride: 800,
       });
       expect(result.technical.capacityPersons).toBe(10);
-      // The shaft still picks the machine: the 8-person's car and door,
-      // named by its shaft so no head count contradicts the typed one.
-      expect(result.input.doorWidthMm).toBe(800);
+      // The shaft still picks the machine: the 8-person's car, named by its
+      // shaft so no head count contradicts the typed one, and the door.
+      expect(result.input.doorWidthMm).toBe(700);
       expect(result.technical.standardLift).toBe(
         '1600 × 1850 mm standard shaft',
       );

@@ -40,6 +40,14 @@ const products = [
 ];
 
 describe('startingSpeedAndDoor', () => {
+  it('drops a door narrower than a typed door may be, as a narrow shaft gives', () => {
+    const start = startingSpeedAndDoor('OTHER', {
+      ...WORKED_EXAMPLE,
+      doorWidthMm: 675,
+    });
+    expect(start.doorWidthMm).toBe(WORKED_EXAMPLE.doorWidthMm);
+  });
+
   it("starts an escalator at the sheet's 6 m base rise and 2 stops, not the passenger example's 45 m", () => {
     const start = startingSpeedAndDoor('ESCALATOR', WORKED_EXAMPLE);
     expect(start.travelHeightM).toBe(6);
